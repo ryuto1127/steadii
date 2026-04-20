@@ -20,6 +20,28 @@ type Syllabus = {
   raw: string | null;
 };
 
+type Verbatim = {
+  fullText: string;
+  sourceKind: "pdf" | "image" | "url";
+  blob?: {
+    blobAssetId: string;
+    url: string;
+    filename: string;
+    mimeType: string;
+    sizeBytes: number;
+  };
+};
+
+async function friendlyError(res: Response): Promise<string> {
+  try {
+    const body = await res.json();
+    if (typeof body?.error === "string") return body.error;
+  } catch {
+    // ignore
+  }
+  return `Request failed (${res.status})`;
+}
+
 export function SyllabusWizard({
   classes,
   blobConfigured = true,
@@ -33,6 +55,7 @@ export function SyllabusWizard({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syllabus, setSyllabus] = useState<Syllabus | null>(null);
+  const [verbatim, setVerbatim] = useState<Verbatim | null>(null);
   const [classId, setClassId] = useState<string>("");
   const router = useRouter();
 
@@ -45,9 +68,10 @@ export function SyllabusWizard({
       else if (url.trim()) fd.append("url", url.trim());
       else throw new Error("Provide a file or URL.");
       const res = await fetch("/api/syllabus/extract", { method: "POST", body: fd });
-      if (!res.ok) throw new Error(await res.text());
-      const body = (await res.json()) as { syllabus: Syllabus };
+      if (!res.ok) throw new Error(await friendlyError(res));
+      const body = (await res.json()) as { syllabus: Syllabus; verbatim: Verbatim };
       setSyllabus(body.syllabus);
+      setVerbatim(body.verbatim);
     } catch (err) {
       setError(err instanceof Error ? err.message : "extraction failed");
     } finally {
@@ -56,7 +80,7 @@ export function SyllabusWizard({
   }
 
   async function save() {
-    if (!syllabus) return;
+    if (!syllabus || !verbatim) return;
     setSaving(true);
     setError(null);
     try {
@@ -65,10 +89,11 @@ export function SyllabusWizard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           syllabus,
+          verbatim,
           classNotionPageId: classId || null,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await friendlyError(res));
       const { pageId } = (await res.json()) as { pageId: string; url: string | null };
       router.push(`/app/syllabus?saved=${encodeURIComponent(pageId)}`);
     } catch (err) {
