@@ -20,7 +20,7 @@ export default async function SettingsPage() {
   const storage = await getStorageTotals(userId);
 
   return (
-    <div className="max-w-xl">
+    <div className="mx-auto max-w-xl">
       <h1 className="font-serif text-3xl">{t("settings")}</h1>
 
       <section className="mt-8 rounded-xl bg-[hsl(var(--surface))] p-6 shadow-sm">

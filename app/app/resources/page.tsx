@@ -23,7 +23,7 @@ export default async function ResourcesPage() {
     );
 
   return (
-    <div className="max-w-2xl">
+    <div className="mx-auto max-w-2xl">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="font-serif text-3xl">Registered Resources</h1>
