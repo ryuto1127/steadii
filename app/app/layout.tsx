@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/config";
 import { Sidebar } from "@/components/layout/sidebar";
 import { OfflineStrip } from "@/components/layout/offline-strip";
-import { StatusBar } from "@/components/layout/status-bar";
 import {
   getOnboardingStatus,
   isOnboardingComplete,
@@ -33,19 +32,25 @@ export default async function AppLayout({
   const showBanner = effective.plan !== "admin" && balance.nearLimit;
   const pct = Math.min(100, Math.round((balance.used / balance.limit) * 100));
 
+  // Arc-style island: body bg = warm canvas (--background); 12px padding
+  // on every edge shows the canvas; main content floats as a surface-
+  // colored rounded-xl island on the right, sidebar melts into the
+  // canvas on the left.
   return (
-    <div className="flex min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
-      <Sidebar />
-      <div className="relative flex min-h-screen flex-1 flex-col">
-        <main className="relative flex-1 px-8 py-6">
-          <span aria-hidden className="ambient-amber" />
-          <OfflineStrip />
+    <div className="flex h-screen gap-3 bg-[hsl(var(--background))] p-3">
+      <Sidebar
+        creditsRemaining={Math.max(0, balance.limit - balance.used)}
+        plan={effective.plan}
+      />
+      <main className="relative flex-1 overflow-y-auto rounded-xl bg-[hsl(var(--surface))]">
+        <OfflineStrip />
+        <div className="px-10 py-8">
           {showBanner && (
             <div
-              className={`relative z-10 mx-auto mb-4 max-w-4xl rounded-md border px-3 py-2 text-small ${
+              className={`mx-auto mb-5 max-w-4xl rounded-lg px-4 py-2.5 text-small ${
                 balance.exceeded
-                  ? "border-[hsl(var(--destructive)/0.4)] bg-[hsl(var(--destructive)/0.08)] text-[hsl(var(--destructive))]"
-                  : "border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] text-[hsl(var(--foreground))]"
+                  ? "bg-[hsl(var(--destructive)/0.08)] text-[hsl(var(--destructive))]"
+                  : "bg-[hsl(var(--surface-raised))] text-[hsl(var(--foreground))]"
               }`}
             >
               <div className="flex items-center justify-between gap-4">
@@ -56,21 +61,16 @@ export default async function AppLayout({
                 </span>
                 <Link
                   href="/app/settings"
-                  className="shrink-0 rounded-md border border-[hsl(var(--border))] px-3 py-1 text-small transition-hover hover:bg-[hsl(var(--surface))]"
+                  className="shrink-0 rounded-md px-3 py-1 text-small transition-hover hover:bg-[hsl(var(--surface))]"
                 >
                   {effective.plan === "free" ? "Upgrade" : "Manage"}
                 </Link>
               </div>
             </div>
           )}
-          <div className="relative z-10">{children}</div>
-        </main>
-        <StatusBar
-          creditsUsed={balance.used}
-          creditsLimit={balance.limit}
-          plan={effective.plan}
-        />
-      </div>
+          {children}
+        </div>
+      </main>
     </div>
   );
 }
