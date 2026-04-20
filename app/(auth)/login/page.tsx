@@ -9,7 +9,7 @@ export default async function LoginPage({
 }) {
   const session = await auth();
   const { from } = await searchParams;
-  const target = from && from.startsWith("/app") ? from : "/app/chat";
+  const target = from && from.startsWith("/app") ? from : "/app";
 
   if (session?.user) {
     redirect(target);
@@ -23,13 +23,20 @@ export default async function LoginPage({
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-20">
-      <h1 className="font-serif text-4xl">{t("login.title")}</h1>
-      <p className="mt-3 text-[hsl(var(--muted-foreground))]">{t("login.subtitle")}</p>
-      <form action={signInAction} className="mt-10">
+    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
+      <p className="font-mono text-[11px] uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+        Steadii
+      </p>
+      <h1 className="mt-3 font-display text-[hsl(var(--foreground))]">
+        {t("brand.tagline")}
+      </h1>
+      <p className="mt-2 text-small text-[hsl(var(--muted-foreground))]">
+        {t("login.subtitle")}
+      </p>
+      <form action={signInAction} className="mt-8">
         <button
           type="submit"
-          className="w-full rounded-lg bg-[hsl(var(--primary))] px-5 py-3 font-medium text-[hsl(var(--primary-foreground))] shadow-sm transition hover:opacity-90"
+          className="w-full rounded-md bg-[hsl(var(--primary))] px-4 py-2 text-body font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
         >
           {t("login.button")}
         </button>
