@@ -32,15 +32,15 @@ export default async function AppLayout({
   const pct = Math.min(100, Math.round((balance.used / balance.limit) * 100));
 
   return (
-    <div className="flex min-h-screen bg-[hsl(var(--background))]">
+    <div className="flex min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
       <Sidebar />
-      <main className="flex-1 px-10 py-10">
+      <main className="flex-1 px-8 py-6">
         {showBanner && (
           <div
-            className={`mx-auto mb-6 max-w-4xl rounded-lg px-4 py-3 text-sm ${
+            className={`mx-auto mb-5 max-w-4xl rounded-md border px-3 py-2 text-small ${
               balance.exceeded
-                ? "bg-[hsl(var(--destructive)/0.1)] text-[hsl(var(--destructive))]"
-                : "bg-[hsl(var(--accent)/0.12)] text-[hsl(var(--foreground))]"
+                ? "border-[hsl(var(--destructive)/0.4)] bg-[hsl(var(--destructive)/0.08)] text-[hsl(var(--destructive))]"
+                : "border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] text-[hsl(var(--foreground))]"
             }`}
           >
             <div className="flex items-center justify-between gap-4">
@@ -50,8 +50,8 @@ export default async function AppLayout({
                   : `You've used ${pct}% of your monthly credits (${balance.used} / ${balance.limit}).`}
               </span>
               <Link
-                href="/app/settings/billing"
-                className="shrink-0 rounded-md border border-[hsl(var(--border))] px-3 py-1 text-xs transition hover:bg-[hsl(var(--surface-raised))]"
+                href="/app/settings"
+                className="shrink-0 rounded-md border border-[hsl(var(--border))] px-3 py-1 text-small transition-hover hover:bg-[hsl(var(--surface))]"
               >
                 {effective.plan === "free" ? "Upgrade" : "Manage"}
               </Link>
