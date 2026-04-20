@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { middleware } from "@/middleware";
+import { proxy } from "@/proxy";
 import { NextRequest } from "next/server";
 
 function request(url: string, cookies: Record<string, string> = {}) {
@@ -10,9 +10,9 @@ function request(url: string, cookies: Record<string, string> = {}) {
   return req;
 }
 
-describe("middleware — /app auth gate", () => {
+describe("proxy — /app auth gate", () => {
   it("redirects unauthenticated visit to /app/chat → /login", () => {
-    const res = middleware(request("http://localhost:3000/app/chat"));
+    const res = proxy(request("http://localhost:3000/app/chat"));
     expect(res.status).toBeGreaterThanOrEqual(300);
     expect(res.status).toBeLessThan(400);
     const location = res.headers.get("location");
@@ -23,7 +23,7 @@ describe("middleware — /app auth gate", () => {
   });
 
   it("lets authenticated request through when session cookie present", () => {
-    const res = middleware(
+    const res = proxy(
       request("http://localhost:3000/app/settings", {
         "authjs.session-token": "some-token",
       })
@@ -32,7 +32,7 @@ describe("middleware — /app auth gate", () => {
   });
 
   it("does not redirect marketing pages", () => {
-    const res = middleware(request("http://localhost:3000/privacy"));
+    const res = proxy(request("http://localhost:3000/privacy"));
     expect(res.headers.get("location")).toBeNull();
   });
 });
