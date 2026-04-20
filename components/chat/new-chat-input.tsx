@@ -81,6 +81,7 @@ export function NewChatInput({
   autoFocus?: boolean;
 }) {
   const t = useTranslations("chat_input");
+  const tChat = useTranslations("chat");
   const router = useRouter();
   const [value, setValue] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -127,7 +128,7 @@ export function NewChatInput({
       )}
     >
       <label htmlFor="new-chat-textarea" className="sr-only">
-        Message Steadii
+        {t("placeholder")}
       </label>
       <div className="flex items-start gap-2 px-2.5">
         <span
@@ -193,7 +194,7 @@ export function NewChatInput({
             onClick={() => setFile(null)}
             className="ml-auto transition-hover hover:text-[hsl(var(--foreground))]"
           >
-            Remove
+            {tChat("remove_attachment")}
           </button>
         </div>
       ) : null}

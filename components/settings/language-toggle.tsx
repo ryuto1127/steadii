@@ -38,7 +38,7 @@ export function LanguageToggle({
     <div
       role="radiogroup"
       aria-label="Language"
-      className="inline-flex rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-0.5"
+      className="inline-flex shrink-0 rounded-lg border border-[hsl(var(--border)/0.6)] bg-[hsl(var(--surface))] p-0.5"
     >
       {(["en", "ja"] as const).map((loc) => {
         const isActive = value === loc;
@@ -51,7 +51,7 @@ export function LanguageToggle({
             disabled={isPending}
             onClick={() => apply(loc)}
             className={cn(
-              "inline-flex items-center rounded-[4px] px-2.5 py-1 text-small font-medium transition-hover",
+              "inline-flex min-w-[72px] items-center justify-center whitespace-nowrap rounded-[6px] px-3 py-1 text-small font-medium transition-hover",
               isActive
                 ? "bg-[hsl(var(--surface-raised))] text-[hsl(var(--foreground))]"
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"

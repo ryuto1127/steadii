@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server";
+
 type Props = {
   creditsUsed: number;
   creditsLimit: number;
@@ -5,11 +7,22 @@ type Props = {
 };
 
 // 32px-tall persistent status bar at the bottom of the main column.
-// Gentler contrast: shortcut keys render slightly brighter than labels,
-// everything else sits at muted-foreground.
-export function StatusBar({ creditsUsed, creditsLimit, plan }: Props) {
+// Server component — reads translations via getTranslations so the
+// labels follow the user's UI language (not the agent's).
+export async function StatusBar({ creditsUsed, creditsLimit, plan }: Props) {
+  const t = await getTranslations("status_bar");
   const remaining = Math.max(0, creditsLimit - creditsUsed);
-  const planLabel = plan === "pro" ? "Pro" : plan === "admin" ? "Admin" : "Free";
+  const planLabel =
+    plan === "pro"
+      ? t("plan_pro")
+      : plan === "admin"
+      ? t("plan_admin")
+      : t("plan_free");
+
+  const creditsText =
+    plan === "admin"
+      ? t("credits_unlimited", { plan: planLabel })
+      : t("credits", { n: remaining, plan: planLabel });
 
   return (
     <footer
@@ -21,14 +34,12 @@ export function StatusBar({ creditsUsed, creditsLimit, plan }: Props) {
       aria-label="Status bar"
     >
       <div className="flex items-center gap-4">
-        <Shortcut k="⌘/" label="Focus input" />
-        <Shortcut k="↵" label="Send" />
-        <Shortcut k="⌘K" label="Actions" />
+        <Shortcut k="⌘/" label={t("focus_input")} />
+        <Shortcut k="↵" label={t("send")} />
+        <Shortcut k="⌘K" label={t("actions")} />
       </div>
       <div className="flex items-center gap-3 tabular-nums">
-        <span>
-          {plan === "admin" ? "∞" : remaining} credits · {planLabel}
-        </span>
+        <span>{creditsText}</span>
       </div>
     </footer>
   );

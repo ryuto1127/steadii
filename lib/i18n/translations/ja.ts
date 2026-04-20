@@ -88,6 +88,25 @@ export const ja: Messages = {
     placeholder: "Steadiiに聞く…",
     send_hint: "⌘⏎ で送信",
   },
+  chat: {
+    actions: {
+      add_to_mistakes: "+ 間違いノートに追加",
+      generate_similar: "類題を生成",
+      save_to_notion: "Notionに保存",
+    },
+    dismiss: "閉じる",
+    remove_attachment: "削除",
+  },
+  status_bar: {
+    focus_input: "入力にフォーカス",
+    send: "送信",
+    actions: "アクション",
+    credits: "{n} クレジット · {plan}",
+    credits_unlimited: "∞ クレジット · {plan}",
+    plan_free: "Free",
+    plan_pro: "Pro",
+    plan_admin: "Admin",
+  },
   settings: {
     title: "設定",
     sign_out: "サインアウト",
