@@ -5,6 +5,10 @@ import { encrypt } from "@/lib/utils/crypto";
 import { db } from "@/lib/db/client";
 import { notionConnections, auditLog } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
+import {
+  discoverResources,
+  clearDiscoveryCache,
+} from "@/lib/integrations/notion/discovery";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -85,6 +89,13 @@ export async function GET(request: NextRequest) {
     result: "success",
     detail: { workspace_name: token.workspace_name },
   });
+
+  clearDiscoveryCache(userId);
+  try {
+    await discoverResources(userId, { force: true });
+  } catch (err) {
+    console.error("Discovery after reconnect failed", err);
+  }
 
   const res = NextResponse.redirect(new URL("/onboarding?step=calendar", request.url));
   res.cookies.delete("notion_oauth_state");

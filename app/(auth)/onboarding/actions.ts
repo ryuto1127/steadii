@@ -12,6 +12,7 @@ import { decrypt } from "@/lib/utils/crypto";
 import { notionClientFromToken } from "@/lib/integrations/notion/client";
 import { runNotionSetup } from "@/lib/integrations/notion/setup";
 import { parseNotionId } from "@/lib/integrations/notion/id";
+import { discoverResources, clearDiscoveryCache } from "@/lib/integrations/notion/discovery";
 import { redirect } from "next/navigation";
 
 export async function runSetupAction() {
@@ -49,6 +50,7 @@ export async function runSetupAction() {
     .update(notionConnections)
     .set({
       parentPageId: result.parentPageId,
+      classesDbId: result.classesDbId,
       mistakesDbId: result.mistakesDbId,
       assignmentsDbId: result.assignmentsDbId,
       syllabiDbId: result.syllabiDbId,
@@ -64,6 +66,15 @@ export async function runSetupAction() {
       resourceType: "page",
       notionId: result.parentPageId,
       title: "Steadii",
+      autoRegistered: 1,
+    },
+    {
+      userId,
+      connectionId: conn.id,
+      resourceType: "database",
+      notionId: result.classesDbId,
+      title: "Classes",
+      parentNotionId: result.parentPageId,
       autoRegistered: 1,
     },
     {
@@ -111,7 +122,21 @@ export async function runSetupAction() {
     },
   });
 
+  clearDiscoveryCache(userId);
+  try {
+    await discoverResources(userId, { force: true });
+  } catch (err) {
+    console.error("Initial discovery failed", err);
+  }
+
   redirect("/onboarding?step=resources");
+}
+
+export async function refreshResourcesAction() {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  await discoverResources(session.user.id, { force: true });
+  redirect("/app/resources");
 }
 
 export async function disconnectNotionAction() {

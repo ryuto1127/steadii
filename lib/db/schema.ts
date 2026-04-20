@@ -87,6 +87,7 @@ export const notionConnections = pgTable(
     botId: text("bot_id").notNull(),
     accessTokenEncrypted: text("access_token_encrypted").notNull(),
     parentPageId: text("parent_page_id"),
+    classesDbId: text("classes_db_id"),
     mistakesDbId: text("mistakes_db_id"),
     assignmentsDbId: text("assignments_db_id"),
     syllabiDbId: text("syllabi_db_id"),
@@ -116,6 +117,7 @@ export const registeredResources = pgTable("registered_resources", {
   parentNotionId: text("parent_notion_id"),
   autoRegistered: integer("auto_registered").notNull().default(0),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  archivedAt: timestamp("archived_at", { mode: "date" }),
 });
 
 export const auditLog = pgTable("audit_log", {
