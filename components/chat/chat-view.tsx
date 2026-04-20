@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { MistakeNoteDialog } from "./mistake-note-dialog";
+import { MarkdownMessage } from "./markdown-message";
 
 type Attachment = {
   id: string;
@@ -294,7 +295,11 @@ export function ChatView({
                   </div>
                 )}
                 {m.content ? (
-                  m.content
+                  m.role === "assistant" ? (
+                    <MarkdownMessage content={m.content} />
+                  ) : (
+                    <span className="whitespace-pre-wrap">{m.content}</span>
+                  )
                 ) : m.role === "assistant" && streaming ? (
                   <ThinkingDots />
                 ) : (

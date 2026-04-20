@@ -72,3 +72,126 @@
     cursor: not-allowed;
   }
 }
+
+/* Typography for rendered markdown in chat responses. Intentionally
+   minimal — we lean on the sans/serif font tokens and let spacing do
+   the hierarchy. Scoped with .prose-chat so it never bleeds into UI
+   chrome. */
+.prose-chat {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: hsl(var(--foreground));
+}
+
+.prose-chat > * + * {
+  margin-top: 0.85rem;
+}
+
+.prose-chat h1,
+.prose-chat h2,
+.prose-chat h3,
+.prose-chat h4 {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  line-height: 1.25;
+  margin-top: 1.4rem;
+  margin-bottom: 0.25rem;
+}
+
+.prose-chat h1 { font-size: 1.35rem; }
+.prose-chat h2 { font-size: 1.2rem; }
+.prose-chat h3 { font-size: 1.05rem; }
+.prose-chat h4 { font-size: 0.95rem; }
+
+.prose-chat p {
+  margin: 0;
+}
+
+.prose-chat strong {
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.prose-chat em {
+  font-style: italic;
+}
+
+.prose-chat a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-chat a:hover { opacity: 0.8; }
+
+.prose-chat ul,
+.prose-chat ol {
+  padding-left: 1.35rem;
+  margin: 0;
+}
+.prose-chat ul { list-style: disc; }
+.prose-chat ol { list-style: decimal; }
+.prose-chat li + li { margin-top: 0.25rem; }
+.prose-chat li > p { display: inline; }
+
+.prose-chat blockquote {
+  border-left: 2px solid hsl(var(--border));
+  padding-left: 0.9rem;
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
+.prose-chat code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: hsl(var(--surface-raised));
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+}
+
+.prose-chat pre {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  background: hsl(var(--surface-raised));
+  padding: 0.9rem 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  line-height: 1.5;
+}
+
+.prose-chat pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+}
+
+.prose-chat table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.prose-chat th,
+.prose-chat td {
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid hsl(var(--border));
+  text-align: left;
+}
+.prose-chat th {
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.prose-chat hr {
+  border: 0;
+  border-top: 1px solid hsl(var(--border));
+  margin: 1.4rem 0;
+}
+
+/* Block-level KaTeX — give it a little breathing room and horizontal
+   scroll for very long derivations. */
+.prose-chat .katex-display {
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.1rem 0;
+}
