@@ -22,10 +22,10 @@ export function ActionPill({
 }) {
   const toneClasses =
     tone === "primary"
-      ? "border-[hsl(var(--primary)/0.4)] bg-[hsl(var(--primary)/0.08)] text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/0.14)]"
+      ? "border-[hsl(var(--border))] bg-transparent text-[hsl(var(--primary))] hover:bg-[hsl(var(--surface-raised))]"
       : tone === "destructive"
-      ? "border-[hsl(var(--destructive)/0.4)] bg-[hsl(var(--destructive)/0.08)] text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/0.14)]"
-      : "border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--surface-raised))]";
+      ? "border-[hsl(var(--border))] bg-transparent text-[hsl(var(--destructive))] hover:bg-[hsl(var(--surface-raised))]"
+      : "border-[hsl(var(--border))] bg-transparent text-[hsl(var(--foreground))] hover:bg-[hsl(var(--surface-raised))]";
 
   return (
     <button

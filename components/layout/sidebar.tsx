@@ -16,9 +16,6 @@ export async function Sidebar() {
         Steadii
       </div>
       <SidebarNav labels={labels} />
-      <div className="mt-auto px-3 pt-4 font-mono text-[11px] text-[hsl(var(--muted-foreground))]">
-        ↑↓ navigate · Enter open
-      </div>
     </aside>
   );
 }

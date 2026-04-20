@@ -67,7 +67,7 @@ export function MistakeNoteDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-      <div className="w-full max-w-md rounded-2xl bg-[hsl(var(--surface))] p-6 shadow-lg">
+      <div className="w-full max-w-md rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4 shadow-lg">
         <h2 className="text-h2 text-[hsl(var(--foreground))]">Add to Mistake Notes</h2>
         <div className="mt-4 space-y-3">
           <label className="block text-xs text-[hsl(var(--muted-foreground))]">

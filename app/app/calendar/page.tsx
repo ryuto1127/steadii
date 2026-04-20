@@ -52,7 +52,7 @@ export default async function CalendarPage() {
         {[...byDay.entries()]
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([day, dayEvents]) => (
-            <section key={day} className="rounded-xl bg-[hsl(var(--surface))] p-4 shadow-sm">
+            <section key={day} className="rounded-lg bg-[hsl(var(--surface))] p-4">
               <h2 className="text-sm font-medium">{day}</h2>
               <ul className="mt-3 space-y-2">
                 {dayEvents.map((ev, i) => (

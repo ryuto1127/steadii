@@ -42,7 +42,7 @@ export default async function LandingPage() {
           </div>
         </header>
 
-        <section className="mb-20 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3">
+        <section className="mb-20 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3">
           <Screenshot
             labels={{
               todaySchedule: t("landing.mock.today_schedule"),
