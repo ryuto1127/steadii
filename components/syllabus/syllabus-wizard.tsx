@@ -134,6 +134,7 @@ export function SyllabusWizard({
             <DropZone
               accept={accept}
               file={file}
+              status={extracting ? "extracting" : "ready"}
               onFile={(f) => {
                 setFile(f);
                 setUrl("");

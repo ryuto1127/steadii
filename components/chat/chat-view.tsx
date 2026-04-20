@@ -44,6 +44,10 @@ export function ChatView({
   const [mistakeFor, setMistakeFor] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<{
+    filename: string;
+    kind: "image" | "pdf";
+  } | null>(null);
   const [, startTransition] = useTransition();
   const scrollAnchor = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -212,23 +216,35 @@ export function ChatView({
 
   async function uploadFile(file: File) {
     setUploadError(null);
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("chatId", chatId);
-    const res = await fetch("/api/chat/attachments", { method: "POST", body: fd });
-    if (!res.ok) {
-      let friendly = `Upload failed (HTTP ${res.status}).`;
-      try {
-        const body = await res.json();
-        if (typeof body?.error === "string") friendly = body.error;
-      } catch {
-        // non-JSON response — fall through to HTTP code
+    const isPdf = file.type === "application/pdf";
+    setUploading({
+      filename: file.name,
+      kind: isPdf ? "pdf" : "image",
+    });
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("chatId", chatId);
+      const res = await fetch("/api/chat/attachments", {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) {
+        let friendly = `Upload failed (HTTP ${res.status}).`;
+        try {
+          const body = await res.json();
+          if (typeof body?.error === "string") friendly = body.error;
+        } catch {
+          // non-JSON response — fall through to HTTP code
+        }
+        setUploadError(friendly);
+        return;
       }
-      setUploadError(friendly);
-      return;
+      const body = (await res.json()) as { attachment: Attachment };
+      setAttachment(body.attachment);
+    } finally {
+      setUploading(null);
     }
-    const body = (await res.json()) as { attachment: Attachment };
-    setAttachment(body.attachment);
   }
 
   return (
@@ -377,7 +393,19 @@ export function ChatView({
             </button>
           </div>
         )}
-        {attachment && (
+        {uploading && (
+          <div className="mb-2 flex items-center gap-2 rounded-md bg-[hsl(var(--surface-raised))] px-3 py-2 text-xs">
+            <span
+              aria-hidden
+              className="inline-block h-2 w-2 animate-pulse rounded-full bg-[hsl(var(--primary))]"
+            />
+            <span>
+              Uploading {uploading.filename}
+              <span className="text-[hsl(var(--muted-foreground))]">…</span>
+            </span>
+          </div>
+        )}
+        {attachment && !uploading && (
           <div className="mb-2 flex items-center justify-between rounded-md bg-[hsl(var(--surface-raised))] px-3 py-2 text-xs">
             <span>Attached: {attachment.filename ?? attachment.kind}</span>
             <button
