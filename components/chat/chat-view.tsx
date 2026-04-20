@@ -30,9 +30,11 @@ type ToolEvent = {
 export function ChatView({
   chatId,
   initialMessages,
+  blobConfigured = true,
 }: {
   chatId: string;
   initialMessages: Message[];
+  blobConfigured?: boolean;
 }) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [toolEvents, setToolEvents] = useState<ToolEvent[]>([]);
@@ -40,6 +42,7 @@ export function ChatView({
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [mistakeFor, setMistakeFor] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const scrollAnchor = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -187,12 +190,14 @@ export function ChatView({
   }
 
   async function uploadFile(file: File) {
+    setUploadError(null);
     const fd = new FormData();
     fd.append("file", file);
     fd.append("chatId", chatId);
     const res = await fetch("/api/chat/attachments", { method: "POST", body: fd });
     if (!res.ok) {
-      alert(`upload failed: ${await res.text()}`);
+      const text = await res.text();
+      setUploadError(text.slice(0, 240) || "Upload failed.");
       return;
     }
     const body = (await res.json()) as { attachment: Attachment };
@@ -312,6 +317,27 @@ export function ChatView({
       </div>
 
       <div className="border-t border-[hsl(var(--border))] py-4">
+        {!blobConfigured && (
+          <div className="mb-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-xs text-[hsl(var(--muted-foreground))]">
+            Image and PDF uploads are disabled until
+            <code className="mx-1 font-mono text-[hsl(var(--foreground))]">
+              BLOB_READ_WRITE_TOKEN
+            </code>
+            is set. Ask the administrator.
+          </div>
+        )}
+        {uploadError && (
+          <div className="mb-2 flex items-center justify-between rounded-md bg-[hsl(var(--destructive)/0.1)] px-3 py-2 text-xs text-[hsl(var(--destructive))]">
+            <span>{uploadError}</span>
+            <button
+              type="button"
+              onClick={() => setUploadError(null)}
+              className="ml-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         {attachment && (
           <div className="mb-2 flex items-center justify-between rounded-md bg-[hsl(var(--surface-raised))] px-3 py-2 text-xs">
             <span>Attached: {attachment.filename ?? attachment.kind}</span>
@@ -331,12 +357,24 @@ export function ChatView({
           }}
           className="flex items-end gap-2"
         >
-          <label className="cursor-pointer rounded-md border border-[hsl(var(--border))] px-3 py-2 text-xs text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))]">
+          <label
+            className={`rounded-md border border-[hsl(var(--border))] px-3 py-2 text-xs ${
+              blobConfigured
+                ? "cursor-pointer text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))]"
+                : "cursor-not-allowed text-[hsl(var(--muted-foreground)/0.5)]"
+            }`}
+            title={
+              blobConfigured
+                ? undefined
+                : "Image uploads require Vercel Blob. Ask the administrator to configure BLOB_READ_WRITE_TOKEN."
+            }
+          >
             Attach
             <input
               type="file"
               accept="image/*,application/pdf"
               className="hidden"
+              disabled={!blobConfigured}
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) uploadFile(f);

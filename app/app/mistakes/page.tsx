@@ -9,6 +9,8 @@ import {
   listFromDatabase,
 } from "@/lib/views/notion-list";
 import { ListFilter } from "@/components/views/list-filter";
+import { checkDatabaseHealth } from "@/lib/views/notion-health";
+import { DeadDbBanner } from "@/components/views/dead-db-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +24,14 @@ export default async function MistakesPage({
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const params = await searchParams;
+
+  const health = await checkDatabaseHealth({
+    userId: session.user.id,
+    databaseSelector: "mistakesDbId",
+  });
+  if (!health.ok) {
+    return <DeadDbBanner title="Mistake Notes" reason={health.reason} />;
+  }
 
   const rows = await listFromDatabase({
     userId: session.user.id,

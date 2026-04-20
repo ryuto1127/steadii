@@ -6,6 +6,8 @@ import { eq } from "drizzle-orm";
 import { SyllabusWizard } from "@/components/syllabus/syllabus-wizard";
 import { decrypt } from "@/lib/utils/crypto";
 import { notionClientFromToken } from "@/lib/integrations/notion/client";
+import { checkDatabaseHealth } from "@/lib/views/notion-health";
+import { DeadDbBanner } from "@/components/views/dead-db-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +15,14 @@ export default async function NewSyllabusPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
+
+  const health = await checkDatabaseHealth({
+    userId,
+    databaseSelector: "syllabiDbId",
+  });
+  if (!health.ok) {
+    return <DeadDbBanner title="Upload a syllabus" reason={health.reason} />;
+  }
 
   const [conn] = await db
     .select()
@@ -49,7 +59,10 @@ export default async function NewSyllabusPage() {
       <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
         Drop a PDF, an image, or paste a URL. We&apos;ll extract the structure and show you a preview before saving to Notion.
       </p>
-      <SyllabusWizard classes={classes} />
+      <SyllabusWizard
+        classes={classes}
+        blobConfigured={!!process.env.BLOB_READ_WRITE_TOKEN}
+      />
     </div>
   );
 }

@@ -13,6 +13,7 @@ const schema = z.object({
   STRIPE_PRICE_ID_PRO: z.string().min(1),
   STRIPE_WEBHOOK_SECRET: z.string().optional().default(""),
   ENCRYPTION_KEY: z.string().min(1),
+  BLOB_READ_WRITE_TOKEN: z.string().optional().default(""),
   APP_URL: z.string().url().default("http://localhost:3000"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });

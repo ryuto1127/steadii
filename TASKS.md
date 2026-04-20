@@ -315,6 +315,16 @@ Expected total time: 2–3 hours.
 - [ ] Install Stripe CLI locally for webhook forwarding during development
 - [ ] Defer: the production webhook endpoint will be configured after Phase 5
 
+### S.6.5 Vercel Blob (attachment storage)
+
+- [ ] In the Vercel dashboard, go to Storage → Create store → **Blob**
+- [ ] Give the store a name (e.g. `steadii-alpha`)
+- [ ] Copy the `BLOB_READ_WRITE_TOKEN` the dashboard generates
+- [ ] Add `BLOB_READ_WRITE_TOKEN` to `.env.local` and to Vercel Project
+      → Environment Variables (Production + Preview)
+- Chat image/PDF attachments and syllabus image uploads depend on this;
+  without it those paths return a friendly "uploads disabled" message
+
 ### S.7 Sentry
 
 - [ ] Create a Sentry account (free tier is enough)

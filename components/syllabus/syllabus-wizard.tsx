@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { DropZone } from "./drop-zone";
 
 type ScheduleItem = { date: string | null; topic: string | null };
 
@@ -21,8 +22,10 @@ type Syllabus = {
 
 export function SyllabusWizard({
   classes,
+  blobConfigured = true,
 }: {
   classes: Array<{ id: string; name: string }>;
+  blobConfigured?: boolean;
 }) {
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -79,6 +82,9 @@ export function SyllabusWizard({
     setSyllabus((s) => (s ? { ...s, [key]: value } : s));
   }
 
+  const imagesAllowed = blobConfigured;
+  const accept = imagesAllowed ? "application/pdf,image/*" : "application/pdf";
+
   return (
     <div className="mt-8 space-y-6">
       {!syllabus && (
@@ -96,25 +102,31 @@ export function SyllabusWizard({
             placeholder="https://…"
             className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
           />
-          <div className="mt-4">
+          <div className="mt-5">
             <label className="block text-xs text-[hsl(var(--muted-foreground))]">
-              Or a PDF / image
+              Or a {imagesAllowed ? "PDF / image" : "PDF"}
             </label>
-            <input
-              type="file"
-              accept="application/pdf,image/*"
-              onChange={(e) => {
-                setFile(e.target.files?.[0] ?? null);
+            <DropZone
+              accept={accept}
+              file={file}
+              onFile={(f) => {
+                setFile(f);
                 setUrl("");
               }}
-              className="mt-1 text-sm"
             />
+            {!imagesAllowed && (
+              <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+                Image uploads require Vercel Blob. Ask the administrator to
+                configure <code className="font-mono">BLOB_READ_WRITE_TOKEN</code>.
+                PDF uploads still work.
+              </p>
+            )}
           </div>
           <button
             type="button"
             disabled={extracting || (!url.trim() && !file)}
             onClick={extract}
-            className="mt-4 rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))] disabled:opacity-40"
+            className="mt-5 rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))] disabled:opacity-40"
           >
             {extracting ? "Extracting…" : "Extract"}
           </button>

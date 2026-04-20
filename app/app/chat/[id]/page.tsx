@@ -79,7 +79,11 @@ export default async function SingleChatPage({
         </form>
       </header>
 
-      <ChatView chatId={chat.id} initialMessages={visible} />
+      <ChatView
+        chatId={chat.id}
+        initialMessages={visible}
+        blobConfigured={!!process.env.BLOB_READ_WRITE_TOKEN}
+      />
     </div>
   );
 }
