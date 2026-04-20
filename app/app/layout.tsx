@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/config";
 import { Sidebar } from "@/components/layout/sidebar";
+import { OfflineStrip } from "@/components/layout/offline-strip";
 import {
   getOnboardingStatus,
   isOnboardingComplete,
@@ -35,6 +36,7 @@ export default async function AppLayout({
     <div className="flex min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
       <Sidebar />
       <main className="flex-1 px-8 py-6">
+        <OfflineStrip />
         {showBanner && (
           <div
             className={`mx-auto mb-5 max-w-4xl rounded-md border px-3 py-2 text-small ${
