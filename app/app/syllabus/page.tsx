@@ -7,6 +7,8 @@ import {
   listFromDatabase,
 } from "@/lib/views/notion-list";
 import { ListFilter } from "@/components/views/list-filter";
+import { checkDatabaseHealth } from "@/lib/views/notion-health";
+import { DeadDbBanner } from "@/components/views/dead-db-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +22,14 @@ export default async function SyllabusListPage({
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const params = await searchParams;
+
+  const health = await checkDatabaseHealth({
+    userId: session.user.id,
+    databaseSelector: "syllabiDbId",
+  });
+  if (!health.ok) {
+    return <DeadDbBanner title="Syllabi" reason={health.reason} />;
+  }
 
   const rows = await listFromDatabase({
     userId: session.user.id,

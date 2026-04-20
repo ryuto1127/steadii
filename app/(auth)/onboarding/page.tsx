@@ -6,6 +6,7 @@ import {
   isOnboardingComplete,
 } from "@/lib/onboarding/status";
 import { runSetupAction } from "./actions";
+import { NotionConnectPanel } from "@/components/onboarding/notion-connect-panel";
 
 export default async function OnboardingPage({
   searchParams,
@@ -46,18 +47,7 @@ export default async function OnboardingPage({
           n={1}
           title="Connect Notion"
           done={status.notionConnected}
-          body={
-            status.notionConnected ? (
-              <p className="text-[hsl(var(--muted-foreground))]">Connected.</p>
-            ) : (
-              <Link
-                href="/api/integrations/notion/connect"
-                className="inline-flex rounded-lg bg-[hsl(var(--primary))] px-4 py-2 font-medium text-[hsl(var(--primary-foreground))] shadow-sm transition hover:opacity-90"
-              >
-                Connect Notion
-              </Link>
-            )
-          }
+          body={<NotionConnectPanel connected={status.notionConnected} />}
         />
 
         <Step

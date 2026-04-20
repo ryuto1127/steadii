@@ -4,12 +4,20 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
 import { notionConnections, accounts } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
-import { disconnectNotionAction } from "@/app/(auth)/onboarding/actions";
+import {
+  disconnectNotionAction,
+  repairSetupAction,
+} from "@/app/(auth)/onboarding/actions";
 
-export default async function ConnectionsPage() {
+export default async function ConnectionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ repaired?: string }>;
+}) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
+  const { repaired } = await searchParams;
 
   const [notionConn] = await db
     .select()
@@ -29,6 +37,12 @@ export default async function ConnectionsPage() {
     <div className="max-w-2xl">
       <h1 className="font-serif text-3xl">Connections</h1>
 
+      {repaired && (
+        <div className="mt-6 rounded-lg bg-[hsl(var(--primary)/0.1)] px-4 py-3 text-sm text-[hsl(var(--foreground))]">
+          Setup re-run successfully. Your Steadii workspace has been re-created in Notion.
+        </div>
+      )}
+
       <section className="mt-10 rounded-xl bg-[hsl(var(--surface))] p-6 shadow-sm">
         <h2 className="text-lg font-medium">Notion</h2>
         {notionConn ? (
@@ -37,20 +51,34 @@ export default async function ConnectionsPage() {
               Connected to <strong>{notionConn.workspaceName ?? "workspace"}</strong>
               {notionConn.setupCompletedAt ? " — setup complete." : " — setup pending."}
             </p>
-            <form action={disconnectNotionAction} className="mt-4 flex gap-3">
-              <button
-                type="submit"
-                className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
-              >
-                Disconnect
-              </button>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <form action={repairSetupAction}>
+                <button
+                  type="submit"
+                  className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
+                >
+                  Re-run setup
+                </button>
+              </form>
               <Link
                 href="/api/integrations/notion/connect"
                 className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
               >
                 Re-connect
               </Link>
-            </form>
+              <form action={disconnectNotionAction}>
+                <button
+                  type="submit"
+                  className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
+                >
+                  Disconnect
+                </button>
+              </form>
+            </div>
+            <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
+              Re-run setup if the Steadii page has been deleted from Notion or the
+              four databases are out of sync.
+            </p>
           </>
         ) : (
           <Link
