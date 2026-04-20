@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  :root {
+    --background: 45 35% 97%;
+    --surface: 0 0% 100%;
+    --surface-raised: 45 25% 94%;
+    --border: 40 20% 87%;
+    --foreground: 28 15% 15%;
+    --muted-foreground: 28 8% 42%;
+    --primary: 140 22% 35%;
+    --primary-foreground: 45 35% 97%;
+    --accent: 25 55% 58%;
+    --accent-foreground: 45 35% 97%;
+    --destructive: 0 65% 50%;
+    --ring: 140 22% 35%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 30 8% 10%;
+    --surface: 30 6% 13%;
+    --surface-raised: 30 6% 16%;
+    --border: 30 8% 22%;
+    --foreground: 45 20% 92%;
+    --muted-foreground: 30 8% 60%;
+    --primary: 140 28% 58%;
+    --primary-foreground: 30 8% 10%;
+    --accent: 25 55% 65%;
+    --accent-foreground: 30 8% 10%;
+    --destructive: 0 55% 55%;
+    --ring: 140 28% 58%;
+  }
+
+  html {
+    color-scheme: light dark;
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.015em;
+  }
+
+  *, *::before, *::after {
+    border-color: hsl(var(--border));
+  }
+}
