@@ -104,26 +104,21 @@ export function SidebarNav({ labels }: { labels: Record<string, string> }) {
             href={href}
             data-nav-item
             aria-current={active ? "page" : undefined}
+            title={`g${NAV_SHORTCUTS[key]} · ${labels[key] ?? key}`}
             className={cn(
-              "group flex h-9 items-center gap-2.5 rounded-[10px] px-2.5 text-[14px] font-medium transition-hover",
+              "group flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[14px] font-medium transition-hover",
               active
-                ? "nav-active-pill text-[hsl(var(--foreground))]"
-                : "text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface))] hover:text-[hsl(var(--foreground))]"
+                ? "nav-active text-[hsl(var(--foreground))]"
+                : "text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
             )}
           >
             <span
-              className={cn(
-                "flex h-4 w-4 shrink-0 items-center justify-center",
-                active ? "text-[hsl(var(--primary))]" : ""
-              )}
+              className="flex h-4 w-4 shrink-0 items-center justify-center"
               aria-hidden
             >
-              <Icon size={16} strokeWidth={1.5} />
+              <Icon size={16} strokeWidth={1.75} />
             </span>
             <span className="flex-1">{labels[key] ?? key}</span>
-            <span className="font-mono text-[11px] tabular-nums text-[hsl(var(--muted-foreground))] opacity-0 transition-hover group-hover:opacity-60">
-              g{NAV_SHORTCUTS[key]}
-            </span>
           </Link>
         );
       })}

@@ -73,16 +73,6 @@ type MessagesShape = {
     dismiss: string;
     remove_attachment: string;
   };
-  status_bar: {
-    focus_input: string;
-    send: string;
-    actions: string;
-    credits: string;
-    credits_unlimited: string;
-    plan_free: string;
-    plan_pro: string;
-    plan_admin: string;
-  };
   settings: {
     title: string;
     sign_out: string;
@@ -201,16 +191,6 @@ export const en: MessagesShape = {
     },
     dismiss: "Dismiss",
     remove_attachment: "Remove",
-  },
-  status_bar: {
-    focus_input: "Focus input",
-    send: "Send",
-    actions: "Actions",
-    credits: "{n} credits · {plan}",
-    credits_unlimited: "∞ credits · {plan}",
-    plan_free: "Free",
-    plan_pro: "Pro",
-    plan_admin: "Admin",
   },
   settings: {
     title: "Settings",

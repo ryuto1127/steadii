@@ -19,22 +19,29 @@ import { GraduationCap } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-
-function todayLabel(): string {
-  const d = new Date();
-  return `TODAY · ${MONTHS[d.getMonth()]} ${d.getDate()}`;
+function todaySubtitle(): string {
+  return new Date().toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 }
 
-function pastWeekLabel(startIso: string, endIso: string): string {
-  const fmt = (iso: string) => {
-    if (!iso) return "";
-    const d = new Date(iso);
-    const mm = (d.getMonth() + 1).toString().padStart(2, "0");
-    const dd = d.getDate().toString().padStart(2, "0");
-    return `${mm}/${dd}`;
-  };
-  return `PAST WEEK · ${fmt(startIso)} — ${fmt(endIso)}`;
+function dueSubtitle(): string {
+  const from = new Date();
+  const to = new Date(from.getTime() + 72 * 60 * 60 * 1000);
+  return `${formatMD(from)} — ${formatMD(to)}`;
+}
+
+function pastWeekSubtitle(startIso: string, endIso: string): string {
+  if (!startIso || !endIso) return "";
+  return `${formatMD(new Date(startIso))} — ${formatMD(new Date(endIso))}`;
+}
+
+function formatMD(d: Date): string {
+  const mm = (d.getMonth() + 1).toString().padStart(2, "0");
+  const dd = d.getDate().toString().padStart(2, "0");
+  return `${mm}/${dd}`;
 }
 
 export default async function HomePage() {
@@ -69,50 +76,45 @@ export default async function HomePage() {
   ]);
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6 py-6">
-      <div className="grid gap-5 md:grid-cols-3">
-        {/* TODAY */}
-        <DashboardCard label={todayLabel()}>
+    <div className="mx-auto flex max-w-4xl flex-col gap-8">
+      <div className="grid gap-8 md:grid-cols-3">
+        {/* Today */}
+        <DashboardCard title={t("today_schedule")} subtitle={todaySubtitle()}>
           {events.length === 0 ? (
             <GhostTimeline message={t("no_events")} />
           ) : (
-            <ul className="space-y-1">
+            <ul className="flex flex-col gap-1.5">
               {events.slice(0, 6).map((e) => (
                 <li
                   key={e.id}
-                  className="flex items-baseline gap-2 text-body text-[hsl(var(--foreground))]"
+                  className="flex items-baseline gap-2 text-[14px] text-[hsl(var(--foreground))]"
                 >
-                  <span className="font-mono text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]">
+                  <span className="w-[84px] shrink-0 font-mono text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]">
                     {formatTimeRange(e.start, e.end)}
                   </span>
                   <span className="min-w-0 flex-1 truncate">{e.title}</span>
-                  {e.calendarName ? (
-                    <span className="truncate text-small text-[hsl(var(--muted-foreground))]">
-                      {e.calendarName}
-                    </span>
-                  ) : null}
                 </li>
               ))}
             </ul>
           )}
         </DashboardCard>
 
-        {/* DUE */}
-        <DashboardCard label="DUE · NEXT 72H">
+        {/* Due soon */}
+        <DashboardCard title={t("due_soon")} subtitle={dueSubtitle()}>
           {dueSoon.length === 0 ? (
-            <div className="fade-in flex min-h-[6.5rem] items-center justify-center text-small text-[hsl(var(--muted-foreground))]">
-              — {t("nothing_due")} —
-            </div>
+            <p className="fade-in text-[14px] text-[hsl(var(--muted-foreground))]">
+              {t("nothing_due")}
+            </p>
           ) : (
-            <ul className="space-y-1">
+            <ul className="flex flex-col gap-1.5">
               {dueSoon.slice(0, 6).map((a) => (
                 <li
                   key={a.id}
-                  className="flex items-center gap-2 text-body text-[hsl(var(--foreground))]"
+                  className="flex items-center gap-2 text-[14px] text-[hsl(var(--foreground))]"
                 >
                   <ClassDot color={a.classColor} />
                   <span className="min-w-0 flex-1 truncate">{a.title}</span>
-                  <span className="font-mono text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]">
+                  <span className="shrink-0 text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]">
                     {formatRelativeDue(a.due)}
                   </span>
                 </li>
@@ -121,25 +123,29 @@ export default async function HomePage() {
           )}
         </DashboardCard>
 
-        {/* PAST WEEK */}
+        {/* Past week */}
         <DashboardCard
-          label={pastWeekLabel(weekSummary.window.start, weekSummary.window.end)}
+          title={t("past_week")}
+          subtitle={pastWeekSubtitle(
+            weekSummary.window.start,
+            weekSummary.window.end
+          )}
         >
           {weekSummary.empty ? (
-            <div className="fade-in flex min-h-[6.5rem] items-center justify-center text-small text-[hsl(var(--muted-foreground))]">
-              — {t("not_enough_history")} —
-            </div>
+            <p className="fade-in text-[14px] text-[hsl(var(--muted-foreground))]">
+              {t("not_enough_history")}
+            </p>
           ) : (
-            <div className="flex flex-col gap-1.5">
-              <div className="text-body tabular-nums">
+            <div className="flex flex-col gap-2">
+              <p className="text-[14px] tabular-nums text-[hsl(var(--foreground))]">
                 {t("counts", {
                   chats: String(weekSummary.counts.chats),
                   mistakes: String(weekSummary.counts.mistakes),
                   syllabi: String(weekSummary.counts.syllabi),
                 })}
-              </div>
+              </p>
               {weekSummary.pattern ? (
-                <p className="text-small text-[hsl(var(--muted-foreground))]">
+                <p className="text-[13px] text-[hsl(var(--muted-foreground))]">
                   {weekSummary.pattern}
                 </p>
               ) : null}

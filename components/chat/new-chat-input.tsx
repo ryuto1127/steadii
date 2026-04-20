@@ -123,20 +123,14 @@ export function NewChatInput({
     <form
       onSubmit={onSubmit}
       className={cn(
-        "relative w-full rounded-[10px] border border-[hsl(var(--border)/0.6)] bg-[hsl(var(--surface))] transition-default",
-        "focus-within:border-[hsl(var(--primary)/0.4)] focus-within:shadow-[0_0_0_4px_hsl(var(--primary)/0.12)]"
+        "group/input relative w-full rounded-[10px] bg-[hsl(var(--surface-raised))] transition-default",
+        "focus-within:shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]"
       )}
     >
       <label htmlFor="new-chat-textarea" className="sr-only">
         {t("placeholder")}
       </label>
-      <div className="flex items-start gap-2 px-2.5">
-        <span
-          aria-hidden
-          className="pt-[14px] font-mono text-[12px] leading-none text-[hsl(var(--muted-foreground))]"
-        >
-          ▸
-        </span>
+      <div className="flex items-center gap-2 px-3.5">
         <textarea
           ref={textareaRef}
           id="new-chat-textarea"
@@ -152,14 +146,14 @@ export function NewChatInput({
               (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
             }
           }}
-          className="block w-full resize-none bg-transparent py-[10px] pr-2 text-body leading-[1.45] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none"
+          className="block w-full resize-none bg-transparent py-[14px] text-[15px] leading-[1.4] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none"
         />
-        <div className="flex shrink-0 items-center gap-1.5 pt-[10px]">
-          <span aria-hidden className="ai-pulse" title="AI ready" />
+        <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="flex h-5 w-5 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+            title="Attach image or PDF"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] opacity-0 transition-hover hover:bg-[hsl(var(--surface))] hover:text-[hsl(var(--foreground))] focus-visible:opacity-100 group-hover/input:opacity-100 group-focus-within/input:opacity-100"
             aria-label="Attach image or PDF"
           >
             <Paperclip size={16} strokeWidth={1.5} />
@@ -168,14 +162,14 @@ export function NewChatInput({
             type="submit"
             disabled={!canSubmit}
             className={cn(
-              "flex h-5 w-5 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-hover",
+              "flex h-7 w-7 items-center justify-center rounded-md transition-hover",
               canSubmit
-                ? "text-[hsl(var(--primary))] hover:opacity-80"
-                : "opacity-50"
+                ? "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:opacity-90"
+                : "text-[hsl(var(--muted-foreground))] opacity-50"
             )}
             aria-label="Send"
           >
-            <ArrowUp size={16} strokeWidth={1.75} />
+            <ArrowUp size={14} strokeWidth={2} />
           </button>
         </div>
       </div>

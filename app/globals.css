@@ -3,35 +3,42 @@
 @theme {
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --radius: 0.5rem;
+  --radius: 0.625rem;
 }
 
 @layer base {
   :root {
-    --background: 0 0% 99%;
-    --surface: 0 0% 100%;
-    --surface-raised: 240 5% 96%;
-    --border: 240 6% 90%;
+    /* --background is the canvas the app sits on. It's ALSO the
+       sidebar color — the main content is what floats on top as a
+       white island. */
+    --background: 40 18% 96%;    /* #FAF7F2 warm canvas */
+    --surface: 0 0% 100%;         /* #FFFFFF main content */
+    --surface-raised: 40 14% 92%; /* warm hover / inputs */
+    --border: 40 12% 88%;         /* warm tinted border */
     --foreground: 240 10% 4%;
     --muted-foreground: 240 4% 46%;
     --primary: 32 95% 44%;
     --primary-foreground: 0 0% 99%;
     --destructive: 0 72% 51%;
     --ring: 32 95% 44%;
-    --radius: 0.5rem;
+    --radius: 0.625rem;
+    /* Optional tint that mixes over --background on class detail pages
+       (set at the app root to a class color; default transparent). */
+    --sidebar-tint-overlay: 0 0% 0% / 0;
   }
 
   .dark {
-    --background: 240 10% 4%;
-    --surface: 240 6% 10%;
-    --surface-raised: 240 5% 14%;
-    --border: 240 4% 18%;
+    --background: 0 5% 10%;       /* #1A1818 warm near-black sidebar */
+    --surface: 20 6% 5%;          /* #0F0E0D darker main island */
+    --surface-raised: 0 4% 14%;   /* warm hover */
+    --border: 0 3% 18%;
     --foreground: 0 0% 98%;
-    --muted-foreground: 240 5% 65%;
+    --muted-foreground: 0 0% 65%;
     --primary: 38 92% 50%;
-    --primary-foreground: 240 10% 4%;
+    --primary-foreground: 20 6% 5%;
     --destructive: 358 75% 59%;
     --ring: 38 92% 50%;
+    --sidebar-tint-overlay: 0 0% 0% / 0;
   }
 
   html {
@@ -43,14 +50,14 @@
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
     font-family: var(--font-sans);
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.5;
     font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    letter-spacing: -0.015em;
+    letter-spacing: -0.01em;
     font-weight: 600;
   }
 
@@ -70,38 +77,28 @@
 
   .text-h2 {
     font-size: 18px;
-    letter-spacing: -0.015em;
+    letter-spacing: -0.01em;
     line-height: 1.3;
     font-weight: 600;
   }
 
+  /* Section titles are sentence-case, 14px semibold — no caps, no
+     mono, no letter-spacing. */
   .text-h3 {
-    font-size: 16px;
-    line-height: 1.35;
+    font-size: 14px;
+    line-height: 1.3;
     font-weight: 600;
+    letter-spacing: 0;
   }
 
   .text-body {
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.5;
   }
 
   .text-small {
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.4;
-  }
-
-  /* Monospace small-caps label used for section headers per Linear /
-     Granola style (e.g. "TODAY · APR 20"). 12px + 0.08em tracking +
-     muted color. */
-  .mono-label {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: hsl(var(--muted-foreground));
-    font-variant-numeric: tabular-nums;
   }
 
   .font-mono {
@@ -180,80 +177,47 @@
   animation: steadii-ai-pulse 1.5s ease-in-out infinite;
 }
 
-/* Ambient amber glow, top-right of main. 400x400, bleeds in from
-   -100px; a 30s breathing cycle keeps the room alive. */
-@keyframes steadii-ambient-breathe {
-  0%, 100% { opacity: 0.6; }
-  50%      { opacity: 1;   }
-}
-.ambient-amber {
-  position: absolute;
-  top: -100px;
-  right: -100px;
-  width: 400px;
-  height: 400px;
-  pointer-events: none;
-  z-index: 0;
-  background: radial-gradient(
-    circle,
-    hsl(var(--primary) / 0.08) 0%,
-    hsl(var(--primary) / 0) 70%
-  );
-  animation: steadii-ambient-breathe 30s ease-in-out infinite;
-}
-
 /* Soft fade-in for empty states and late-loaded content. */
 @keyframes steadii-fade-in {
   from { opacity: 0; transform: translateY(2px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 .fade-in {
-  animation: steadii-fade-in 200ms cubic-bezier(0.34, 1.2, 0.64, 1) both;
+  animation: steadii-fade-in 240ms cubic-bezier(0.34, 1.2, 0.64, 1) both;
 }
 
-/* Arc-style interactive lift for cards. Hover raises a hair + soft
-   shadow in light, glow in dark. */
-.card-lift {
-  transition: transform 240ms cubic-bezier(0.34, 1.2, 0.64, 1),
-              box-shadow 240ms cubic-bezier(0.34, 1.2, 0.64, 1),
-              border-color 240ms cubic-bezier(0.34, 1.2, 0.64, 1);
+/* Active sidebar pill — WHITE on warm canvas. Subtle shadow lifts
+   it off the tint. Dark mode uses surface (darker) with a light
+   inset border instead of a cast shadow. */
+.nav-active {
+  background-color: hsl(var(--surface));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
-.card-lift:hover {
-  transform: scale(1.005);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-.dark .card-lift:hover {
-  box-shadow: 0 0 0 1px hsl(var(--border)),
-              0 2px 12px hsl(var(--primary) / 0.05);
+.dark .nav-active {
+  background-color: hsl(var(--surface));
+  box-shadow: 0 0 0 1px hsl(var(--border));
 }
 
-/* Sidebar background: gentle vertical light gradient. */
-.sidebar-bg {
-  background: linear-gradient(
-    to bottom,
-    hsl(var(--surface-raised)) 0%,
-    hsl(var(--surface-raised) / 0.7) 100%
-  );
-}
-
-/* Active sidebar pill: amber-tinted gradient left → transparent right. */
-.nav-active-pill {
-  background: linear-gradient(
-    to right,
-    hsl(var(--primary) / 0.14) 0%,
-    hsl(var(--primary) / 0) 100%
-  );
+/* Class color wash overlay for /app/classes/[id] — 8% mix of the
+   class color on top of the canvas, transitioning over 400ms. */
+.canvas-wash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-color: hsl(var(--sidebar-tint-overlay));
+  transition: background-color 400ms ease-out;
+  z-index: 0;
 }
 
 /* Typography for rendered markdown in chat responses. */
 .prose-chat {
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.6;
   color: hsl(var(--foreground));
 }
 
 .prose-chat > * + * {
-  margin-top: 0.8rem;
+  margin-top: 0.85rem;
 }
 
 .prose-chat h1,
@@ -263,7 +227,7 @@
   font-family: var(--font-sans);
   font-weight: 600;
   line-height: 1.25;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.01em;
   margin-top: 1.3rem;
   margin-bottom: 0.25rem;
 }
@@ -305,7 +269,7 @@
 
 .prose-chat blockquote {
   border-left: 2px solid hsl(var(--border));
-  padding-left: 0.8rem;
+  padding-left: 0.85rem;
   color: hsl(var(--muted-foreground));
   font-style: italic;
 }
@@ -322,7 +286,7 @@
   font-family: var(--font-mono);
   font-size: 13px;
   background: hsl(var(--surface-raised));
-  padding: 0.85rem 1rem;
+  padding: 0.9rem 1.05rem;
   border-radius: 8px;
   overflow-x: auto;
   line-height: 1.5;
@@ -338,11 +302,11 @@
 .prose-chat table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
 }
 .prose-chat th,
 .prose-chat td {
-  padding: 0.4rem 0.7rem;
+  padding: 0.45rem 0.7rem;
   border-bottom: 1px solid hsl(var(--border));
   text-align: left;
 }
@@ -358,7 +322,7 @@
 }
 
 .prose-chat .katex-display {
-  margin: 0.7rem 0;
+  margin: 0.75rem 0;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 0.1rem 0;

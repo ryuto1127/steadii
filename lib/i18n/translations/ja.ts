@@ -97,16 +97,6 @@ export const ja: Messages = {
     dismiss: "閉じる",
     remove_attachment: "削除",
   },
-  status_bar: {
-    focus_input: "入力にフォーカス",
-    send: "送信",
-    actions: "アクション",
-    credits: "{n} クレジット · {plan}",
-    credits_unlimited: "∞ クレジット · {plan}",
-    plan_free: "Free",
-    plan_pro: "Pro",
-    plan_admin: "Admin",
-  },
   settings: {
     title: "設定",
     sign_out: "サインアウト",

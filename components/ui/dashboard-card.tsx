@@ -5,42 +5,49 @@ import { cn } from "@/lib/utils/cn";
 type EmptyAction = { label: string; href: string };
 
 export function DashboardCard({
-  label,
+  title,
+  subtitle,
   children,
   empty,
   action,
   className,
 }: {
-  /** Mono small-caps section label, e.g. "TODAY · APR 20". */
-  label: string;
+  /** Sentence-case section title, e.g. "Today". */
+  title: string;
+  /** Muted subtitle sitting under the title, e.g. "Wed, Apr 20". */
+  subtitle?: string;
   children?: ReactNode;
   empty?: { text: string; action?: EmptyAction };
-  action?: { label: string; href: string; shortcut?: string };
+  action?: { label: string; href: string };
   className?: string;
 }) {
   const hasChildren = children !== undefined && children !== null && children !== false;
   return (
-    <section
-      className={cn(
-        "card-lift rounded-[10px] border border-[hsl(var(--border)/0.6)] bg-[hsl(var(--surface))] p-5",
-        className
-      )}
-    >
-      <header className="mb-3 flex items-center justify-between gap-3">
-        <span className="mono-label">{label}</span>
+    <section className={cn("flex flex-col gap-3", className)}>
+      <header className="flex items-baseline justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[14px] font-semibold text-[hsl(var(--foreground))]">
+            {title}
+          </span>
+          {subtitle ? (
+            <span className="text-[12px] text-[hsl(var(--muted-foreground))]">
+              {subtitle}
+            </span>
+          ) : null}
+        </div>
         {action ? (
           <Link
             href={action.href}
-            className="mono-label text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+            className="text-[13px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
           >
             {action.label}
           </Link>
         ) : null}
       </header>
       {hasChildren ? (
-        <div className="space-y-1">{children}</div>
+        <div className="flex flex-col gap-1.5">{children}</div>
       ) : empty ? (
-        <div className="py-4 text-small text-[hsl(var(--muted-foreground))]">
+        <div className="py-3 text-[14px] text-[hsl(var(--muted-foreground))]">
           <p>{empty.text}</p>
           {empty.action ? (
             <Link

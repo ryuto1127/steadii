@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { SidebarNav } from "./sidebar-nav";
 import { NAV_ITEM_KEYS } from "./nav-items";
+import { ServiceTiles } from "./service-tiles";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
 import { chats } from "@/lib/db/schema";
@@ -20,7 +21,13 @@ function shortTime(d: Date): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-export async function Sidebar() {
+export async function Sidebar({
+  creditsRemaining,
+  plan,
+}: {
+  creditsRemaining: number;
+  plan: "free" | "pro" | "admin";
+}) {
   const t = await getTranslations("nav");
   const labels: Record<string, string> = {};
   for (const key of NAV_ITEM_KEYS) labels[key] = t(key);
@@ -42,41 +49,41 @@ export async function Sidebar() {
 
   return (
     <aside
-      className="sidebar-bg sticky top-0 flex h-screen w-56 shrink-0 flex-col px-3 py-5"
+      className="flex h-full w-52 shrink-0 flex-col px-2 py-3"
       aria-label="Primary"
     >
-      <div className="flex items-baseline gap-2 px-2 pb-1">
-        <span className="text-[15px] font-semibold leading-none tracking-[-0.02em] text-[hsl(var(--foreground))]">
-          Steadii
-        </span>
-      </div>
-      <span className="mb-5 px-2 font-mono text-[11px] tracking-[0.08em] text-[hsl(var(--muted-foreground))]">
-        v0.1 · α
-      </span>
+      <ServiceTiles />
 
       <SidebarNav labels={labels} />
 
       {recent.length > 0 ? (
-        <div className="mt-5 flex flex-col gap-0.5 pt-4">
-          <span className="px-2 pb-1 font-mono text-[11px] tracking-[0.08em] text-[hsl(var(--muted-foreground))]">
-            RECENT
+        <div className="mt-5 flex flex-col gap-0.5">
+          <span className="px-2 pb-1 text-[13px] font-semibold text-[hsl(var(--muted-foreground))]">
+            Recent
           </span>
           {recent.map((c) => (
             <Link
               key={c.id}
               href={`/app/chat/${c.id}`}
-              className="flex h-7 items-center gap-2 rounded-lg px-2 text-[13px] text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface))] hover:text-[hsl(var(--foreground))]"
+              className="flex h-8 items-center gap-2 rounded-lg px-2 text-[14px] text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
             >
               <span className="min-w-0 flex-1 truncate">
                 {c.title ?? "Untitled"}
               </span>
-              <span className="font-mono text-[11px] tabular-nums opacity-60">
+              <span className="shrink-0 text-[12px] tabular-nums opacity-60">
                 {shortTime(c.updatedAt)}
               </span>
             </Link>
           ))}
         </div>
       ) : null}
+
+      <div className="mt-auto flex items-center justify-between px-2 pt-3 text-[12px] text-[hsl(var(--muted-foreground))]">
+        <span className="tabular-nums">
+          {plan === "admin" ? "∞ credits" : `${creditsRemaining} credits`}
+        </span>
+        <span className="capitalize opacity-70">{plan}</span>
+      </div>
     </aside>
   );
 }
