@@ -66,9 +66,11 @@ describe("mistakeSaveSchema", () => {
   });
 
   it("accepts a valid payload with optional fields", () => {
+    // Zod 4 validates UUIDs strictly (RFC 4122 version + variant bits),
+    // so test fixtures need proper v4 UUIDs rather than padded ones.
     const parsed = mistakeSaveSchema.parse({
-      chatId: "00000000-0000-0000-0000-000000000001",
-      assistantMessageId: "00000000-0000-0000-0000-000000000002",
+      chatId: "00000000-0000-4000-8000-000000000001",
+      assistantMessageId: "00000000-0000-4000-8000-000000000002",
       title: "Prob",
       difficulty: "hard",
       tags: ["vectors"],

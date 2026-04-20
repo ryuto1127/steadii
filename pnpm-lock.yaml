@@ -61,7 +61,7 @@ importers:
         version: 0.4.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       openai:
         specifier: ^6.34.0
-        version: 6.34.0(zod@3.25.76)
+        version: 6.34.0(zod@4.3.6)
       pdf-parse:
         specifier: ^2.4.5
         version: 2.4.5
@@ -84,8 +84,8 @@ importers:
         specifier: ^3.5.0
         version: 3.5.0
       zod:
-        specifier: ^3.23.8
-        version: 3.25.76
+        specifier: ^4.3.6
+        version: 4.3.6
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.0.0-beta.7
@@ -4414,6 +4414,9 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
 snapshots:
 
   '@alloc/quick-lru@5.2.0': {}
@@ -7789,9 +7792,9 @@ snapshots:
 
   obug@2.1.1: {}
 
-  openai@6.34.0(zod@3.25.76):
+  openai@6.34.0(zod@4.3.6):
     optionalDependencies:
-      zod: 3.25.76
+      zod: 4.3.6
 
   optionator@0.9.4:
     dependencies:
@@ -8597,3 +8600,5 @@ snapshots:
       zod: 3.25.76
 
   zod@3.25.76: {}
+
+  zod@4.3.6: {}
