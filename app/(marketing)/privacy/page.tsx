@@ -3,11 +3,11 @@ export const dynamic = "force-static";
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 py-20">
-      <p className="font-mono text-xs uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+      <p className="font-mono text-[11px] uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
         α — subject to change
       </p>
-      <h1 className="mt-6 font-serif text-4xl">Privacy Policy</h1>
-      <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">
+      <h1 className="mt-4 font-display text-[hsl(var(--foreground))]">Privacy Policy</h1>
+      <p className="mt-3 text-small text-[hsl(var(--muted-foreground))]">
         Last updated: 2026-04-20
       </p>
 
@@ -52,8 +52,8 @@ export default function PrivacyPage() {
 function Section({ heading, body }: { heading: string; body: string }) {
   return (
     <section>
-      <h2 className="font-serif text-xl">{heading}</h2>
-      <p className="mt-2 text-[hsl(var(--foreground))]">{body}</p>
+      <h2 className="text-h2 text-[hsl(var(--foreground))]">{heading}</h2>
+      <p className="mt-2 text-body text-[hsl(var(--foreground))]">{body}</p>
     </section>
   );
 }
