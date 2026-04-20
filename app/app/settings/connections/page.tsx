@@ -34,7 +34,7 @@ export default async function ConnectionsPage({
   const calendarConnected = googleAcct[0]?.scope?.includes("calendar") ?? false;
 
   return (
-    <div className="max-w-2xl">
+    <div className="mx-auto max-w-2xl">
       <h1 className="font-serif text-3xl">Connections</h1>
 
       {repaired && (
