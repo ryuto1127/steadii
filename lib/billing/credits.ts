@@ -60,8 +60,14 @@ export async function getCreditBalance(userId: string): Promise<CreditBalance> {
   };
 }
 
-export async function assertCreditsAvailable(userId: string): Promise<CreditBalance> {
+export async function assertCreditsAvailable(
+  userId: string
+): Promise<CreditBalance> {
+  // Admin redemptions bypass quota entirely.
+  const { isUnlimitedPlan } = await import("./effective-plan");
+  const unlimited = await isUnlimitedPlan(userId);
   const balance = await getCreditBalance(userId);
+  if (unlimited) return balance;
   if (balance.exceeded) throw new BillingQuotaExceededError(balance);
   return balance;
 }

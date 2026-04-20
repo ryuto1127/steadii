@@ -72,15 +72,14 @@ export default async function SettingsPage() {
           </p>
         </div>
 
-        {balance.plan === "free" && (
-          <div className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] p-4">
-            <p className="text-sm font-medium">Upgrade to Pro</p>
-            <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
-              1,000 credits/month · 50 MB per file · 2 GB total storage.
-              Billing UI ships in Phase 5.
-            </p>
-          </div>
-        )}
+        <div className="mt-6">
+          <Link
+            href="/app/settings/billing"
+            className="inline-flex rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
+          >
+            Manage billing →
+          </Link>
+        </div>
       </section>
 
       <ul className="mt-6 divide-y divide-[hsl(var(--border))] rounded-xl bg-[hsl(var(--surface))]">
