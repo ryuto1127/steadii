@@ -33,8 +33,8 @@ export default async function CalendarPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h1 className="font-serif text-3xl">Calendar</h1>
-      <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
+      <h1 className="text-h1 text-[hsl(var(--foreground))]">Calendar</h1>
+      <p className="mt-2 text-small text-[hsl(var(--muted-foreground))]">
         Next 7 days — primary calendar. Agent-driven edits reflect here on next
         reload.
       </p>

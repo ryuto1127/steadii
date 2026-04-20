@@ -57,8 +57,8 @@ export default async function NewSyllabusPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="font-serif text-3xl">Upload a syllabus</h1>
-      <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
+      <h1 className="text-h1 text-[hsl(var(--foreground))]">Upload a syllabus</h1>
+      <p className="mt-2 text-small text-[hsl(var(--muted-foreground))]">
         Drop a PDF, an image, or paste a URL. We&apos;ll extract the structure and show you a preview before saving to Notion.
       </p>
       <SyllabusWizard
