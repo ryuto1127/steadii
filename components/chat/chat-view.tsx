@@ -43,6 +43,7 @@ export function ChatView({
   const [streaming, setStreaming] = useState(false);
   const [mistakeFor, setMistakeFor] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [streamError, setStreamError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const scrollAnchor = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -52,6 +53,7 @@ export function ChatView({
   }, [messages, toolEvents, streaming]);
 
   async function runStream() {
+    setStreamError(null);
     setStreaming(true);
     const assistantTempId = "assistant-" + Date.now();
     setMessages((m) => [
@@ -126,6 +128,25 @@ export function ChatView({
                   pendingId: payload.pendingId,
                 },
               ]);
+            } else if (payload.type === "error") {
+              // Replace the (still-empty) assistant placeholder with an
+              // error bubble so the user sees *why* the stream failed.
+              setMessages((m) =>
+                m.map((x) =>
+                  x.id === currentAssistantId
+                    ? {
+                        ...x,
+                        role: "assistant",
+                        content:
+                          x.content ||
+                          `⚠ ${payload.message ?? "Something went wrong."}`,
+                      }
+                    : x
+                )
+              );
+              setStreamError(
+                payload.message ?? `Stream failed (${payload.code ?? "UNKNOWN"})`
+              );
             }
           } catch {
             // ignore
@@ -338,6 +359,18 @@ export function ChatView({
             <button
               type="button"
               onClick={() => setUploadError(null)}
+              className="ml-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+        {streamError && (
+          <div className="mb-2 flex items-center justify-between rounded-md bg-[hsl(var(--destructive)/0.1)] px-3 py-2 text-xs text-[hsl(var(--destructive))]">
+            <span>{streamError}</span>
+            <button
+              type="button"
+              onClick={() => setStreamError(null)}
               className="ml-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
             >
               Dismiss

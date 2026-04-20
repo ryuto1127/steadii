@@ -6,21 +6,20 @@ export type TaskType =
   | "chat_title"
   | "tag_suggest";
 
-export type OpenAIModel = "gpt-5.4-mini" | "gpt-5.4" | "gpt-5.4-nano";
+// Canonical defaults per PRD §5. These are the target IDs; the operator can
+// override them at runtime with OPENAI_CHAT_MODEL / OPENAI_COMPLEX_MODEL /
+// OPENAI_NANO_MODEL without a code change — useful when the listed IDs
+// haven't rolled out to a particular account yet.
+export type DefaultOpenAIModel = "gpt-5.4-mini" | "gpt-5.4" | "gpt-5.4-nano";
 
-export function selectModel(taskType: TaskType): OpenAIModel {
-  switch (taskType) {
-    case "chat":
-    case "tool_call":
-      return "gpt-5.4-mini";
-    case "mistake_explain":
-    case "syllabus_extract":
-      return "gpt-5.4";
-    case "chat_title":
-    case "tag_suggest":
-      return "gpt-5.4-nano";
-  }
-}
+const DEFAULTS: Record<
+  "chat" | "complex" | "nano",
+  DefaultOpenAIModel
+> = {
+  chat: "gpt-5.4-mini",
+  complex: "gpt-5.4",
+  nano: "gpt-5.4-nano",
+};
 
 type Pricing = {
   inputPerMillion: number;
@@ -28,17 +27,58 @@ type Pricing = {
   cachedInputPerMillion: number;
 };
 
-const PRICING: Record<OpenAIModel, Pricing> = {
-  "gpt-5.4-mini": { inputPerMillion: 0.15, outputPerMillion: 0.6, cachedInputPerMillion: 0.075 },
-  "gpt-5.4": { inputPerMillion: 2.5, outputPerMillion: 10, cachedInputPerMillion: 1.25 },
-  "gpt-5.4-nano": { inputPerMillion: 0.05, outputPerMillion: 0.2, cachedInputPerMillion: 0.025 },
+const PRICING: Record<DefaultOpenAIModel, Pricing> = {
+  "gpt-5.4-mini": {
+    inputPerMillion: 0.15,
+    outputPerMillion: 0.6,
+    cachedInputPerMillion: 0.075,
+  },
+  "gpt-5.4": {
+    inputPerMillion: 2.5,
+    outputPerMillion: 10,
+    cachedInputPerMillion: 1.25,
+  },
+  "gpt-5.4-nano": {
+    inputPerMillion: 0.05,
+    outputPerMillion: 0.2,
+    cachedInputPerMillion: 0.025,
+  },
 };
 
+export function selectModel(
+  taskType: TaskType,
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  switch (taskType) {
+    case "chat":
+    case "tool_call":
+      return env.OPENAI_CHAT_MODEL?.trim() || DEFAULTS.chat;
+    case "mistake_explain":
+    case "syllabus_extract":
+      return env.OPENAI_COMPLEX_MODEL?.trim() || DEFAULTS.complex;
+    case "chat_title":
+    case "tag_suggest":
+      return env.OPENAI_NANO_MODEL?.trim() || DEFAULTS.nano;
+  }
+}
+
+// Map any (possibly overridden) model string back to a pricing tier so
+// credit accounting stays sane even when OPENAI_*_MODEL is set to a new ID.
+// The heuristic: exact match first; else look for "mini" or "nano" in the
+// string; default to the complex (full) tier.
+export function pricingTierFor(model: string): DefaultOpenAIModel {
+  if (model in PRICING) return model as DefaultOpenAIModel;
+  const lower = model.toLowerCase();
+  if (lower.includes("nano")) return "gpt-5.4-nano";
+  if (lower.includes("mini")) return "gpt-5.4-mini";
+  return "gpt-5.4";
+}
+
 export function estimateUsdCost(
-  model: OpenAIModel,
+  model: string,
   tokens: { input: number; output: number; cached: number }
 ): number {
-  const p = PRICING[model];
+  const p = PRICING[pricingTierFor(model)];
   const uncachedInput = Math.max(0, tokens.input - tokens.cached);
   const dollars =
     (uncachedInput * p.inputPerMillion +
@@ -51,3 +91,6 @@ export function estimateUsdCost(
 export function usdToCredits(usd: number): number {
   return Math.floor(usd * 100);
 }
+
+// Re-export for legacy callers that imported OpenAIModel.
+export type OpenAIModel = string;
