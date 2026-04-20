@@ -2,8 +2,12 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Paperclip, ArrowUp, FileText as FileTextIcon } from "lucide-react";
 import { MistakeNoteDialog } from "./mistake-note-dialog";
 import { MarkdownMessage } from "./markdown-message";
+import { ToolCallCard, type ToolCallStatus } from "./tool-call-card";
+import { ActionPill } from "@/components/ui/action-pill";
+import { cn } from "@/lib/utils/cn";
 
 type Attachment = {
   id: string;
@@ -22,7 +26,7 @@ type Message = {
 type ToolEvent = {
   id: string; // toolCallId
   toolName: string;
-  status: "running" | "done" | "failed" | "pending" | "denied";
+  status: ToolCallStatus;
   args?: unknown;
   result?: unknown;
   pendingId?: string;
@@ -32,10 +36,12 @@ export function ChatView({
   chatId,
   initialMessages,
   blobConfigured = true,
+  autoStream = false,
 }: {
   chatId: string;
   initialMessages: Message[];
   blobConfigured?: boolean;
+  autoStream?: boolean;
 }) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [toolEvents, setToolEvents] = useState<ToolEvent[]>([]);
@@ -52,10 +58,22 @@ export function ChatView({
   const [, startTransition] = useTransition();
   const scrollAnchor = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const didAutoStream = useRef(false);
 
   useEffect(() => {
     scrollAnchor.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, toolEvents, streaming]);
+
+  // Auto-trigger the stream when the URL has ?stream=1 (e.g., user hit send
+  // from the Home input and was routed here with a fresh user message that
+  // already exists in the DB).
+  useEffect(() => {
+    if (autoStream && !didAutoStream.current) {
+      didAutoStream.current = true;
+      void runStream();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStream]);
 
   async function runStream() {
     setStreamError(null);
@@ -134,8 +152,6 @@ export function ChatView({
                 },
               ]);
             } else if (payload.type === "error") {
-              // Replace the (still-empty) assistant placeholder with an
-              // error bubble so the user sees *why* the stream failed.
               setMessages((m) =>
                 m.map((x) =>
                   x.id === currentAssistantId
@@ -158,6 +174,8 @@ export function ChatView({
           }
         }
       }
+    } catch (err) {
+      setStreamError(err instanceof Error ? err.message : "Stream failed.");
     } finally {
       setStreaming(false);
       startTransition(() => router.refresh());
@@ -171,7 +189,7 @@ export function ChatView({
       body: JSON.stringify({ pendingId, decision }),
     });
     if (!res.ok) {
-      alert(`confirmation failed: ${await res.text()}`);
+      setStreamError(`Confirmation failed: ${await res.text()}`);
       return;
     }
     setToolEvents((evs) =>
@@ -204,7 +222,7 @@ export function ChatView({
       body: JSON.stringify({ chatId, content: text }),
     });
     if (!res.ok) {
-      console.error("post message failed", await res.text());
+      setStreamError("Failed to send message.");
       return;
     }
     const { messageId } = (await res.json()) as { messageId: string };
@@ -248,118 +266,102 @@ export function ChatView({
     }
   }
 
+  const hasAnyPending = toolEvents.some((t) => t.status === "pending");
+
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col">
-      <div className="flex-1 overflow-y-auto py-6">
-        {messages.length === 0 && (
-          <p className="mt-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
-            Ask anything about your classes, assignments, or a problem you&apos;re stuck on.
-          </p>
-        )}
-        <ul className="space-y-6">
-          {messages.map((m) => (
-            <li
-              key={m.id}
-              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={
-                  m.role === "user"
-                    ? "max-w-[80%] rounded-xl bg-[hsl(var(--surface-raised))] px-4 py-3 text-sm"
-                    : "max-w-[85%] text-sm leading-relaxed"
-                }
+      <div className="flex-1 overflow-y-auto py-4">
+        <ul className="space-y-5">
+          {messages.map((m, idx) => {
+            const isLastAssistant =
+              m.role === "assistant" && idx === messages.length - 1;
+            const showCursor = streaming && isLastAssistant && !hasAnyPending;
+            const isUserMsg = m.role === "user";
+            return (
+              <li
+                key={m.id}
+                className={cn(
+                  "flex",
+                  isUserMsg ? "justify-end" : "justify-start"
+                )}
               >
-                {m.attachments.length > 0 && (
-                  <div className="mb-2 space-y-2">
-                    {m.attachments.map((a) =>
-                      a.kind === "image" ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          key={a.id}
-                          src={a.url}
-                          alt={a.filename ?? "attachment"}
-                          className="max-h-64 rounded-md"
-                        />
-                      ) : (
-                        <a
-                          key={a.id}
-                          href={a.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs underline"
-                        >
-                          {a.filename ?? "PDF"}
-                        </a>
-                      )
-                    )}
-                  </div>
-                )}
-                {m.content ? (
-                  m.role === "assistant" ? (
-                    <MarkdownMessage content={m.content} />
-                  ) : (
-                    <span className="whitespace-pre-wrap">{m.content}</span>
-                  )
-                ) : m.role === "assistant" && streaming ? (
-                  <ThinkingDots />
-                ) : (
-                  <span className="text-[hsl(var(--muted-foreground))]">…</span>
-                )}
-                {m.role === "assistant" &&
-                  m.content &&
-                  !m.id.startsWith("assistant-") && (
-                    <div className="mt-2">
-                      <button
-                        type="button"
-                        onClick={() => setMistakeFor(m.id)}
-                        className="text-xs text-[hsl(var(--muted-foreground))] underline-offset-2 hover:text-[hsl(var(--foreground))] hover:underline"
-                      >
-                        Add to mistake notebook
-                      </button>
+                <div
+                  className={cn(
+                    isUserMsg
+                      ? "max-w-[80%] rounded-md bg-[hsl(var(--surface-raised))] px-3 py-2 text-body"
+                      : "max-w-[85%] text-body"
+                  )}
+                >
+                  {m.attachments.length > 0 && (
+                    <div className="mb-2 space-y-2">
+                      {m.attachments.map((a) =>
+                        a.kind === "image" ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={a.id}
+                            src={a.url}
+                            alt={a.filename ?? "attachment"}
+                            className="max-h-[200px] max-w-[200px] rounded-sm border border-[hsl(var(--border))]"
+                          />
+                        ) : (
+                          <a
+                            key={a.id}
+                            href={a.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-sm border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 py-1 text-small"
+                          >
+                            <FileTextIcon
+                              size={12}
+                              strokeWidth={1.5}
+                              className="text-[hsl(var(--muted-foreground))]"
+                            />
+                            {a.filename ?? "PDF"}
+                          </a>
+                        )
+                      )}
                     </div>
                   )}
-              </div>
-            </li>
-          ))}
+                  {m.content ? (
+                    m.role === "assistant" ? (
+                      <div className={cn(showCursor && "streaming-cursor")}>
+                        <MarkdownMessage content={m.content} />
+                      </div>
+                    ) : (
+                      <span className="whitespace-pre-wrap">{m.content}</span>
+                    )
+                  ) : m.role === "assistant" && streaming ? (
+                    <span className="streaming-cursor" aria-label="Thinking" />
+                  ) : (
+                    <span className="text-[hsl(var(--muted-foreground))]">…</span>
+                  )}
+                  {m.role === "assistant" &&
+                    m.content &&
+                    !m.id.startsWith("assistant-") && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <ActionPill onClick={() => setMistakeFor(m.id)} tone="primary">
+                          + 間違いノートに追加
+                        </ActionPill>
+                      </div>
+                    )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
 
         {toolEvents.length > 0 && (
           <ul className="mt-4 space-y-2">
             {toolEvents.map((ev) => (
-              <li
-                key={ev.id}
-                className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-xs"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono">
-                    {ev.status === "running" && `· ${ev.toolName}…`}
-                    {ev.status === "done" && `✓ ${ev.toolName}`}
-                    {ev.status === "failed" && `✗ ${ev.toolName}`}
-                    {ev.status === "pending" && `? ${ev.toolName}`}
-                    {ev.status === "denied" && `✗ ${ev.toolName} (denied)`}
-                  </span>
-                </div>
-                {ev.status === "pending" && ev.pendingId && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <pre className="flex-1 overflow-x-auto rounded bg-[hsl(var(--surface-raised))] p-2 text-[11px]">
-                      {JSON.stringify(ev.args, null, 2)}
-                    </pre>
-                    <button
-                      type="button"
-                      onClick={() => confirmPending(ev.pendingId!, "approve")}
-                      className="rounded bg-[hsl(var(--primary))] px-3 py-1 text-[11px] text-[hsl(var(--primary-foreground))]"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => confirmPending(ev.pendingId!, "deny")}
-                      className="rounded border border-[hsl(var(--border))] px-3 py-1 text-[11px]"
-                    >
-                      Deny
-                    </button>
-                  </div>
-                )}
+              <li key={ev.id}>
+                <ToolCallCard
+                  toolName={ev.toolName}
+                  status={ev.status}
+                  args={ev.args}
+                  result={ev.result}
+                  pendingId={ev.pendingId}
+                  onConfirm={(d) => ev.pendingId && confirmPending(ev.pendingId, d)}
+                />
               </li>
             ))}
           </ul>
@@ -368,9 +370,9 @@ export function ChatView({
         <div ref={scrollAnchor} />
       </div>
 
-      <div className="border-t border-[hsl(var(--border))] py-4">
+      <div className="border-t border-[hsl(var(--border))] py-3">
         {!blobConfigured && (
-          <div className="mb-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-xs text-[hsl(var(--muted-foreground))]">
+          <div className="mb-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-small text-[hsl(var(--muted-foreground))]">
             Image and PDF uploads are disabled until
             <code className="mx-1 font-mono text-[hsl(var(--foreground))]">
               BLOB_READ_WRITE_TOKEN
@@ -379,34 +381,21 @@ export function ChatView({
           </div>
         )}
         {uploadError && (
-          <div className="mb-2 flex items-center justify-between rounded-md bg-[hsl(var(--destructive)/0.1)] px-3 py-2 text-xs text-[hsl(var(--destructive))]">
-            <span>{uploadError}</span>
-            <button
-              type="button"
-              onClick={() => setUploadError(null)}
-              className="ml-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-            >
-              Dismiss
-            </button>
-          </div>
+          <InlineAlert tone="destructive" onDismiss={() => setUploadError(null)}>
+            {uploadError}
+          </InlineAlert>
         )}
         {streamError && (
-          <div className="mb-2 flex items-center justify-between rounded-md bg-[hsl(var(--destructive)/0.1)] px-3 py-2 text-xs text-[hsl(var(--destructive))]">
-            <span>{streamError}</span>
-            <button
-              type="button"
-              onClick={() => setStreamError(null)}
-              className="ml-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-            >
-              Dismiss
-            </button>
-          </div>
+          <InlineAlert tone="destructive" onDismiss={() => setStreamError(null)}>
+            {streamError}
+          </InlineAlert>
         )}
         {uploading && (
-          <div className="mb-2 flex items-center gap-2 rounded-md bg-[hsl(var(--surface-raised))] px-3 py-2 text-xs">
+          <div className="mb-2 flex items-center gap-2 rounded-md bg-[hsl(var(--surface-raised))] px-3 py-2 text-small">
             <span
               aria-hidden
-              className="inline-block h-2 w-2 animate-pulse rounded-full bg-[hsl(var(--primary))]"
+              className="inline-block h-2 w-2 rounded-full bg-[hsl(var(--primary))]"
+              style={{ animation: "steadii-pulse 1.2s ease-in-out infinite" }}
             />
             <span>
               Uploading {uploading.filename}
@@ -414,50 +403,13 @@ export function ChatView({
             </span>
           </div>
         )}
-        {attachment && !uploading && (
-          <div className="mb-2 flex items-center justify-between rounded-md bg-[hsl(var(--surface-raised))] px-3 py-2 text-xs">
-            <span>Attached: {attachment.filename ?? attachment.kind}</span>
-            <button
-              type="button"
-              onClick={() => setAttachment(null)}
-              className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-            >
-              Remove
-            </button>
-          </div>
-        )}
         <form
           onSubmit={(e) => {
             e.preventDefault();
             send();
           }}
-          className="flex items-end gap-2"
+          className="relative w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-2 focus-within:border-[hsl(var(--ring))] transition-default"
         >
-          <label
-            className={`rounded-md border border-[hsl(var(--border))] px-3 py-2 text-xs ${
-              blobConfigured
-                ? "cursor-pointer text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))]"
-                : "cursor-not-allowed text-[hsl(var(--muted-foreground)/0.5)]"
-            }`}
-            title={
-              blobConfigured
-                ? undefined
-                : "Image uploads require Vercel Blob. Ask the administrator to configure BLOB_READ_WRITE_TOKEN."
-            }
-          >
-            Attach
-            <input
-              type="file"
-              accept="image/*,application/pdf"
-              className="hidden"
-              disabled={!blobConfigured}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) uploadFile(f);
-                e.target.value = "";
-              }}
-            />
-          </label>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -469,16 +421,67 @@ export function ChatView({
             }}
             placeholder="Message Steadii…"
             rows={2}
-            className="flex-1 resize-none rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
+            className="block w-full resize-none bg-transparent px-3 py-2 text-body text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none"
             disabled={streaming}
           />
-          <button
-            type="submit"
-            disabled={streaming || (!input.trim() && !attachment)}
-            className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))] shadow-sm transition hover:opacity-90 disabled:opacity-40"
-          >
-            {streaming ? "…" : "Send"}
-          </button>
+          {attachment && !uploading && (
+            <div className="mx-2 mb-2 flex items-center justify-between rounded-md bg-[hsl(var(--surface-raised))] px-2 py-1 text-small">
+              <span className="flex items-center gap-1.5 truncate">
+                <FileTextIcon
+                  size={12}
+                  strokeWidth={1.5}
+                  className="text-[hsl(var(--muted-foreground))]"
+                />
+                {attachment.filename ?? attachment.kind}
+              </span>
+              <button
+                type="button"
+                onClick={() => setAttachment(null)}
+                className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              >
+                Remove
+              </button>
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-2 px-1 pt-1">
+            <div className="flex items-center gap-2">
+              <label
+                className={cn(
+                  "flex h-7 w-7 items-center justify-center rounded-md transition-hover",
+                  blobConfigured
+                    ? "cursor-pointer text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
+                    : "cursor-not-allowed text-[hsl(var(--muted-foreground)/0.5)]"
+                )}
+                title={
+                  blobConfigured
+                    ? undefined
+                    : "Image uploads require Vercel Blob. Ask the administrator to configure BLOB_READ_WRITE_TOKEN."
+                }
+                aria-label="Attach"
+              >
+                <Paperclip size={14} strokeWidth={1.5} />
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  disabled={!blobConfigured}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadFile(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={streaming || (!input.trim() && !attachment)}
+              aria-label="Send"
+              className="flex h-7 w-7 items-center justify-center rounded-md bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] transition-hover disabled:opacity-40"
+            >
+              <ArrowUp size={14} strokeWidth={1.75} />
+            </button>
+          </div>
         </form>
       </div>
 
@@ -492,33 +495,32 @@ export function ChatView({
   );
 }
 
-// Three staggered pulsing dots — 200ms ease-in-out per AGENTS.md §10.6.
-// Rendered only while streaming && the current assistant bubble is still
-// empty, so an error event (Bug D) turns the stuck state into a visible
-// message instead of eternal pulsing.
-function ThinkingDots() {
+function InlineAlert({
+  tone,
+  onDismiss,
+  children,
+}: {
+  tone: "destructive" | "neutral";
+  onDismiss: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <span
-      role="status"
-      aria-label="Thinking"
-      className="inline-flex items-center gap-1"
+    <div
+      className={cn(
+        "mb-2 flex items-center justify-between rounded-md px-3 py-2 text-small",
+        tone === "destructive"
+          ? "border border-[hsl(var(--destructive)/0.4)] bg-[hsl(var(--destructive)/0.08)] text-[hsl(var(--destructive))]"
+          : "border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))]"
+      )}
     >
-      {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          className="inline-block h-1.5 w-1.5 rounded-full bg-[hsl(var(--muted-foreground))]"
-          style={{
-            animation: "steadii-thinking 1200ms ease-in-out infinite",
-            animationDelay: `${i * 160}ms`,
-          }}
-        />
-      ))}
-      <style>{`
-        @keyframes steadii-thinking {
-          0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
-          40% { opacity: 1; transform: translateY(-2px); }
-        }
-      `}</style>
-    </span>
+      <span>{children}</span>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="ml-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+      >
+        Dismiss
+      </button>
+    </div>
   );
 }
