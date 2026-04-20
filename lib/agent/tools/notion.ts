@@ -362,7 +362,7 @@ export const notionQueryDatabase: ToolExecutor<
 // ---------- notion_create_row ----------
 const createRowArgsSchema = z.object({
   databaseId: z.string().min(1),
-  properties: z.record(z.unknown()),
+  properties: z.record(z.string(), z.unknown()),
 });
 
 export const notionCreateRow: ToolExecutor<
@@ -420,7 +420,7 @@ export const notionCreateRow: ToolExecutor<
 // ---------- notion_update_row ----------
 const updateRowArgsSchema = z.object({
   pageId: z.string().min(1),
-  properties: z.record(z.unknown()),
+  properties: z.record(z.string(), z.unknown()),
 });
 
 export const notionUpdateRow: ToolExecutor<
