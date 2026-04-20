@@ -16,7 +16,7 @@ const hoist = vi.hoisted(() => {
   return { PDFParse: FakePDFParse, instances };
 });
 
-vi.mock("pdf-parse", () => ({ PDFParse: hoist.PDFParse }));
+vi.mock("pdf-parse", () => ({ PDFParse: hoist.PDFParse, default: {} }));
 
 import { extractPdfText } from "@/lib/syllabus/pdf";
 
