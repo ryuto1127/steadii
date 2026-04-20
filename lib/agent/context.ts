@@ -1,7 +1,8 @@
 import "server-only";
 import { db } from "@/lib/db/client";
-import { notionConnections, registeredResources } from "@/lib/db/schema";
+import { notionConnections, registeredResources, accounts } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
+import { getCalendarForUser } from "@/lib/integrations/google/calendar";
 export {
   serializeContextForPrompt,
   type UserContextPayload,
@@ -27,6 +28,8 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
         )
     : [];
 
+  const calendarEventsThisWeek = await safelyFetchWeekEvents(userId);
+
   return {
     notion: {
       connected: !!conn,
@@ -41,5 +44,37 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
       notionId: r.notionId,
       title: r.title,
     })),
+    calendarEventsThisWeek,
   };
+}
+
+async function safelyFetchWeekEvents(userId: string) {
+  const [acct] = await db
+    .select({ scope: accounts.scope })
+    .from(accounts)
+    .where(and(eq(accounts.userId, userId), eq(accounts.provider, "google")))
+    .limit(1);
+  if (!acct?.scope?.includes("calendar")) return [];
+
+  try {
+    const cal = await getCalendarForUser(userId);
+    const now = new Date();
+    const weekOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const resp = await cal.events.list({
+      calendarId: "primary",
+      timeMin: now.toISOString(),
+      timeMax: weekOut.toISOString(),
+      singleEvents: true,
+      orderBy: "startTime",
+      maxResults: 25,
+    });
+    return (resp.data.items ?? []).map((e) => ({
+      summary: e.summary,
+      start: e.start?.dateTime ?? e.start?.date,
+      end: e.end?.dateTime ?? e.end?.date,
+    }));
+  } catch (err) {
+    console.error("Week events fetch failed, proceeding without", err);
+    return [];
+  }
 }

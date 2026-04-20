@@ -4,15 +4,44 @@ import { MAIN_SYSTEM_PROMPT } from "./prompts/main";
 import { selectModel } from "./models";
 import { recordUsage } from "./usage";
 import { buildUserContext, serializeContextForPrompt } from "./context";
+import { getUserConfirmationMode } from "./preferences";
+import { requiresConfirmation } from "./confirmation";
+import { getToolByName, openAIToolDefs } from "./tool-registry";
+import { discoverResources } from "@/lib/integrations/notion/discovery";
 import { db } from "@/lib/db/client";
-import { messages as messagesTable, chats, messageAttachments } from "@/lib/db/schema";
+import {
+  messages as messagesTable,
+  chats,
+  messageAttachments,
+  pendingToolCalls,
+} from "@/lib/db/schema";
 import { asc, eq } from "drizzle-orm";
+import type OpenAI from "openai";
 
 export type StreamEvent =
   | { type: "text_delta"; delta: string }
   | { type: "message_start"; assistantMessageId: string }
   | { type: "message_end"; assistantMessageId: string; text: string }
-  | { type: "tool_call_stub"; name: string }
+  | {
+      type: "tool_call_started";
+      toolName: string;
+      args: unknown;
+      toolCallId: string;
+    }
+  | {
+      type: "tool_call_result";
+      toolName: string;
+      toolCallId: string;
+      result: unknown;
+      ok: boolean;
+    }
+  | {
+      type: "tool_call_pending";
+      toolName: string;
+      toolCallId: string;
+      pendingId: string;
+      args: unknown;
+    }
   | { type: "error"; code: string; message: string };
 
 export type OrchestratorRequest = {
@@ -20,11 +49,7 @@ export type OrchestratorRequest = {
   chatId: string;
 };
 
-type StoredMessage = {
-  id: string;
-  role: "user" | "assistant" | "system" | "tool";
-  content: string;
-};
+const MAX_TOOL_ITERATIONS = 5;
 
 export async function* streamChatResponse(
   req: OrchestratorRequest
@@ -35,87 +60,257 @@ export async function* streamChatResponse(
     return;
   }
 
+  try {
+    await discoverResources(req.userId);
+  } catch (err) {
+    console.error("pre-chat discovery failed (non-fatal)", err);
+  }
   const ctx = await buildUserContext(req.userId);
   const contextPrompt = serializeContextForPrompt(ctx);
+  const confirmationMode = await getUserConfirmationMode(req.userId);
   const model = selectModel("chat");
 
-  const openaiMessages: Array<{
-    role: "system" | "user" | "assistant";
-    content: string;
-  }> = [
+  const conversation: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: MAIN_SYSTEM_PROMPT },
     { role: "system", content: contextPrompt },
-    ...history
-      .filter((m) => m.role !== "tool")
-      .map((m) => ({
-        role: m.role as "user" | "assistant" | "system",
-        content: m.content,
-      })),
+    ...history.map(toOpenAIMessage),
   ];
 
   const assistantId = await insertPendingAssistant(req.chatId, model);
   yield { type: "message_start", assistantMessageId: assistantId };
 
-  let fullText = "";
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let cachedTokens = 0;
+  let iterations = 0;
+  let finalText = "";
 
-  try {
-    const stream = await openai().chat.completions.create({
+  while (iterations < MAX_TOOL_ITERATIONS) {
+    iterations += 1;
+
+    let text = "";
+    let toolCalls: Array<{ id: string; name: string; args: string }> = [];
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let cachedTokens = 0;
+
+    try {
+      const stream = await openai().chat.completions.create({
+        model,
+        stream: true,
+        stream_options: { include_usage: true },
+        messages: conversation,
+        tools: openAIToolDefs(),
+        tool_choice: "auto",
+      });
+
+      const partialToolCalls: Record<
+        number,
+        { id: string; name: string; args: string }
+      > = {};
+
+      for await (const chunk of stream) {
+        const choice = chunk.choices?.[0];
+        const delta = choice?.delta;
+        if (delta?.content) {
+          text += delta.content;
+          yield { type: "text_delta", delta: delta.content };
+        }
+        const deltaToolCalls = delta?.tool_calls;
+        if (deltaToolCalls) {
+          for (const tc of deltaToolCalls) {
+            const idx = tc.index ?? 0;
+            if (!partialToolCalls[idx]) {
+              partialToolCalls[idx] = {
+                id: tc.id ?? "",
+                name: tc.function?.name ?? "",
+                args: tc.function?.arguments ?? "",
+              };
+            } else {
+              if (tc.id) partialToolCalls[idx].id = tc.id;
+              if (tc.function?.name) partialToolCalls[idx].name = tc.function.name;
+              if (tc.function?.arguments)
+                partialToolCalls[idx].args += tc.function.arguments;
+            }
+          }
+        }
+        if (chunk.usage) {
+          inputTokens = chunk.usage.prompt_tokens ?? 0;
+          outputTokens = chunk.usage.completion_tokens ?? 0;
+          const cacheInfo = (chunk.usage as {
+            prompt_tokens_details?: { cached_tokens?: number };
+          }).prompt_tokens_details;
+          cachedTokens = cacheInfo?.cached_tokens ?? 0;
+        }
+      }
+
+      toolCalls = Object.values(partialToolCalls).filter((c) => c.id && c.name);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown OpenAI error";
+      await db
+        .update(messagesTable)
+        .set({ content: `(error: ${message})` })
+        .where(eq(messagesTable.id, assistantId));
+      yield { type: "error", code: "OPENAI_FAILED", message };
+      return;
+    }
+
+    await recordUsage({
+      userId: req.userId,
+      chatId: req.chatId,
+      messageId: assistantId,
       model,
-      stream: true,
-      stream_options: { include_usage: true },
-      messages: openaiMessages,
+      taskType: toolCalls.length > 0 ? "tool_call" : "chat",
+      inputTokens,
+      outputTokens,
+      cachedTokens,
     });
 
-    for await (const chunk of stream) {
-      const delta = chunk.choices?.[0]?.delta?.content ?? "";
-      if (delta) {
-        fullText += delta;
-        yield { type: "text_delta", delta };
-      }
-      if (chunk.usage) {
-        inputTokens = chunk.usage.prompt_tokens ?? 0;
-        outputTokens = chunk.usage.completion_tokens ?? 0;
-        const cacheInfo = (chunk.usage as { prompt_tokens_details?: { cached_tokens?: number } })
-          .prompt_tokens_details;
-        cachedTokens = cacheInfo?.cached_tokens ?? 0;
-      }
+    finalText = text;
+
+    if (toolCalls.length === 0) {
+      // plain response — done
+      await db
+        .update(messagesTable)
+        .set({ content: text })
+        .where(eq(messagesTable.id, assistantId));
+      break;
     }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown OpenAI error";
+
+    // Persist the tool-call envelope on the assistant row so a resumed
+    // stream can rebuild the OpenAI conversation exactly.
     await db
       .update(messagesTable)
-      .set({ content: `(error: ${message})` })
+      .set({
+        content: text,
+        toolCalls: toolCalls.map((c) => ({
+          id: c.id,
+          type: "function",
+          function: { name: c.name, arguments: c.args },
+        })),
+      })
       .where(eq(messagesTable.id, assistantId));
-    yield { type: "error", code: "OPENAI_FAILED", message };
-    return;
-  }
 
-  await db
-    .update(messagesTable)
-    .set({ content: fullText })
-    .where(eq(messagesTable.id, assistantId));
+    // Append the assistant's tool-call message to the conversation
+    conversation.push({
+      role: "assistant",
+      content: text || null,
+      tool_calls: toolCalls.map((c) => ({
+        id: c.id,
+        type: "function",
+        function: { name: c.name, arguments: c.args },
+      })),
+    });
+
+    // Execute each tool, possibly pausing for confirmation
+    let pausedForConfirmation = false;
+    for (const call of toolCalls) {
+      const tool = getToolByName(call.name);
+      if (!tool) {
+        conversation.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify({ error: "unknown_tool", name: call.name }),
+        });
+        continue;
+      }
+
+      let parsedArgs: unknown;
+      try {
+        parsedArgs = JSON.parse(call.args || "{}");
+      } catch {
+        parsedArgs = {};
+      }
+
+      if (requiresConfirmation(confirmationMode, tool.schema.mutability)) {
+        const [pending] = await db
+          .insert(pendingToolCalls)
+          .values({
+            userId: req.userId,
+            chatId: req.chatId,
+            assistantMessageId: assistantId,
+            toolName: call.name,
+            toolCallId: call.id,
+            args: parsedArgs as Record<string, unknown>,
+          })
+          .returning({ id: pendingToolCalls.id });
+
+        yield {
+          type: "tool_call_pending",
+          toolName: call.name,
+          toolCallId: call.id,
+          pendingId: pending.id,
+          args: parsedArgs,
+        };
+        pausedForConfirmation = true;
+        break;
+      }
+
+      yield {
+        type: "tool_call_started",
+        toolName: call.name,
+        toolCallId: call.id,
+        args: parsedArgs,
+      };
+      try {
+        const result = await tool.execute({ userId: req.userId }, parsedArgs);
+        conversation.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify(result),
+        });
+        yield {
+          type: "tool_call_result",
+          toolName: call.name,
+          toolCallId: call.id,
+          result,
+          ok: true,
+        };
+      } catch (err) {
+        const payload = {
+          error: err instanceof Error ? err.message : "tool_failed",
+        };
+        conversation.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify(payload),
+        });
+        yield {
+          type: "tool_call_result",
+          toolName: call.name,
+          toolCallId: call.id,
+          result: payload,
+          ok: false,
+        };
+      }
+    }
+
+    if (pausedForConfirmation) {
+      await db
+        .update(messagesTable)
+        .set({ content: text })
+        .where(eq(messagesTable.id, assistantId));
+      yield { type: "message_end", assistantMessageId: assistantId, text };
+      return;
+    }
+  }
 
   await db
     .update(chats)
     .set({ updatedAt: new Date() })
     .where(eq(chats.id, req.chatId));
 
-  await recordUsage({
-    userId: req.userId,
-    chatId: req.chatId,
-    messageId: assistantId,
-    model,
-    taskType: "chat",
-    inputTokens,
-    outputTokens,
-    cachedTokens,
-  });
-
-  yield { type: "message_end", assistantMessageId: assistantId, text: fullText };
+  yield { type: "message_end", assistantMessageId: assistantId, text: finalText };
 }
+
+type StoredMessage = {
+  id: string;
+  role: "user" | "assistant" | "system" | "tool";
+  content: string;
+  toolCallId: string | null;
+  toolCalls: Array<{
+    id: string;
+    type: "function";
+    function: { name: string; arguments: string };
+  }> | null;
+};
 
 async function loadHistory(chatId: string): Promise<StoredMessage[]> {
   const rows = await db
@@ -125,7 +320,31 @@ async function loadHistory(chatId: string): Promise<StoredMessage[]> {
     .orderBy(asc(messagesTable.createdAt));
   return rows
     .filter((r) => !r.deletedAt)
-    .map((r) => ({ id: r.id, role: r.role, content: r.content }));
+    .map((r) => ({
+      id: r.id,
+      role: r.role,
+      content: r.content,
+      toolCallId: r.toolCallId,
+      toolCalls: (r.toolCalls as StoredMessage["toolCalls"]) ?? null,
+    }));
+}
+
+function toOpenAIMessage(m: StoredMessage): OpenAI.Chat.ChatCompletionMessageParam {
+  if (m.role === "tool") {
+    return {
+      role: "tool",
+      tool_call_id: m.toolCallId ?? "",
+      content: m.content,
+    };
+  }
+  if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+    return {
+      role: "assistant",
+      content: m.content || null,
+      tool_calls: m.toolCalls,
+    };
+  }
+  return { role: m.role, content: m.content };
 }
 
 async function insertPendingAssistant(chatId: string, model: string): Promise<string> {

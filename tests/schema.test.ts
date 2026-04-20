@@ -8,6 +8,7 @@ import {
   messages,
   messageAttachments,
   usageEvents,
+  pendingToolCalls,
 } from "@/lib/db/schema";
 import { getTableColumns } from "drizzle-orm";
 
@@ -92,5 +93,18 @@ describe("Drizzle schema — Phase 2 chat tables", () => {
     expect(cols.outputTokens).toBeDefined();
     expect(cols.cachedTokens).toBeDefined();
     expect(cols.creditsUsed).toBeDefined();
+  });
+});
+
+describe("Drizzle schema — Phase 3 pending_tool_calls", () => {
+  it("has status transitions, tool info, chat/user foreign keys", () => {
+    const cols = getTableColumns(pendingToolCalls);
+    expect(cols.userId).toBeDefined();
+    expect(cols.chatId).toBeDefined();
+    expect(cols.toolName).toBeDefined();
+    expect(cols.toolCallId).toBeDefined();
+    expect(cols.args).toBeDefined();
+    expect(cols.status).toBeDefined();
+    expect(cols.resolvedAt).toBeDefined();
   });
 });
