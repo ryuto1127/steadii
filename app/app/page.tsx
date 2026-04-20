@@ -6,6 +6,7 @@ import { NewChatInput } from "@/components/chat/new-chat-input";
 import { ActionPill } from "@/components/ui/action-pill";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ClassDot } from "@/components/ui/class-dot";
+import { GhostTimeline } from "@/components/ui/ghost-timeline";
 import { getNotionClientForUser } from "@/lib/integrations/notion/client";
 import { computeWeekSummary } from "@/lib/agent/tools/summarize-week";
 import {
@@ -18,6 +19,24 @@ import { GraduationCap } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
+const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+function todayLabel(): string {
+  const d = new Date();
+  return `TODAY · ${MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
+
+function pastWeekLabel(startIso: string, endIso: string): string {
+  const fmt = (iso: string) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    const mm = (d.getMonth() + 1).toString().padStart(2, "0");
+    const dd = d.getDate().toString().padStart(2, "0");
+    return `${mm}/${dd}`;
+  };
+  return `PAST WEEK · ${fmt(startIso)} — ${fmt(endIso)}`;
+}
+
 export default async function HomePage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
@@ -29,7 +48,7 @@ export default async function HomePage() {
 
   if (!hasAnyClass) {
     return (
-      <div className="mx-auto flex max-w-3xl flex-col gap-8 py-10">
+      <div className="mx-auto flex max-w-3xl flex-col gap-6 py-6">
         <EmptyState
           icon={<GraduationCap size={18} strokeWidth={1.5} />}
           title={t("welcome_title")}
@@ -50,22 +69,25 @@ export default async function HomePage() {
   ]);
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-8 py-6">
-      <div className="grid gap-4 md:grid-cols-3">
-        <DashboardCard title={t("today_schedule")}>
-          {events.length === 0 ? null : (
+    <div className="mx-auto flex max-w-4xl flex-col gap-4 py-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        {/* TODAY */}
+        <DashboardCard label={todayLabel()}>
+          {events.length === 0 ? (
+            <GhostTimeline message={t("no_events")} />
+          ) : (
             <ul className="space-y-1">
               {events.slice(0, 6).map((e) => (
                 <li
                   key={e.id}
-                  className="flex items-baseline gap-2 text-small text-[hsl(var(--foreground))]"
+                  className="flex items-baseline gap-2 text-body text-[hsl(var(--foreground))]"
                 >
-                  <span className="font-mono text-[13px] tabular-nums text-[hsl(var(--muted-foreground))]">
+                  <span className="font-mono text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]">
                     {formatTimeRange(e.start, e.end)}
                   </span>
                   <span className="min-w-0 flex-1 truncate">{e.title}</span>
                   {e.calendarName ? (
-                    <span className="truncate text-[hsl(var(--muted-foreground))]">
+                    <span className="truncate text-small text-[hsl(var(--muted-foreground))]">
                       {e.calendarName}
                     </span>
                   ) : null}
@@ -73,48 +95,43 @@ export default async function HomePage() {
               ))}
             </ul>
           )}
-          {events.length === 0 ? (
-            <p className="py-4 text-small text-[hsl(var(--muted-foreground))]">
-              {t("no_events")}
-            </p>
-          ) : null}
         </DashboardCard>
 
-        <DashboardCard title={t("due_soon")}>
-          {dueSoon.length === 0 ? null : (
+        {/* DUE */}
+        <DashboardCard label="DUE · NEXT 72H">
+          {dueSoon.length === 0 ? (
+            <div className="flex min-h-[6.5rem] items-center justify-center text-small text-[hsl(var(--muted-foreground))]">
+              — {t("nothing_due")} —
+            </div>
+          ) : (
             <ul className="space-y-1">
               {dueSoon.slice(0, 6).map((a) => (
                 <li
                   key={a.id}
-                  className="flex items-center gap-2 text-small text-[hsl(var(--foreground))]"
+                  className="flex items-center gap-2 text-body text-[hsl(var(--foreground))]"
                 >
                   <ClassDot color={a.classColor} />
                   <span className="min-w-0 flex-1 truncate">{a.title}</span>
-                  <span className="font-mono text-[13px] tabular-nums text-[hsl(var(--muted-foreground))]">
+                  <span className="font-mono text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]">
                     {formatRelativeDue(a.due)}
                   </span>
                 </li>
               ))}
             </ul>
           )}
-          {dueSoon.length === 0 ? (
-            <p className="py-4 text-small text-[hsl(var(--muted-foreground))]">
-              {t("nothing_due")}
-            </p>
-          ) : null}
         </DashboardCard>
 
-        <DashboardCard title={t("past_week")}>
+        {/* PAST WEEK */}
+        <DashboardCard
+          label={pastWeekLabel(weekSummary.window.start, weekSummary.window.end)}
+        >
           {weekSummary.empty ? (
-            <p className="py-4 text-small text-[hsl(var(--muted-foreground))]">
-              {t("not_enough_history")}
-            </p>
+            <div className="flex min-h-[6.5rem] items-center justify-center text-small text-[hsl(var(--muted-foreground))]">
+              — {t("not_enough_history")} —
+            </div>
           ) : (
-            <div className="flex flex-col gap-2">
-              <div className="font-mono text-[11px] text-[hsl(var(--muted-foreground))]">
-                {formatDateMD(weekSummary.window.start)} — {formatDateMD(weekSummary.window.end)}
-              </div>
-              <div className="text-small">
+            <div className="flex flex-col gap-1.5">
+              <div className="text-body tabular-nums">
                 {t("counts", {
                   chats: String(weekSummary.counts.chats),
                   mistakes: String(weekSummary.counts.mistakes),
@@ -126,8 +143,12 @@ export default async function HomePage() {
                   {weekSummary.pattern}
                 </p>
               ) : null}
-              <div className="mt-1 flex flex-wrap gap-2">
-                <SeedPill seed="review_recent_mistakes" label={t("review_action")} tone="primary" />
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                <SeedPill
+                  seed="review_recent_mistakes"
+                  label={t("review_action")}
+                  tone="primary"
+                />
                 <SeedPill
                   seed="generate_similar_problems"
                   label={t("generate_practice_action")}
@@ -143,12 +164,6 @@ export default async function HomePage() {
       </div>
     </div>
   );
-}
-
-function formatDateMD(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
 function SeedPill({

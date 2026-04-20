@@ -85,7 +85,7 @@ export const ja: Messages = {
       "シラバスや画像を貼ったり、気になることを聞いてみてください…",
   },
   chat_input: {
-    placeholder: "Steadiiに何でも聞いてみてください…",
+    placeholder: "Steadiiに聞く…",
     send_hint: "⌘⏎ で送信",
   },
   settings: {
