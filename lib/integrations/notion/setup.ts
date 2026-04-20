@@ -1,5 +1,6 @@
 import "server-only";
 import type { Client } from "@notionhq/client";
+import { primeDataSourceCache, resolveDataSourceId } from "./data-source";
 
 export type NotionSetupResult = {
   parentPageId: string;
@@ -31,7 +32,13 @@ export class NotionSetupMultipleCandidatesError extends Error {
   }
 }
 
-type DbPropertyMap = Parameters<Client["databases"]["create"]>[0]["properties"];
+// Notion SDK v5 moved the schema into `initial_data_source.properties` for
+// database creation, and into `properties` for subsequent data-source
+// updates. We pull the property-map type off the data source since the
+// shape is identical.
+type DbPropertyMap = NonNullable<
+  Parameters<Client["dataSources"]["create"]>[0]["properties"]
+>;
 
 const CLASSES_PROPS: DbPropertyMap = {
   Name: { title: {} },
@@ -69,20 +76,30 @@ const CLASSES_PROPS: DbPropertyMap = {
   },
 };
 
-function classRelation(classesDbId: string): DbPropertyMap[string] {
+// Relations in SDK v5 target a *data source*, not a database. We accept a
+// database ID at the call site (that's what the caller has during setup
+// right after creating Classes) and resolve it lazily to the data source.
+async function classRelation(
+  client: Client,
+  classesDbId: string
+): Promise<DbPropertyMap[string]> {
+  const dsId = await resolveDataSourceId(client, classesDbId);
   return {
     relation: {
-      database_id: classesDbId,
+      data_source_id: dsId,
       type: "dual_property",
       dual_property: {},
     },
   };
 }
 
-function mistakesProps(classesDbId: string): DbPropertyMap {
+async function mistakesProps(
+  client: Client,
+  classesDbId: string
+): Promise<DbPropertyMap> {
   return {
     Title: { title: {} },
-    Class: classRelation(classesDbId),
+    Class: await classRelation(client, classesDbId),
     Unit: { rich_text: {} },
     Difficulty: {
       select: {
@@ -99,10 +116,13 @@ function mistakesProps(classesDbId: string): DbPropertyMap {
   };
 }
 
-function assignmentsProps(classesDbId: string): DbPropertyMap {
+async function assignmentsProps(
+  client: Client,
+  classesDbId: string
+): Promise<DbPropertyMap> {
   return {
     Title: { title: {} },
-    Class: classRelation(classesDbId),
+    Class: await classRelation(client, classesDbId),
     Due: { date: {} },
     Status: {
       select: {
@@ -126,10 +146,13 @@ function assignmentsProps(classesDbId: string): DbPropertyMap {
   };
 }
 
-function syllabiProps(classesDbId: string): DbPropertyMap {
+async function syllabiProps(
+  client: Client,
+  classesDbId: string
+): Promise<DbPropertyMap> {
   return {
     Title: { title: {} },
-    Class: classRelation(classesDbId),
+    Class: await classRelation(client, classesDbId),
     Term: { rich_text: {} },
     Grading: { rich_text: {} },
     Attendance: { rich_text: {} },
@@ -201,7 +224,12 @@ async function finishSetupWithChildren(
 
   const mistakesDbId =
     existingChildren?.mistakes ??
-    (await createDb(client, parentPageId, "Mistake Notes", mistakesProps(classesDbId)));
+    (await createDb(
+      client,
+      parentPageId,
+      "Mistake Notes",
+      await mistakesProps(client, classesDbId)
+    ));
 
   const assignmentsDbId =
     existingChildren?.assignments ??
@@ -209,12 +237,17 @@ async function finishSetupWithChildren(
       client,
       parentPageId,
       "Assignments",
-      assignmentsProps(classesDbId)
+      await assignmentsProps(client, classesDbId)
     ));
 
   const syllabiDbId =
     existingChildren?.syllabi ??
-    (await createDb(client, parentPageId, "Syllabi", syllabiProps(classesDbId)));
+    (await createDb(
+      client,
+      parentPageId,
+      "Syllabi",
+      await syllabiProps(client, classesDbId)
+    ));
 
   return {
     parentPageId,
@@ -231,11 +264,16 @@ async function createDb(
   title: string,
   properties: DbPropertyMap
 ): Promise<string> {
-  const created = await client.databases.create({
+  const created = (await client.databases.create({
     parent: { type: "page_id", page_id: parentPageId },
     title: [{ type: "text", text: { content: title } }],
-    properties,
-  });
+    initial_data_source: { properties },
+  })) as unknown as { id: string; data_sources?: Array<{ id: string }> };
+
+  // Prime the data-source cache so the first query on this DB doesn't
+  // need an extra retrieve round-trip.
+  const dsId = created.data_sources?.[0]?.id;
+  if (dsId) primeDataSourceCache(created.id, dsId);
   return created.id;
 }
 
@@ -334,8 +372,9 @@ export async function scoreSteadiiCandidates(
     let rowTotal = 0;
     for (const dbId of childIds) {
       try {
-        const resp = await client.databases.query({
-          database_id: dbId,
+        const dsId = await resolveDataSourceId(client, dbId);
+        const resp = await client.dataSources.query({
+          data_source_id: dsId,
           page_size: 1,
         });
         rowTotal += resp.results.length + (resp.has_more ? 1 : 0);
@@ -424,7 +463,9 @@ async function createSteadiiParent(client: Client, title: string) {
     return await client.pages.create({
       parent: { type: "workspace", workspace: true },
       properties: {
-        title: [{ type: "text", text: { content: title } }],
+        title: {
+          title: [{ type: "text", text: { content: title } }],
+        },
       },
     } as unknown as Parameters<Client["pages"]["create"]>[0]);
   } catch {
@@ -444,7 +485,9 @@ async function createSteadiiParent(client: Client, title: string) {
     return await client.pages.create({
       parent: { type: "page_id", page_id: first.id },
       properties: {
-        title: [{ type: "text", text: { content: title } }],
+        title: {
+          title: [{ type: "text", text: { content: title } }],
+        },
       },
     });
   } catch {

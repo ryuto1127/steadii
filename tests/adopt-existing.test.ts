@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   runNotionSetup,
   NotionSetupMultipleCandidatesError,
 } from "@/lib/integrations/notion/setup";
+import { __resetDataSourceCacheForTests } from "@/lib/integrations/notion/data-source";
 
 function fakeClient(opts: {
   existingSteadiiPages?: Array<{ id: string; title: string }>;
@@ -38,8 +39,18 @@ function fakeClient(opts: {
       create: vi.fn(async (args: Record<string, unknown>) => {
         dbSeq += 1;
         created.push({ kind: "database", args });
-        return { id: `db-${dbSeq}` };
+        return {
+          id: `db-${dbSeq}`,
+          data_sources: [{ id: `ds-${dbSeq}` }],
+        };
       }),
+      retrieve: vi.fn(async (args: { database_id: string }) => ({
+        id: args.database_id,
+        data_sources: [{ id: `ds-for-${args.database_id}` }],
+      })),
+    },
+    dataSources: {
+      query: vi.fn(async () => ({ results: [], has_more: false })),
     },
     blocks: {
       children: {
@@ -56,6 +67,10 @@ function fakeClient(opts: {
   };
   return { client, created };
 }
+
+beforeEach(() => {
+  __resetDataSourceCacheForTests();
+});
 
 describe("runNotionSetup — adopt-existing", () => {
   it("throws NotionSetupMultipleCandidatesError when two Steadii pages exist", async () => {

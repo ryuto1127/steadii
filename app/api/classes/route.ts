@@ -5,6 +5,7 @@ import { notionConnections } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { decrypt } from "@/lib/utils/crypto";
 import { notionClientFromToken } from "@/lib/integrations/notion/client";
+import { resolveDataSourceId } from "@/lib/integrations/notion/data-source";
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +25,13 @@ export async function GET() {
 
   try {
     const client = notionClientFromToken(decrypt(conn.accessTokenEncrypted));
-    const resp = await client.databases.query({
-      database_id: conn.classesDbId,
+    const dsId = await resolveDataSourceId(client, conn.classesDbId);
+    const resp = await client.dataSources.query({
+      data_source_id: dsId,
       page_size: 100,
     });
-    const classes = resp.results.flatMap((r) => {
-      const obj = r as unknown as {
+    const classes = resp.results.flatMap((r: unknown) => {
+      const obj = r as {
         id: string;
         properties?: {
           Name?: { title?: Array<{ plain_text?: string }> };

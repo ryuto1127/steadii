@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   runNotionSetup,
   NotionSetupMultipleCandidatesError,
 } from "@/lib/integrations/notion/setup";
+import { __resetDataSourceCacheForTests } from "@/lib/integrations/notion/data-source";
+
+beforeEach(() => {
+  __resetDataSourceCacheForTests();
+});
 
 function fakeClient(candidates: Array<{ id: string; title: string }>) {
   const archived: string[] = [];
@@ -36,8 +41,17 @@ function fakeClient(candidates: Array<{ id: string; title: string }>) {
     databases: {
       create: vi.fn(async () => {
         dbSeq += 1;
-        return { id: `db-${dbSeq}` };
+        return {
+          id: `db-${dbSeq}`,
+          data_sources: [{ id: `ds-${dbSeq}` }],
+        };
       }),
+      retrieve: vi.fn(async ({ database_id }: { database_id: string }) => ({
+        id: database_id,
+        data_sources: [{ id: `ds-for-${database_id}` }],
+      })),
+    },
+    dataSources: {
       query: vi.fn(async () => ({ results: [], has_more: false })),
     },
     blocks: {

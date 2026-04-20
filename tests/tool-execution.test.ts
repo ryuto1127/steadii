@@ -97,12 +97,13 @@ describe("notion_create_page execution", () => {
     expect(createCall).toBeDefined();
     const args = createCall!.args as {
       parent: { type: string; page_id: string };
-      properties: { title: Array<{ text: { content: string } }> };
+      // v5 wraps the title rich-text array inside a `{ title: [...] }` object.
+      properties: { title: { title: Array<{ text: { content: string } }> } };
       children?: unknown[];
     };
     expect(args.parent.type).toBe("page_id");
     expect(args.parent.page_id).toBe("parent-id");
-    expect(args.properties.title[0].text.content).toBe("Physics Week 5");
+    expect(args.properties.title.title[0].text.content).toBe("Physics Week 5");
     expect(args.children).toHaveLength(1);
 
     expect(hoist.auditRows).toHaveLength(1);

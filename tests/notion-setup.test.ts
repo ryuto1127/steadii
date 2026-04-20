@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   runNotionSetup,
   NotionSetupNoAccessiblePageError,
 } from "@/lib/integrations/notion/setup";
+import { __resetDataSourceCacheForTests } from "@/lib/integrations/notion/data-source";
 
 type CreatedCall = { kind: "page" | "database"; args: Record<string, unknown> };
 
@@ -28,11 +29,24 @@ function fakeClient(opts: {
       }),
     },
     databases: {
+      // v5 returns a container; the setup code uses `data_sources[0].id` to
+      // prime the DS cache so later relation targets resolve without an
+      // explicit retrieve.
       create: vi.fn(async (args: Record<string, unknown>) => {
         dbSeq += 1;
         created.push({ kind: "database", args });
-        return { id: `db-${dbSeq}` };
+        return {
+          id: `db-${dbSeq}`,
+          data_sources: [{ id: `ds-${dbSeq}` }],
+        };
       }),
+      retrieve: vi.fn(async (args: { database_id: string }) => ({
+        id: args.database_id,
+        data_sources: [{ id: `ds-for-${args.database_id}` }],
+      })),
+    },
+    dataSources: {
+      query: vi.fn(async () => ({ results: [], has_more: false })),
     },
     search: vi.fn(async () => ({
       results:
@@ -41,6 +55,10 @@ function fakeClient(opts: {
   };
   return { client, created };
 }
+
+beforeEach(() => {
+  __resetDataSourceCacheForTests();
+});
 
 describe("runNotionSetup — 4-DB class-centric structure", () => {
   it("creates Classes first, then Mistake Notes, Assignments, Syllabi", async () => {
@@ -72,7 +90,11 @@ describe("runNotionSetup — 4-DB class-centric structure", () => {
         (c.args.title as Array<{ text: { content: string } }>)[0].text.content ===
           "Classes"
     )!;
-    const props = classes.args.properties as Record<string, Record<string, unknown>>;
+    // v5 moved schema into initial_data_source.properties.
+    const ids = classes.args.initial_data_source as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+    const props = ids.properties;
     expect(props.Name).toHaveProperty("title");
     expect(props.Code).toHaveProperty("rich_text");
     expect(props.Term).toHaveProperty("select");
@@ -105,14 +127,20 @@ describe("runNotionSetup — 4-DB class-centric structure", () => {
           (c.args.title as Array<{ text: { content: string } }>)[0].text
             .content === name
       )!;
-      const props = db.args.properties as Record<string, Record<string, unknown>>;
+      const ids = db.args.initial_data_source as {
+        properties: Record<string, Record<string, unknown>>;
+      };
+      const props = ids.properties;
       expect(props.Class).toBeDefined();
+      // v5 relations target a data source, not a database.
       const relation = props.Class.relation as {
-        database_id: string;
+        data_source_id: string;
         type: string;
         dual_property: unknown;
       };
-      expect(relation.database_id).toBe(result.classesDbId);
+      // classesDbId is "db-1"; setup primes the cache with "ds-1".
+      expect(relation.data_source_id).toBe("ds-1");
+      expect(result.classesDbId).toBe("db-1");
       expect(relation.type).toBe("dual_property");
       expect(relation.dual_property).toBeDefined();
     }
