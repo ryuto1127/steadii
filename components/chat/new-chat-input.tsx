@@ -24,29 +24,48 @@ async function createChatAndPost(
     return { error: "Couldn't start a new chat." };
   }
   const created = (await createResp.json()) as { id?: string; error?: string };
-  if (!created.id) return { error: created.error ?? "Couldn't start a new chat." };
-
+  if (!created.id) {
+    return { error: created.error ?? "Couldn't start a new chat." };
+  }
   const chatId = created.id;
 
-  let attachmentId: string | undefined;
+  // If a file is attached, /api/chat/attachments writes its own message
+  // (containing the attachment) onto the chat. The text becomes a follow-
+  // up user message in the same chat.
   if (file) {
     const form = new FormData();
     form.set("file", file);
     form.set("chatId", chatId);
-    const up = await fetch("/api/chat/attachments", { method: "POST", body: form });
-    if (up.ok) {
-      const j = (await up.json()) as { id?: string };
-      attachmentId = j.id;
+    const up = await fetch("/api/chat/attachments", {
+      method: "POST",
+      body: form,
+    });
+    if (!up.ok) {
+      let msg = "Upload failed.";
+      try {
+        const body = await up.json();
+        if (typeof body?.error === "string") msg = body.error;
+      } catch {
+        // ignore
+      }
+      return { error: msg };
     }
   }
 
-  const fd = new FormData();
-  fd.set("chatId", chatId);
-  fd.set("content", content);
-  if (attachmentId) fd.set("attachmentId", attachmentId);
-  const post = await fetch("/api/chat/message", { method: "POST", body: fd });
+  const post = await fetch("/api/chat/message", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chatId, content }),
+  });
   if (!post.ok) {
-    return { error: "Couldn't send the message." };
+    let msg = "Couldn't send the message.";
+    try {
+      const body = await post.json();
+      if (typeof body?.error === "string") msg = body.error;
+    } catch {
+      // ignore
+    }
+    return { error: msg };
   }
   return chatId;
 }
