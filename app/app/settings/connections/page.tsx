@@ -43,7 +43,7 @@ export default async function ConnectionsPage({
         </div>
       )}
 
-      <section className="mt-10 rounded-xl bg-[hsl(var(--surface))] p-6 shadow-sm">
+      <section className="mt-10 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
         <h2 className="text-lg font-medium">Notion</h2>
         {notionConn ? (
           <>
@@ -90,7 +90,7 @@ export default async function ConnectionsPage({
         )}
       </section>
 
-      <section className="mt-6 rounded-xl bg-[hsl(var(--surface))] p-6 shadow-sm">
+      <section className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
         <h2 className="text-lg font-medium">Google Calendar</h2>
         <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
           {calendarConnected

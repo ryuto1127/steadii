@@ -45,7 +45,7 @@ export default async function BillingPage({
         </div>
       )}
 
-      <section className="mt-8 rounded-xl bg-[hsl(var(--surface))] p-6 shadow-sm">
+      <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
         <h2 className="text-lg font-medium">Current plan</h2>
         <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
           {effective.plan === "admin"
@@ -113,7 +113,7 @@ export default async function BillingPage({
 
       <BillingActions effectivePlan={effective.plan} />
 
-      <section className="mt-8 rounded-xl bg-[hsl(var(--surface))] p-6 shadow-sm">
+      <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
         <h2 className="text-lg font-medium">Redeem a code</h2>
         <RedeemForm />
         {redemptions.length > 0 && (

@@ -121,9 +121,6 @@ export function SidebarNav({ labels }: { labels: Record<string, string> }) {
               <Icon size={16} strokeWidth={1.5} />
             </span>
             <span className="flex-1">{labels[key] ?? key}</span>
-            <span className="font-mono text-[11px] text-[hsl(var(--muted-foreground))] opacity-60">
-              g{NAV_SHORTCUTS[key]}
-            </span>
           </Link>
         );
       })}

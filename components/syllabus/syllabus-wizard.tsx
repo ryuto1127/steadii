@@ -113,7 +113,7 @@ export function SyllabusWizard({
   return (
     <div className="mt-8 space-y-6">
       {!syllabus && (
-        <section className="rounded-xl bg-[hsl(var(--surface))] p-6 shadow-sm">
+        <section className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
           <label className="block text-xs text-[hsl(var(--muted-foreground))]">
             URL (web-page syllabi only)
           </label>
@@ -166,7 +166,7 @@ export function SyllabusWizard({
       )}
 
       {syllabus && (
-        <section className="rounded-xl bg-[hsl(var(--surface))] p-6 shadow-sm">
+        <section className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
           <h2 className="text-h2 text-[hsl(var(--foreground))]">Preview</h2>
           <p className="mt-1 text-small text-[hsl(var(--muted-foreground))]">
             Edit anything before saving. Leave a field blank to skip it.

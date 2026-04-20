@@ -87,7 +87,7 @@ export default async function AdminPage() {
         <Stat label="Active Stripe subs" value={String(activeSubs[0]?.n ?? 0)} />
       </section>
 
-      <section className="mt-8 rounded-xl bg-[hsl(var(--surface))] p-6 shadow-sm">
+      <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
         <h2 className="text-lg font-medium">Top users by credits (this month)</h2>
         {topUsers.length === 0 ? (
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
@@ -105,7 +105,7 @@ export default async function AdminPage() {
         )}
       </section>
 
-      <section className="mt-8 rounded-xl bg-[hsl(var(--surface))] p-6 shadow-sm">
+      <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
         <h2 className="text-lg font-medium">Active redeem codes</h2>
         {activeCodes.length === 0 ? (
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
@@ -127,7 +127,7 @@ export default async function AdminPage() {
         )}
       </section>
 
-      <section className="mt-8 rounded-xl bg-[hsl(var(--surface))] p-6 shadow-sm">
+      <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
         <h2 className="text-lg font-medium">Recent redemptions</h2>
         {recentRedemptions.length === 0 ? (
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
@@ -155,7 +155,7 @@ export default async function AdminPage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-[hsl(var(--surface))] p-4 shadow-sm">
+    <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
       <p className="text-xs uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
         {label}
       </p>

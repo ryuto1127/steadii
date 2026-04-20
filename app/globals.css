@@ -8,28 +8,28 @@
 
 @layer base {
   :root {
-    --background: 45 14% 98%;
+    --background: 0 0% 99%;
     --surface: 0 0% 100%;
-    --surface-raised: 40 14% 94%;
-    --border: 35 16% 87%;
-    --foreground: 30 12% 10%;
-    --muted-foreground: 32 4% 40%;
+    --surface-raised: 240 5% 96%;
+    --border: 240 6% 90%;
+    --foreground: 240 10% 4%;
+    --muted-foreground: 240 4% 46%;
     --primary: 32 95% 44%;
-    --primary-foreground: 45 14% 98%;
+    --primary-foreground: 0 0% 99%;
     --destructive: 0 72% 51%;
     --ring: 32 95% 44%;
     --radius: 0.375rem;
   }
 
   .dark {
-    --background: 30 8% 4%;
-    --surface: 30 6% 8%;
-    --surface-raised: 30 6% 11%;
-    --border: 30 6% 16%;
-    --foreground: 40 34% 94%;
-    --muted-foreground: 30 5% 53%;
+    --background: 240 10% 4%;
+    --surface: 240 6% 10%;
+    --surface-raised: 240 5% 14%;
+    --border: 240 4% 18%;
+    --foreground: 0 0% 98%;
+    --muted-foreground: 240 5% 65%;
     --primary: 38 92% 50%;
-    --primary-foreground: 30 8% 4%;
+    --primary-foreground: 240 10% 4%;
     --destructive: 358 75% 59%;
     --ring: 38 92% 50%;
   }

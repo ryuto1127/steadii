@@ -408,7 +408,7 @@ export function ChatView({
             e.preventDefault();
             send();
           }}
-          className="relative w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-2 focus-within:border-[hsl(var(--ring))] transition-default"
+          className="relative w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-2 transition-default focus-within:border-[hsl(var(--ring))] focus-within:shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]"
         >
           <textarea
             value={input}

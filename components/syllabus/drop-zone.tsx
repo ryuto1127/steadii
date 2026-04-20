@@ -33,7 +33,7 @@ export function DropZone({
   if (file) {
     const extracting = status === "extracting";
     return (
-      <div className="mt-2 flex items-center justify-between rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-4 py-3 text-sm">
+      <div className="mt-2 flex items-center justify-between rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-4 py-3 text-sm">
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium">{file.name}</p>
           <p className="mt-0.5 flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
@@ -82,7 +82,7 @@ export function DropZone({
       tabIndex={0}
       aria-label="Upload file"
       className={[
-        "mt-2 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-10 text-center transition",
+        "mt-2 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-6 py-10 text-center transition",
         dragging
           ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.06)]"
           : "border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] hover:border-[hsl(var(--primary)/0.6)] hover:bg-[hsl(var(--primary)/0.04)]",

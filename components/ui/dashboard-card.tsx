@@ -23,12 +23,14 @@ export function DashboardCard({
   return (
     <section
       className={cn(
-        "rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-5",
+        "rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4",
         className
       )}
     >
-      <header className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="text-h3 text-[hsl(var(--foreground))]">{title}</h3>
+      <header className="mb-2.5 flex items-center justify-between gap-3">
+        <h3 className="text-[15px] font-semibold leading-none text-[hsl(var(--foreground))]">
+          {title}
+        </h3>
         {action ? (
           <Link
             href={action.href}
@@ -46,9 +48,9 @@ export function DashboardCard({
         ) : null}
       </header>
       {hasChildren ? (
-        <div className="space-y-2">{children}</div>
+        <div className="space-y-1 text-[14px] leading-[1.4]">{children}</div>
       ) : empty ? (
-        <div className="py-6 text-small text-[hsl(var(--muted-foreground))]">
+        <div className="py-4 text-small text-[hsl(var(--muted-foreground))]">
           <p>{empty.text}</p>
           {empty.action ? (
             <Link
