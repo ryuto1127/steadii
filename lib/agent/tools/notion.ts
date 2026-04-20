@@ -340,7 +340,7 @@ export const notionQueryDatabase: ToolExecutor<
         databaseId: { type: "string" },
         limit: { type: "integer", minimum: 1, maximum: 100 },
         filter: { type: "object" },
-        sorts: { type: "array" },
+        sorts: { type: "array", items: { type: "object" } },
       },
       required: ["databaseId"],
       additionalProperties: false,
