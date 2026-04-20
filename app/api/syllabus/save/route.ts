@@ -4,9 +4,24 @@ import { syllabusSchema } from "@/lib/syllabus/schema";
 import { saveSyllabusToNotion } from "@/lib/syllabus/save";
 import { z } from "zod";
 
+const verbatimSchema = z.object({
+  fullText: z.string(),
+  sourceKind: z.enum(["pdf", "image", "url"]),
+  blob: z
+    .object({
+      blobAssetId: z.string(),
+      url: z.string().url(),
+      filename: z.string(),
+      mimeType: z.string(),
+      sizeBytes: z.number(),
+    })
+    .optional(),
+});
+
 const bodySchema = z.object({
   syllabus: syllabusSchema,
   classNotionPageId: z.string().optional().nullable(),
+  verbatim: verbatimSchema,
 });
 
 export async function POST(request: NextRequest) {
@@ -23,6 +38,7 @@ export async function POST(request: NextRequest) {
       userId: session.user.id,
       classNotionPageId: parsed.data.classNotionPageId ?? null,
       syllabus: parsed.data.syllabus,
+      verbatim: parsed.data.verbatim,
     });
     return NextResponse.json(result);
   } catch (err) {

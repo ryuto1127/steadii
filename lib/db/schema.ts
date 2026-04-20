@@ -16,6 +16,7 @@ export const users = pgTable("users", {
   email: text("email").notNull(),
   emailVerified: timestamp("email_verified", { mode: "date" }),
   image: text("image"),
+  plan: text("plan").$type<"free" | "pro">().notNull().default("free"),
   preferences: jsonb("preferences").$type<{
     theme?: "light" | "dark" | "system";
     locale?: "en" | "ja";
@@ -27,6 +28,22 @@ export const users = pgTable("users", {
 }, (table) => ({
   emailIdx: uniqueIndex("users_email_idx").on(table.email),
 }));
+
+export const blobAssets = pgTable("blob_assets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  source: text("source").$type<"chat_attachment" | "syllabus">().notNull(),
+  url: text("url").notNull(),
+  filename: text("filename"),
+  mimeType: text("mime_type"),
+  sizeBytes: integer("size_bytes").notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { mode: "date" }),
+});
+
+export type BlobAsset = typeof blobAssets.$inferSelect;
 
 export const accounts = pgTable(
   "accounts",
@@ -164,6 +181,9 @@ export const messageAttachments = pgTable("message_attachments", {
   messageId: uuid("message_id")
     .notNull()
     .references(() => messages.id, { onDelete: "cascade" }),
+  blobAssetId: uuid("blob_asset_id").references(() => blobAssets.id, {
+    onDelete: "set null",
+  }),
   kind: text("kind").$type<"image" | "pdf">().notNull(),
   url: text("url").notNull(),
   filename: text("filename"),

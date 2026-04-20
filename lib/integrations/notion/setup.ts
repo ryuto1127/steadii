@@ -18,6 +18,19 @@ export class NotionSetupNoAccessiblePageError extends Error {
   }
 }
 
+export class NotionSetupMultipleCandidatesError extends Error {
+  candidates: Array<{ id: string; url: string | null }>;
+  constructor(candidates: Array<{ id: string; url: string | null }>) {
+    super(
+      `Found multiple "Steadii" pages in your Notion workspace. Delete all but one and try again. Candidates: ${candidates
+        .map((c) => c.url ?? c.id)
+        .join(", ")}`
+    );
+    this.name = "NotionSetupMultipleCandidatesError";
+    this.candidates = candidates;
+  }
+}
+
 type DbPropertyMap = Parameters<Client["databases"]["create"]>[0]["properties"];
 
 const CLASSES_PROPS: DbPropertyMap = {
@@ -131,41 +144,134 @@ export async function runNotionSetup(
   opts: { title?: string } = {}
 ): Promise<NotionSetupResult> {
   const title = opts.title ?? "Steadii";
-  const parent = await createSteadiiParent(client, title);
-  const parentPageId = parent.id;
 
-  const classes = await client.databases.create({
-    parent: { type: "page_id", page_id: parentPageId },
-    title: [{ type: "text", text: { content: "Classes" } }],
-    properties: CLASSES_PROPS,
-  });
-  const classesDbId = classes.id;
+  // Try to adopt an existing Steadii page before creating a duplicate.
+  const existing = await findExistingSteadiiPages(client, title);
+  if (existing.length > 1) {
+    throw new NotionSetupMultipleCandidatesError(existing);
+  }
 
-  const mistakes = await client.databases.create({
-    parent: { type: "page_id", page_id: parentPageId },
-    title: [{ type: "text", text: { content: "Mistake Notes" } }],
-    properties: mistakesProps(classesDbId),
-  });
+  let parentPageId: string;
+  let existingChildren: ExistingChildren | null = null;
+  if (existing.length === 1) {
+    parentPageId = existing[0].id;
+    existingChildren = await findSteadiiChildDatabases(client, parentPageId);
+  } else {
+    const parent = await createSteadiiParent(client, title);
+    parentPageId = parent.id;
+  }
 
-  const assignments = await client.databases.create({
-    parent: { type: "page_id", page_id: parentPageId },
-    title: [{ type: "text", text: { content: "Assignments" } }],
-    properties: assignmentsProps(classesDbId),
-  });
+  const classesDbId =
+    existingChildren?.classes ??
+    (await createDb(client, parentPageId, "Classes", CLASSES_PROPS));
 
-  const syllabi = await client.databases.create({
-    parent: { type: "page_id", page_id: parentPageId },
-    title: [{ type: "text", text: { content: "Syllabi" } }],
-    properties: syllabiProps(classesDbId),
-  });
+  const mistakesDbId =
+    existingChildren?.mistakes ??
+    (await createDb(client, parentPageId, "Mistake Notes", mistakesProps(classesDbId)));
+
+  const assignmentsDbId =
+    existingChildren?.assignments ??
+    (await createDb(
+      client,
+      parentPageId,
+      "Assignments",
+      assignmentsProps(classesDbId)
+    ));
+
+  const syllabiDbId =
+    existingChildren?.syllabi ??
+    (await createDb(client, parentPageId, "Syllabi", syllabiProps(classesDbId)));
 
   return {
     parentPageId,
     classesDbId,
-    mistakesDbId: mistakes.id,
-    assignmentsDbId: assignments.id,
-    syllabiDbId: syllabi.id,
+    mistakesDbId,
+    assignmentsDbId,
+    syllabiDbId,
   };
+}
+
+async function createDb(
+  client: Client,
+  parentPageId: string,
+  title: string,
+  properties: DbPropertyMap
+): Promise<string> {
+  const created = await client.databases.create({
+    parent: { type: "page_id", page_id: parentPageId },
+    title: [{ type: "text", text: { content: title } }],
+    properties,
+  });
+  return created.id;
+}
+
+type ExistingChildren = {
+  classes?: string;
+  mistakes?: string;
+  assignments?: string;
+  syllabi?: string;
+};
+
+async function findExistingSteadiiPages(
+  client: Client,
+  title: string
+): Promise<Array<{ id: string; url: string | null }>> {
+  try {
+    const resp = await client.search({
+      query: title,
+      filter: { property: "object", value: "page" },
+      page_size: 25,
+    });
+    const out: Array<{ id: string; url: string | null }> = [];
+    for (const r of resp.results) {
+      const obj = r as unknown as {
+        id: string;
+        object: string;
+        url?: string;
+        archived?: boolean;
+        parent?: { type?: string };
+        properties?: { title?: { title?: Array<{ plain_text?: string }> } };
+      };
+      if (obj.archived) continue;
+      // Only consider pages owned by the workspace or parented on another
+      // page — never a database row that happens to be titled "Steadii".
+      if (obj.parent?.type === "database_id") continue;
+      const titleText = (
+        obj.properties?.title?.title?.map((t) => t.plain_text ?? "").join("") ??
+        ""
+      ).trim();
+      if (titleText === title) out.push({ id: obj.id, url: obj.url ?? null });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+async function findSteadiiChildDatabases(
+  client: Client,
+  parentPageId: string
+): Promise<ExistingChildren> {
+  const out: ExistingChildren = {};
+  let cursor: string | undefined;
+  do {
+    const resp = await client.blocks.children.list({
+      block_id: parentPageId,
+      start_cursor: cursor,
+      page_size: 100,
+    });
+    for (const block of resp.results) {
+      if (!("type" in block)) continue;
+      if (block.type !== "child_database") continue;
+      const title = block.child_database.title.trim();
+      if (title === "Classes") out.classes = block.id;
+      else if (title === "Mistake Notes") out.mistakes = block.id;
+      else if (title === "Assignments") out.assignments = block.id;
+      else if (title === "Syllabi") out.syllabi = block.id;
+    }
+    cursor = resp.next_cursor ?? undefined;
+  } while (cursor);
+  return out;
 }
 
 async function createSteadiiParent(client: Client, title: string) {

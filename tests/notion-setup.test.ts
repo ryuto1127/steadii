@@ -121,7 +121,8 @@ describe("runNotionSetup — 4-DB class-centric structure", () => {
   it("tries workspace-root parent first and uses it when allowed", async () => {
     const { client, created } = fakeClient({ workspaceRootAllowed: true });
     await runNotionSetup(client as never);
-    expect(client.search).not.toHaveBeenCalled();
+    // search() is called once to check for an existing Steadii page (adopt-existing);
+    // with no match, setup proceeds to create the workspace-root parent.
     const firstPage = created.find((c) => c.kind === "page")!;
     expect(
       (firstPage.args.parent as { type: string; workspace?: boolean }).type

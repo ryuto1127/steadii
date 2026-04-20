@@ -40,7 +40,9 @@ export async function Sidebar() {
               href={item.href}
               className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--surface))] hover:text-[hsl(var(--foreground))]"
             >
-              <Icon size={16} strokeWidth={1.75} />
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                <Icon size={16} strokeWidth={1.75} />
+              </span>
               <span>{t(item.key)}</span>
             </Link>
           );

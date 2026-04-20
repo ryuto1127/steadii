@@ -8,6 +8,10 @@ import { getUserConfirmationMode } from "./preferences";
 import { requiresConfirmation } from "./confirmation";
 import { getToolByName, openAIToolDefs } from "./tool-registry";
 import { discoverResources } from "@/lib/integrations/notion/discovery";
+import {
+  assertCreditsAvailable,
+  BillingQuotaExceededError,
+} from "@/lib/billing/credits";
 import { db } from "@/lib/db/client";
 import {
   messages as messagesTable,
@@ -58,6 +62,25 @@ export async function* streamChatResponse(
   if (history.length === 0) {
     yield { type: "error", code: "NO_MESSAGES", message: "No messages in chat." };
     return;
+  }
+
+  try {
+    await assertCreditsAvailable(req.userId);
+  } catch (err) {
+    if (err instanceof BillingQuotaExceededError) {
+      const { used, limit, plan } = err.balance;
+      yield {
+        type: "error",
+        code: "BILLING_QUOTA_EXCEEDED",
+        message: `You've used ${used} of ${limit} credits this month on the ${plan} plan. ${
+          plan === "free"
+            ? "Upgrade to Pro or wait until the cycle resets."
+            : "Wait until the cycle resets."
+        }`,
+      };
+      return;
+    }
+    throw err;
   }
 
   try {

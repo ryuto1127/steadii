@@ -196,8 +196,14 @@ export function ChatView({
     fd.append("chatId", chatId);
     const res = await fetch("/api/chat/attachments", { method: "POST", body: fd });
     if (!res.ok) {
-      const text = await res.text();
-      setUploadError(text.slice(0, 240) || "Upload failed.");
+      let friendly = `Upload failed (HTTP ${res.status}).`;
+      try {
+        const body = await res.json();
+        if (typeof body?.error === "string") friendly = body.error;
+      } catch {
+        // non-JSON response — fall through to HTTP code
+      }
+      setUploadError(friendly);
       return;
     }
     const body = (await res.json()) as { attachment: Attachment };

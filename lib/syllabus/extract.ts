@@ -8,7 +8,10 @@ import { load as loadHtml } from "cheerio";
 
 const SYSTEM_PROMPT = `You extract structured syllabus data from a raw document.
 Return strictly the fields in the provided JSON schema. Use null for any field
-you can't find. Schedule entries should be chronological and terse.`;
+you can't find. Schedule entries should be chronological and terse.
+ALWAYS populate \`raw\` with a close-to-verbatim transcription of the source,
+preserving section headings, tables, and the weekly schedule — the student
+will re-read it later, so don't summarize.`;
 
 const SYLLABUS_JSON_SCHEMA = {
   type: "object",
