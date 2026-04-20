@@ -171,7 +171,7 @@ export const en: MessagesShape = {
       "or paste a syllabus, image, or ask anything…",
   },
   chat_input: {
-    placeholder: "Ask Steadii anything…",
+    placeholder: "Ask Steadii…",
     send_hint: "⌘⏎ to send",
   },
   settings: {

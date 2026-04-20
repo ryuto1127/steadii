@@ -36,15 +36,16 @@
 
   html {
     color-scheme: light dark;
+    font-feature-settings: "cv11", "ss01", "ss03";
   }
 
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
     font-family: var(--font-sans);
-    font-size: 14px;
-    line-height: 1.55;
-    font-feature-settings: "cv11", "ss01";
+    font-size: 13px;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -56,43 +57,56 @@
   .font-display {
     font-size: 28px;
     letter-spacing: -0.02em;
-    line-height: 1.2;
+    line-height: 1.15;
     font-weight: 600;
   }
 
   .text-h1 {
     font-size: 22px;
     letter-spacing: -0.015em;
-    line-height: 1.25;
+    line-height: 1.2;
     font-weight: 600;
   }
 
   .text-h2 {
-    font-size: 18px;
-    letter-spacing: -0.01em;
+    font-size: 17px;
+    letter-spacing: -0.015em;
     line-height: 1.3;
     font-weight: 600;
   }
 
   .text-h3 {
-    font-size: 15px;
-    line-height: 1.4;
+    font-size: 14px;
+    line-height: 1.35;
     font-weight: 600;
   }
 
   .text-body {
-    font-size: 14px;
-    line-height: 1.55;
+    font-size: 13px;
+    line-height: 1.45;
   }
 
   .text-small {
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  /* Monospace small-caps label used for section headers per Linear /
+     Granola style (e.g. "TODAY · APR 20"). 11px + 0.08em tracking +
+     muted color. */
+  .mono-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
   }
 
   .font-mono {
     font-family: var(--font-mono);
-    font-size: 13px;
+    font-size: 12px;
     font-variant-numeric: tabular-nums;
   }
 
@@ -144,15 +158,48 @@
   animation: steadii-tail-cursor 1s steps(1) infinite;
 }
 
+/* AI-ready pulse: 6px amber dot that breathes in/out. Used right of
+   the chat input as an ambient "agent is listening" cue. */
+@keyframes steadii-ai-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1); }
+}
+.ai-pulse {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: hsl(var(--primary));
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.15);
+  animation: steadii-ai-pulse 1.5s ease-in-out infinite;
+}
+
+/* Ambient amber gradient, top-right corner of the main content area.
+   Pointer-events: none so it never blocks clicks. */
+.ambient-amber {
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 240px;
+  height: 240px;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    circle,
+    hsl(var(--primary) / 0.10) 0%,
+    hsl(var(--primary) / 0) 65%
+  );
+}
+
 /* Typography for rendered markdown in chat responses. */
 .prose-chat {
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.55;
   color: hsl(var(--foreground));
 }
 
 .prose-chat > * + * {
-  margin-top: 0.85rem;
+  margin-top: 0.75rem;
 }
 
 .prose-chat h1,
@@ -163,14 +210,14 @@
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.015em;
-  margin-top: 1.4rem;
-  margin-bottom: 0.25rem;
+  margin-top: 1.2rem;
+  margin-bottom: 0.2rem;
 }
 
-.prose-chat h1 { font-size: 18px; }
-.prose-chat h2 { font-size: 16px; }
-.prose-chat h3 { font-size: 15px; }
-.prose-chat h4 { font-size: 14px; }
+.prose-chat h1 { font-size: 17px; }
+.prose-chat h2 { font-size: 15px; }
+.prose-chat h3 { font-size: 14px; }
+.prose-chat h4 { font-size: 13px; }
 
 .prose-chat p {
   margin: 0;
@@ -194,17 +241,17 @@
 
 .prose-chat ul,
 .prose-chat ol {
-  padding-left: 1.35rem;
+  padding-left: 1.2rem;
   margin: 0;
 }
 .prose-chat ul { list-style: disc; }
 .prose-chat ol { list-style: decimal; }
-.prose-chat li + li { margin-top: 0.25rem; }
+.prose-chat li + li { margin-top: 0.2rem; }
 .prose-chat li > p { display: inline; }
 
 .prose-chat blockquote {
   border-left: 2px solid hsl(var(--border));
-  padding-left: 0.9rem;
+  padding-left: 0.8rem;
   color: hsl(var(--muted-foreground));
   font-style: italic;
 }
@@ -219,9 +266,9 @@
 
 .prose-chat pre {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 12px;
   background: hsl(var(--surface-raised));
-  padding: 0.9rem 1rem;
+  padding: 0.8rem 0.95rem;
   border-radius: 6px;
   overflow-x: auto;
   line-height: 1.5;
@@ -237,11 +284,11 @@
 .prose-chat table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 12px;
 }
 .prose-chat th,
 .prose-chat td {
-  padding: 0.45rem 0.7rem;
+  padding: 0.4rem 0.65rem;
   border-bottom: 1px solid hsl(var(--border));
   text-align: left;
 }
@@ -253,11 +300,11 @@
 .prose-chat hr {
   border: 0;
   border-top: 1px solid hsl(var(--border));
-  margin: 1.4rem 0;
+  margin: 1.2rem 0;
 }
 
 .prose-chat .katex-display {
-  margin: 0.75rem 0;
+  margin: 0.7rem 0;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 0.1rem 0;

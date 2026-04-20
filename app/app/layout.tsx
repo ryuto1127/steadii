@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/config";
 import { Sidebar } from "@/components/layout/sidebar";
 import { OfflineStrip } from "@/components/layout/offline-strip";
+import { StatusBar } from "@/components/layout/status-bar";
 import {
   getOnboardingStatus,
   isOnboardingComplete,
@@ -35,33 +36,41 @@ export default async function AppLayout({
   return (
     <div className="flex min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
       <Sidebar />
-      <main className="flex-1 px-8 py-6">
-        <OfflineStrip />
-        {showBanner && (
-          <div
-            className={`mx-auto mb-5 max-w-4xl rounded-md border px-3 py-2 text-small ${
-              balance.exceeded
-                ? "border-[hsl(var(--destructive)/0.4)] bg-[hsl(var(--destructive)/0.08)] text-[hsl(var(--destructive))]"
-                : "border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] text-[hsl(var(--foreground))]"
-            }`}
-          >
-            <div className="flex items-center justify-between gap-4">
-              <span>
-                {balance.exceeded
-                  ? `Out of credits for this month (${balance.used} / ${balance.limit}). Chat is paused.`
-                  : `You've used ${pct}% of your monthly credits (${balance.used} / ${balance.limit}).`}
-              </span>
-              <Link
-                href="/app/settings"
-                className="shrink-0 rounded-md border border-[hsl(var(--border))] px-3 py-1 text-small transition-hover hover:bg-[hsl(var(--surface))]"
-              >
-                {effective.plan === "free" ? "Upgrade" : "Manage"}
-              </Link>
+      <div className="relative flex min-h-screen flex-1 flex-col">
+        <main className="relative flex-1 px-6 py-5">
+          <span aria-hidden className="ambient-amber" />
+          <OfflineStrip />
+          {showBanner && (
+            <div
+              className={`relative z-10 mx-auto mb-4 max-w-4xl rounded-md border px-3 py-2 text-small ${
+                balance.exceeded
+                  ? "border-[hsl(var(--destructive)/0.4)] bg-[hsl(var(--destructive)/0.08)] text-[hsl(var(--destructive))]"
+                  : "border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] text-[hsl(var(--foreground))]"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-4">
+                <span>
+                  {balance.exceeded
+                    ? `Out of credits for this month (${balance.used} / ${balance.limit}). Chat is paused.`
+                    : `You've used ${pct}% of your monthly credits (${balance.used} / ${balance.limit}).`}
+                </span>
+                <Link
+                  href="/app/settings"
+                  className="shrink-0 rounded-md border border-[hsl(var(--border))] px-3 py-1 text-small transition-hover hover:bg-[hsl(var(--surface))]"
+                >
+                  {effective.plan === "free" ? "Upgrade" : "Manage"}
+                </Link>
+              </div>
             </div>
-          </div>
-        )}
-        {children}
-      </main>
+          )}
+          <div className="relative z-10">{children}</div>
+        </main>
+        <StatusBar
+          creditsUsed={balance.used}
+          creditsLimit={balance.limit}
+          plan={effective.plan}
+        />
+      </div>
     </div>
   );
 }

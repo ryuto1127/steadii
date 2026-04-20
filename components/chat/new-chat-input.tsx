@@ -1,6 +1,12 @@
 "use client";
 
-import { useRef, useState, useTransition, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+  type FormEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import { Paperclip, ArrowUp } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -45,6 +51,9 @@ async function createChatAndPost(
   return chatId;
 }
 
+const MIN_HEIGHT_PX = 40;
+const MAX_HEIGHT_PX = 200;
+
 export function NewChatInput({
   placeholder,
   autoFocus = false,
@@ -59,6 +68,16 @@ export function NewChatInput({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-grow the textarea up to MAX_HEIGHT_PX.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const next = Math.min(MAX_HEIGHT_PX, Math.max(MIN_HEIGHT_PX, el.scrollHeight));
+    el.style.height = `${next}px`;
+  }, [value]);
 
   const canSubmit = value.trim().length > 0 && !isPending;
 
@@ -84,28 +103,62 @@ export function NewChatInput({
     <form
       onSubmit={onSubmit}
       className={cn(
-        "relative w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-2 transition-default",
-        "focus-within:border-[hsl(var(--ring))] focus-within:shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]"
+        "relative w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] transition-default",
+        "focus-within:border-[hsl(var(--ring))] focus-within:shadow-[0_0_0_1px_hsl(var(--primary)/0.45)]"
       )}
     >
       <label htmlFor="new-chat-textarea" className="sr-only">
         Message Steadii
       </label>
-      <textarea
-        id="new-chat-textarea"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={placeholder ?? t("placeholder")}
-        autoFocus={autoFocus}
-        rows={3}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault();
-            (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
-          }
-        }}
-        className="block w-full resize-none bg-transparent px-3 py-2 text-body text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none"
-      />
+      <div className="flex items-start gap-2 px-2.5">
+        <span
+          aria-hidden
+          className="pt-[14px] font-mono text-[12px] leading-none text-[hsl(var(--muted-foreground))]"
+        >
+          ▸
+        </span>
+        <textarea
+          ref={textareaRef}
+          id="new-chat-textarea"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={placeholder ?? t("placeholder")}
+          autoFocus={autoFocus}
+          rows={1}
+          style={{ height: MIN_HEIGHT_PX }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
+            }
+          }}
+          className="block w-full resize-none bg-transparent py-[10px] pr-2 text-body leading-[1.45] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none"
+        />
+        <div className="flex shrink-0 items-center gap-1.5 pt-[10px]">
+          <span aria-hidden className="ai-pulse" title="AI ready" />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex h-5 w-5 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+            aria-label="Attach image or PDF"
+          >
+            <Paperclip size={16} strokeWidth={1.5} />
+          </button>
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className={cn(
+              "flex h-5 w-5 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-hover",
+              canSubmit
+                ? "text-[hsl(var(--primary))] hover:opacity-80"
+                : "opacity-50"
+            )}
+            aria-label="Send"
+          >
+            <ArrowUp size={16} strokeWidth={1.75} />
+          </button>
+        </div>
+      </div>
       <input
         ref={fileRef}
         type="file"
@@ -113,41 +166,22 @@ export function NewChatInput({
         className="hidden"
         onChange={(e) => setFile(e.target.files?.[0] ?? null)}
       />
-      <div className="flex items-center justify-between gap-2 px-1 pt-1">
-        <div className="flex items-center gap-2">
+      {file ? (
+        <div className="flex items-center gap-2 border-t border-[hsl(var(--border))] px-3 py-1.5 text-[11px] text-[hsl(var(--muted-foreground))]">
+          <span className="truncate">{file.name}</span>
           <button
             type="button"
-            onClick={() => fileRef.current?.click()}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
-            aria-label="Attach image or PDF"
+            onClick={() => setFile(null)}
+            className="ml-auto transition-hover hover:text-[hsl(var(--foreground))]"
           >
-            <Paperclip size={14} strokeWidth={1.5} />
-          </button>
-          {file ? (
-            <button
-              type="button"
-              onClick={() => setFile(null)}
-              className="truncate rounded-md border border-[hsl(var(--border))] px-2 py-1 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
-              title="Click to remove"
-            >
-              {file.name}
-            </button>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-2 text-small text-[hsl(var(--muted-foreground))]">
-          <span className="font-mono text-[11px] opacity-60">{t("send_hint")}</span>
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="flex h-7 w-7 items-center justify-center rounded-md bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] transition-hover disabled:opacity-40"
-            aria-label="Send"
-          >
-            <ArrowUp size={14} strokeWidth={1.75} />
+            Remove
           </button>
         </div>
-      </div>
+      ) : null}
       {error ? (
-        <p className="mt-2 px-3 text-small text-[hsl(var(--destructive))]">{error}</p>
+        <p className="border-t border-[hsl(var(--destructive)/0.3)] px-3 py-1.5 text-[11px] text-[hsl(var(--destructive))]">
+          {error}
+        </p>
       ) : null}
     </form>
   );
