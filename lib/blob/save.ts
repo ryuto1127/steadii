@@ -30,6 +30,11 @@ export async function uploadAndRecord(args: {
   const prefix = args.pathPrefix ?? `steadii/${args.userId}/${args.source}`;
   const path = `${prefix}/${Date.now()}-${args.file.name}`;
 
+  // Public access: blob URLs are cryptographically random (non-enumerable)
+  // but anyone with the URL can fetch the file. Acceptable for α because
+  // (1) invite-only users, (2) syllabi are typically public, (3) Notion
+  // file blocks require public URLs. Post-α: split into public syllabus
+  // store + private chat-attachment store with a proxy route. See PRD §9.6.
   const uploaded = await put(path, args.file, {
     access: "public",
     contentType: args.file.type,

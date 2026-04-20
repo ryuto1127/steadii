@@ -549,3 +549,77 @@ Redeemコード入力UI:
 |---|---|
 | 法務整備の先送りによるトラブル | α版は招待制・Testing mode で限定、公開前に確実に整備 |
 | APIコストの暴走 | ユーザーあたりCredit上限、管理者ダッシュボードでの監視 |
+
+---
+
+## 9. Vision: From reactive to proactive
+
+### 9.1 Core thesis
+
+Steadii の長期的な差別化は、受動的な Q&A ツールから、複数の
+プラットフォームを横断する能動的なアシスタントへの移行にある。
+
+既存の AI プロダクト (ChatGPT, Notion AI, Atlas, NotebookLM)
+はすべてユーザーが質問するのを待つ「機械型」である。Steadii
+はユーザーが聞く前に、Notion と Google Calendar を横断して
+状況を読み取り、必要な情報を先回りして提示する「秘書型」を
+目指す。
+
+この違いは構造的優位である。既存製品は Notion にも Google
+Calendar にも統合されていないため、同じ機能を後から追加する
+のは難しい。
+
+### 9.2 Example scenarios (post v1.0)
+
+- ユーザーが Google Calendar で授業日を「欠席」とマーク →
+  Steadii が該当シラバスを読み、欠席申請手順を検出して通知:
+  「12日の MAT135 を欠席予定ですね。このクラスの欠席申請手順は
+  こちらです。」
+- 課題提出期限の48時間前 → 過去の作業パターンから所要時間を
+  推定し、カレンダーに作業時間ブロックを提案
+- 試験週間が近づく → 蓄積された間違いノートから自動で practice
+  quiz を生成
+- 新しいシラバスが保存された → 掲載されている日付 (中間試験、
+  小テスト、期末) を Google Calendar に追加提案 (初回はユーザー
+  確認)
+
+### 9.3 Design principles
+
+- Opt-in only — ユーザーを驚かせない
+- Transparent — 常に「何を見て何を提案したか」を明示
+- Rate-limited — 能動的な介入は1日最大3件
+- Confidence thresholds — 低確信の観察は「〜ですか?」という
+  質問の形で、高確信のみアクションの形で
+- User in control — すべての提案に「今回は不要」「今後提案しない」
+  の選択肢
+
+### 9.4 Progressive rollout
+
+- v1.0: "Morning Brief" — アプリを開いた時にだけ表示される
+  画面内要約。今日の授業 + 今日期限の課題 + 最近の間違い
+  パターン。プッシュ通知なし、メールなし、UIのみ。
+- v1.1: アプリ内通知インフラ (プッシュはまだなし)、opt-in 設定
+- v1.2+: クロスプラットフォーム介入 (Calendar 欠席 → シラバス
+  参照)、パターン認識 (弱点トピック検出)
+- v2.0+: プッシュ通知、メール通知、学習グループなどのチーム機能
+
+### 9.5 Scope boundary for Phase 1-6
+
+上記機能はいずれも v1.0 ローンチ前には実装しない。このセクション
+は、今フェーズの設計判断を将来ビジョンと整合させるためにのみ
+存在する (例: verbatim preservation や使用パターン保存は、将来の
+能動機能の前提となる)。
+
+### 9.6 α-period privacy note (Blob access)
+
+Blob store は α 期間中は public access で運用する。URL は
+cryptographically random で列挙不可だが、URL を知る者は誰でも
+fetch できる。これは (1) 招待制 10 人、(2) シラバスは元々公開
+文書であることが多い、(3) Notion external file block が public
+URL を要求するため、α では許容する。
+
+β 以降は以下に分離する:
+- Syllabus originals → public store 継続 (Notion 参照のため)
+- Chat attachments → private store + 自前プロキシ経由
+  (`/api/blob/[...pathname]` で session 認証 + `blob_assets` 所有権
+  確認)

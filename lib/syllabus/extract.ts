@@ -146,17 +146,81 @@ export function cleanHtml(html: string): string {
   }
 }
 
-export async function fetchSyllabusUrl(url: string): Promise<{ html: string }> {
+export type FetchedUrl =
+  | { kind: "html"; contentType: string; html: string }
+  | { kind: "pdf"; contentType: string; bytes: Buffer; filename: string }
+  | { kind: "image"; contentType: string; bytes: Buffer; filename: string };
+
+export function classifyFetchedContentType(
+  contentType: string
+): "html" | "pdf" | "image" | null {
+  const ct = contentType.toLowerCase();
+  if (
+    ct.includes("text/html") ||
+    ct.includes("text/plain") ||
+    ct.includes("application/xhtml")
+  ) {
+    return "html";
+  }
+  if (ct.includes("application/pdf")) return "pdf";
+  if (ct.startsWith("image/")) return "image";
+  return null;
+}
+
+export function filenameFromUrl(rawUrl: string, fallbackExt: string): string {
+  try {
+    const u = new URL(rawUrl);
+    const base = u.pathname.split("/").filter(Boolean).pop() ?? "";
+    if (base && /\.[a-z0-9]+$/i.test(base)) return base;
+    const host = u.hostname.replace(/[^a-z0-9-]/gi, "-");
+    return `${host || "syllabus"}.${fallbackExt}`;
+  } catch {
+    return `syllabus.${fallbackExt}`;
+  }
+}
+
+export class UnsupportedSyllabusUrlTypeError extends Error {
+  code = "UNSUPPORTED_URL_CONTENT_TYPE" as const;
+  constructor(contentType: string) {
+    super(
+      `We can only read HTML, PDF, or image URLs right now. This one reported "${
+        contentType || "(no content-type header)"
+      }".`
+    );
+  }
+}
+
+export async function fetchSyllabusUrl(url: string): Promise<FetchedUrl> {
   const res = await fetch(url, {
     headers: { "User-Agent": "Steadii Syllabus Fetcher" },
   });
   if (!res.ok) throw new Error(`URL fetch failed (${res.status})`);
   const contentType = res.headers.get("content-type") ?? "";
-  if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
-    throw new Error(`unsupported content-type: ${contentType}`);
+  const kind = classifyFetchedContentType(contentType);
+  if (kind === "html") {
+    const html = await res.text();
+    return { kind: "html", contentType, html };
   }
-  const html = await res.text();
-  return { html };
+  if (kind === "pdf") {
+    const bytes = Buffer.from(await res.arrayBuffer());
+    return {
+      kind: "pdf",
+      contentType,
+      bytes,
+      filename: filenameFromUrl(url, "pdf"),
+    };
+  }
+  if (kind === "image") {
+    const bytes = Buffer.from(await res.arrayBuffer());
+    const ext = contentType.split("/")[1]?.split(";")[0]?.trim() || "png";
+    return {
+      kind: "image",
+      contentType,
+      bytes,
+      filename: filenameFromUrl(url, ext),
+    };
+  }
+  throw new UnsupportedSyllabusUrlTypeError(contentType);
 }
 
 // re-export for routing
