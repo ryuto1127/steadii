@@ -3,6 +3,7 @@ import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from "next/font/goo
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import "./globals.css";
+import "katex/dist/katex.min.css";
 
 const sans = Instrument_Sans({
   subsets: ["latin"],
