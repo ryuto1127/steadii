@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
-import { SidebarNav, ICON_OFFSET_PX, NAV_ITEM_KEYS } from "./sidebar-nav";
+import { SidebarNav } from "./sidebar-nav";
+import { ICON_OFFSET_PX, NAV_ITEM_KEYS } from "./nav-items";
 
 export async function Sidebar() {
   const t = await getTranslations("nav");
@@ -20,5 +21,5 @@ export async function Sidebar() {
 }
 
 // Kept for the sidebar-icon-offsets.test.ts import path. Clients of this
-// test should migrate to importing from `./sidebar-nav` directly.
+// test should migrate to importing from `./nav-items` directly.
 export const __testing = { ICON_OFFSET_PX };
