@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth, signOut } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import { ExternalLink, RefreshCw } from "lucide-react";
+import { getLocale, getTranslations } from "next-intl/server";
 import { db } from "@/lib/db/client";
 import {
   notionConnections,
@@ -25,7 +26,9 @@ import {
 import { BillingActions } from "@/components/billing/billing-actions";
 import { RedeemForm } from "@/components/billing/redeem-form";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { LanguageToggle } from "@/components/settings/language-toggle";
 import { getUserThemePreference } from "@/lib/theme/get-preference";
+import { isLocale } from "@/lib/i18n/config";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +36,9 @@ export default async function SettingsPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
+  const t = await getTranslations("settings");
+  const currentLocaleRaw = await getLocale();
+  const currentLocale = isLocale(currentLocaleRaw) ? currentLocaleRaw : "en";
 
   const [
     mode,
@@ -83,9 +89,9 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl py-6">
-      <h1 className="text-h1 text-[hsl(var(--foreground))]">Settings</h1>
+      <h1 className="text-h1 text-[hsl(var(--foreground))]">{t("title")}</h1>
 
-      <Section title="Profile">
+      <Section title={t("sections.profile")}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-body">{session.user.name ?? "(no name)"}</p>
@@ -98,13 +104,13 @@ export default async function SettingsPage() {
               type="submit"
               className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
             >
-              Sign out
+              {t("sign_out")}
             </button>
           </form>
         </div>
       </Section>
 
-      <Section title="Connections">
+      <Section title={t("sections.connections")}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-body">Notion</p>
@@ -154,7 +160,7 @@ export default async function SettingsPage() {
         </div>
       </Section>
 
-      <Section title="Resources">
+      <Section title={t("sections.resources")}>
         <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
           Notion pages the agent can read. Pages under the Steadii parent
           auto-register. Add extra pages with a URL.
@@ -210,7 +216,7 @@ export default async function SettingsPage() {
         </form>
       </Section>
 
-      <Section title="Agent behavior">
+      <Section title={t("sections.agent")}>
         <form action={setConfirmationModeAction} className="space-y-2">
           <Option
             value="destructive_only"
@@ -242,7 +248,7 @@ export default async function SettingsPage() {
         </form>
       </Section>
 
-      <Section title="Usage & billing">
+      <Section title={t("sections.usage")}>
         <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
           {effective.plan === "admin"
             ? `Admin (redemption) · active until ${effective.until.toLocaleDateString()}`
@@ -281,7 +287,7 @@ export default async function SettingsPage() {
         </div>
       </Section>
 
-      <Section title="Redeem code">
+      <Section title={t("sections.redeem")}>
         <RedeemForm />
         {redemptions.length > 0 && (
           <ul className="mt-4 space-y-1 text-small text-[hsl(var(--muted-foreground))]">
@@ -302,25 +308,31 @@ export default async function SettingsPage() {
         )}
       </Section>
 
-      <Section title="Appearance">
+      <Section title={t("sections.appearance")}>
         <div className="flex items-center justify-between">
           <p className="text-small text-[hsl(var(--muted-foreground))]">
-            Theme
+            {t("appearance_theme_label")}
           </p>
           <ThemeToggle initial={theme} />
         </div>
       </Section>
 
-      <Section title="Language">
-        <div className="flex items-center justify-between">
+      <Section title={t("sections.language")}>
+        <div className="flex items-center justify-between gap-4">
           <p className="text-small text-[hsl(var(--muted-foreground))]">
-            UI language follows your browser&apos;s Accept-Language. Explicit
-            override coming after α.
+            {t("language_description")}
           </p>
+          <LanguageToggle
+            initial={currentLocale}
+            labels={{
+              en: t("language_option_en"),
+              ja: t("language_option_ja"),
+            }}
+          />
         </div>
       </Section>
 
-      <Section title="Danger zone" tone="warn">
+      <Section title={t("sections.danger")} tone="warn">
         <div className="flex items-center justify-between">
           <p className="text-small text-[hsl(var(--muted-foreground))]">
             Delete account and all associated data. (Coming after α.)

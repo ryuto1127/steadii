@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Paperclip, ArrowUp } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils/cn";
 
 // Creates a chat and lands on /app/chat/[id]?stream=1 with the first message
@@ -45,12 +46,13 @@ async function createChatAndPost(
 }
 
 export function NewChatInput({
-  placeholder = "Ask Steadii anything…",
+  placeholder,
   autoFocus = false,
 }: {
   placeholder?: string;
   autoFocus?: boolean;
 }) {
+  const t = useTranslations("chat_input");
   const router = useRouter();
   const [value, setValue] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -93,7 +95,7 @@ export function NewChatInput({
         id="new-chat-textarea"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t("placeholder")}
         autoFocus={autoFocus}
         rows={3}
         onKeyDown={(e) => {
@@ -133,7 +135,7 @@ export function NewChatInput({
           ) : null}
         </div>
         <div className="flex items-center gap-2 text-small text-[hsl(var(--muted-foreground))]">
-          <span className="font-mono text-[11px] opacity-60">⌘⏎ to send</span>
+          <span className="font-mono text-[11px] opacity-60">{t("send_hint")}</span>
           <button
             type="submit"
             disabled={!canSubmit}
