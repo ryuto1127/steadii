@@ -21,6 +21,10 @@ const hoist = vi.hoisted(() => {
         where: () => ({
           orderBy: () => state.messages,
           limit: () => state.messages,
+          // Awaiting the .where() directly resolves to [] — used by the
+          // new attachments query inside loadHistory; attachments aren't
+          // exercised in this error-path test, so an empty list is fine.
+          then: (resolve: (val: unknown) => unknown) => resolve([]),
         }),
       }),
     }),
@@ -85,6 +89,7 @@ vi.mock("drizzle-orm", () => ({
   isNull: () => ({}),
   gte: () => ({}),
   sum: () => ({}),
+  inArray: () => ({}),
 }));
 
 vi.mock("@/lib/billing/credits", () => ({

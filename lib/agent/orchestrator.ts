@@ -19,7 +19,7 @@ import {
   messageAttachments,
   pendingToolCalls,
 } from "@/lib/db/schema";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import type OpenAI from "openai";
 
 export type StreamEvent =
@@ -323,17 +323,7 @@ export async function* streamChatResponse(
   yield { type: "message_end", assistantMessageId: assistantId, text: finalText };
 }
 
-type StoredMessage = {
-  id: string;
-  role: "user" | "assistant" | "system" | "tool";
-  content: string;
-  toolCallId: string | null;
-  toolCalls: Array<{
-    id: string;
-    type: "function";
-    function: { name: string; arguments: string };
-  }> | null;
-};
+import { toOpenAIMessage, type StoredMessage } from "./messages";
 
 async function loadHistory(chatId: string): Promise<StoredMessage[]> {
   const rows = await db
@@ -341,33 +331,34 @@ async function loadHistory(chatId: string): Promise<StoredMessage[]> {
     .from(messagesTable)
     .where(eq(messagesTable.chatId, chatId))
     .orderBy(asc(messagesTable.createdAt));
-  return rows
-    .filter((r) => !r.deletedAt)
-    .map((r) => ({
-      id: r.id,
-      role: r.role,
-      content: r.content,
-      toolCallId: r.toolCallId,
-      toolCalls: (r.toolCalls as StoredMessage["toolCalls"]) ?? null,
-    }));
-}
+  const live = rows.filter((r) => !r.deletedAt);
+  if (live.length === 0) return [];
 
-function toOpenAIMessage(m: StoredMessage): OpenAI.Chat.ChatCompletionMessageParam {
-  if (m.role === "tool") {
-    return {
-      role: "tool",
-      tool_call_id: m.toolCallId ?? "",
-      content: m.content,
-    };
+  const ids = live.map((r) => r.id);
+  const atts = await db
+    .select()
+    .from(messageAttachments)
+    .where(inArray(messageAttachments.messageId, ids));
+  const byMessage = new Map<string, typeof atts>();
+  for (const a of atts) {
+    const list = byMessage.get(a.messageId) ?? [];
+    list.push(a);
+    byMessage.set(a.messageId, list);
   }
-  if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
-    return {
-      role: "assistant",
-      content: m.content || null,
-      tool_calls: m.toolCalls,
-    };
-  }
-  return { role: m.role, content: m.content };
+
+  return live.map((r) => ({
+    id: r.id,
+    role: r.role,
+    content: r.content,
+    toolCallId: r.toolCallId,
+    toolCalls: (r.toolCalls as StoredMessage["toolCalls"]) ?? null,
+    attachments: (byMessage.get(r.id) ?? []).map((a) => ({
+      id: a.id,
+      kind: a.kind,
+      url: a.url,
+      filename: a.filename,
+    })),
+  }));
 }
 
 async function insertPendingAssistant(chatId: string, model: string): Promise<string> {
