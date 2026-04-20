@@ -190,6 +190,30 @@ export const usageEvents = pgTable("usage_events", {
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
+export const pendingToolCalls = pgTable("pending_tool_calls", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  chatId: uuid("chat_id")
+    .notNull()
+    .references(() => chats.id, { onDelete: "cascade" }),
+  assistantMessageId: uuid("assistant_message_id").references(() => messages.id, {
+    onDelete: "set null",
+  }),
+  toolName: text("tool_name").notNull(),
+  toolCallId: text("tool_call_id").notNull(),
+  args: jsonb("args").notNull(),
+  status: text("status")
+    .$type<"pending" | "approved" | "denied" | "expired">()
+    .notNull()
+    .default("pending"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  resolvedAt: timestamp("resolved_at", { mode: "date" }),
+});
+
+export type PendingToolCall = typeof pendingToolCalls.$inferSelect;
+
 export type Chat = typeof chats.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type MessageAttachment = typeof messageAttachments.$inferSelect;

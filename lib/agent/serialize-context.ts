@@ -12,6 +12,11 @@ export type UserContextPayload = {
     notionId: string;
     title: string | null;
   }>;
+  calendarEventsThisWeek?: Array<{
+    summary: string | null | undefined;
+    start: string | null | undefined;
+    end: string | null | undefined;
+  }>;
 };
 
 export function serializeContextForPrompt(ctx: UserContextPayload): string {
@@ -29,6 +34,12 @@ export function serializeContextForPrompt(ctx: UserContextPayload): string {
     lines.push(`Registered resources:`);
     for (const r of ctx.registeredResources) {
       lines.push(`  - [${r.kind}] ${r.title ?? "(untitled)"} → ${r.notionId}`);
+    }
+  }
+  if (ctx.calendarEventsThisWeek && ctx.calendarEventsThisWeek.length > 0) {
+    lines.push(`Calendar (next 7 days):`);
+    for (const e of ctx.calendarEventsThisWeek) {
+      lines.push(`  - ${e.start ?? "?"} → ${e.end ?? "?"}: ${e.summary ?? "(untitled)"}`);
     }
   }
   return lines.join("\n");
