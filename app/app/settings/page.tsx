@@ -1,12 +1,31 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth/config";
+import { auth, signOut } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { ExternalLink, RefreshCw } from "lucide-react";
+import { db } from "@/lib/db/client";
+import {
+  notionConnections,
+  accounts,
+  registeredResources,
+} from "@/lib/db/schema";
+import { and, eq, isNull } from "drizzle-orm";
 import { getUserConfirmationMode } from "@/lib/agent/preferences";
 import { setConfirmationModeAction } from "./actions";
 import { getCreditBalance } from "@/lib/billing/credits";
 import { getStorageTotals } from "@/lib/billing/storage";
 import { prettyBytes } from "@/lib/billing/plan";
+import { getEffectivePlan } from "@/lib/billing/effective-plan";
+import { listUserRedemptions } from "@/lib/billing/redeem";
+import {
+  addResourceAction,
+  removeResourceAction,
+  refreshResourcesAction,
+  disconnectNotionAction,
+} from "@/app/(auth)/onboarding/actions";
+import { BillingActions } from "@/components/billing/billing-actions";
+import { RedeemForm } from "@/components/billing/redeem-form";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { getUserThemePreference } from "@/lib/theme/get-preference";
 
 export const dynamic = "force-dynamic";
 
@@ -14,179 +33,410 @@ export default async function SettingsPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
-  const t = await getTranslations("nav");
-  const mode = await getUserConfirmationMode(userId);
-  const balance = await getCreditBalance(userId);
-  const storage = await getStorageTotals(userId);
+
+  const [
+    mode,
+    balance,
+    storage,
+    effective,
+    redemptions,
+    notionConn,
+    googleAcct,
+    resources,
+    theme,
+  ] = await Promise.all([
+    getUserConfirmationMode(userId),
+    getCreditBalance(userId),
+    getStorageTotals(userId),
+    getEffectivePlan(userId),
+    listUserRedemptions(userId),
+    db
+      .select()
+      .from(notionConnections)
+      .where(eq(notionConnections.userId, userId))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+    db
+      .select()
+      .from(accounts)
+      .where(and(eq(accounts.userId, userId), eq(accounts.provider, "google")))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+    db
+      .select()
+      .from(registeredResources)
+      .where(
+        and(
+          eq(registeredResources.userId, userId),
+          isNull(registeredResources.archivedAt)
+        )
+      ),
+    getUserThemePreference(userId),
+  ]);
+
+  const calendarConnected = googleAcct?.scope?.includes("calendar") ?? false;
+
+  async function signOutAction() {
+    "use server";
+    await signOut({ redirectTo: "/" });
+  }
 
   return (
-    <div className="mx-auto max-w-xl">
-      <h1 className="font-serif text-3xl">{t("settings")}</h1>
+    <div className="mx-auto max-w-2xl py-6">
+      <h1 className="text-h1 text-[hsl(var(--foreground))]">Settings</h1>
 
-      <section className="mt-8 rounded-xl bg-[hsl(var(--surface))] p-6 shadow-sm">
-        <h2 className="text-lg font-medium">Plan &amp; usage</h2>
-        <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
-          Current plan:{" "}
-          <span className="font-medium text-[hsl(var(--foreground))]">
-            {balance.plan === "pro" ? "Pro" : "Free"}
-          </span>
-        </p>
-
-        <div className="mt-5">
-          <div className="flex items-baseline justify-between text-sm">
-            <span>Credits this month</span>
-            <span className="font-mono text-xs">
-              {balance.used} / {balance.limit}
-            </span>
-          </div>
-          <Bar
-            percent={Math.min(100, (balance.used / balance.limit) * 100)}
-            tone={balance.exceeded ? "destructive" : balance.nearLimit ? "accent" : "primary"}
-          />
-          {balance.exceeded && (
-            <p className="mt-1 text-xs text-[hsl(var(--destructive))]">
-              Out of credits. Chat is paused until next cycle or upgrade.
+      <Section title="Profile">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-body">{session.user.name ?? "(no name)"}</p>
+            <p className="text-small text-[hsl(var(--muted-foreground))]">
+              {session.user.email}
             </p>
+          </div>
+          <form action={signOutAction}>
+            <button
+              type="submit"
+              className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </Section>
+
+      <Section title="Connections">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-body">Notion</p>
+            <p className="text-small text-[hsl(var(--muted-foreground))]">
+              {notionConn
+                ? `Connected to ${notionConn.workspaceName ?? "workspace"}${
+                    notionConn.setupCompletedAt ? " · setup complete" : " · setup pending"
+                  }`
+                : "Not connected"}
+            </p>
+          </div>
+          {notionConn ? (
+            <form action={disconnectNotionAction}>
+              <button
+                type="submit"
+                className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))]"
+              >
+                Disconnect
+              </button>
+            </form>
+          ) : (
+            <Link
+              href="/api/integrations/notion/connect"
+              className="inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
+            >
+              Connect
+            </Link>
           )}
         </div>
-
-        <div className="mt-5">
-          <div className="flex items-baseline justify-between text-sm">
-            <span>Storage</span>
-            <span className="font-mono text-xs">
-              {prettyBytes(storage.usedBytes)} / {prettyBytes(storage.maxTotalBytes)}
-            </span>
+        <div className="mt-3 flex items-center justify-between border-t border-[hsl(var(--border))] pt-3">
+          <div>
+            <p className="text-body">Google Calendar</p>
+            <p className="text-small text-[hsl(var(--muted-foreground))]">
+              {calendarConnected ? "Calendar scope granted." : "Calendar scope missing."}
+            </p>
           </div>
-          <Bar
-            percent={Math.min(100, (storage.usedBytes / storage.maxTotalBytes) * 100)}
-            tone={
-              storage.usedBytes >= storage.maxTotalBytes
-                ? "destructive"
-                : storage.usedBytes >= storage.maxTotalBytes * 0.8
-                ? "accent"
-                : "primary"
-            }
-          />
-          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
-            Per-file cap: {prettyBytes(storage.maxFileBytes)}
-          </p>
+          {!calendarConnected ? (
+            <form action={signOutAction}>
+              <button
+                type="submit"
+                className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+              >
+                Sign out to re-auth
+              </button>
+            </form>
+          ) : null}
         </div>
+      </Section>
 
-        <div className="mt-6">
-          <Link
-            href="/app/settings/billing"
-            className="inline-flex rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
-          >
-            Manage billing →
-          </Link>
-        </div>
-      </section>
-
-      <ul className="mt-6 divide-y divide-[hsl(var(--border))] rounded-xl bg-[hsl(var(--surface))]">
-        <li>
-          <Link
-            href="/app/settings/connections"
-            className="flex items-center justify-between px-6 py-4 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
-          >
-            <span>Connections</span>
-            <span className="text-[hsl(var(--muted-foreground))]">→</span>
-          </Link>
-        </li>
-        <li>
-          <Link
-            href="/app/resources"
-            className="flex items-center justify-between px-6 py-4 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
-          >
-            <span>Registered Resources</span>
-            <span className="text-[hsl(var(--muted-foreground))]">→</span>
-          </Link>
-        </li>
-      </ul>
-
-      <section className="mt-8 rounded-xl bg-[hsl(var(--surface))] p-6 shadow-sm">
-        <h2 className="text-lg font-medium">Agent confirmation</h2>
-        <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-          Choose when Steadii should pause and ask before acting on your Notion
-          pages or calendar.
+      <Section title="Resources">
+        <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
+          Notion pages the agent can read. Pages under the Steadii parent
+          auto-register. Add extra pages with a URL.
         </p>
-        <form action={setConfirmationModeAction} className="mt-4 space-y-3">
+        <form action={addResourceAction} className="mb-3 flex gap-2">
+          <input
+            name="notion_url"
+            placeholder="https://notion.so/..."
+            className="flex-1 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small focus:outline-none focus:border-[hsl(var(--ring))]"
+          />
+          <button
+            type="submit"
+            className="inline-flex items-center rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
+          >
+            Add
+          </button>
+        </form>
+        {resources.length === 0 ? (
+          <p className="text-small text-[hsl(var(--muted-foreground))]">
+            No manual resources yet.
+          </p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-[hsl(var(--border))]">
+            {resources.map((r) => (
+              <li key={r.id} className="flex items-center justify-between py-2 text-small">
+                <div className="min-w-0">
+                  <p className="truncate text-body">{r.title ?? r.notionId}</p>
+                  <p className="truncate text-[hsl(var(--muted-foreground))]">
+                    {r.autoRegistered ? "auto-registered" : "manual"} · {r.resourceType}
+                  </p>
+                </div>
+                <form action={removeResourceAction}>
+                  <input type="hidden" name="id" value={r.id} />
+                  <button
+                    type="submit"
+                    className="text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))]"
+                  >
+                    Remove
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action={refreshResourcesAction} className="mt-3">
+          <button
+            type="submit"
+            className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
+          >
+            <RefreshCw size={12} strokeWidth={1.5} />
+            Refresh from Notion
+          </button>
+        </form>
+      </Section>
+
+      <Section title="Agent behavior">
+        <form action={setConfirmationModeAction} className="space-y-2">
           <Option
             value="destructive_only"
+            name="mode"
             checked={mode === "destructive_only"}
             label="Only confirm destructive actions (recommended)"
             hint="Creating or updating is automatic; deletions pause for approval."
           />
           <Option
             value="all"
+            name="mode"
             checked={mode === "all"}
             label="Confirm every write"
             hint="Any change — create, update, delete — pauses for approval."
           />
           <Option
             value="none"
+            name="mode"
             checked={mode === "none"}
             label="Never ask"
             hint="Steadii acts immediately. Use with care."
           />
           <button
             type="submit"
-            className="mt-2 rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))]"
+            className="mt-2 inline-flex items-center rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
           >
             Save
           </button>
         </form>
-      </section>
+      </Section>
+
+      <Section title="Usage & billing">
+        <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
+          {effective.plan === "admin"
+            ? `Admin (redemption) · active until ${effective.until.toLocaleDateString()}`
+            : effective.plan === "pro" && effective.source === "stripe"
+            ? `Pro (Stripe)${
+                effective.until
+                  ? ` · renews ${effective.until.toLocaleDateString()}`
+                  : ""
+              }`
+            : effective.plan === "pro" && effective.source === "friend_redemption"
+            ? `Pro (friend redemption) · active until ${effective.until.toLocaleDateString()}`
+            : "Free"}
+        </p>
+        <MeterRow
+          label="Credits this month"
+          used={balance.used}
+          limit={balance.limit}
+          unit=""
+          exceeded={balance.exceeded}
+          nearLimit={balance.nearLimit}
+        />
+        <div className="mt-3">
+          <MeterRow
+            label="Storage"
+            used={storage.usedBytes}
+            limit={storage.maxTotalBytes}
+            unit="bytes"
+            exceeded={storage.usedBytes >= storage.maxTotalBytes}
+            nearLimit={storage.usedBytes >= storage.maxTotalBytes * 0.8}
+            prettyUsed={prettyBytes(storage.usedBytes)}
+            prettyLimit={prettyBytes(storage.maxTotalBytes)}
+          />
+        </div>
+        <div className="mt-4">
+          <BillingActions effectivePlan={effective.plan} />
+        </div>
+      </Section>
+
+      <Section title="Redeem code">
+        <RedeemForm />
+        {redemptions.length > 0 && (
+          <ul className="mt-4 space-y-1 text-small text-[hsl(var(--muted-foreground))]">
+            {redemptions.map((r) => (
+              <li key={r.redemption.id} className="flex justify-between">
+                <span>
+                  {r.code.type} · {r.code.durationDays} days · redeemed{" "}
+                  {r.redemption.redeemedAt.toLocaleDateString()}
+                </span>
+                <span>
+                  {r.redemption.effectiveUntil.getTime() > Date.now()
+                    ? `active until ${r.redemption.effectiveUntil.toLocaleDateString()}`
+                    : "expired"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      <Section title="Appearance">
+        <div className="flex items-center justify-between">
+          <p className="text-small text-[hsl(var(--muted-foreground))]">
+            Theme
+          </p>
+          <ThemeToggle initial={theme} />
+        </div>
+      </Section>
+
+      <Section title="Language">
+        <div className="flex items-center justify-between">
+          <p className="text-small text-[hsl(var(--muted-foreground))]">
+            UI language follows your browser&apos;s Accept-Language. Explicit
+            override coming after α.
+          </p>
+        </div>
+      </Section>
+
+      <Section title="Danger zone" tone="warn">
+        <div className="flex items-center justify-between">
+          <p className="text-small text-[hsl(var(--muted-foreground))]">
+            Delete account and all associated data. (Coming after α.)
+          </p>
+          <button
+            type="button"
+            disabled
+            className="text-small text-[hsl(var(--muted-foreground))] opacity-60"
+          >
+            Delete account
+          </button>
+        </div>
+      </Section>
     </div>
   );
 }
 
-function Bar({
-  percent,
-  tone,
+function Section({
+  title,
+  tone = "neutral",
+  children,
 }: {
-  percent: number;
-  tone: "primary" | "accent" | "destructive";
+  title: string;
+  tone?: "neutral" | "warn";
+  children: React.ReactNode;
 }) {
-  const color =
-    tone === "destructive"
-      ? "hsl(var(--destructive))"
-      : tone === "accent"
-      ? "hsl(var(--accent))"
-      : "hsl(var(--primary))";
   return (
-    <div className="mt-2 h-2 overflow-hidden rounded-full bg-[hsl(var(--surface-raised))]">
-      <div
-        className="h-full rounded-full transition-all"
-        style={{ width: `${Math.max(0, Math.min(100, percent))}%`, backgroundColor: color }}
-      />
+    <section
+      className={
+        tone === "warn"
+          ? "mt-5 rounded-md border border-[hsl(var(--destructive)/0.25)] bg-[hsl(var(--destructive)/0.03)] p-4"
+          : "mt-5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4"
+      }
+    >
+      <h2 className="mb-2.5 text-h3 text-[hsl(var(--foreground))]">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function MeterRow({
+  label,
+  used,
+  limit,
+  exceeded,
+  nearLimit,
+  prettyUsed,
+  prettyLimit,
+  unit,
+}: {
+  label: string;
+  used: number;
+  limit: number;
+  exceeded: boolean;
+  nearLimit: boolean;
+  prettyUsed?: string;
+  prettyLimit?: string;
+  unit?: string;
+}) {
+  void unit;
+  const pct = Math.min(100, Math.max(0, (used / limit) * 100));
+  const fill = exceeded
+    ? "hsl(var(--destructive))"
+    : nearLimit
+    ? "hsl(var(--primary))"
+    : "hsl(var(--primary))";
+  return (
+    <div>
+      <div className="flex items-baseline justify-between text-small">
+        <span>{label}</span>
+        <span className="font-mono text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]">
+          {prettyUsed ?? used} / {prettyLimit ?? limit}
+        </span>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[hsl(var(--surface-raised))]">
+        <div
+          className="h-full transition-default"
+          style={{
+            width: `${pct}%`,
+            backgroundColor: fill,
+            opacity: exceeded ? 1 : nearLimit ? 0.9 : 0.8,
+          }}
+        />
+      </div>
     </div>
   );
 }
 
 function Option({
+  name,
   value,
   checked,
   label,
   hint,
 }: {
+  name: string;
   value: string;
   checked: boolean;
   label: string;
   hint: string;
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-lg px-3 py-2 transition hover:bg-[hsl(var(--surface-raised))]">
+    <label className="flex cursor-pointer items-start gap-3 rounded-md px-2 py-1.5 transition-hover hover:bg-[hsl(var(--surface-raised))]">
       <input
         type="radio"
-        name="mode"
+        name={name}
         value={value}
         defaultChecked={checked}
         className="mt-1"
       />
       <div>
-        <p className="text-sm font-medium">{label}</p>
-        <p className="text-xs text-[hsl(var(--muted-foreground))]">{hint}</p>
+        <p className="text-body font-medium">{label}</p>
+        <p className="text-small text-[hsl(var(--muted-foreground))]">{hint}</p>
       </div>
     </label>
   );
 }
+
+void ExternalLink;

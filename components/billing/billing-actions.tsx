@@ -32,20 +32,19 @@ export function BillingActions({
   }
 
   return (
-    <section className="mt-6 rounded-xl bg-[hsl(var(--surface))] p-6 shadow-sm">
-      <h2 className="text-lg font-medium">Stripe</h2>
+    <div>
       {effectivePlan === "admin" && (
-        <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
+        <p className="mb-2 text-small text-[hsl(var(--muted-foreground))]">
           You&apos;re on an admin redemption — no Stripe subscription needed.
         </p>
       )}
-      <div className="mt-4 flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-2">
         {effectivePlan !== "pro" && effectivePlan !== "admin" && (
           <button
             type="button"
             onClick={() => go("/api/stripe/checkout", "checkout")}
             disabled={busy !== null}
-            className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))] disabled:opacity-40"
+            className="inline-flex items-center rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-40"
           >
             {busy === "checkout" ? "Opening…" : "Upgrade to Pro"}
           </button>
@@ -54,14 +53,14 @@ export function BillingActions({
           type="button"
           onClick={() => go("/api/stripe/portal", "portal")}
           disabled={busy !== null}
-          className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm disabled:opacity-40"
+          className="inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))] disabled:opacity-40"
         >
           {busy === "portal" ? "Opening…" : "Manage subscription"}
         </button>
       </div>
       {error && (
-        <p className="mt-3 text-xs text-[hsl(var(--destructive))]">{error}</p>
+        <p className="mt-2 text-small text-[hsl(var(--destructive))]">{error}</p>
       )}
-    </section>
+    </div>
   );
 }

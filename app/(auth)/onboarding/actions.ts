@@ -52,7 +52,7 @@ export async function refreshResourcesAction() {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthenticated");
   await discoverResources(session.user.id, { force: true });
-  redirect("/app/resources");
+  redirect("/app/settings");
 }
 
 export async function disconnectNotionAction() {
@@ -96,7 +96,7 @@ export async function addResourceAction(formData: FormData) {
     autoRegistered: 0,
   });
 
-  redirect("/app/resources");
+  redirect("/app/settings");
 }
 
 export async function removeResourceAction(formData: FormData) {
@@ -109,5 +109,5 @@ export async function removeResourceAction(formData: FormData) {
     .delete(registeredResources)
     .where(eq(registeredResources.id, id));
 
-  redirect("/app/resources");
+  redirect("/app/settings");
 }
