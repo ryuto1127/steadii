@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { MistakeNoteDialog } from "./mistake-note-dialog";
 
 type Attachment = {
   id: string;
@@ -38,6 +39,7 @@ export function ChatView({
   const [input, setInput] = useState("");
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [streaming, setStreaming] = useState(false);
+  const [mistakeFor, setMistakeFor] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const scrollAnchor = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -246,6 +248,19 @@ export function ChatView({
                 {m.content || (
                   <span className="text-[hsl(var(--muted-foreground))]">…</span>
                 )}
+                {m.role === "assistant" &&
+                  m.content &&
+                  !m.id.startsWith("assistant-") && (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setMistakeFor(m.id)}
+                        className="text-xs text-[hsl(var(--muted-foreground))] underline-offset-2 hover:text-[hsl(var(--foreground))] hover:underline"
+                      >
+                        Add to mistake notebook
+                      </button>
+                    </div>
+                  )}
               </div>
             </li>
           ))}
@@ -352,6 +367,13 @@ export function ChatView({
           </button>
         </form>
       </div>
+
+      <MistakeNoteDialog
+        chatId={chatId}
+        assistantMessageId={mistakeFor ?? ""}
+        open={!!mistakeFor}
+        onClose={() => setMistakeFor(null)}
+      />
     </div>
   );
 }
