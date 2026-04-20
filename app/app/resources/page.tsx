@@ -2,11 +2,13 @@ import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
 import { registeredResources } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   addResourceAction,
   removeResourceAction,
+  refreshResourcesAction,
 } from "@/app/(auth)/onboarding/actions";
+import { isNull } from "drizzle-orm";
 
 export default async function ResourcesPage() {
   const session = await auth();
@@ -16,14 +18,28 @@ export default async function ResourcesPage() {
   const resources = await db
     .select()
     .from(registeredResources)
-    .where(eq(registeredResources.userId, userId));
+    .where(
+      and(eq(registeredResources.userId, userId), isNull(registeredResources.archivedAt))
+    );
 
   return (
     <div className="max-w-2xl">
-      <h1 className="font-serif text-3xl">Registered Resources</h1>
-      <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-        Pages and databases the agent can reference.
-      </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="font-serif text-3xl">Registered Resources</h1>
+          <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
+            Pages and databases the agent can reference.
+          </p>
+        </div>
+        <form action={refreshResourcesAction}>
+          <button
+            type="submit"
+            className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-xs transition hover:bg-[hsl(var(--surface-raised))]"
+          >
+            Refresh from Notion
+          </button>
+        </form>
+      </div>
 
       <form action={addResourceAction} className="mt-8 flex gap-2">
         <input
