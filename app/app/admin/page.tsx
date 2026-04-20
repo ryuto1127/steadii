@@ -69,7 +69,7 @@ export default async function AdminPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h1 className="font-serif text-3xl">Admin</h1>
+      <h1 className="text-h1 text-[hsl(var(--foreground))]">Admin</h1>
       <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
         Visible only while you hold an active admin redemption.
       </p>

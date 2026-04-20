@@ -167,8 +167,8 @@ export function SyllabusWizard({
 
       {syllabus && (
         <section className="rounded-xl bg-[hsl(var(--surface))] p-6 shadow-sm">
-          <h2 className="font-serif text-xl">Preview</h2>
-          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+          <h2 className="text-h2 text-[hsl(var(--foreground))]">Preview</h2>
+          <p className="mt-1 text-small text-[hsl(var(--muted-foreground))]">
             Edit anything before saving. Leave a field blank to skip it.
           </p>
 
