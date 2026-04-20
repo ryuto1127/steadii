@@ -25,6 +25,13 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
 };
 
 export async function getUserPlan(userId: string): Promise<Plan> {
+  // Effective plan respects active admin / Pro / friend-redemption sources.
+  // Import lazily to avoid a circular dep with effective-plan.ts.
+  const { getPlanForLimits } = await import("./effective-plan");
+  return getPlanForLimits(userId);
+}
+
+export async function getUsersPlanColumn(userId: string): Promise<Plan> {
   const [row] = await db
     .select({ plan: users.plan })
     .from(users)

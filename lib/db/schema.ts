@@ -210,6 +210,68 @@ export const usageEvents = pgTable("usage_events", {
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
+export const subscriptions = pgTable("subscriptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  stripeCustomerId: text("stripe_customer_id").notNull(),
+  stripeSubscriptionId: text("stripe_subscription_id").notNull(),
+  stripePriceId: text("stripe_price_id"),
+  status: text("status")
+    .$type<
+      | "trialing"
+      | "active"
+      | "past_due"
+      | "canceled"
+      | "incomplete"
+      | "incomplete_expired"
+      | "unpaid"
+      | "paused"
+    >()
+    .notNull(),
+  currentPeriodEnd: timestamp("current_period_end", { mode: "date" }),
+  cancelAtPeriodEnd: integer("cancel_at_period_end").notNull().default(0),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+}, (t) => ({
+  userIdx: uniqueIndex("subscriptions_user_idx").on(t.userId),
+  stripeSubIdx: uniqueIndex("subscriptions_stripe_sub_idx").on(
+    t.stripeSubscriptionId
+  ),
+}));
+
+export const redeemCodes = pgTable("redeem_codes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  code: text("code").notNull(),
+  type: text("type").$type<"admin" | "friend">().notNull(),
+  durationDays: integer("duration_days").notNull(),
+  maxUses: integer("max_uses").notNull().default(1),
+  usesCount: integer("uses_count").notNull().default(0),
+  note: text("note"),
+  expiresAt: timestamp("expires_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  disabledAt: timestamp("disabled_at", { mode: "date" }),
+}, (t) => ({
+  codeIdx: uniqueIndex("redeem_codes_code_idx").on(t.code),
+}));
+
+export const redemptions = pgTable("redemptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  codeId: uuid("code_id")
+    .notNull()
+    .references(() => redeemCodes.id, { onDelete: "restrict" }),
+  redeemedAt: timestamp("redeemed_at", { mode: "date" }).notNull().defaultNow(),
+  effectiveUntil: timestamp("effective_until", { mode: "date" }).notNull(),
+});
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type RedeemCode = typeof redeemCodes.$inferSelect;
+export type Redemption = typeof redemptions.$inferSelect;
+
 export const pendingToolCalls = pgTable("pending_tool_calls", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")

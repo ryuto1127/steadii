@@ -9,6 +9,9 @@ import {
   messageAttachments,
   usageEvents,
   pendingToolCalls,
+  subscriptions,
+  redeemCodes,
+  redemptions,
 } from "@/lib/db/schema";
 import { getTableColumns } from "drizzle-orm";
 
@@ -93,6 +96,35 @@ describe("Drizzle schema — Phase 2 chat tables", () => {
     expect(cols.outputTokens).toBeDefined();
     expect(cols.cachedTokens).toBeDefined();
     expect(cols.creditsUsed).toBeDefined();
+  });
+});
+
+describe("Drizzle schema — Phase 5 billing tables", () => {
+  it("subscriptions has Stripe linking columns", () => {
+    const cols = getTableColumns(subscriptions);
+    expect(cols.stripeCustomerId).toBeDefined();
+    expect(cols.stripeSubscriptionId).toBeDefined();
+    expect(cols.stripePriceId).toBeDefined();
+    expect(cols.status).toBeDefined();
+    expect(cols.currentPeriodEnd).toBeDefined();
+    expect(cols.cancelAtPeriodEnd).toBeDefined();
+  });
+  it("redeem_codes has type/duration/max_uses/uses_count", () => {
+    const cols = getTableColumns(redeemCodes);
+    expect(cols.code).toBeDefined();
+    expect(cols.type).toBeDefined();
+    expect(cols.durationDays).toBeDefined();
+    expect(cols.maxUses).toBeDefined();
+    expect(cols.usesCount).toBeDefined();
+    expect(cols.expiresAt).toBeDefined();
+    expect(cols.disabledAt).toBeDefined();
+  });
+  it("redemptions has user/code + effective_until", () => {
+    const cols = getTableColumns(redemptions);
+    expect(cols.userId).toBeDefined();
+    expect(cols.codeId).toBeDefined();
+    expect(cols.redeemedAt).toBeDefined();
+    expect(cols.effectiveUntil).toBeDefined();
   });
 });
 

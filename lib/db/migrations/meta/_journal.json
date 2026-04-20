@@ -43,6 +43,13 @@
       "when": 1776666233715,
       "tag": "0005_mean_groot",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1776675252551,
+      "tag": "0006_ordinary_mesmero",
+      "breakpoints": true
     }
   ]
 }
