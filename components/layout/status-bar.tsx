@@ -4,15 +4,20 @@ type Props = {
   plan: "free" | "pro" | "admin";
 };
 
-// 28px-tall persistent status bar at the bottom of the main column.
-// Mono shortcut keys on the left, credits + plan right-aligned.
+// 32px-tall persistent status bar at the bottom of the main column.
+// Gentler contrast: shortcut keys render slightly brighter than labels,
+// everything else sits at muted-foreground.
 export function StatusBar({ creditsUsed, creditsLimit, plan }: Props) {
   const remaining = Math.max(0, creditsLimit - creditsUsed);
   const planLabel = plan === "pro" ? "Pro" : plan === "admin" ? "Admin" : "Free";
 
   return (
     <footer
-      className="sticky bottom-0 z-20 flex h-7 items-center justify-between gap-4 border-t border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-4 font-mono text-[11px] text-[hsl(var(--muted-foreground))]"
+      className="sticky bottom-0 z-20 flex h-8 items-center justify-between gap-4 bg-[hsl(var(--surface-raised))] px-3.5 text-[12px] text-[hsl(var(--muted-foreground))]"
+      style={{
+        borderTop: "1px solid hsl(var(--border) / 0.6)",
+        fontFamily: "var(--font-sans)",
+      }}
       aria-label="Status bar"
     >
       <div className="flex items-center gap-4">
@@ -32,15 +37,16 @@ export function StatusBar({ creditsUsed, creditsLimit, plan }: Props) {
 function Shortcut({ k, label }: { k: string; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <kbd className="rounded-[3px] border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-1 py-[1px] font-mono text-[10px] leading-none text-[hsl(var(--foreground))]">
+      <kbd
+        className="rounded-[4px] border px-1 py-[1px] font-mono text-[10px] leading-none text-[hsl(var(--foreground)/0.75)]"
+        style={{
+          borderColor: "hsl(var(--border) / 0.6)",
+          backgroundColor: "hsl(var(--surface))",
+        }}
+      >
         {k}
       </kbd>
-      <span
-        className="text-[11px]"
-        style={{ fontFamily: "var(--font-sans)" }}
-      >
-        {label}
-      </span>
+      <span>{label}</span>
     </span>
   );
 }

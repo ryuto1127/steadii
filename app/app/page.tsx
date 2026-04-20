@@ -69,8 +69,8 @@ export default async function HomePage() {
   ]);
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4 py-4">
-      <div className="grid gap-3 md:grid-cols-3">
+    <div className="mx-auto flex max-w-4xl flex-col gap-6 py-6">
+      <div className="grid gap-5 md:grid-cols-3">
         {/* TODAY */}
         <DashboardCard label={todayLabel()}>
           {events.length === 0 ? (
@@ -100,7 +100,7 @@ export default async function HomePage() {
         {/* DUE */}
         <DashboardCard label="DUE · NEXT 72H">
           {dueSoon.length === 0 ? (
-            <div className="flex min-h-[6.5rem] items-center justify-center text-small text-[hsl(var(--muted-foreground))]">
+            <div className="fade-in flex min-h-[6.5rem] items-center justify-center text-small text-[hsl(var(--muted-foreground))]">
               — {t("nothing_due")} —
             </div>
           ) : (
@@ -126,7 +126,7 @@ export default async function HomePage() {
           label={pastWeekLabel(weekSummary.window.start, weekSummary.window.end)}
         >
           {weekSummary.empty ? (
-            <div className="flex min-h-[6.5rem] items-center justify-center text-small text-[hsl(var(--muted-foreground))]">
+            <div className="fade-in flex min-h-[6.5rem] items-center justify-center text-small text-[hsl(var(--muted-foreground))]">
               — {t("not_enough_history")} —
             </div>
           ) : (

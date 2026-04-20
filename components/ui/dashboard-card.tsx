@@ -22,11 +22,11 @@ export function DashboardCard({
   return (
     <section
       className={cn(
-        "rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3",
+        "card-lift rounded-[10px] border border-[hsl(var(--border)/0.6)] bg-[hsl(var(--surface))] p-5",
         className
       )}
     >
-      <header className="mb-2 flex items-center justify-between gap-3">
+      <header className="mb-3 flex items-center justify-between gap-3">
         <span className="mono-label">{label}</span>
         {action ? (
           <Link
