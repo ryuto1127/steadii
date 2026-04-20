@@ -13,7 +13,8 @@ const baseEnv = {
   STRIPE_PRICE_ID_PRO: "price_123",
   ENCRYPTION_KEY: "key",
   APP_URL: "http://localhost:3000",
-} as NodeJS.ProcessEnv;
+  NODE_ENV: "test" as const,
+} satisfies NodeJS.ProcessEnv;
 
 describe("env validation", () => {
   it("accepts a complete env", () => {
