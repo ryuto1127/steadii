@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { DashboardCard } from "@/components/ui/dashboard-card";
 import { NewChatInput } from "@/components/chat/new-chat-input";
 import { ActionPill } from "@/components/ui/action-pill";
@@ -21,6 +22,7 @@ export default async function HomePage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
+  const t = await getTranslations("home");
 
   const notion = await getNotionClientForUser(userId);
   const hasAnyClass = Boolean(notion?.connection.classesDbId);
@@ -30,22 +32,12 @@ export default async function HomePage() {
       <div className="mx-auto flex max-w-3xl flex-col gap-8 py-10">
         <EmptyState
           icon={<GraduationCap size={18} strokeWidth={1.5} />}
-          title="Welcome to Steadii"
-          description={
-            <>
-              <div>Steady through the semester.</div>
-              <div className="mt-3">
-                Connect your first class to start seeing today&apos;s schedule,
-                due assignments, and recent activity.
-              </div>
-            </>
-          }
-          actions={[
-            { label: "+ Add your first class", href: "/app/classes" },
-          ]}
+          title={t("welcome_title")}
+          description={<div>{t("welcome_body")}</div>}
+          actions={[{ label: t("add_first_class"), href: "/app/classes" }]}
         />
         <div className="mx-auto w-full max-w-2xl">
-          <NewChatInput placeholder="or paste a syllabus, image, or ask anything…" />
+          <NewChatInput placeholder={t("welcome_input_placeholder")} />
         </div>
       </div>
     );
@@ -60,7 +52,7 @@ export default async function HomePage() {
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-8 py-6">
       <div className="grid gap-4 md:grid-cols-3">
-        <DashboardCard title="Today's schedule">
+        <DashboardCard title={t("today_schedule")}>
           {events.length === 0 ? null : (
             <ul className="space-y-1">
               {events.slice(0, 6).map((e) => (
@@ -83,12 +75,12 @@ export default async function HomePage() {
           )}
           {events.length === 0 ? (
             <p className="py-4 text-small text-[hsl(var(--muted-foreground))]">
-              No classes or events today.
+              {t("no_events")}
             </p>
           ) : null}
         </DashboardCard>
 
-        <DashboardCard title="Due soon">
+        <DashboardCard title={t("due_soon")}>
           {dueSoon.length === 0 ? null : (
             <ul className="space-y-1">
               {dueSoon.slice(0, 6).map((a) => (
@@ -107,15 +99,15 @@ export default async function HomePage() {
           )}
           {dueSoon.length === 0 ? (
             <p className="py-4 text-small text-[hsl(var(--muted-foreground))]">
-              Nothing due. You&apos;re clear.
+              {t("nothing_due")}
             </p>
           ) : null}
         </DashboardCard>
 
-        <DashboardCard title="Past week">
+        <DashboardCard title={t("past_week")}>
           {weekSummary.empty ? (
             <p className="py-4 text-small text-[hsl(var(--muted-foreground))]">
-              Not enough history yet. Come back next week.
+              {t("not_enough_history")}
             </p>
           ) : (
             <div className="flex flex-col gap-2">
@@ -123,9 +115,11 @@ export default async function HomePage() {
                 {formatDateMD(weekSummary.window.start)} — {formatDateMD(weekSummary.window.end)}
               </div>
               <div className="text-small">
-                <span className="tabular-nums">{weekSummary.counts.chats}</span> chats ·{" "}
-                <span className="tabular-nums">{weekSummary.counts.mistakes}</span> mistakes ·{" "}
-                <span className="tabular-nums">{weekSummary.counts.syllabi}</span> syllabi
+                {t("counts", {
+                  chats: String(weekSummary.counts.chats),
+                  mistakes: String(weekSummary.counts.mistakes),
+                  syllabi: String(weekSummary.counts.syllabi),
+                })}
               </div>
               {weekSummary.pattern ? (
                 <p className="text-small text-[hsl(var(--muted-foreground))]">
@@ -133,8 +127,11 @@ export default async function HomePage() {
                 </p>
               ) : null}
               <div className="mt-1 flex flex-wrap gap-2">
-                <ReviewPill />
-                <GeneratePracticePill />
+                <SeedPill seed="review_recent_mistakes" label={t("review_action")} tone="primary" />
+                <SeedPill
+                  seed="generate_similar_problems"
+                  label={t("generate_practice_action")}
+                />
               </div>
             </div>
           )}
@@ -154,22 +151,21 @@ function formatDateMD(iso: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-function ReviewPill() {
+function SeedPill({
+  seed,
+  label,
+  tone,
+}: {
+  seed: string;
+  label: string;
+  tone?: "primary" | "neutral";
+}) {
   return (
     <form action="/api/chat/seeded" method="post">
-      <input type="hidden" name="seed" value="review_recent_mistakes" />
-      <ActionPill tone="primary" type="submit">
-        復習する
+      <input type="hidden" name="seed" value={seed} />
+      <ActionPill tone={tone} type="submit">
+        {label}
       </ActionPill>
-    </form>
-  );
-}
-
-function GeneratePracticePill() {
-  return (
-    <form action="/api/chat/seeded" method="post">
-      <input type="hidden" name="seed" value="generate_similar_problems" />
-      <ActionPill type="submit">練習問題を生成</ActionPill>
     </form>
   );
 }

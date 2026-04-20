@@ -45,6 +45,44 @@ type MessagesShape = {
   };
   login: { title: string; subtitle: string; button: string };
   app: { welcome: string; empty_state: string };
+  home: {
+    today_schedule: string;
+    due_soon: string;
+    past_week: string;
+    no_events: string;
+    nothing_due: string;
+    not_enough_history: string;
+    counts: string;
+    review_action: string;
+    generate_practice_action: string;
+    welcome_title: string;
+    welcome_body: string;
+    add_first_class: string;
+    welcome_input_placeholder: string;
+  };
+  chat_input: {
+    placeholder: string;
+    send_hint: string;
+  };
+  settings: {
+    title: string;
+    sign_out: string;
+    sections: {
+      profile: string;
+      connections: string;
+      resources: string;
+      agent: string;
+      usage: string;
+      redeem: string;
+      appearance: string;
+      language: string;
+      danger: string;
+    };
+    appearance_theme_label: string;
+    language_description: string;
+    language_option_en: string;
+    language_option_ja: string;
+  };
   legal: { privacy_title: string; terms_title: string; placeholder: string };
 };
 
@@ -114,6 +152,47 @@ export const en: MessagesShape = {
   app: {
     welcome: "Welcome, {name}.",
     empty_state: "Nothing here yet.",
+  },
+  home: {
+    today_schedule: "Today's schedule",
+    due_soon: "Due soon",
+    past_week: "Past week",
+    no_events: "No classes or events today.",
+    nothing_due: "Nothing due. You're clear.",
+    not_enough_history: "Not enough history yet. Come back next week.",
+    counts: "{chats} chats · {mistakes} mistakes · {syllabi} syllabi",
+    review_action: "Review",
+    generate_practice_action: "Generate practice",
+    welcome_title: "Welcome to Steadii",
+    welcome_body:
+      "Connect your first class to start seeing today's schedule, due assignments, and recent activity.",
+    add_first_class: "+ Add your first class",
+    welcome_input_placeholder:
+      "or paste a syllabus, image, or ask anything…",
+  },
+  chat_input: {
+    placeholder: "Ask Steadii anything…",
+    send_hint: "⌘⏎ to send",
+  },
+  settings: {
+    title: "Settings",
+    sign_out: "Sign out",
+    sections: {
+      profile: "Profile",
+      connections: "Connections",
+      resources: "Resources",
+      agent: "Agent behavior",
+      usage: "Usage & billing",
+      redeem: "Redeem code",
+      appearance: "Appearance",
+      language: "Language",
+      danger: "Danger zone",
+    },
+    appearance_theme_label: "Theme",
+    language_description:
+      "Which language should the app use? Agent responses still follow the language you type in.",
+    language_option_en: "English",
+    language_option_ja: "日本語",
   },
   legal: {
     privacy_title: "Privacy Policy",

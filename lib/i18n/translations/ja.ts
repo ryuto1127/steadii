@@ -67,6 +67,47 @@ export const ja: Messages = {
     welcome: "{name}さん、ようこそ。",
     empty_state: "まだ何もありません。",
   },
+  home: {
+    today_schedule: "今日の予定",
+    due_soon: "まもなく締切",
+    past_week: "先週の振り返り",
+    no_events: "今日は授業も予定もありません。",
+    nothing_due: "締切なし。今は落ち着いています。",
+    not_enough_history: "履歴がまだ足りません。来週また見てみてください。",
+    counts: "チャット {chats} · 間違い {mistakes} · シラバス {syllabi}",
+    review_action: "復習する",
+    generate_practice_action: "練習問題を生成",
+    welcome_title: "Steadiiへようこそ",
+    welcome_body:
+      "最初の授業を登録すると、今日の予定・締切の近い課題・最近の活動が表示されます。",
+    add_first_class: "+ 最初の授業を追加",
+    welcome_input_placeholder:
+      "シラバスや画像を貼ったり、気になることを聞いてみてください…",
+  },
+  chat_input: {
+    placeholder: "Steadiiに何でも聞いてみてください…",
+    send_hint: "⌘⏎ で送信",
+  },
+  settings: {
+    title: "設定",
+    sign_out: "サインアウト",
+    sections: {
+      profile: "プロフィール",
+      connections: "連携",
+      resources: "登録リソース",
+      agent: "エージェントの挙動",
+      usage: "使用量と課金",
+      redeem: "コード入力",
+      appearance: "外観",
+      language: "言語",
+      danger: "危険な操作",
+    },
+    appearance_theme_label: "テーマ",
+    language_description:
+      "UIの言語を選びます。エージェントの応答はあなたが入力した言語に自動で合わせます。",
+    language_option_en: "English",
+    language_option_ja: "日本語",
+  },
   legal: {
     privacy_title: "プライバシーポリシー",
     terms_title: "利用規約",
