@@ -18,7 +18,7 @@
   "dependencies": {
     "@auth/drizzle-adapter": "^1.7.4",
     "@neondatabase/serverless": "^1.1.0",
-    "@notionhq/client": "^2.2.16",
+    "@notionhq/client": "^5.19.0",
     "@radix-ui/react-slot": "^1.1.1",
     "@sentry/nextjs": "^10.49.0",
     "@vercel/blob": "^2.3.3",

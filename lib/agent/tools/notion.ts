@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { getNotionClientForUser } from "@/lib/integrations/notion/client";
+import { resolveDataSourceId } from "@/lib/integrations/notion/data-source";
 import { db } from "@/lib/db/client";
 import { auditLog } from "@/lib/db/schema";
 import type { ToolExecutor } from "./types";
@@ -152,7 +153,9 @@ export const notionCreatePage: ToolExecutor<
       const page = await client.pages.create({
         parent: { type: "page_id", page_id: args.parentPageId },
         properties: {
-          title: [{ type: "text", text: { content: args.title } }],
+          title: {
+            title: [{ type: "text", text: { content: args.title } }],
+          },
         },
         children: args.content
           ? [
@@ -349,11 +352,12 @@ export const notionQueryDatabase: ToolExecutor<
   async execute(ctx, rawArgs) {
     const args = queryDbArgsSchema.parse(rawArgs);
     const { client } = await getClient(ctx.userId);
-    const resp = await client.databases.query({
-      database_id: args.databaseId,
+    const dsId = await resolveDataSourceId(client, args.databaseId);
+    const resp = await client.dataSources.query({
+      data_source_id: dsId,
       page_size: args.limit ?? 25,
-      filter: args.filter as Parameters<typeof client.databases.query>[0]["filter"],
-      sorts: args.sorts as Parameters<typeof client.databases.query>[0]["sorts"],
+      filter: args.filter as Parameters<typeof client.dataSources.query>[0]["filter"],
+      sorts: args.sorts as Parameters<typeof client.dataSources.query>[0]["sorts"],
     });
     return { results: resp.results, has_more: resp.has_more };
   },

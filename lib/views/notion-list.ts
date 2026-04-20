@@ -4,6 +4,7 @@ import { notionConnections } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { decrypt } from "@/lib/utils/crypto";
 import { notionClientFromToken } from "@/lib/integrations/notion/client";
+import { resolveDataSourceId } from "@/lib/integrations/notion/data-source";
 
 export type NotionRow = {
   id: string;
@@ -26,12 +27,13 @@ export async function listFromDatabase(args: {
 
   const client = notionClientFromToken(decrypt(conn.accessTokenEncrypted));
   try {
-    const resp = await client.databases.query({
-      database_id: dbId,
+    const dsId = await resolveDataSourceId(client, dbId);
+    const resp = await client.dataSources.query({
+      data_source_id: dsId,
       page_size: args.limit ?? 100,
     });
-    return resp.results.map((r) => {
-      const obj = r as unknown as {
+    return resp.results.map((r: unknown) => {
+      const obj = r as {
         id: string;
         url?: string;
         properties: Record<string, unknown>;

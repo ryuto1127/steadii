@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { SyllabusWizard } from "@/components/syllabus/syllabus-wizard";
 import { decrypt } from "@/lib/utils/crypto";
 import { notionClientFromToken } from "@/lib/integrations/notion/client";
+import { resolveDataSourceId } from "@/lib/integrations/notion/data-source";
 import { checkDatabaseHealth } from "@/lib/views/notion-health";
 import { DeadDbBanner } from "@/components/views/dead-db-banner";
 
@@ -34,12 +35,13 @@ export default async function NewSyllabusPage() {
   if (conn?.classesDbId) {
     try {
       const client = notionClientFromToken(decrypt(conn.accessTokenEncrypted));
-      const resp = await client.databases.query({
-        database_id: conn.classesDbId,
+      const dsId = await resolveDataSourceId(client, conn.classesDbId);
+      const resp = await client.dataSources.query({
+        data_source_id: dsId,
         page_size: 100,
       });
-      classes = resp.results.flatMap((r) => {
-        const obj = r as unknown as {
+      classes = resp.results.flatMap((r: unknown) => {
+        const obj = r as {
           id: string;
           properties?: {
             Name?: { title?: Array<{ plain_text?: string }> };

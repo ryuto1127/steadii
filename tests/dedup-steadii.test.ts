@@ -1,9 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   decideSteadiiWinner,
   scoreSteadiiCandidates,
   type DuplicateScore,
 } from "@/lib/integrations/notion/setup";
+import { __resetDataSourceCacheForTests } from "@/lib/integrations/notion/data-source";
+
+beforeEach(() => {
+  __resetDataSourceCacheForTests();
+});
 
 describe("decideSteadiiWinner", () => {
   const mk = (
@@ -83,8 +88,19 @@ describe("scoreSteadiiCandidates", () => {
         },
       },
       databases: {
-        query: vi.fn(async ({ database_id }: { database_id: string }) => {
-          const n = state.rows[database_id] ?? 0;
+        // v5: scoreSteadiiCandidates resolves the data source via retrieve,
+        // then queries client.dataSources.query. We map each database id to
+        // a synthetic data source id ("{dbId}-ds") so rows lookup stays
+        // keyed by the original database id for the test fixtures.
+        retrieve: vi.fn(async ({ database_id }: { database_id: string }) => ({
+          id: database_id,
+          data_sources: [{ id: `${database_id}-ds` }],
+        })),
+      },
+      dataSources: {
+        query: vi.fn(async ({ data_source_id }: { data_source_id: string }) => {
+          const dbId = data_source_id.replace(/-ds$/, "");
+          const n = state.rows[dbId] ?? 0;
           return {
             results: n > 0 ? [{ id: "row" }] : [],
             has_more: n > 1,
