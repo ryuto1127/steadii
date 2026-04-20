@@ -1,50 +1,10 @@
 import { getTranslations } from "next-intl/server";
-import {
-  MessageCircle,
-  Calendar,
-  BookOpen,
-  FileText,
-  CheckSquare,
-  FolderOpen,
-  Settings,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { SidebarNav, type SidebarNavItem } from "./sidebar-nav";
-
-// Lucide icons share viewBox="0 0 24 24" but the painted content has
-// inconsistent left margins: Calendar/BookOpen/CheckSquare draw their body
-// at x=3, FileText/MessageCircle at x=4, while FolderOpen and Settings draw
-// their body flush at x=2. At size=16 that puts the latter two ~1 px
-// further left than the rest. Wrapper CSS can't fix this (the SVG bbox IS
-// centered — it's the paint within that's shifted). We nudge the two
-// outliers right by 1 px so the strokes visually align.
-const ICON_OFFSET_PX: Record<string, number> = {
-  resources: 1, // FolderOpen body at x=2
-  settings: 1,  // Settings gear's leftmost spoke at x=2
-};
-
-type Item = { key: string; href: string; icon: LucideIcon };
-
-const items: readonly Item[] = [
-  { key: "chat", href: "/app/chat", icon: MessageCircle },
-  { key: "calendar", href: "/app/calendar", icon: Calendar },
-  { key: "mistakes", href: "/app/mistakes", icon: BookOpen },
-  { key: "syllabus", href: "/app/syllabus", icon: FileText },
-  { key: "assignments", href: "/app/assignments", icon: CheckSquare },
-  { key: "resources", href: "/app/resources", icon: FolderOpen },
-  { key: "settings", href: "/app/settings", icon: Settings },
-];
+import { SidebarNav, ICON_OFFSET_PX, NAV_ITEM_KEYS } from "./sidebar-nav";
 
 export async function Sidebar() {
   const t = await getTranslations("nav");
-
-  const navItems: SidebarNavItem[] = items.map((item) => ({
-    key: item.key,
-    href: item.href,
-    icon: item.icon,
-    label: t(item.key),
-    iconOffsetPx: ICON_OFFSET_PX[item.key] ?? 0,
-  }));
+  const labels: Record<string, string> = {};
+  for (const key of NAV_ITEM_KEYS) labels[key] = t(key);
 
   return (
     <aside
@@ -54,9 +14,11 @@ export async function Sidebar() {
       <div className="px-3 pb-8 font-serif text-2xl text-[hsl(var(--foreground))]">
         Steadii
       </div>
-      <SidebarNav items={navItems} />
+      <SidebarNav labels={labels} />
     </aside>
   );
 }
 
+// Kept for the sidebar-icon-offsets.test.ts import path. Clients of this
+// test should migrate to importing from `./sidebar-nav` directly.
 export const __testing = { ICON_OFFSET_PX };
