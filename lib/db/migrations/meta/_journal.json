@@ -50,6 +50,13 @@
       "when": 1776675252551,
       "tag": "0006_ordinary_mesmero",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1776707480537,
+      "tag": "0007_rare_chamber",
+      "breakpoints": true
     }
   ]
 }
