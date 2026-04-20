@@ -27,7 +27,7 @@ export default async function BillingPage({
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="font-serif text-3xl">Billing</h1>
+      <h1 className="text-h1">Billing</h1>
       <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
         Stripe is in test mode for α. Charges won&apos;t post; subscription
         state still round-trips.
@@ -149,7 +149,7 @@ function Bar({
     tone === "destructive"
       ? "hsl(var(--destructive))"
       : tone === "accent"
-      ? "hsl(var(--accent))"
+      ? "hsl(var(--primary))"
       : "hsl(var(--primary))";
   return (
     <div className="mt-2 h-2 overflow-hidden rounded-full bg-[hsl(var(--surface-raised))]">

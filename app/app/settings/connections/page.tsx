@@ -35,7 +35,7 @@ export default async function ConnectionsPage({
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="font-serif text-3xl">Connections</h1>
+      <h1 className="text-h1">Connections</h1>
 
       {repaired && (
         <div className="mt-6 rounded-lg bg-[hsl(var(--primary)/0.1)] px-4 py-3 text-sm text-[hsl(var(--foreground))]">
