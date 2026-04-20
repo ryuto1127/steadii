@@ -11,6 +11,18 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+export async function POST() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
+  const [row] = await db
+    .insert(chats)
+    .values({ userId: session.user.id })
+    .returning({ id: chats.id });
+  return NextResponse.json({ id: row.id });
+}
+
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
