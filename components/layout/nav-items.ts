@@ -4,25 +4,29 @@
 // that makes them non-iterable from a server component.
 
 export const NAV_ITEM_KEYS = [
-  "chat",
+  "home",
+  "chats",
+  "classes",
   "calendar",
-  "mistakes",
-  "syllabus",
-  "assignments",
-  "resources",
   "settings",
 ] as const;
 
 export type NavItemKey = (typeof NAV_ITEM_KEYS)[number];
 
-// Lucide icons share viewBox="0 0 24 24" but the painted content has
-// inconsistent left margins: Calendar/BookOpen/CheckSquare draw their body
-// at x=3, FileText/MessageCircle at x=4, while FolderOpen and Settings draw
-// their body flush at x=2. At size=16 that puts the latter two ~1 px
-// further left than the rest. Wrapper CSS can't fix this (the SVG bbox IS
-// centered — it's the paint within that's shifted). We nudge the two
-// outliers right by 1 px so the strokes visually align.
-export const ICON_OFFSET_PX: Record<string, number> = {
-  resources: 1, // FolderOpen body at x=2
-  settings: 1,  // Settings gear's leftmost spoke at x=2
+export const NAV_HREFS: Record<NavItemKey, string> = {
+  home: "/app",
+  chats: "/app/chats",
+  classes: "/app/classes",
+  calendar: "/app/calendar",
+  settings: "/app/settings",
+};
+
+// Keyboard shortcut: `g` then the first letter of the nav key jumps to that
+// section. §4.1 spec.
+export const NAV_SHORTCUTS: Record<NavItemKey, string> = {
+  home: "h",
+  chats: "c",
+  classes: "l",
+  calendar: "a",
+  settings: "s",
 };

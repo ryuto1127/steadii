@@ -1,13 +1,16 @@
 type MessagesShape = {
   brand: { name: string; tagline: string };
-  landing: { headline: string; subhead: string; cta: string; alpha: string };
+  landing: {
+    headline: string;
+    subhead: string;
+    cta: string;
+    alpha: string;
+  };
   nav: {
-    chat: string;
+    home: string;
+    chats: string;
+    classes: string;
     calendar: string;
-    mistakes: string;
-    syllabus: string;
-    assignments: string;
-    resources: string;
     settings: string;
   };
   login: { title: string; subtitle: string; button: string };
@@ -18,22 +21,20 @@ type MessagesShape = {
 export const en: MessagesShape = {
   brand: {
     name: "Steadii",
-    tagline: "Your academic life, gently organized.",
+    tagline: "Steady through the semester.",
   },
   landing: {
-    headline: "Steadii keeps university a little quieter.",
+    headline: "Steady through the semester.",
     subhead:
-      "A calm workspace that ties Notion, Google Calendar, and your study notes together through conversation.",
-    cta: "Sign in with Google",
+      "Your classes, assignments, and mistakes — in one conversation.",
+    cta: "Continue with Google",
     alpha: "α version — invite only",
   },
   nav: {
-    chat: "Chat",
+    home: "Home",
+    chats: "Chats",
+    classes: "Classes",
     calendar: "Calendar",
-    mistakes: "Mistake Notes",
-    syllabus: "Syllabus",
-    assignments: "Assignments",
-    resources: "Resources",
     settings: "Settings",
   },
   login: {

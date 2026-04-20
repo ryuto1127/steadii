@@ -3,22 +3,20 @@ import type { Messages } from "./en";
 export const ja: Messages = {
   brand: {
     name: "Steadii",
-    tagline: "学生生活を、静かに整える。",
+    tagline: "学期を、淡々と乗り切る。",
   },
   landing: {
-    headline: "Steadiiで大学生活を、少しだけ静かに。",
+    headline: "学期を、淡々と乗り切る。",
     subhead:
-      "NotionとGoogleカレンダー、そして学習ノートを会話でゆるやかにつなぐ、落ち着いた作業机。",
-    cta: "Googleでサインイン",
+      "授業、課題、間違い — すべてひとつの会話で。",
+    cta: "Googleで続ける",
     alpha: "α版 — 招待制",
   },
   nav: {
-    chat: "チャット",
+    home: "ホーム",
+    chats: "チャット",
+    classes: "授業",
     calendar: "カレンダー",
-    mistakes: "間違いノート",
-    syllabus: "シラバス",
-    assignments: "課題",
-    resources: "登録リソース",
     settings: "設定",
   },
   login: {

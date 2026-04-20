@@ -1,71 +1,129 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import { useEffect, useRef, type KeyboardEvent } from "react";
 import {
-  MessageCircle,
+  Home,
+  MessagesSquare,
+  GraduationCap,
   Calendar,
-  BookOpen,
-  FileText,
-  CheckSquare,
-  FolderOpen,
   Settings,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { ICON_OFFSET_PX, NAV_ITEM_KEYS, type NavItemKey } from "./nav-items";
+import {
+  NAV_HREFS,
+  NAV_ITEM_KEYS,
+  NAV_SHORTCUTS,
+  type NavItemKey,
+} from "./nav-items";
+import { cn } from "@/lib/utils/cn";
 
 const ICONS: Record<NavItemKey, LucideIcon> = {
-  chat: MessageCircle,
+  home: Home,
+  chats: MessagesSquare,
+  classes: GraduationCap,
   calendar: Calendar,
-  mistakes: BookOpen,
-  syllabus: FileText,
-  assignments: CheckSquare,
-  resources: FolderOpen,
   settings: Settings,
-};
-
-const HREFS: Record<NavItemKey, string> = {
-  chat: "/app/chat",
-  calendar: "/app/calendar",
-  mistakes: "/app/mistakes",
-  syllabus: "/app/syllabus",
-  assignments: "/app/assignments",
-  resources: "/app/resources",
-  settings: "/app/settings",
 };
 
 export function SidebarNav({ labels }: { labels: Record<string, string> }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const containerRef = useRef<HTMLElement>(null);
+
+  // Global shortcut: press `g` then one of h/c/l/a/s to jump. Skip when an
+  // input/textarea/contentEditable is focused.
+  useEffect(() => {
+    let armed = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (!armed && e.key.toLowerCase() === "g") {
+        armed = true;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => (armed = false), 900);
+        return;
+      }
+      if (armed) {
+        const key = e.key.toLowerCase();
+        const match = (Object.entries(NAV_SHORTCUTS) as [NavItemKey, string][]).find(
+          ([, k]) => k === key
+        );
+        if (match) {
+          e.preventDefault();
+          router.push(NAV_HREFS[match[0]]);
+        }
+        armed = false;
+        if (timer) clearTimeout(timer);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      if (timer) clearTimeout(timer);
+    };
+  }, [router]);
+
+  const handleNavKey = (e: KeyboardEvent<HTMLElement>) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    const nav = containerRef.current;
+    if (!nav) return;
+    const links = Array.from(nav.querySelectorAll<HTMLAnchorElement>("a[data-nav-item]"));
+    if (links.length === 0) return;
+    const active = document.activeElement as HTMLElement | null;
+    const idx = active ? links.indexOf(active as HTMLAnchorElement) : -1;
+    e.preventDefault();
+    let next = idx;
+    if (e.key === "ArrowDown") next = idx < 0 ? 0 : Math.min(idx + 1, links.length - 1);
+    if (e.key === "ArrowUp") next = idx < 0 ? 0 : Math.max(idx - 1, 0);
+    links[next]?.focus();
+  };
+
   return (
-    <nav className="flex-1 space-y-1">
+    <nav
+      ref={containerRef}
+      onKeyDown={handleNavKey}
+      className="flex-1 space-y-0.5"
+      aria-label="Primary navigation"
+    >
       {NAV_ITEM_KEYS.map((key) => {
         const Icon = ICONS[key];
-        const href = HREFS[key];
+        const href = NAV_HREFS[key];
         const active = isActive(pathname, href);
-        const offset = ICON_OFFSET_PX[key] ?? 0;
         return (
           <Link
             key={key}
             href={href}
+            data-nav-item
             aria-current={active ? "page" : undefined}
-            className={
+            className={cn(
+              "flex items-center gap-3 rounded-md px-3 py-1.5 text-body font-medium transition-hover",
               active
-                ? "flex items-center gap-3 rounded-lg bg-[hsl(var(--surface))] px-3 py-2 text-sm font-medium text-[hsl(var(--foreground))] shadow-sm"
-                : "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--surface))] hover:text-[hsl(var(--foreground))]"
-            }
+                ? "bg-[hsl(var(--surface))] text-[hsl(var(--foreground))]"
+                : "text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface))] hover:text-[hsl(var(--foreground))]"
+            )}
           >
             <span
-              className={
-                active
-                  ? "flex h-5 w-5 shrink-0 items-center justify-center text-[hsl(var(--primary))]"
-                  : "flex h-5 w-5 shrink-0 items-center justify-center"
-              }
-              style={offset ? { transform: `translateX(${offset}px)` } : undefined}
+              className={cn(
+                "flex h-4 w-4 shrink-0 items-center justify-center",
+                active ? "text-[hsl(var(--primary))]" : ""
+              )}
               aria-hidden
             >
-              <Icon size={16} strokeWidth={1.75} />
+              <Icon size={16} strokeWidth={1.5} />
             </span>
-            <span>{labels[key] ?? key}</span>
+            <span className="flex-1">{labels[key] ?? key}</span>
+            <span className="font-mono text-[11px] text-[hsl(var(--muted-foreground))] opacity-60">
+              g{NAV_SHORTCUTS[key]}
+            </span>
           </Link>
         );
       })}
@@ -75,6 +133,8 @@ export function SidebarNav({ labels }: { labels: Record<string, string> }) {
 
 export function isActive(pathname: string | null, href: string): boolean {
   if (!pathname) return false;
+  // Home is an exact match only (otherwise /app matches every /app/* route).
+  if (href === "/app") return pathname === "/app";
   if (pathname === href) return true;
   return pathname.startsWith(href + "/");
 }
