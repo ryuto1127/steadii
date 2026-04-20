@@ -293,7 +293,11 @@ export function ChatView({
                     )}
                   </div>
                 )}
-                {m.content || (
+                {m.content ? (
+                  m.content
+                ) : m.role === "assistant" && streaming ? (
+                  <ThinkingDots />
+                ) : (
                   <span className="text-[hsl(var(--muted-foreground))]">…</span>
                 )}
                 {m.role === "assistant" &&
@@ -480,5 +484,36 @@ export function ChatView({
         onClose={() => setMistakeFor(null)}
       />
     </div>
+  );
+}
+
+// Three staggered pulsing dots — 200ms ease-in-out per AGENTS.md §10.6.
+// Rendered only while streaming && the current assistant bubble is still
+// empty, so an error event (Bug D) turns the stuck state into a visible
+// message instead of eternal pulsing.
+function ThinkingDots() {
+  return (
+    <span
+      role="status"
+      aria-label="Thinking"
+      className="inline-flex items-center gap-1"
+    >
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="inline-block h-1.5 w-1.5 rounded-full bg-[hsl(var(--muted-foreground))]"
+          style={{
+            animation: "steadii-thinking 1200ms ease-in-out infinite",
+            animationDelay: `${i * 160}ms`,
+          }}
+        />
+      ))}
+      <style>{`
+        @keyframes steadii-thinking {
+          0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+          40% { opacity: 1; transform: translateY(-2px); }
+        }
+      `}</style>
+    </span>
   );
 }
