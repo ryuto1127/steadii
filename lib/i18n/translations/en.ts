@@ -64,6 +64,25 @@ type MessagesShape = {
     placeholder: string;
     send_hint: string;
   };
+  chat: {
+    actions: {
+      add_to_mistakes: string;
+      generate_similar: string;
+      save_to_notion: string;
+    };
+    dismiss: string;
+    remove_attachment: string;
+  };
+  status_bar: {
+    focus_input: string;
+    send: string;
+    actions: string;
+    credits: string;
+    credits_unlimited: string;
+    plan_free: string;
+    plan_pro: string;
+    plan_admin: string;
+  };
   settings: {
     title: string;
     sign_out: string;
@@ -173,6 +192,25 @@ export const en: MessagesShape = {
   chat_input: {
     placeholder: "Ask Steadii…",
     send_hint: "⌘⏎ to send",
+  },
+  chat: {
+    actions: {
+      add_to_mistakes: "+ Add to mistakes",
+      generate_similar: "Generate similar",
+      save_to_notion: "Save to Notion",
+    },
+    dismiss: "Dismiss",
+    remove_attachment: "Remove",
+  },
+  status_bar: {
+    focus_input: "Focus input",
+    send: "Send",
+    actions: "Actions",
+    credits: "{n} credits · {plan}",
+    credits_unlimited: "∞ credits · {plan}",
+    plan_free: "Free",
+    plan_pro: "Pro",
+    plan_admin: "Admin",
   },
   settings: {
     title: "Settings",

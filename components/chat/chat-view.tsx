@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Paperclip, ArrowUp, FileText as FileTextIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { MistakeNoteDialog } from "./mistake-note-dialog";
 import { MarkdownMessage } from "./markdown-message";
 import { ToolCallCard, type ToolCallStatus } from "./tool-call-card";
@@ -43,6 +44,7 @@ export function ChatView({
   blobConfigured?: boolean;
   autoStream?: boolean;
 }) {
+  const t = useTranslations();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [toolEvents, setToolEvents] = useState<ToolEvent[]>([]);
   const [input, setInput] = useState("");
@@ -340,7 +342,7 @@ export function ChatView({
                     !m.id.startsWith("assistant-") && (
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         <ActionPill onClick={() => setMistakeFor(m.id)} tone="primary">
-                          + 間違いノートに追加
+                          {t("chat.actions.add_to_mistakes")}
                         </ActionPill>
                       </div>
                     )}
@@ -381,12 +383,20 @@ export function ChatView({
           </div>
         )}
         {uploadError && (
-          <InlineAlert tone="destructive" onDismiss={() => setUploadError(null)}>
+          <InlineAlert
+            tone="destructive"
+            onDismiss={() => setUploadError(null)}
+            dismissLabel={t("chat.dismiss")}
+          >
             {uploadError}
           </InlineAlert>
         )}
         {streamError && (
-          <InlineAlert tone="destructive" onDismiss={() => setStreamError(null)}>
+          <InlineAlert
+            tone="destructive"
+            onDismiss={() => setStreamError(null)}
+            dismissLabel={t("chat.dismiss")}
+          >
             {streamError}
           </InlineAlert>
         )}
@@ -419,7 +429,7 @@ export function ChatView({
                 send();
               }
             }}
-            placeholder="Message Steadii…"
+            placeholder={t("chat_input.placeholder")}
             rows={2}
             className="block w-full resize-none bg-transparent px-3 py-2 text-body text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none"
             disabled={streaming}
@@ -439,7 +449,7 @@ export function ChatView({
                 onClick={() => setAttachment(null)}
                 className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
               >
-                Remove
+                {t("chat.remove_attachment")}
               </button>
             </div>
           )}
@@ -498,10 +508,12 @@ export function ChatView({
 function InlineAlert({
   tone,
   onDismiss,
+  dismissLabel,
   children,
 }: {
   tone: "destructive" | "neutral";
   onDismiss: () => void;
+  dismissLabel: string;
   children: React.ReactNode;
 }) {
   return (
@@ -519,7 +531,7 @@ function InlineAlert({
         onClick={onDismiss}
         className="ml-2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
       >
-        Dismiss
+        {dismissLabel}
       </button>
     </div>
   );
