@@ -70,7 +70,7 @@ async function createChatAndPost(
   return chatId;
 }
 
-const MIN_HEIGHT_PX = 40;
+const MIN_HEIGHT_PX = 48;
 const MAX_HEIGHT_PX = 200;
 
 export function NewChatInput({
@@ -122,8 +122,8 @@ export function NewChatInput({
     <form
       onSubmit={onSubmit}
       className={cn(
-        "relative w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] transition-default",
-        "focus-within:border-[hsl(var(--ring))] focus-within:shadow-[0_0_0_1px_hsl(var(--primary)/0.45)]"
+        "relative w-full rounded-[10px] border border-[hsl(var(--border)/0.6)] bg-[hsl(var(--surface))] transition-default",
+        "focus-within:border-[hsl(var(--primary)/0.4)] focus-within:shadow-[0_0_0_4px_hsl(var(--primary)/0.12)]"
       )}
     >
       <label htmlFor="new-chat-textarea" className="sr-only">

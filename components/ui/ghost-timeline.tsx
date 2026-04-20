@@ -35,7 +35,7 @@ export function GhostTimeline({
           className="pointer-events-none absolute inset-0 flex items-center justify-center"
           aria-live="polite"
         >
-          <span className="rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2.5 py-1 text-[11px] text-[hsl(var(--muted-foreground))]">
+          <span className="fade-in rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2.5 py-1 text-[12px] text-[hsl(var(--muted-foreground))]">
             {message}
           </span>
         </div>
