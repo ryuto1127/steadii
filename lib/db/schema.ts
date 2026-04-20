@@ -134,6 +134,67 @@ export const auditLog = pgTable("audit_log", {
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
+export const chats = pgTable("chats", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { mode: "date" }),
+});
+
+export const messages = pgTable("messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  chatId: uuid("chat_id")
+    .notNull()
+    .references(() => chats.id, { onDelete: "cascade" }),
+  role: text("role").$type<"user" | "assistant" | "system" | "tool">().notNull(),
+  content: text("content").notNull().default(""),
+  toolCalls: jsonb("tool_calls"),
+  toolCallId: text("tool_call_id"),
+  model: text("model"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { mode: "date" }),
+});
+
+export const messageAttachments = pgTable("message_attachments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  messageId: uuid("message_id")
+    .notNull()
+    .references(() => messages.id, { onDelete: "cascade" }),
+  kind: text("kind").$type<"image" | "pdf">().notNull(),
+  url: text("url").notNull(),
+  filename: text("filename"),
+  mimeType: text("mime_type"),
+  sizeBytes: integer("size_bytes"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+export const usageEvents = pgTable("usage_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  chatId: uuid("chat_id").references(() => chats.id, { onDelete: "set null" }),
+  messageId: uuid("message_id").references(() => messages.id, {
+    onDelete: "set null",
+  }),
+  model: text("model").notNull(),
+  taskType: text("task_type").notNull(),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  cachedTokens: integer("cached_tokens").notNull().default(0),
+  creditsUsed: integer("credits_used").notNull().default(0),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+export type Chat = typeof chats.$inferSelect;
+export type Message = typeof messages.$inferSelect;
+export type MessageAttachment = typeof messageAttachments.$inferSelect;
+export type UsageEvent = typeof usageEvents.$inferSelect;
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type NotionConnection = typeof notionConnections.$inferSelect;
