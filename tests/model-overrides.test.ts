@@ -21,7 +21,7 @@ describe("selectModel env overrides", () => {
       OPENAI_CHAT_MODEL: "gpt-4o-mini",
       OPENAI_COMPLEX_MODEL: "gpt-4o",
       OPENAI_NANO_MODEL: "gpt-4o-mini",
-    } as NodeJS.ProcessEnv;
+    } as unknown as NodeJS.ProcessEnv;
     expect(selectModel("chat", env)).toBe("gpt-4o-mini");
     expect(selectModel("mistake_explain", env)).toBe("gpt-4o");
     expect(selectModel("chat_title", env)).toBe("gpt-4o-mini");
@@ -31,7 +31,7 @@ describe("selectModel env overrides", () => {
     const env = {
       OPENAI_CHAT_MODEL: "   ",
       OPENAI_COMPLEX_MODEL: "  gpt-test  ",
-    } as NodeJS.ProcessEnv;
+    } as unknown as NodeJS.ProcessEnv;
     expect(selectModel("chat", env)).toBe("gpt-5.4-mini");
     expect(selectModel("mistake_explain", env)).toBe("gpt-test");
   });

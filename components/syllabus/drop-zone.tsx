@@ -6,10 +6,12 @@ export function DropZone({
   accept,
   file,
   onFile,
+  status = "ready",
 }: {
   accept: string;
   file: File | null;
   onFile: (f: File | null) => void;
+  status?: "ready" | "extracting";
 }) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -29,21 +31,34 @@ export function DropZone({
   const hint = humanAcceptHint(accept);
 
   if (file) {
+    const extracting = status === "extracting";
     return (
       <div className="mt-2 flex items-center justify-between rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-4 py-3 text-sm">
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium">{file.name}</p>
-          <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">
-            {file.type || "file"} · {formatSize(file.size)}
+          <p className="mt-0.5 flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
+            {extracting && (
+              <span
+                aria-hidden
+                className="inline-block h-2 w-2 animate-pulse rounded-full bg-[hsl(var(--primary))]"
+              />
+            )}
+            <span>
+              {extracting
+                ? `Extracting ${file.name}…`
+                : `Ready to extract · ${file.type || "file"} · ${formatSize(file.size)}`}
+            </span>
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => onFile(null)}
-          className="ml-3 rounded-md border border-[hsl(var(--border))] px-3 py-1 text-xs transition hover:bg-[hsl(var(--surface))]"
-        >
-          Remove
-        </button>
+        {!extracting && (
+          <button
+            type="button"
+            onClick={() => onFile(null)}
+            className="ml-3 rounded-md border border-[hsl(var(--border))] px-3 py-1 text-xs transition hover:bg-[hsl(var(--surface))]"
+          >
+            Remove
+          </button>
+        )}
       </div>
     );
   }
