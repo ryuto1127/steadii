@@ -14,7 +14,7 @@ export default async function LandingPage() {
           href="/login"
           className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
         >
-          Sign in
+          {t("landing.sign_in")}
         </Link>
       </nav>
 
@@ -37,27 +37,49 @@ export default async function LandingPage() {
               {t("landing.cta")}
             </Link>
             <span className="text-small text-[hsl(var(--muted-foreground))]">
-              Invite-only during α.
+              {t("landing.invite_hint")}
             </span>
           </div>
         </header>
 
         <section className="mb-20 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3">
-          <Screenshot />
+          <Screenshot
+            labels={{
+              todaySchedule: t("landing.mock.today_schedule"),
+              dueSoon: t("landing.mock.due_soon"),
+              pastWeek: t("landing.mock.past_week"),
+              pastWeekWindow: t("landing.mock.past_week_window"),
+              pastWeekCounts: t("landing.mock.past_week_counts", {
+                chats: "12",
+                mistakes: "7",
+                syllabi: "2",
+              }),
+              pastWeekPattern: t("landing.mock.past_week_pattern"),
+              csc108: t("landing.mock.csc108_lecture"),
+              officeHours: t("landing.mock.office_hours"),
+              mat135Tut: t("landing.mock.mat135_tutorial"),
+              physicsPs4: t("landing.mock.physics_ps4"),
+              essay: t("landing.mock.essay_outline"),
+              mat135Hw: t("landing.mock.mat135_hw"),
+              in14h: t("landing.mock.in_14h"),
+              in2d: t("landing.mock.in_2d"),
+              in3d: t("landing.mock.in_3d"),
+            }}
+          />
         </section>
 
         <section className="mb-24 grid gap-10 md:grid-cols-3">
           <ValueProp
-            title="One conversation"
-            body="Ask Steadii anything about your classes. It reads Notion and your calendar, then answers."
+            title={t("landing.value_props.conversation.title")}
+            body={t("landing.value_props.conversation.body")}
           />
           <ValueProp
-            title="Notion-native"
-            body="Your mistakes, syllabi, and assignments live in your own Notion. Steadii organizes, never locks in."
+            title={t("landing.value_props.notion.title")}
+            body={t("landing.value_props.notion.body")}
           />
           <ValueProp
-            title="Verbatim by default"
-            body="Original PDFs and full source text are kept with every syllabus — no lossy summaries."
+            title={t("landing.value_props.verbatim.title")}
+            body={t("landing.value_props.verbatim.body")}
           />
         </section>
 
@@ -66,21 +88,23 @@ export default async function LandingPage() {
             href="/privacy"
             className="transition-hover hover:text-[hsl(var(--foreground))]"
           >
-            Privacy
+            {t("landing.footer.privacy")}
           </Link>
           <Link
             href="/terms"
             className="transition-hover hover:text-[hsl(var(--foreground))]"
           >
-            Terms
+            {t("landing.footer.terms")}
           </Link>
           <a
             href="mailto:hello@mysteadii.xyz"
             className="transition-hover hover:text-[hsl(var(--foreground))]"
           >
-            Contact
+            {t("landing.footer.contact")}
           </a>
-          <span className="ml-auto font-mono text-[11px]">α · subject to change</span>
+          <span className="ml-auto font-mono text-[11px]">
+            {t("landing.footer.subject_to_change")}
+          </span>
         </footer>
       </main>
     </div>
@@ -98,34 +122,45 @@ function ValueProp({ title, body }: { title: string; body: string }) {
   );
 }
 
-// Dashboard mock that works without images. Renders three cards (schedule,
-// due, past week) to give landing visitors a feel for the product. When a
-// real screenshot is ready, swap the <Screenshot /> body for an <Image />.
-function Screenshot() {
+type ScreenshotLabels = {
+  todaySchedule: string;
+  dueSoon: string;
+  pastWeek: string;
+  pastWeekWindow: string;
+  pastWeekCounts: string;
+  pastWeekPattern: string;
+  csc108: string;
+  officeHours: string;
+  mat135Tut: string;
+  physicsPs4: string;
+  essay: string;
+  mat135Hw: string;
+  in14h: string;
+  in2d: string;
+  in3d: string;
+};
+
+function Screenshot({ labels }: { labels: ScreenshotLabels }) {
   return (
     <div className="rounded-lg bg-[hsl(var(--background))] p-4">
       <div className="grid gap-3 md:grid-cols-3">
-        <MockCard title="Today's schedule">
-          <MockRow time="09:00 — 10:30" label="CSC108 lecture" />
-          <MockRow time="11:00 — 12:00" label="Office hours" />
-          <MockRow time="14:00 — 15:30" label="MAT135 tutorial" />
+        <MockCard title={labels.todaySchedule}>
+          <MockRow time="09:00 — 10:30" label={labels.csc108} />
+          <MockRow time="11:00 — 12:00" label={labels.officeHours} />
+          <MockRow time="14:00 — 15:30" label={labels.mat135Tut} />
         </MockCard>
-        <MockCard title="Due soon">
-          <MockRow dot="orange" label="Physics PS 4" right="in 14h" />
-          <MockRow dot="blue" label="Essay outline" right="in 2d" />
-          <MockRow dot="green" label="MAT135 HW" right="in 3d" />
+        <MockCard title={labels.dueSoon}>
+          <MockRow dot="orange" label={labels.physicsPs4} right={labels.in14h} />
+          <MockRow dot="blue" label={labels.essay} right={labels.in2d} />
+          <MockRow dot="green" label={labels.mat135Hw} right={labels.in3d} />
         </MockCard>
-        <MockCard title="Past week">
+        <MockCard title={labels.pastWeek}>
           <p className="font-mono text-[11px] text-[hsl(var(--muted-foreground))]">
-            4/13 — 4/20
+            {labels.pastWeekWindow}
           </p>
-          <p className="mt-1.5 text-small">
-            <span className="tabular-nums">12</span> chats ·{" "}
-            <span className="tabular-nums">7</span> mistakes ·{" "}
-            <span className="tabular-nums">2</span> syllabi
-          </p>
+          <p className="mt-1.5 text-small">{labels.pastWeekCounts}</p>
           <p className="mt-1.5 text-small text-[hsl(var(--muted-foreground))]">
-            自由落下問題で3回詰まりました
+            {labels.pastWeekPattern}
           </p>
         </MockCard>
       </div>
