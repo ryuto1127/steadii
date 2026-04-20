@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import {
   MessageCircle,
@@ -10,6 +9,7 @@ import {
   Settings,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { SidebarNav, type SidebarNavItem } from "./sidebar-nav";
 
 // Lucide icons share viewBox="0 0 24 24" but the painted content has
 // inconsistent left margins: Calendar/BookOpen/CheckSquare draw their body
@@ -38,6 +38,14 @@ const items: readonly Item[] = [
 export async function Sidebar() {
   const t = await getTranslations("nav");
 
+  const navItems: SidebarNavItem[] = items.map((item) => ({
+    key: item.key,
+    href: item.href,
+    icon: item.icon,
+    label: t(item.key),
+    iconOffsetPx: ICON_OFFSET_PX[item.key] ?? 0,
+  }));
+
   return (
     <aside
       className="flex h-screen w-60 flex-col bg-[hsl(var(--surface-raised))] px-3 py-6"
@@ -46,28 +54,7 @@ export async function Sidebar() {
       <div className="px-3 pb-8 font-serif text-2xl text-[hsl(var(--foreground))]">
         Steadii
       </div>
-      <nav className="flex-1 space-y-1">
-        {items.map((item) => {
-          const Icon = item.icon;
-          const offset = ICON_OFFSET_PX[item.key] ?? 0;
-          return (
-            <Link
-              key={item.key}
-              href={item.href}
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--surface))] hover:text-[hsl(var(--foreground))]"
-            >
-              <span
-                className="flex h-5 w-5 shrink-0 items-center justify-center"
-                style={offset ? { transform: `translateX(${offset}px)` } : undefined}
-                aria-hidden
-              >
-                <Icon size={16} strokeWidth={1.75} />
-              </span>
-              <span>{t(item.key)}</span>
-            </Link>
-          );
-        })}
-      </nav>
+      <SidebarNav items={navItems} />
     </aside>
   );
 }

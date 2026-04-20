@@ -58,4 +58,17 @@
   *, *::before, *::after {
     border-color: hsl(var(--border));
   }
+
+  /* Browsers stopped defaulting <button> to pointer cursor. Make every
+     enabled button (and role="button") advertise that it's clickable.
+     Respect :disabled / aria-disabled by not applying the pointer. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role="button"][aria-disabled="true"] {
+    cursor: not-allowed;
+  }
 }

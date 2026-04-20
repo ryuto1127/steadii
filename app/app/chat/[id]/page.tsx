@@ -4,6 +4,7 @@ import { db } from "@/lib/db/client";
 import { chats, messages, messageAttachments } from "@/lib/db/schema";
 import { and, asc, eq } from "drizzle-orm";
 import {
+  createChatAction,
   deleteChatAction,
   renameChatAction,
 } from "@/lib/agent/chat-actions";
@@ -68,15 +69,25 @@ export default async function SingleChatPage({
             className="w-full bg-transparent font-serif text-2xl focus:outline-none"
           />
         </form>
-        <form action={deleteChatAction}>
-          <input type="hidden" name="id" value={chat.id} />
-          <button
-            type="submit"
-            className="text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--destructive))]"
-          >
-            Delete
-          </button>
-        </form>
+        <div className="flex items-center gap-4">
+          <form action={createChatAction}>
+            <button
+              type="submit"
+              className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
+            >
+              + New chat
+            </button>
+          </form>
+          <form action={deleteChatAction}>
+            <input type="hidden" name="id" value={chat.id} />
+            <button
+              type="submit"
+              className="text-xs text-[hsl(var(--muted-foreground))] transition hover:text-[hsl(var(--destructive))]"
+            >
+              Delete
+            </button>
+          </form>
+        </div>
       </header>
 
       <ChatView
