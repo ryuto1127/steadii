@@ -139,15 +139,41 @@ function syllabiProps(classesDbId: string): DbPropertyMap {
   };
 }
 
+export type DuplicateCandidate = { id: string; url: string | null };
+
+export type DuplicateResolver = (
+  candidates: DuplicateCandidate[]
+) => Promise<{ winnerId: string | null }>;
+
 export async function runNotionSetup(
   client: Client,
-  opts: { title?: string } = {}
+  opts: {
+    title?: string;
+    resolveDuplicates?: DuplicateResolver;
+  } = {}
 ): Promise<NotionSetupResult> {
   const title = opts.title ?? "Steadii";
 
   // Try to adopt an existing Steadii page before creating a duplicate.
   const existing = await findExistingSteadiiPages(client, title);
   if (existing.length > 1) {
+    if (opts.resolveDuplicates) {
+      const { winnerId } = await opts.resolveDuplicates(existing);
+      if (!winnerId) {
+        throw new NotionSetupMultipleCandidatesError(existing);
+      }
+      const winner = existing.find((e) => e.id === winnerId);
+      if (!winner) {
+        throw new NotionSetupMultipleCandidatesError(existing);
+      }
+      const parentPageId = winner.id;
+      const existingChildren = await findSteadiiChildDatabases(client, parentPageId);
+      return await finishSetupWithChildren(
+        client,
+        parentPageId,
+        existingChildren
+      );
+    }
     throw new NotionSetupMultipleCandidatesError(existing);
   }
 
@@ -161,6 +187,14 @@ export async function runNotionSetup(
     parentPageId = parent.id;
   }
 
+  return await finishSetupWithChildren(client, parentPageId, existingChildren);
+}
+
+async function finishSetupWithChildren(
+  client: Client,
+  parentPageId: string,
+  existingChildren: ExistingChildren | null
+): Promise<NotionSetupResult> {
   const classesDbId =
     existingChildren?.classes ??
     (await createDb(client, parentPageId, "Classes", CLASSES_PROPS));
@@ -272,6 +306,117 @@ async function findSteadiiChildDatabases(
     cursor = resp.next_cursor ?? undefined;
   } while (cursor);
   return out;
+}
+
+export type DuplicateScore = {
+  id: string;
+  url: string | null;
+  childCount: number;
+  rowTotal: number;
+};
+
+// Pure-ish: takes a client to probe, returns a score per candidate. Used by
+// resolveDuplicateSteadiiPages. Broken out for testability.
+export async function scoreSteadiiCandidates(
+  client: Client,
+  candidates: DuplicateCandidate[]
+): Promise<DuplicateScore[]> {
+  const out: DuplicateScore[] = [];
+  for (const c of candidates) {
+    const children = await findSteadiiChildDatabases(client, c.id);
+    const childIds = [
+      children.classes,
+      children.mistakes,
+      children.assignments,
+      children.syllabi,
+    ].filter(Boolean) as string[];
+    const childCount = childIds.length;
+    let rowTotal = 0;
+    for (const dbId of childIds) {
+      try {
+        const resp = await client.databases.query({
+          database_id: dbId,
+          page_size: 1,
+        });
+        rowTotal += resp.results.length + (resp.has_more ? 1 : 0);
+      } catch {
+        // probe failure shouldn't block the dedup decision
+      }
+    }
+    out.push({ id: c.id, url: c.url, childCount, rowTotal });
+  }
+  return out;
+}
+
+export type DedupDecision =
+  | { kind: "adopt"; winnerId: string; loserIds: string[]; reason: string }
+  | { kind: "ambiguous"; reason: string };
+
+// Decide which candidate wins based on the scoring table + the stored
+// parent_page_id hint. Pure; no client calls. Easy to unit-test.
+export function decideSteadiiWinner(
+  scores: DuplicateScore[],
+  storedParentPageId: string | null
+): DedupDecision {
+  if (scores.length < 2) {
+    return {
+      kind: "ambiguous",
+      reason: "unexpected: decideSteadiiWinner called with <2 candidates",
+    };
+  }
+
+  // Step 1: stored parent page id wins if it's in the candidate set.
+  if (storedParentPageId) {
+    const match = scores.find((s) => s.id === storedParentPageId);
+    if (match) {
+      return {
+        kind: "adopt",
+        winnerId: match.id,
+        loserIds: scores.filter((s) => s.id !== match.id).map((s) => s.id),
+        reason: "matches_stored_parent_page_id",
+      };
+    }
+  }
+
+  // Step 2: most child DBs wins (Classes / Mistake Notes / Assignments / Syllabi).
+  const maxChild = Math.max(...scores.map((s) => s.childCount));
+  const childLeaders = scores.filter((s) => s.childCount === maxChild);
+  if (childLeaders.length === 1) {
+    return {
+      kind: "adopt",
+      winnerId: childLeaders[0].id,
+      loserIds: scores.filter((s) => s.id !== childLeaders[0].id).map((s) => s.id),
+      reason: "most_child_databases",
+    };
+  }
+
+  // Step 3: tiebreak by row count across children.
+  const maxRows = Math.max(...childLeaders.map((s) => s.rowTotal));
+  const rowLeaders = childLeaders.filter((s) => s.rowTotal === maxRows);
+  if (rowLeaders.length === 1) {
+    return {
+      kind: "adopt",
+      winnerId: rowLeaders[0].id,
+      loserIds: scores.filter((s) => s.id !== rowLeaders[0].id).map((s) => s.id),
+      reason: "most_rows_in_children",
+    };
+  }
+
+  // If we're still tied AND some of the tied candidates have real data,
+  // refuse to auto-dedup. Empty-tie (all zero rows) picks the first.
+  if (maxRows === 0) {
+    return {
+      kind: "adopt",
+      winnerId: rowLeaders[0].id,
+      loserIds: scores.filter((s) => s.id !== rowLeaders[0].id).map((s) => s.id),
+      reason: "empty_tie_picked_first",
+    };
+  }
+
+  return {
+    kind: "ambiguous",
+    reason: "multiple_candidates_with_live_data",
+  };
 }
 
 async function createSteadiiParent(client: Client, title: string) {

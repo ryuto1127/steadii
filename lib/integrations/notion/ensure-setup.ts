@@ -11,7 +11,10 @@ import { notionClientFromToken } from "./client";
 import {
   runNotionSetup,
   NotionSetupNoAccessiblePageError,
+  scoreSteadiiCandidates,
+  decideSteadiiWinner,
   type NotionSetupResult,
+  type DuplicateCandidate,
 } from "./setup";
 import { databaseStillExists } from "./probe";
 import type { Client } from "@notionhq/client";
@@ -59,7 +62,13 @@ export async function ensureNotionSetup(
     return {
       status: "re_set_up",
       reason: "deleted_in_notion",
-      result: await doFreshSetup(userId, conn.id, client, "deleted_in_notion"),
+      result: await doFreshSetup(
+        userId,
+        conn.id,
+        client,
+        "deleted_in_notion",
+        conn.parentPageId ?? null
+      ),
     };
   }
 
@@ -67,13 +76,25 @@ export async function ensureNotionSetup(
     return {
       status: "re_set_up",
       reason: "forced",
-      result: await doFreshSetup(userId, conn.id, client, "forced"),
+      result: await doFreshSetup(
+        userId,
+        conn.id,
+        client,
+        "forced",
+        conn.parentPageId ?? null
+      ),
     };
   }
 
   return {
     status: "freshly_set_up",
-    result: await doFreshSetup(userId, conn.id, client, "fresh"),
+    result: await doFreshSetup(
+      userId,
+      conn.id,
+      client,
+      "fresh",
+      conn.parentPageId ?? null
+    ),
   };
 }
 
@@ -91,11 +112,62 @@ async function doFreshSetup(
   userId: string,
   connectionId: string,
   client: Client,
-  reason: string
+  reason: string,
+  storedParentPageId: string | null = null
 ): Promise<NotionSetupResult> {
+  const resolver = async (candidates: DuplicateCandidate[]) => {
+    const scores = await scoreSteadiiCandidates(client, candidates);
+    const decision = decideSteadiiWinner(scores, storedParentPageId);
+    if (decision.kind === "ambiguous") {
+      await db.insert(auditLog).values({
+        userId,
+        action: "notion.setup.dedup.ambiguous",
+        result: "failure",
+        detail: {
+          candidates: scores,
+          storedParentPageId,
+          reason: decision.reason,
+        },
+      });
+      return { winnerId: null };
+    }
+    // Archive losers, one audit row each.
+    for (const loserId of decision.loserIds) {
+      try {
+        await client.pages.update({ page_id: loserId, archived: true });
+        await db.insert(auditLog).values({
+          userId,
+          action: "archive_duplicate_steadii_parent",
+          resourceType: "notion_page",
+          resourceId: loserId,
+          result: "success",
+          detail: {
+            kept: decision.winnerId,
+            archived: loserId,
+            reason: decision.reason,
+          },
+        });
+      } catch (err) {
+        await db.insert(auditLog).values({
+          userId,
+          action: "archive_duplicate_steadii_parent",
+          resourceType: "notion_page",
+          resourceId: loserId,
+          result: "failure",
+          detail: {
+            kept: decision.winnerId,
+            reason: decision.reason,
+            message: err instanceof Error ? err.message : String(err),
+          },
+        });
+      }
+    }
+    return { winnerId: decision.winnerId };
+  };
+
   let result: NotionSetupResult;
   try {
-    result = await runNotionSetup(client);
+    result = await runNotionSetup(client, { resolveDuplicates: resolver });
   } catch (err) {
     await db.insert(auditLog).values({
       userId,
