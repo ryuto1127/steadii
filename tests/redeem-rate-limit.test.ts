@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
 type CodeRow = {
   id: string;
@@ -13,19 +13,19 @@ type CodeRow = {
   createdAt: Date;
 };
 
-type RedemptionRow = {
-  id: string;
+type AuditRow = {
   userId: string;
-  codeId: string;
-  redeemedAt: Date;
-  effectiveUntil: Date;
+  action: string;
+  result: string;
+  createdAt: Date;
+  [k: string]: unknown;
 };
 
 const hoist = vi.hoisted(() => {
   const state = {
     codes: [] as CodeRow[],
-    redemptions: [] as RedemptionRow[],
-    audit: [] as Array<Record<string, unknown> & { createdAt?: Date }>,
+    redemptions: [] as Record<string, unknown>[],
+    audit: [] as AuditRow[],
     idSeq: 0,
   };
 
@@ -39,19 +39,22 @@ const hoist = vi.hoisted(() => {
   function matches(row: Record<string, unknown>, filter: unknown): boolean {
     if (!filter) return true;
     const f = filter as { __op: string; [k: string]: unknown };
-    if (f.__op === "eq")
-      return row[f.col as string] === resolve(row, f.val);
+    if (f.__op === "eq") return row[f.col as string] === resolve(row, f.val);
     if (f.__op === "gt")
       return (row[f.col as string] as Date) > (resolve(row, f.val) as Date);
-    if (f.__op === "lt") {
-      const a = row[f.col as string] as number;
-      const b = resolve(row, f.val) as number;
-      return a < b;
-    }
+    if (f.__op === "lt")
+      return (row[f.col as string] as number) < (resolve(row, f.val) as number);
     if (f.__op === "isnull") return row[f.col as string] == null;
     if (f.__op === "and")
       return (f.children as unknown[]).every((c) => matches(row, c));
     return true;
+  }
+
+  function sourceFor(name: string): Array<Record<string, unknown>> {
+    if (name === "codes") return state.codes as unknown as Array<Record<string, unknown>>;
+    if (name === "redemptions") return state.redemptions;
+    if (name === "audit") return state.audit as unknown as Array<Record<string, unknown>>;
+    return [];
   }
 
   function applyPatch(
@@ -60,24 +63,15 @@ const hoist = vi.hoisted(() => {
   ): void {
     for (const [k, v] of Object.entries(patch)) {
       if (v && typeof v === "object" && (v as { __sqlDelta?: number }).__sqlDelta !== undefined) {
-        const delta = (v as { __sqlDelta: number }).__sqlDelta;
-        row[k] = ((row[k] as number) ?? 0) + delta;
+        row[k] = ((row[k] as number) ?? 0) + (v as { __sqlDelta: number }).__sqlDelta;
       } else {
         row[k] = v;
       }
     }
   }
 
-  function sourceFor(name: string): Array<Record<string, unknown>> {
-    if (name === "codes") return state.codes as unknown as Array<Record<string, unknown>>;
-    if (name === "redemptions")
-      return state.redemptions as unknown as Array<Record<string, unknown>>;
-    if (name === "audit") return state.audit;
-    return [];
-  }
-
   const db = {
-    select: (_cols?: unknown) => ({
+    select: () => ({
       from: (table: { __name: string }) => ({
         where: (filter: unknown) => {
           const rows = sourceFor(table.__name).filter((r) => matches(r, filter));
@@ -101,11 +95,14 @@ const hoist = vi.hoisted(() => {
               id: `r-${state.idSeq}`,
               redeemedAt: new Date(),
               ...item,
-            } as RedemptionRow);
+            });
           }
         } else if (table.__name === "audit") {
           for (const item of arr as Record<string, unknown>[]) {
-            state.audit.push({ createdAt: new Date(), ...item });
+            state.audit.push({
+              createdAt: new Date(),
+              ...item,
+            } as AuditRow);
           }
         }
       },
@@ -121,8 +118,9 @@ const hoist = vi.hoisted(() => {
               updated.push(r);
             }
           }
-          const returning = () => Promise.resolve(updated);
-          return Object.assign(Promise.resolve(undefined), { returning });
+          return Object.assign(Promise.resolve(undefined), {
+            returning: () => Promise.resolve(updated),
+          });
         },
       }),
     }),
@@ -174,7 +172,7 @@ vi.mock("drizzle-orm", () => ({
   lt: (col: unknown, val: unknown) => ({ __op: "lt", col: colOf(col), val }),
   isNull: (col: unknown) => ({ __op: "isnull", col: colOf(col) }),
   desc: () => ({}),
-  sql: (strings: TemplateStringsArray, ..._values: unknown[]) => {
+  sql: (strings: TemplateStringsArray) => {
     const raw = strings.join("?");
     if (/-\s*1/.test(raw)) return { __sqlDelta: -1 };
     if (/\+\s*1/.test(raw)) return { __sqlDelta: 1 };
@@ -186,7 +184,10 @@ vi.mock("@/lib/billing/effective-plan", () => ({
   syncUsersPlanColumn: async () => {},
 }));
 
-import { redeemCode } from "@/lib/billing/redeem";
+import {
+  redeemCode,
+  countRecentFailedRedeemAttempts,
+} from "@/lib/billing/redeem";
 
 beforeEach(() => {
   hoist.state.codes = [];
@@ -195,10 +196,10 @@ beforeEach(() => {
   hoist.state.idSeq = 0;
 });
 
-function seedCode(partial: Partial<CodeRow> = {}): CodeRow {
+function seedValidCode(partial: Partial<CodeRow> = {}): CodeRow {
   const row: CodeRow = {
-    id: "c-1",
-    code: "STEADII-F-XXXX-XXXX-XXXX",
+    id: "c-valid",
+    code: "STEADII-F-VALID",
     type: "friend",
     durationDays: 30,
     maxUses: 1,
@@ -213,70 +214,97 @@ function seedCode(partial: Partial<CodeRow> = {}): CodeRow {
   return row;
 }
 
-describe("redeemCode", () => {
-  it("NOT_FOUND for unknown code", async () => {
-    const r = await redeemCode({ userId: "u", code: "NOPE" });
-    expect(r).toEqual({ ok: false, code: "NOT_FOUND", message: "That code isn't valid." });
-  });
-
-  it("NOT_FOUND when code is empty", async () => {
-    const r = await redeemCode({ userId: "u", code: "" });
+describe("redeem rate-limit", () => {
+  it("logs a failed attempt when code is unknown", async () => {
+    const r = await redeemCode({ userId: "u", code: "NOPE-XYZ" });
     expect(r.ok).toBe(false);
+    const failed = hoist.state.audit.filter((a) => a.action === "redeem.failed");
+    expect(failed).toHaveLength(1);
+    expect(failed[0].result).toBe("failure");
   });
 
-  it("DISABLED when disabledAt is set", async () => {
-    seedCode({ disabledAt: new Date() });
-    const r = await redeemCode({
+  it("counts failed attempts in the last hour", async () => {
+    hoist.state.audit.push({
       userId: "u",
-      code: "STEADII-F-XXXX-XXXX-XXXX",
+      action: "redeem.failed",
+      result: "failure",
+      createdAt: new Date(),
     });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("DISABLED");
+    hoist.state.audit.push({
+      userId: "u",
+      action: "redeem.failed",
+      result: "failure",
+      createdAt: new Date(),
+    });
+    // outside window
+    hoist.state.audit.push({
+      userId: "u",
+      action: "redeem.failed",
+      result: "failure",
+      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    });
+    // different user
+    hoist.state.audit.push({
+      userId: "other",
+      action: "redeem.failed",
+      result: "failure",
+      createdAt: new Date(),
+    });
+
+    const n = await countRecentFailedRedeemAttempts("u");
+    expect(n).toBe(2);
   });
 
-  it("EXPIRED when expiresAt is in the past", async () => {
-    seedCode({ expiresAt: new Date(Date.now() - 1000) });
-    const r = await redeemCode({
-      userId: "u",
-      code: "STEADII-F-XXXX-XXXX-XXXX",
-    });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("EXPIRED");
+  it("blocks the 6th failed attempt within an hour with RATE_LIMITED", async () => {
+    for (let i = 0; i < 5; i++) {
+      const r = await redeemCode({ userId: "u", code: `BAD-${i}` });
+      expect(r.ok).toBe(false);
+    }
+    const sixth = await redeemCode({ userId: "u", code: "BAD-6" });
+    expect(sixth.ok).toBe(false);
+    if (!sixth.ok) expect(sixth.code).toBe("RATE_LIMITED");
   });
 
-  it("EXHAUSTED when usesCount >= maxUses", async () => {
-    seedCode({ maxUses: 1, usesCount: 1 });
-    const r = await redeemCode({
-      userId: "u",
-      code: "STEADII-F-XXXX-XXXX-XXXX",
-    });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("EXHAUSTED");
-  });
-
-  it("creates a redemption, increments usage, and writes audit on success", async () => {
-    seedCode();
-    const r = await redeemCode({
-      userId: "u",
-      code: "STEADII-F-XXXX-XXXX-XXXX",
-    });
+  it("a valid redeem still works when user is under the limit", async () => {
+    seedValidCode();
+    // Two prior failures — under the 5 limit.
+    hoist.state.audit.push(
+      {
+        userId: "u",
+        action: "redeem.failed",
+        result: "failure",
+        createdAt: new Date(),
+      },
+      {
+        userId: "u",
+        action: "redeem.failed",
+        result: "failure",
+        createdAt: new Date(),
+      }
+    );
+    const r = await redeemCode({ userId: "u", code: "STEADII-F-VALID" });
     expect(r.ok).toBe(true);
-    expect(hoist.state.redemptions).toHaveLength(1);
-    expect(hoist.state.codes[0].usesCount).toBe(1);
-    expect(
-      hoist.state.audit.some((a) => a.action === "redeem.friend")
-    ).toBe(true);
   });
 
-  it("returns an effectiveUntil roughly durationDays in the future", async () => {
-    seedCode({ durationDays: 30 });
-    const r = await redeemCode({
-      userId: "u",
-      code: "STEADII-F-XXXX-XXXX-XXXX",
-    });
-    if (!r.ok) throw new Error("expected success");
-    const daysAhead = (r.effectiveUntil.getTime() - Date.now()) / (24 * 3600_000);
-    expect(daysAhead).toBeGreaterThan(29);
-    expect(daysAhead).toBeLessThanOrEqual(30);
+  it("blocks a valid redeem when the user is already over the limit", async () => {
+    seedValidCode();
+    for (let i = 0; i < 5; i++) {
+      hoist.state.audit.push({
+        userId: "u",
+        action: "redeem.failed",
+        result: "failure",
+        createdAt: new Date(),
+      });
+    }
+    const r = await redeemCode({ userId: "u", code: "STEADII-F-VALID" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("RATE_LIMITED");
+  });
+
+  it("redacts the full code in the audit row (only first 8 chars)", async () => {
+    await redeemCode({ userId: "u", code: "SECRET-LONG-CODE-123456" });
+    const [row] = hoist.state.audit.filter((a) => a.action === "redeem.failed");
+    expect(row.resourceId).toBe("SECRET-L...");
+    expect(String(row.resourceId)).not.toContain("LONG");
   });
 });

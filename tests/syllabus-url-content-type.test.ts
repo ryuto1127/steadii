@@ -4,6 +4,9 @@ vi.mock("@/lib/env", () => ({ env: () => ({ OPENAI_API_KEY: "x" }) }));
 vi.mock("@/lib/integrations/openai/client", () => ({ openai: () => ({}) }));
 vi.mock("@/lib/agent/usage", () => ({ recordUsage: async () => {} }));
 vi.mock("@/lib/db/client", () => ({ db: {} }));
+vi.mock("node:dns/promises", () => ({
+  lookup: async () => [{ address: "93.184.216.34", family: 4 }],
+}));
 
 import {
   classifyFetchedContentType,
