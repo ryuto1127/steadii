@@ -15,6 +15,12 @@ import {
   BlobNotConfiguredError,
 } from "@/lib/blob/save";
 import type { Syllabus } from "@/lib/syllabus/schema";
+import {
+  BUCKETS,
+  RateLimitError,
+  enforceRateLimit,
+  rateLimitResponse,
+} from "@/lib/utils/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -42,6 +48,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
   const userId = session.user.id;
+
+  try {
+    enforceRateLimit(userId, "syllabus.extract", BUCKETS.syllabusExtract);
+  } catch (err) {
+    if (err instanceof RateLimitError) return rateLimitResponse(err);
+    throw err;
+  }
 
   const form = await request.formData();
   const file = form.get("file");

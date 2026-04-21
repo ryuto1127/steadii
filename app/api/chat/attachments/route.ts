@@ -9,6 +9,12 @@ import {
   isBlobConfigured,
   BlobNotConfiguredError,
 } from "@/lib/blob/save";
+import {
+  BUCKETS,
+  RateLimitError,
+  enforceRateLimit,
+  rateLimitResponse,
+} from "@/lib/utils/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -29,6 +35,13 @@ export async function POST(request: NextRequest) {
     );
   }
   const userId = session.user.id;
+
+  try {
+    enforceRateLimit(userId, "chat.attachment", BUCKETS.chatAttachment);
+  } catch (err) {
+    if (err instanceof RateLimitError) return rateLimitResponse(err);
+    throw err;
+  }
 
   if (!isBlobConfigured()) {
     return NextResponse.json(

@@ -7,6 +7,12 @@ import {
   streamChatResponse,
   generateChatTitle,
 } from "@/lib/agent/orchestrator";
+import {
+  BUCKETS,
+  RateLimitError,
+  enforceRateLimit,
+  rateLimitResponse,
+} from "@/lib/utils/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,6 +35,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
   const userId = session.user.id;
+
+  try {
+    enforceRateLimit(userId, "chat.stream", BUCKETS.chatStream);
+  } catch (err) {
+    if (err instanceof RateLimitError) return rateLimitResponse(err);
+    throw err;
+  }
 
   const chatId = request.nextUrl.searchParams.get("chatId");
   if (!chatId) {

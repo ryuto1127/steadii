@@ -4,6 +4,12 @@ import { db } from "@/lib/db/client";
 import { chats, messages as messagesTable } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import {
+  BUCKETS,
+  RateLimitError,
+  enforceRateLimit,
+  rateLimitResponse,
+} from "@/lib/utils/rate-limit";
 
 const bodySchema = z.object({
   chatId: z.string().uuid(),
@@ -16,6 +22,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
   const userId = session.user.id;
+
+  try {
+    enforceRateLimit(userId, "chat.message", BUCKETS.chatMessage);
+  } catch (err) {
+    if (err instanceof RateLimitError) return rateLimitResponse(err);
+    throw err;
+  }
 
   const json = await request.json();
   const parsed = bodySchema.safeParse(json);
