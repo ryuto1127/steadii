@@ -12,7 +12,9 @@ export const authConfig = {
     sessionsTable: sessions,
     verificationTokensTable: verificationTokens,
   }),
-  session: { strategy: "database" },
+  // JWT strategy: session lives in a signed cookie, no DB lookup per request.
+  // The adapter is still used for user/account provisioning during OAuth.
+  session: { strategy: "jwt" },
   providers: [
     Google({
       clientId: process.env.AUTH_GOOGLE_ID,
@@ -32,9 +34,17 @@ export const authConfig = {
     signIn: "/login",
   },
   callbacks: {
-    session({ session, user }) {
-      if (session.user) {
-        session.user.id = user.id;
+    jwt({ token, user }) {
+      // On sign-in `user` is the adapter User row; persist its id into the
+      // token so later requests don't need a DB lookup to know who we are.
+      if (user?.id) {
+        token.id = user.id;
+      }
+      return token;
+    },
+    session({ session, token }) {
+      if (session.user && typeof token.id === "string") {
+        session.user.id = token.id;
       }
       return session;
     },
