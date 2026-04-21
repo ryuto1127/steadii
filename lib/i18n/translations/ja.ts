@@ -97,6 +97,16 @@ export const ja: Messages = {
   chat_input: {
     placeholder: "Steadiiに聞く…",
     send_hint: "⌘⏎ で送信",
+    example_prompts: [
+      "今週の課題は？",
+      "この物理の問題を解説して",
+      "金曜までに化学の課題を追加",
+      "次の授業は何？",
+      "CSC108のシラバスを要約して",
+      "似た練習問題を作って",
+      "最近の間違いを振り返りたい",
+      "先週の勉強時間を教えて",
+    ],
   },
   chat: {
     actions: {

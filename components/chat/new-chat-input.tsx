@@ -89,8 +89,31 @@ export function NewChatInput({
   const [error, setError] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [exampleIdx, setExampleIdx] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Rotate through example prompts when the input is idle (no caller-supplied
+  // placeholder, no focus, no content). Helps new users discover what they
+  // can ask the agent. Stops the moment the user engages so we don't yank
+  // their reference text mid-type.
+  const examples = (t.raw("example_prompts") as string[]) ?? [];
+  const shouldRotate =
+    !placeholder && examples.length > 1 && !isFocused && value.length === 0;
+  useEffect(() => {
+    if (!shouldRotate) return;
+    if (typeof window !== "undefined") {
+      const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+      if (media.matches) return;
+    }
+    const interval = window.setInterval(() => {
+      setExampleIdx((i) => (i + 1) % examples.length);
+    }, 4000);
+    return () => window.clearInterval(interval);
+  }, [shouldRotate, examples.length]);
+
+  const effectivePlaceholder =
+    placeholder ?? (examples.length > 0 ? examples[exampleIdx]! : t("placeholder"));
   // Grammarly and other browser extensions inject DOM nodes into forms
   // with a textarea. That insertion happens before React hydrates, which
   // causes a hydration mismatch on the form's children. Gating the form
@@ -157,7 +180,7 @@ export function NewChatInput({
             aria-hidden
             className="flex h-11 flex-1 items-center px-2 text-[15px] text-[hsl(var(--muted-foreground))]"
           >
-            <span className="flex-1 truncate">{placeholder ?? t("placeholder")}</span>
+            <span className="flex-1 truncate">{effectivePlaceholder}</span>
           </div>
         ) : (
           <>
@@ -180,7 +203,7 @@ export function NewChatInput({
               onChange={(e) => setValue(e.target.value)}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
-              placeholder={placeholder ?? t("placeholder")}
+              placeholder={effectivePlaceholder}
               autoFocus={autoFocus}
               rows={1}
               style={{ height: MIN_HEIGHT_PX }}
