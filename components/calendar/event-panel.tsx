@@ -271,24 +271,22 @@ function EventModePanel({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Start">
-            <input
-              type={form.allDay ? "date" : "datetime-local"}
-              value={form.start}
-              onChange={(e) => setField("start", e.target.value)}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="End">
-            <input
-              type={form.allDay ? "date" : "datetime-local"}
-              value={form.end}
-              onChange={(e) => setField("end", e.target.value)}
-              className={inputCls}
-            />
-          </Field>
-        </div>
+        <Field label="Start">
+          <input
+            type={form.allDay ? "date" : "datetime-local"}
+            value={form.start}
+            onChange={(e) => setField("start", e.target.value)}
+            className={inputCls}
+          />
+        </Field>
+        <Field label="End">
+          <input
+            type={form.allDay ? "date" : "datetime-local"}
+            value={form.end}
+            onChange={(e) => setField("end", e.target.value)}
+            className={inputCls}
+          />
+        </Field>
 
         <Field label="Recurrence">
           {isSeriesInstance ? (
@@ -363,7 +361,7 @@ function EventModePanel({
                 disabled={submitting}
                 className="bg-[hsl(var(--destructive))] text-white hover:bg-[hsl(var(--destructive))]/90"
               >
-                Confirm delete
+                Confirm
               </Button>
             </div>
           ) : (
@@ -616,7 +614,7 @@ function TaskModePanel({
                 disabled={submitting}
                 className="bg-[hsl(var(--destructive))] text-white hover:bg-[hsl(var(--destructive))]/90"
               >
-                Confirm delete
+                Confirm
               </Button>
             </div>
           ) : (
