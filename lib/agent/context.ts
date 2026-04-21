@@ -3,6 +3,7 @@ import { db } from "@/lib/db/client";
 import { notionConnections, registeredResources, accounts } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { getCalendarForUser } from "@/lib/integrations/google/calendar";
+import { getUserTimezone } from "./preferences";
 export {
   serializeContextForPrompt,
   type UserContextPayload,
@@ -28,9 +29,13 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
         )
     : [];
 
-  const calendarEventsThisWeek = await safelyFetchWeekEvents(userId);
+  const [timezone, calendarEventsThisWeek] = await Promise.all([
+    getUserTimezone(userId),
+    safelyFetchWeekEvents(userId),
+  ]);
 
   return {
+    timezone,
     notion: {
       connected: !!conn,
       parentPageId: conn?.parentPageId ?? null,

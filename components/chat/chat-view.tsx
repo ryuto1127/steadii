@@ -9,19 +9,13 @@ import { MarkdownMessage } from "./markdown-message";
 import { ToolCallCard, type ToolCallStatus } from "./tool-call-card";
 import { ActionPill } from "@/components/ui/action-pill";
 import { cn } from "@/lib/utils/cn";
+import { reportDetectedTimezone } from "@/lib/utils/report-timezone";
 
 type Attachment = {
   id: string;
   kind: "image" | "pdf";
   url: string;
   filename: string | null;
-};
-
-type Message = {
-  id: string;
-  role: "user" | "assistant" | "system" | "tool";
-  content: string;
-  attachments: Attachment[];
 };
 
 type ToolEvent = {
@@ -31,6 +25,18 @@ type ToolEvent = {
   args?: unknown;
   result?: unknown;
   pendingId?: string;
+};
+
+type TurnItem =
+  | { kind: "narration"; text: string }
+  | { kind: "tool"; event: ToolEvent };
+
+type Message = {
+  id: string;
+  role: "user" | "assistant" | "system" | "tool";
+  content: string;
+  items?: TurnItem[];
+  attachments: Attachment[];
 };
 
 export function ChatView({
@@ -46,7 +52,6 @@ export function ChatView({
 }) {
   const t = useTranslations();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
-  const [toolEvents, setToolEvents] = useState<ToolEvent[]>([]);
   const [input, setInput] = useState("");
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [streaming, setStreaming] = useState(false);
@@ -64,7 +69,7 @@ export function ChatView({
 
   useEffect(() => {
     scrollAnchor.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, toolEvents, streaming]);
+  }, [messages, streaming]);
 
   // Auto-trigger the stream when the URL has ?stream=1 (e.g., user hit send
   // from the Home input and was routed here with a fresh user message that
@@ -121,38 +126,43 @@ export function ChatView({
                 )
               );
             } else if (payload.type === "tool_call_started") {
-              setToolEvents((evs) => [
-                ...evs,
-                {
-                  id: payload.toolCallId,
-                  toolName: payload.toolName,
-                  status: "running",
-                  args: payload.args,
-                },
-              ]);
+              setMessages((m) =>
+                m.map((x) =>
+                  x.id === currentAssistantId
+                    ? flushNarrationAndAddTool(x, {
+                        id: payload.toolCallId,
+                        toolName: payload.toolName,
+                        status: "running",
+                        args: payload.args,
+                      })
+                    : x
+                )
+              );
             } else if (payload.type === "tool_call_result") {
-              setToolEvents((evs) =>
-                evs.map((e) =>
-                  e.id === payload.toolCallId
-                    ? {
-                        ...e,
+              setMessages((m) =>
+                m.map((x) =>
+                  x.id === currentAssistantId
+                    ? updateToolStatus(x, payload.toolCallId, {
                         status: payload.ok ? "done" : "failed",
                         result: payload.result,
-                      }
-                    : e
+                      })
+                    : x
                 )
               );
             } else if (payload.type === "tool_call_pending") {
-              setToolEvents((evs) => [
-                ...evs,
-                {
-                  id: payload.toolCallId,
-                  toolName: payload.toolName,
-                  status: "pending",
-                  args: payload.args,
-                  pendingId: payload.pendingId,
-                },
-              ]);
+              setMessages((m) =>
+                m.map((x) =>
+                  x.id === currentAssistantId
+                    ? flushNarrationAndAddTool(x, {
+                        id: payload.toolCallId,
+                        toolName: payload.toolName,
+                        status: "pending",
+                        args: payload.args,
+                        pendingId: payload.pendingId,
+                      })
+                    : x
+                )
+              );
             } else if (payload.type === "error") {
               setMessages((m) =>
                 m.map((x) =>
@@ -194,12 +204,21 @@ export function ChatView({
       setStreamError(`Confirmation failed: ${await res.text()}`);
       return;
     }
-    setToolEvents((evs) =>
-      evs.map((e) =>
-        e.pendingId === pendingId
-          ? { ...e, status: decision === "approve" ? "done" : "denied" }
-          : e
-      )
+    setMessages((m) =>
+      m.map((msg) => ({
+        ...msg,
+        items: msg.items?.map((it) =>
+          it.kind === "tool" && it.event.pendingId === pendingId
+            ? {
+                ...it,
+                event: {
+                  ...it.event,
+                  status: decision === "approve" ? "done" : "denied",
+                },
+              }
+            : it
+        ),
+      }))
     );
     await runStream();
   }
@@ -207,6 +226,7 @@ export function ChatView({
   async function send() {
     if (!input.trim() && !attachment) return;
     const text = input.trim();
+    reportDetectedTimezone();
 
     const userMsg: Message = {
       id: "temp-" + Date.now(),
@@ -268,7 +288,9 @@ export function ChatView({
     }
   }
 
-  const hasAnyPending = toolEvents.some((t) => t.status === "pending");
+  const hasAnyPending = messages.some((m) =>
+    m.items?.some((it) => it.kind === "tool" && it.event.status === "pending")
+  );
 
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col">
@@ -324,6 +346,33 @@ export function ChatView({
                       )}
                     </div>
                   )}
+                  {m.role === "assistant" && m.items && m.items.length > 0 && (
+                    <div className="mb-2 space-y-1">
+                      {m.items.map((it, i) =>
+                        it.kind === "narration" ? (
+                          <p
+                            key={`n-${i}`}
+                            className="whitespace-pre-wrap text-small italic text-[hsl(var(--muted-foreground))]"
+                          >
+                            {it.text}
+                          </p>
+                        ) : (
+                          <ToolCallCard
+                            key={`t-${it.event.id}`}
+                            toolName={it.event.toolName}
+                            status={it.event.status}
+                            args={it.event.args}
+                            result={it.event.result}
+                            pendingId={it.event.pendingId}
+                            onConfirm={(d) =>
+                              it.event.pendingId &&
+                              confirmPending(it.event.pendingId, d)
+                            }
+                          />
+                        )
+                      )}
+                    </div>
+                  )}
                   {m.content ? (
                     m.role === "assistant" ? (
                       <div className={cn(showCursor && "streaming-cursor")}>
@@ -332,11 +381,11 @@ export function ChatView({
                     ) : (
                       <span className="whitespace-pre-wrap">{m.content}</span>
                     )
-                  ) : m.role === "assistant" && streaming ? (
+                  ) : m.role === "assistant" && streaming && !hasAnyPending ? (
                     <span className="streaming-cursor" aria-label="Thinking" />
-                  ) : (
+                  ) : m.role === "assistant" && !m.items?.length ? (
                     <span className="text-[hsl(var(--muted-foreground))]">…</span>
-                  )}
+                  ) : null}
                   {m.role === "assistant" &&
                     m.content &&
                     !m.id.startsWith("assistant-") && (
@@ -351,23 +400,6 @@ export function ChatView({
             );
           })}
         </ul>
-
-        {toolEvents.length > 0 && (
-          <ul className="mt-4 space-y-2">
-            {toolEvents.map((ev) => (
-              <li key={ev.id}>
-                <ToolCallCard
-                  toolName={ev.toolName}
-                  status={ev.status}
-                  args={ev.args}
-                  result={ev.result}
-                  pendingId={ev.pendingId}
-                  onConfirm={(d) => ev.pendingId && confirmPending(ev.pendingId, d)}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
 
         <div ref={scrollAnchor} />
       </div>
@@ -503,6 +535,30 @@ export function ChatView({
       />
     </div>
   );
+}
+
+function flushNarrationAndAddTool(msg: Message, event: ToolEvent): Message {
+  const items = [...(msg.items ?? [])];
+  const pending = msg.content.trim();
+  if (pending) items.push({ kind: "narration", text: msg.content });
+  items.push({ kind: "tool", event });
+  return { ...msg, content: "", items };
+}
+
+function updateToolStatus(
+  msg: Message,
+  toolCallId: string,
+  patch: Partial<ToolEvent>
+): Message {
+  if (!msg.items) return msg;
+  return {
+    ...msg,
+    items: msg.items.map((it) =>
+      it.kind === "tool" && it.event.id === toolCallId
+        ? { ...it, event: { ...it.event, ...patch } }
+        : it
+    ),
+  };
 }
 
 function InlineAlert({

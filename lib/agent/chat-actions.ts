@@ -38,3 +38,15 @@ export async function deleteChatAction(formData: FormData) {
     .where(and(eq(chats.id, id), eq(chats.userId, userId)));
   redirect("/app/chats");
 }
+
+export async function deleteChatFromListAction(formData: FormData) {
+  const userId = await requireUserId();
+  const id = formData.get("id");
+  if (typeof id !== "string") throw new Error("Invalid input");
+  await db
+    .update(chats)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(chats.id, id), eq(chats.userId, userId)));
+  revalidatePath("/app/chats");
+  revalidatePath("/app");
+}

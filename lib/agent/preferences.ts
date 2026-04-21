@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { ConfirmationMode } from "./confirmation";
 
 export async function getUserConfirmationMode(userId: string): Promise<ConfirmationMode> {
@@ -29,4 +29,46 @@ export async function setUserConfirmationMode(
     .update(users)
     .set({ preferences: next, updatedAt: new Date() })
     .where(eq(users.id, userId));
+}
+
+export async function getUserTimezone(userId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ timezone: users.timezone })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return row?.timezone ?? null;
+}
+
+export async function setUserTimezone(userId: string, tz: string): Promise<void> {
+  await db
+    .update(users)
+    .set({ timezone: tz, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+}
+
+// Sets timezone only if the current value is NULL. Returns true if written.
+// Used for browser auto-detection — we must never overwrite a user's manual
+// choice with a detected value.
+export async function setUserTimezoneIfUnset(
+  userId: string,
+  tz: string
+): Promise<boolean> {
+  const updated = await db
+    .update(users)
+    .set({ timezone: tz, updatedAt: new Date() })
+    .where(and(eq(users.id, userId), isNull(users.timezone)))
+    .returning({ id: users.id });
+  return updated.length > 0;
+}
+
+// Lightweight runtime validation: Intl will throw for unknown IANA zones.
+export function isValidIanaTimezone(tz: string): boolean {
+  if (typeof tz !== "string" || tz.length === 0 || tz.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
 }

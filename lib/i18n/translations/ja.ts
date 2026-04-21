@@ -83,6 +83,16 @@ export const ja: Messages = {
     add_first_class: "+ 最初の授業を追加",
     welcome_input_placeholder:
       "シラバスや画像を貼ったり、気になることを聞いてみてください…",
+    greeting_morning: "おはよう、{name}。",
+    greeting_afternoon: "こんにちは、{name}。",
+    greeting_evening: "こんばんは、{name}。",
+    greeting_night: "まだ起きてる？{name}。",
+    summary_ready: "今週の学習サマリーを用意しました。",
+    full_calendar: "カレンダー全体",
+    assignments_remaining: "今日残っている課題 {count} 件",
+    study_sessions: "学習セッション",
+    focus_summary: "今週は {hours} 時間集中しました。いいペースです。",
+    focus_summary_empty: "まだデータが少なめ。もう少し積み重ねると傾向が見えます。",
   },
   chat_input: {
     placeholder: "Steadiiに聞く…",
@@ -109,6 +119,7 @@ export const ja: Messages = {
       redeem: "コード入力",
       appearance: "外観",
       language: "言語",
+      timezone: "タイムゾーン",
       danger: "危険な操作",
     },
     appearance_theme_label: "テーマ",
@@ -116,10 +127,23 @@ export const ja: Messages = {
       "UIの言語を選びます。エージェントの応答はあなたが入力した言語に自動で合わせます。",
     language_option_en: "English",
     language_option_ja: "日本語",
+    timezone_description:
+      "「明日」などの相対的な日付をこのタイムゾーンで解釈します。初回はブラウザから自動検出されます。",
+    timezone_placeholder: "例: Asia/Tokyo",
+    timezone_save: "保存",
+    timezone_detected: "検出",
+    timezone_saved: "保存しました",
+    timezone_invalid: "不明なタイムゾーンです",
   },
   legal: {
     privacy_title: "プライバシーポリシー",
     terms_title: "利用規約",
     placeholder: "これはα版のプレースホルダーです。正式公開前に更新されます。",
+  },
+  seed_prompts: {
+    review_recent_mistakes:
+      "最近1週間の間違いノートから、特に復習した方がよいものを3件挙げて、それぞれのポイントを短くまとめてください。",
+    generate_similar_problems:
+      "最近1週間の間違いノートのパターンを元に、似た形式の練習問題を3題作成してください。解答は伏せておいてください。",
   },
 };

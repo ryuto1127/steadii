@@ -37,7 +37,7 @@ export default async function RootLayout({
       className={`${sans.variable} ${mono.variable}`}
       suppressHydrationWarning
     >
-      <body>
+      <body suppressHydrationWarning>
         <ThemeProvider>
           <NextIntlClientProvider locale={locale} messages={messages}>
             {children}
