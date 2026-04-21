@@ -27,21 +27,23 @@ type Pricing = {
   cachedInputPerMillion: number;
 };
 
+// OpenAI Standard tier pricing (USD per 1M tokens).
+// Verified against OpenAI pricing page on 2026-04-21.
 const PRICING: Record<DefaultOpenAIModel, Pricing> = {
   "gpt-5.4-mini": {
-    inputPerMillion: 0.15,
-    outputPerMillion: 0.6,
+    inputPerMillion: 0.75,
+    outputPerMillion: 4.5,
     cachedInputPerMillion: 0.075,
   },
   "gpt-5.4": {
     inputPerMillion: 2.5,
-    outputPerMillion: 10,
-    cachedInputPerMillion: 1.25,
+    outputPerMillion: 15,
+    cachedInputPerMillion: 0.25,
   },
   "gpt-5.4-nano": {
-    inputPerMillion: 0.05,
-    outputPerMillion: 0.2,
-    cachedInputPerMillion: 0.025,
+    inputPerMillion: 0.2,
+    outputPerMillion: 1.25,
+    cachedInputPerMillion: 0.02,
   },
 };
 
