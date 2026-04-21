@@ -90,6 +90,7 @@ export function NewChatInput({
   const [isFocused, setIsFocused] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [exampleIdx, setExampleIdx] = useState(0);
+  const [fadeIn, setFadeIn] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -98,22 +99,38 @@ export function NewChatInput({
   // can ask the agent. Stops the moment the user engages so we don't yank
   // their reference text mid-type.
   const examples = (t.raw("example_prompts") as string[]) ?? [];
-  const shouldRotate =
+  const useRotation =
     !placeholder && examples.length > 1 && !isFocused && value.length === 0;
   useEffect(() => {
-    if (!shouldRotate) return;
+    if (!useRotation) return;
     if (typeof window !== "undefined") {
       const media = window.matchMedia("(prefers-reduced-motion: reduce)");
       if (media.matches) return;
     }
+    const FADE_MS = 260;
+    const INTERVAL_MS = 4500;
     const interval = window.setInterval(() => {
-      setExampleIdx((i) => (i + 1) % examples.length);
-    }, 4000);
+      // Fade out first, swap text while invisible, then fade back in. Gives
+      // a smooth cross-fade rather than the jarring hard swap of native
+      // placeholder attributes.
+      setFadeIn(false);
+      window.setTimeout(() => {
+        setExampleIdx((i) => (i + 1) % examples.length);
+        setFadeIn(true);
+      }, FADE_MS);
+    }, INTERVAL_MS);
     return () => window.clearInterval(interval);
-  }, [shouldRotate, examples.length]);
+  }, [useRotation, examples.length]);
 
-  const effectivePlaceholder =
-    placeholder ?? (examples.length > 0 ? examples[exampleIdx]! : t("placeholder"));
+  // Reset to visible when rotation resumes (e.g. user blurred after typing).
+  useEffect(() => {
+    if (useRotation) setFadeIn(true);
+  }, [useRotation]);
+
+  // Native placeholder = stable accessible label. Visual placeholder rendered
+  // as a fading overlay when rotation is active.
+  const nativePlaceholder = placeholder ?? t("placeholder");
+  const rotatingText = examples[exampleIdx] ?? t("placeholder");
   // Grammarly and other browser extensions inject DOM nodes into forms
   // with a textarea. That insertion happens before React hydrates, which
   // causes a hydration mismatch on the form's children. Gating the form
@@ -180,7 +197,7 @@ export function NewChatInput({
             aria-hidden
             className="flex h-11 flex-1 items-center px-2 text-[15px] text-[hsl(var(--muted-foreground))]"
           >
-            <span className="flex-1 truncate">{effectivePlaceholder}</span>
+            <span className="flex-1 truncate">{nativePlaceholder}</span>
           </div>
         ) : (
           <>
@@ -196,26 +213,44 @@ export function NewChatInput({
             >
               <Paperclip size={18} strokeWidth={1.5} />
             </button>
-            <textarea
-              ref={textareaRef}
-              id="new-chat-textarea"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
-              placeholder={effectivePlaceholder}
-              autoFocus={autoFocus}
-              rows={1}
-              style={{ height: MIN_HEIGHT_PX }}
-              onKeyDown={(e) => {
-                if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
-                }
-              }}
-              className="min-h-[44px] flex-1 resize-none bg-transparent px-1 py-2.5 text-[15px] leading-[1.4] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none"
-            />
+            <div className="relative flex-1">
+              <textarea
+                ref={textareaRef}
+                id="new-chat-textarea"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                placeholder={nativePlaceholder}
+                autoFocus={autoFocus}
+                rows={1}
+                style={{ height: MIN_HEIGHT_PX }}
+                onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
+                  }
+                }}
+                className={cn(
+                  "min-h-[44px] w-full resize-none bg-transparent px-1 py-2.5 text-[15px] leading-[1.4] text-[hsl(var(--foreground))] focus:outline-none",
+                  useRotation
+                    ? "placeholder:text-transparent"
+                    : "placeholder:text-[hsl(var(--muted-foreground))]"
+                )}
+              />
+              {useRotation ? (
+                <span
+                  aria-hidden
+                  className={cn(
+                    "pointer-events-none absolute left-1 top-2.5 max-w-full truncate text-[15px] leading-[1.4] text-[hsl(var(--muted-foreground))] transition-opacity duration-[260ms] ease-out",
+                    fadeIn ? "opacity-100" : "opacity-0"
+                  )}
+                >
+                  {rotatingText}
+                </span>
+              ) : null}
+            </div>
             <div className="flex shrink-0 items-center gap-2 pb-1 pr-1">
               <span className="flex items-center gap-1.5 rounded-full bg-[hsl(var(--surface))] px-2 py-1">
                 <span aria-hidden className="steadii-ai-dot" />
