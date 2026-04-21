@@ -2,17 +2,24 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { MonthView } from "./month-view";
 import { WeekView } from "./week-view";
 import { DayView } from "./day-view";
 import { EventPanel, type PanelState } from "./event-panel";
 import {
+  MONTHS_LONG,
+  MONTHS_SHORT,
+  WEEKDAYS_LONG,
   addDays,
   addMonths,
   formatDateInput,
   type CalendarEvent,
+  type CalendarItem,
+  type CalendarTask,
   type CalendarView as ViewType,
+  type PendingCreate,
 } from "@/lib/calendar/events";
 import {
   createCalendarEventAction,
@@ -21,31 +28,46 @@ import {
   type CalendarEventInput,
   type CalendarEventPatch,
 } from "@/lib/agent/calendar-actions";
+import {
+  completeTaskAction,
+  createTaskAction,
+  deleteTaskAction,
+  updateTaskAction,
+  type TaskInput,
+  type TaskPatch,
+} from "@/lib/agent/tasks-actions";
 
 type Props = {
-  initialEvents: CalendarEvent[];
+  initialItems: CalendarItem[];
   initialView: ViewType;
   initialAnchorIso: string;
   initialError: string | null;
+  tasksScopeMissing: boolean;
 };
 
 export function CalendarView({
-  initialEvents,
+  initialItems,
   initialView,
   initialAnchorIso,
   initialError,
+  tasksScopeMissing,
 }: Props) {
   const router = useRouter();
   const [view, setView] = useState<ViewType>(initialView);
   const [anchor, setAnchor] = useState<Date>(() => new Date(initialAnchorIso));
-  const [events, setEvents] = useState<CalendarEvent[]>(initialEvents);
+  const [items, setItems] = useState<CalendarItem[]>(initialItems);
   const [panel, setPanel] = useState<PanelState>({ state: "closed" });
+  const [pendingCreate, setPendingCreate] = useState<PendingCreate>(null);
   const [, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(initialError);
 
   useEffect(() => {
-    setEvents(initialEvents);
-  }, [initialEvents]);
+    if (panel.state !== "create") setPendingCreate(null);
+  }, [panel.state]);
+
+  useEffect(() => {
+    setItems(initialItems);
+  }, [initialItems]);
 
   useEffect(() => {
     setErr(initialError);
@@ -59,6 +81,15 @@ export function CalendarView({
       router.replace(`/app/calendar?${params.toString()}`, { scroll: false });
     });
   }, [view, anchor, router]);
+
+  const events = useMemo(
+    () => items.filter((i): i is CalendarEvent => i.kind === "event"),
+    [items],
+  );
+  const tasks = useMemo(
+    () => items.filter((i): i is CalendarTask => i.kind === "task"),
+    [items],
+  );
 
   const heading = useMemo(() => formatHeading(view, anchor), [view, anchor]);
 
@@ -74,9 +105,11 @@ export function CalendarView({
   };
   const goToday = () => setAnchor(new Date());
 
-  const onCreate = async (input: CalendarEventInput) => {
+  // ---- Event mutations ----
+  const onCreateEvent = async (input: CalendarEventInput) => {
     const tempId = `optimistic-${crypto.randomUUID()}`;
     const optimistic: CalendarEvent = {
+      kind: "event",
       id: tempId,
       summary: input.summary,
       start: input.start,
@@ -88,38 +121,37 @@ export function CalendarView({
       recurringEventId: null,
       reminders: input.reminders ?? null,
     };
-    setEvents((prev) => [...prev, optimistic]);
+    setItems((prev) => [...prev, optimistic]);
     setPanel({ state: "closed" });
     try {
       await createCalendarEventAction(input);
       startTransition(() => router.refresh());
     } catch (e) {
-      setEvents((prev) => prev.filter((ev) => ev.id !== tempId));
+      setItems((prev) => prev.filter((i) => i.id !== tempId));
       setErr(e instanceof Error ? e.message : "Failed to create event");
     }
   };
 
-  const onUpdate = async (patch: CalendarEventPatch) => {
+  const onUpdateEvent = async (patch: CalendarEventPatch) => {
     const prior = events.find((e) => e.id === patch.eventId);
-    setEvents((prev) =>
-      prev.map((e) =>
-        e.id === patch.eventId
-          ? {
-              ...e,
-              summary: patch.summary ?? e.summary,
-              start: patch.start ?? e.start,
-              end: patch.end ?? e.end,
-              allDay: patch.start
-                ? /^\d{4}-\d{2}-\d{2}$/.test(patch.start)
-                : e.allDay,
-              location: patch.location ?? e.location,
-              description: patch.description ?? e.description,
-              recurrence: patch.recurrence ?? e.recurrence,
-              reminders:
-                patch.reminders === undefined ? e.reminders : patch.reminders,
-            }
-          : e,
-      ),
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.kind !== "event" || i.id !== patch.eventId) return i;
+        return {
+          ...i,
+          summary: patch.summary ?? i.summary,
+          start: patch.start ?? i.start,
+          end: patch.end ?? i.end,
+          allDay: patch.start
+            ? /^\d{4}-\d{2}-\d{2}$/.test(patch.start)
+            : i.allDay,
+          location: patch.location ?? i.location,
+          description: patch.description ?? i.description,
+          recurrence: patch.recurrence ?? i.recurrence,
+          reminders:
+            patch.reminders === undefined ? i.reminders : patch.reminders,
+        };
+      }),
     );
     setPanel({ state: "closed" });
     try {
@@ -127,34 +159,128 @@ export function CalendarView({
       startTransition(() => router.refresh());
     } catch (e) {
       if (prior) {
-        setEvents((prev) =>
-          prev.map((ev) => (ev.id === prior.id ? prior : ev)),
+        setItems((prev) =>
+          prev.map((i) => (i.kind === "event" && i.id === prior.id ? prior : i)),
         );
       }
       setErr(e instanceof Error ? e.message : "Failed to update event");
     }
   };
 
-  const onDelete = async (eventId: string) => {
+  const onDeleteEvent = async (eventId: string) => {
     const prior = events.find((e) => e.id === eventId);
-    setEvents((prev) => prev.filter((e) => e.id !== eventId));
+    setItems((prev) =>
+      prev.filter((i) => !(i.kind === "event" && i.id === eventId)),
+    );
     setPanel({ state: "closed" });
     try {
       await deleteCalendarEventAction(eventId);
       startTransition(() => router.refresh());
     } catch (e) {
-      if (prior) setEvents((prev) => [...prev, prior]);
+      if (prior) setItems((prev) => [...prev, prior]);
       setErr(e instanceof Error ? e.message : "Failed to delete event");
     }
   };
 
-  // Drag-to-move: patch start/end only.
+  // ---- Task mutations ----
+  const onCreateTask = async (input: TaskInput) => {
+    const tempId = `optimistic-${crypto.randomUUID()}`;
+    const optimistic: CalendarTask = {
+      kind: "task",
+      id: tempId,
+      title: input.title,
+      due: input.due ?? formatDateInput(new Date()),
+      notes: input.notes ?? null,
+      completed: false,
+      taskListId: input.taskListId ?? "@default",
+      parentId: null,
+    };
+    setItems((prev) => [...prev, optimistic]);
+    setPanel({ state: "closed" });
+    try {
+      await createTaskAction(input);
+      startTransition(() => router.refresh());
+    } catch (e) {
+      setItems((prev) => prev.filter((i) => i.id !== tempId));
+      setErr(e instanceof Error ? e.message : "Failed to create task");
+    }
+  };
+
+  const onUpdateTask = async (patch: TaskPatch) => {
+    const prior = tasks.find((t) => t.id === patch.taskId);
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.kind !== "task" || i.id !== patch.taskId) return i;
+        return {
+          ...i,
+          title: patch.title ?? i.title,
+          notes: patch.notes === undefined ? i.notes : patch.notes,
+          due: patch.due === undefined ? i.due : patch.due ?? i.due,
+        };
+      }),
+    );
+    setPanel({ state: "closed" });
+    try {
+      await updateTaskAction(patch);
+      startTransition(() => router.refresh());
+    } catch (e) {
+      if (prior) {
+        setItems((prev) =>
+          prev.map((i) => (i.kind === "task" && i.id === prior.id ? prior : i)),
+        );
+      }
+      setErr(e instanceof Error ? e.message : "Failed to update task");
+    }
+  };
+
+  const onToggleTaskComplete = async (task: CalendarTask) => {
+    const next = !task.completed;
+    setItems((prev) =>
+      prev.map((i) =>
+        i.kind === "task" && i.id === task.id ? { ...i, completed: next } : i,
+      ),
+    );
+    try {
+      await completeTaskAction({
+        taskId: task.id,
+        taskListId: task.taskListId,
+        completed: next,
+      });
+      startTransition(() => router.refresh());
+    } catch (e) {
+      setItems((prev) =>
+        prev.map((i) =>
+          i.kind === "task" && i.id === task.id
+            ? { ...i, completed: task.completed }
+            : i,
+        ),
+      );
+      setErr(e instanceof Error ? e.message : "Failed to update task");
+    }
+  };
+
+  const onDeleteTask = async (task: CalendarTask) => {
+    const prior = task;
+    setItems((prev) =>
+      prev.filter((i) => !(i.kind === "task" && i.id === task.id)),
+    );
+    setPanel({ state: "closed" });
+    try {
+      await deleteTaskAction({ taskId: task.id, taskListId: task.taskListId });
+      startTransition(() => router.refresh());
+    } catch (e) {
+      setItems((prev) => [...prev, prior]);
+      setErr(e instanceof Error ? e.message : "Failed to delete task");
+    }
+  };
+
+  // Drag-to-move a timed event only.
   const onDragMove = async (args: {
     eventId: string;
     newStart: string;
     newEnd: string;
   }) => {
-    void onUpdate({
+    void onUpdateEvent({
       eventId: args.eventId,
       start: args.newStart,
       end: args.newEnd,
@@ -162,13 +288,33 @@ export function CalendarView({
   };
 
   const onEventClick = (event: CalendarEvent) =>
-    setPanel({ state: "edit", event });
+    setPanel({ state: "edit", kind: "event", event });
+
+  const onTaskClick = (task: CalendarTask) =>
+    setPanel({ state: "edit", kind: "task", task });
 
   const onCreateAt = (prefill: {
     start: string;
     end: string;
     allDay: boolean;
-  }) => setPanel({ state: "create", prefill });
+  }) => {
+    setPendingCreate(null);
+    setPanel({ state: "create", kind: "event", prefill });
+  };
+
+  const onPendingCreate = (args: {
+    dayIso: string;
+    startSlot: number;
+    endSlot: number;
+    prefill: { start: string; end: string; allDay: boolean };
+  }) => {
+    setPendingCreate({
+      dayIso: args.dayIso,
+      startSlot: args.startSlot,
+      endSlot: args.endSlot,
+    });
+    setPanel({ state: "create", kind: "event", prefill: args.prefill });
+  };
 
   const openNewEmpty = () => {
     const now = new Date();
@@ -177,12 +323,17 @@ export function CalendarView({
     const end = new Date(now.getTime() + 60 * 60 * 1000);
     setPanel({
       state: "create",
+      kind: "event",
       prefill: {
         start: toLocalNaive(start),
         end: toLocalNaive(end),
         allDay: false,
       },
     });
+  };
+
+  const handleReconnectTasks = () => {
+    void signIn("google", { callbackUrl: "/app/calendar" }, { prompt: "consent" });
   };
 
   return (
@@ -222,6 +373,18 @@ export function CalendarView({
         </div>
       </header>
 
+      {tasksScopeMissing && (
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-4 py-2 text-small text-[hsl(var(--foreground))]">
+          <span>
+            Reconnect Google to enable Tasks — your current sign-in doesn&apos;t
+            include task access.
+          </span>
+          <Button size="sm" variant="secondary" onClick={handleReconnectTasks}>
+            Reconnect
+          </Button>
+        </div>
+      )}
+
       {err && (
         <div className="mb-3 rounded-lg bg-[hsl(var(--destructive)/0.1)] px-4 py-2 text-small text-[hsl(var(--destructive))]">
           {err}
@@ -234,7 +397,10 @@ export function CalendarView({
             <MonthView
               anchor={anchor}
               events={events}
+              tasks={tasks}
               onEventClick={onEventClick}
+              onTaskClick={onTaskClick}
+              onToggleTaskComplete={onToggleTaskComplete}
               onDragMove={onDragMove}
               onDayClick={(d) =>
                 onCreateAt({
@@ -249,18 +415,28 @@ export function CalendarView({
             <WeekView
               anchor={anchor}
               events={events}
+              tasks={tasks}
+              pendingCreate={pendingCreate}
               onEventClick={onEventClick}
+              onTaskClick={onTaskClick}
+              onToggleTaskComplete={onToggleTaskComplete}
               onDragMove={onDragMove}
               onCreateAt={onCreateAt}
+              onPendingCreate={onPendingCreate}
             />
           )}
           {view === "day" && (
             <DayView
               anchor={anchor}
               events={events}
+              tasks={tasks}
+              pendingCreate={pendingCreate}
               onEventClick={onEventClick}
+              onTaskClick={onTaskClick}
+              onToggleTaskComplete={onToggleTaskComplete}
               onDragMove={onDragMove}
               onCreateAt={onCreateAt}
+              onPendingCreate={onPendingCreate}
             />
           )}
         </div>
@@ -269,9 +445,13 @@ export function CalendarView({
           <EventPanel
             state={panel}
             onClose={() => setPanel({ state: "closed" })}
-            onCreate={onCreate}
-            onUpdate={onUpdate}
-            onDelete={onDelete}
+            onCreateEvent={onCreateEvent}
+            onUpdateEvent={onUpdateEvent}
+            onDeleteEvent={onDeleteEvent}
+            onCreateTask={onCreateTask}
+            onUpdateTask={onUpdateTask}
+            onDeleteTask={onDeleteTask}
+            onToggleTaskComplete={onToggleTaskComplete}
           />
         )}
       </div>
@@ -309,26 +489,17 @@ function ViewToggle({
 
 function formatHeading(view: ViewType, anchor: Date): string {
   if (view === "month") {
-    return anchor.toLocaleDateString(undefined, {
-      month: "long",
-      year: "numeric",
-    });
+    return `${MONTHS_LONG[anchor.getMonth()]} ${anchor.getFullYear()}`;
   }
   if (view === "day") {
-    return anchor.toLocaleDateString(undefined, {
-      weekday: "long",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    return `${WEEKDAYS_LONG[anchor.getDay()]}, ${MONTHS_SHORT[anchor.getMonth()]} ${anchor.getDate()}, ${anchor.getFullYear()}`;
   }
   // week
   const start = new Date(anchor);
   start.setDate(start.getDate() - start.getDay());
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
-  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
-  return `${start.toLocaleDateString(undefined, opts)} – ${end.toLocaleDateString(undefined, { ...opts, year: "numeric" })}`;
+  return `${MONTHS_SHORT[start.getMonth()]} ${start.getDate()} – ${MONTHS_SHORT[end.getMonth()]} ${end.getDate()}, ${end.getFullYear()}`;
 }
 
 function toLocalNaive(d: Date): string {

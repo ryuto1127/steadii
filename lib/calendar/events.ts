@@ -1,6 +1,13 @@
 export type CalendarView = "month" | "week" | "day";
 
+export type PendingCreate = {
+  dayIso: string;
+  startSlot: number;
+  endSlot: number;
+} | null;
+
 export type CalendarEvent = {
+  kind: "event";
   id: string;
   summary: string;
   start: string;
@@ -13,7 +20,75 @@ export type CalendarEvent = {
   reminders?: { minutes: number } | null;
 };
 
+export type CalendarTask = {
+  kind: "task";
+  id: string;
+  title: string;
+  due: string; // YYYY-MM-DD, local-date-only
+  notes: string | null;
+  completed: boolean;
+  taskListId: string;
+  parentId: string | null;
+};
+
+export type CalendarItem = CalendarEvent | CalendarTask;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Deterministic labels — avoid Intl/toLocale* in the render tree (Node ICU vs
+// browser Intl diverge, e.g. "1 AM" vs "1 a.m.", and cause hydration mismatches).
+export const WEEKDAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+export const WEEKDAYS_LONG = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+export const MONTHS_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+export const MONTHS_LONG = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+export function formatTime12(d: Date): string {
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const period = h < 12 ? "AM" : "PM";
+  const hour12 = ((h + 11) % 12) + 1;
+  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+export function formatHour12(h: number): string {
+  const period = h < 12 ? "AM" : "PM";
+  const hour12 = ((h + 11) % 12) + 1;
+  return `${hour12} ${period}`;
+}
 
 export function isAllDayString(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);

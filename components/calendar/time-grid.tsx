@@ -2,9 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  WEEKDAYS_SHORT,
   addDays,
   eventsOnDay,
   formatDateInput,
+  formatHour12,
+  formatTime12,
   layoutDayColumns,
   minutesSinceMidnight,
   parseEventEnd,
@@ -13,6 +16,8 @@ import {
   sameDay,
   snapToSlot,
   type CalendarEvent,
+  type CalendarTask,
+  type PendingCreate,
 } from "@/lib/calendar/events";
 
 export const SLOT_MIN = 30;
@@ -25,7 +30,11 @@ const DRAG_MIME = "application/x-steadii-event";
 type Props = {
   days: Date[];
   events: CalendarEvent[];
+  tasks: CalendarTask[];
+  pendingCreate: PendingCreate;
   onEventClick: (e: CalendarEvent) => void;
+  onTaskClick: (t: CalendarTask) => void;
+  onToggleTaskComplete: (t: CalendarTask) => void;
   onDragMove: (args: {
     eventId: string;
     newStart: string;
@@ -36,14 +45,25 @@ type Props = {
     end: string;
     allDay: boolean;
   }) => void;
+  onPendingCreate: (args: {
+    dayIso: string;
+    startSlot: number;
+    endSlot: number;
+    prefill: { start: string; end: string; allDay: boolean };
+  }) => void;
 };
 
 export function TimeGrid({
   days,
   events,
+  tasks,
+  pendingCreate,
   onEventClick,
+  onTaskClick,
+  onToggleTaskComplete,
   onDragMove,
   onCreateAt,
+  onPendingCreate,
 }: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const scrolled = useRef(false);
@@ -70,7 +90,7 @@ export function TimeGrid({
                 className="flex flex-col items-center gap-0.5 px-2 py-2"
               >
                 <div className="text-[11px] uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
-                  {d.toLocaleDateString(undefined, { weekday: "short" })}
+                  {WEEKDAYS_SHORT[d.getDay()]}
                 </div>
                 <div
                   className={
@@ -91,7 +111,10 @@ export function TimeGrid({
       <AllDayStrip
         days={days}
         events={allDayEvents}
+        tasks={tasks}
         onEventClick={onEventClick}
+        onTaskClick={onTaskClick}
+        onToggleTaskComplete={onToggleTaskComplete}
         onCreateAt={onCreateAt}
       />
 
@@ -109,9 +132,10 @@ export function TimeGrid({
                 dayEvents={eventsOnDay(timedEvents, d)}
                 allTimedEvents={timedEvents}
                 hasLeftBorder={idx > 0}
+                pendingCreate={pendingCreate}
                 onEventClick={onEventClick}
                 onDragMove={onDragMove}
-                onCreateAt={onCreateAt}
+                onPendingCreate={onPendingCreate}
               />
             ))}
           </div>
@@ -122,12 +146,7 @@ export function TimeGrid({
 }
 
 function HourGutter() {
-  const hours: string[] = [];
-  for (let h = 0; h < 24; h += 1) {
-    const d = new Date();
-    d.setHours(h, 0, 0, 0);
-    hours.push(d.toLocaleTimeString(undefined, { hour: "numeric" }));
-  }
+  const hours = Array.from({ length: 24 }, (_, h) => formatHour12(h));
   return (
     <div
       className="relative shrink-0 border-r border-[hsl(var(--border))]"
@@ -151,24 +170,27 @@ function DayColumn({
   dayEvents,
   allTimedEvents,
   hasLeftBorder,
+  pendingCreate,
   onEventClick,
   onDragMove,
-  onCreateAt,
+  onPendingCreate,
 }: {
   day: Date;
   dayEvents: CalendarEvent[];
   allTimedEvents: CalendarEvent[];
   hasLeftBorder: boolean;
+  pendingCreate: PendingCreate;
   onEventClick: (e: CalendarEvent) => void;
   onDragMove: (args: {
     eventId: string;
     newStart: string;
     newEnd: string;
   }) => void;
-  onCreateAt: (prefill: {
-    start: string;
-    end: string;
-    allDay: boolean;
+  onPendingCreate: (args: {
+    dayIso: string;
+    startSlot: number;
+    endSlot: number;
+    prefill: { start: string; end: string; allDay: boolean };
   }) => void;
 }) {
   const bgRef = useRef<HTMLDivElement>(null);
@@ -209,10 +231,15 @@ function DayColumn({
     startDate.setHours(0, Math.floor(startSlot * SLOT_MIN), 0, 0);
     const endDate = new Date(day);
     endDate.setHours(0, Math.floor(endSlot * SLOT_MIN), 0, 0);
-    onCreateAt({
-      start: toLocalNaive(startDate),
-      end: toLocalNaive(endDate),
-      allDay: false,
+    onPendingCreate({
+      dayIso: day.toISOString(),
+      startSlot,
+      endSlot,
+      prefill: {
+        start: toLocalNaive(startDate),
+        end: toLocalNaive(endDate),
+        allDay: false,
+      },
     });
   };
 
@@ -272,19 +299,39 @@ function DayColumn({
         ))}
       </div>
 
-      {dragSel && (
-        <div
-          className="pointer-events-none absolute left-1 right-1 z-[5] rounded bg-[hsl(var(--primary)/0.32)] ring-2 ring-[hsl(var(--primary))]"
-          style={{
-            top: dragSel.startSlot * SLOT_PX + 1,
-            height: (dragSel.endSlot - dragSel.startSlot) * SLOT_PX - 2,
-          }}
-        />
-      )}
+      {(() => {
+        const rect =
+          dragSel ??
+          (pendingCreate && pendingCreate.dayIso === day.toISOString()
+            ? {
+                startSlot: pendingCreate.startSlot,
+                endSlot: pendingCreate.endSlot,
+              }
+            : null);
+        if (!rect) return null;
+        return (
+          // v2: drag/resize the pending placeholder to adjust times
+          <div
+            style={{
+              position: "absolute",
+              top: rect.startSlot * SLOT_PX + 1,
+              height: (rect.endSlot - rect.startSlot) * SLOT_PX - 2,
+              left: 2,
+              right: 2,
+              backgroundColor: "hsl(38 92% 50% / 0.55)",
+              border: "2px solid hsl(38 92% 50%)",
+              borderRadius: 6,
+              boxShadow: "0 4px 12px hsl(38 92% 50% / 0.3)",
+              zIndex: 50,
+              pointerEvents: "none",
+            }}
+          />
+        );
+      })()}
 
       {dropIndicator !== null && (
         <div
-          className="pointer-events-none absolute left-0 right-0 z-[5] h-1 bg-[hsl(var(--primary))]"
+          className="pointer-events-none absolute left-0 right-0 z-[5] h-1 bg-[hsl(var(--primary))] shadow-md"
           style={{ top: dropIndicator * SLOT_PX }}
         />
       )}
@@ -339,7 +386,7 @@ function TimedEventBlock({
   const height = Math.max(SLOT_PX - 2, ((endMin - startMin) / SLOT_MIN) * SLOT_PX);
   const widthPct = 100 / cols;
   const leftPct = col * widthPct;
-  const timeLabel = `${s.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+  const timeLabel = formatTime12(s);
   const isOptimistic = event.id.startsWith("optimistic-");
 
   return (
@@ -402,12 +449,18 @@ function CurrentTimeLine() {
 function AllDayStrip({
   days,
   events,
+  tasks,
   onEventClick,
+  onTaskClick,
+  onToggleTaskComplete,
   onCreateAt,
 }: {
   days: Date[];
   events: CalendarEvent[];
+  tasks: CalendarTask[];
   onEventClick: (e: CalendarEvent) => void;
+  onTaskClick: (t: CalendarTask) => void;
+  onToggleTaskComplete: (t: CalendarTask) => void;
   onCreateAt: (prefill: {
     start: string;
     end: string;
@@ -425,11 +478,13 @@ function AllDayStrip({
       </div>
       <div className="grid flex-1" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
         {days.map((d, idx) => {
+          const dayKey = formatDateInput(d);
           const dayEvents = events.filter((e) => {
             const s = parseEventStart(e);
             const end = parseEventEnd(e);
             return s <= d && d < end;
           });
+          const dayTasks = tasks.filter((t) => t.due === dayKey);
           return (
             <div
               key={d.toISOString()}
@@ -458,10 +513,76 @@ function AllDayStrip({
                   {ev.summary}
                 </div>
               ))}
+              {dayTasks.map((t) => (
+                <TaskPill
+                  key={t.id}
+                  task={t}
+                  onOpen={() => onTaskClick(t)}
+                  onToggle={() => onToggleTaskComplete(t)}
+                />
+              ))}
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function TaskPill({
+  task,
+  onOpen,
+  onToggle,
+}: {
+  task: CalendarTask;
+  onOpen: () => void;
+  onToggle: () => void;
+}) {
+  return (
+    <div
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
+      className="flex cursor-pointer items-center gap-1.5 truncate rounded bg-[hsl(var(--surface-raised))] px-1.5 py-0.5 text-[11px] text-[hsl(var(--foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))]/80"
+    >
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={task.completed}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        className={
+          "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border transition-colors " +
+          (task.completed
+            ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
+            : "border-[hsl(var(--muted-foreground))] bg-transparent hover:border-[hsl(var(--foreground))]")
+        }
+      >
+        {task.completed && (
+          <svg
+            viewBox="0 0 12 12"
+            className="h-2.5 w-2.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <polyline points="2.5,6.5 5,9 9.5,3.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </button>
+      <span
+        className={
+          "truncate " +
+          (task.completed
+            ? "text-[hsl(var(--muted-foreground))] line-through"
+            : "")
+        }
+      >
+        {task.title}
+      </span>
     </div>
   );
 }
