@@ -5,6 +5,7 @@ import { selectModel } from "@/lib/agent/models";
 import { recordUsage } from "@/lib/agent/usage";
 import { routeSyllabusInput, type SyllabusInput } from "./router";
 import { load as loadHtml } from "cheerio";
+import { safeFetch } from "@/lib/utils/ssrf-guard";
 
 const SYSTEM_PROMPT = `You extract structured syllabus data from a raw document.
 Return strictly the fields in the provided JSON schema. Use null for any field
@@ -191,32 +192,31 @@ export class UnsupportedSyllabusUrlTypeError extends Error {
 }
 
 export async function fetchSyllabusUrl(url: string): Promise<FetchedUrl> {
-  const res = await fetch(url, {
+  const res = await safeFetch(url, {
     headers: { "User-Agent": "Steadii Syllabus Fetcher" },
+    timeoutMs: 15_000,
+    maxBytes: 10 * 1024 * 1024,
   });
   if (!res.ok) throw new Error(`URL fetch failed (${res.status})`);
-  const contentType = res.headers.get("content-type") ?? "";
+  const contentType = res.contentType;
   const kind = classifyFetchedContentType(contentType);
   if (kind === "html") {
-    const html = await res.text();
-    return { kind: "html", contentType, html };
+    return { kind: "html", contentType, html: res.bytes.toString("utf8") };
   }
   if (kind === "pdf") {
-    const bytes = Buffer.from(await res.arrayBuffer());
     return {
       kind: "pdf",
       contentType,
-      bytes,
+      bytes: res.bytes,
       filename: filenameFromUrl(url, "pdf"),
     };
   }
   if (kind === "image") {
-    const bytes = Buffer.from(await res.arrayBuffer());
     const ext = contentType.split("/")[1]?.split(";")[0]?.trim() || "png";
     return {
       kind: "image",
       contentType,
-      bytes,
+      bytes: res.bytes,
       filename: filenameFromUrl(url, ext),
     };
   }

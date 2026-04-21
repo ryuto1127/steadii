@@ -6,6 +6,7 @@ import {
   cleanHtml,
   UnsupportedSyllabusUrlTypeError,
 } from "@/lib/syllabus/extract";
+import { BlockedUrlError, ResponseTooLargeError } from "@/lib/utils/ssrf-guard";
 import { routeSyllabusInput, isAcceptedMimeType } from "@/lib/syllabus/router";
 import { extractPdfText, formatPdfWithPageMarkers } from "@/lib/syllabus/pdf";
 import { checkUploadLimits } from "@/lib/billing/storage";
@@ -84,6 +85,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: err.message, code: err.code },
         { status: 415 }
+      );
+    }
+    if (err instanceof BlockedUrlError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 400 }
+      );
+    }
+    if (err instanceof ResponseTooLargeError) {
+      return NextResponse.json(
+        {
+          error: `The URL returned more than ${Math.round(
+            err.limitBytes / 1024 / 1024
+          )} MB; refusing to process.`,
+          code: err.code,
+        },
+        { status: 413 }
       );
     }
     console.error("syllabus extract failed", err);
