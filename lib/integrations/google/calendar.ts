@@ -4,6 +4,10 @@ import { db } from "@/lib/db/client";
 import { accounts } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { env } from "@/lib/env";
+import {
+  decryptOAuthToken,
+  encryptOAuthToken,
+} from "@/lib/auth/oauth-tokens";
 
 export class CalendarNotConnectedError extends Error {
   code = "CALENDAR_NOT_CONNECTED" as const;
@@ -26,8 +30,8 @@ export async function getCalendarForUser(
   const e = env();
   const oauth2 = new google.auth.OAuth2(e.AUTH_GOOGLE_ID, e.AUTH_GOOGLE_SECRET);
   oauth2.setCredentials({
-    access_token: row.access_token ?? undefined,
-    refresh_token: row.refresh_token ?? undefined,
+    access_token: decryptOAuthToken(row.access_token) ?? undefined,
+    refresh_token: decryptOAuthToken(row.refresh_token) ?? undefined,
     expiry_date: row.expires_at ? row.expires_at * 1000 : undefined,
     scope: row.scope ?? undefined,
   });
@@ -37,7 +41,7 @@ export async function getCalendarForUser(
       await db
         .update(accounts)
         .set({
-          access_token: tokens.access_token,
+          access_token: encryptOAuthToken(tokens.access_token),
           expires_at: tokens.expiry_date
             ? Math.floor(tokens.expiry_date / 1000)
             : row.expires_at,
