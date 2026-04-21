@@ -1,17 +1,18 @@
 import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
-import { calendarListEvents } from "@/lib/agent/tools/calendar";
-import { tasksListEvents } from "@/lib/agent/tools/tasks";
-import { TasksNotConnectedError } from "@/lib/integrations/google/tasks";
 import {
-  isAllDayString,
+  listEventsInRange,
+  shouldSync,
+  syncAllForRange,
+} from "@/lib/calendar/events-store";
+import { getUserTimezone } from "@/lib/agent/preferences";
+import { FALLBACK_TZ } from "@/lib/calendar/tz-utils";
+import {
   visibleRange,
-  rfc3339Local,
   type CalendarEvent,
   type CalendarItem,
   type CalendarTask,
   type CalendarView,
-  formatDateInput,
 } from "@/lib/calendar/events";
 import { CalendarView as CalendarViewClient } from "@/components/calendar/calendar-view";
 
@@ -28,6 +29,54 @@ function parseAnchor(v: string | undefined): Date {
   return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
+// Format a UTC Date as a "YYYY-MM-DDTHH:mm:ss±HH:MM" string in `tz`, suitable
+// for the calendar UI's CalendarEvent.start/end fields, which parse both
+// RFC3339 strings (timed) and YYYY-MM-DD (all-day).
+function utcToZoneWallClock(d: Date, tz: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const g = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  const h = g("hour") === "24" ? "00" : g("hour");
+  // Offset via formatToParts with timeZoneName=shortOffset.
+  const offsetFmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    timeZoneName: "shortOffset",
+  });
+  const match = offsetFmt
+    .formatToParts(d)
+    .find((p) => p.type === "timeZoneName")?.value;
+  let offset = "+00:00";
+  if (match && /GMT([+-]\d{1,2})(?::?(\d{2}))?/.test(match)) {
+    const m = /GMT([+-])(\d{1,2})(?::?(\d{2}))?/.exec(match);
+    if (m) {
+      const sign = m[1];
+      const hh = String(m[2]).padStart(2, "0");
+      const mm = m[3] ?? "00";
+      offset = `${sign}${hh}:${mm}`;
+    }
+  }
+  return `${g("year")}-${g("month")}-${g("day")}T${h}:${g("minute")}:${g("second")}${offset}`;
+}
+
+function zoneDateString(d: Date, tz: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const g = (t: string) => parts.find((p) => p.type === t)?.value ?? "01";
+  return `${g("year")}-${g("month")}-${g("day")}`;
+}
+
 export default async function CalendarPage({
   searchParams,
 }: {
@@ -41,74 +90,112 @@ export default async function CalendarPage({
   const view = parseView(sp.view);
   const anchor = parseAnchor(sp.anchor);
   const range = visibleRange(view, anchor);
+  const userTz = (await getUserTimezone(userId)) ?? FALLBACK_TZ;
 
-  const events: CalendarEvent[] = [];
-  const tasks: CalendarTask[] = [];
+  const fromISO = range.start.toISOString();
+  const toISO = range.end.toISOString();
+
+  // First-visit: await the sync so L4 is populated. Subsequent fresh loads
+  // within 60s skip it entirely; stale ones kick off a background sync.
   let err: string | null = null;
   let tasksScopeMissing = false;
-
-  try {
-    const res = await calendarListEvents.execute(
-      { userId },
-      {
-        timeMin: rfc3339Local(range.start),
-        timeMax: rfc3339Local(range.end),
-        limit: 500,
-      },
-    );
-    for (const e of res.events) {
-      if (!e.id || !e.start || !e.end) continue;
-      const allDay = isAllDayString(e.start);
-      events.push({
-        kind: "event",
-        id: e.id,
-        summary: e.summary ?? "(untitled)",
-        start: e.start,
-        end: e.end,
-        allDay,
-        location: e.location ?? null,
-        description: e.description ?? null,
-        recurrence: e.recurrence ?? null,
-        recurringEventId: e.recurringEventId ?? null,
-        reminders: e.reminders ?? null,
-      });
-    }
-  } catch (e) {
-    err = e instanceof Error ? e.message : "failed to load";
-  }
-
-  try {
-    const res = await tasksListEvents.execute(
-      { userId },
-      {
-        dueMin: formatDateInput(range.start),
-        dueMax: formatDateInput(range.end),
-        limit: 100,
-      },
-    );
-    for (const t of res.tasks) {
-      if (!t.due) continue;
-      tasks.push({
-        kind: "task",
-        id: t.id,
-        title: t.title,
-        due: t.due,
-        notes: t.notes,
-        completed: t.status === "completed",
-        taskListId: t.taskListId,
-        parentId: t.parentId,
-      });
-    }
-  } catch (e) {
-    if (e instanceof TasksNotConnectedError) {
-      tasksScopeMissing = true;
+  const needsSync = shouldSync(userId, fromISO, toISO);
+  // Check emptiness cheaply before awaiting.
+  const pre = await listEventsInRange(userId, fromISO, toISO);
+  if (needsSync) {
+    if (pre.length === 0) {
+      try {
+        const result = await syncAllForRange(userId, fromISO, toISO);
+        // Surface a hint if tasks scope is missing (TasksNotConnectedError is
+        // swallowed by the adapter as ok:true, so inspect non-ok sources).
+        const tasksRes = result.bySource.google_tasks;
+        if (tasksRes && !tasksRes.ok) {
+          if (/scope|not connect/i.test(tasksRes.error)) tasksScopeMissing = true;
+        }
+      } catch (e) {
+        err = e instanceof Error ? e.message : "failed to load";
+      }
     } else {
-      // Don't clobber a calendar error; surface tasks error only if calendar succeeded.
-      if (!err) err = e instanceof Error ? e.message : "failed to load tasks";
+      // Fire-and-forget: don't block first paint.
+      void syncAllForRange(userId, fromISO, toISO).catch(() => {});
     }
   }
 
-  const items: CalendarItem[] = [...events, ...tasks];
+  const rows = needsSync && pre.length === 0
+    ? await listEventsInRange(userId, fromISO, toISO)
+    : pre;
+
+  const items: CalendarItem[] = [];
+  for (const r of rows) {
+    if (r.kind === "event") {
+      const start = r.isAllDay
+        ? zoneDateString(r.startsAt, r.originTimezone ?? userTz)
+        : utcToZoneWallClock(r.startsAt, r.originTimezone ?? userTz);
+      const end =
+        r.endsAt == null
+          ? start
+          : r.isAllDay
+            ? zoneDateString(r.endsAt, r.originTimezone ?? userTz)
+            : utcToZoneWallClock(r.endsAt, r.originTimezone ?? userTz);
+      const meta = (r.sourceMetadata ?? {}) as Record<string, unknown>;
+      const reminders =
+        (meta.reminders as { overrides?: Array<{ method?: string; minutes?: number }> } | null)
+          ?.overrides;
+      const popup = reminders?.find((o) => o.method === "popup") ?? reminders?.[0];
+      const ce: CalendarEvent = {
+        kind: "event",
+        id: r.externalId,
+        summary: r.title,
+        start,
+        end,
+        allDay: r.isAllDay,
+        location: r.location,
+        description: r.description,
+        recurrence: (meta.recurrence as string[] | null) ?? null,
+        recurringEventId: (meta.recurringEventId as string | null) ?? null,
+        reminders:
+          popup && typeof popup.minutes === "number"
+            ? { minutes: popup.minutes }
+            : null,
+      };
+      items.push(ce);
+    } else if (r.kind === "task") {
+      const meta = (r.sourceMetadata ?? {}) as Record<string, unknown>;
+      const due = (meta.dueDate as string | undefined) ??
+        zoneDateString(r.startsAt, r.originTimezone ?? userTz);
+      const ct: CalendarTask = {
+        kind: "task",
+        id: r.externalId,
+        title: r.title,
+        due,
+        notes: r.description,
+        completed: r.status === "completed",
+        taskListId: (meta.taskListId as string | undefined) ?? "@default",
+        parentId: (meta.parentTaskId as string | null | undefined) ?? null,
+        origin: "google_tasks",
+        url: r.url,
+      };
+      items.push(ct);
+    } else if (r.kind === "assignment") {
+      const meta = (r.sourceMetadata ?? {}) as Record<string, unknown>;
+      const dueDate = (meta.dueDate as string | undefined) ??
+        zoneDateString(r.startsAt, r.originTimezone ?? userTz);
+      const courseName = (meta.courseName as string | null | undefined) ?? null;
+      const ct: CalendarTask = {
+        kind: "task",
+        id: r.externalId,
+        title: courseName ? `${r.title} · ${courseName}` : r.title,
+        due: dueDate,
+        notes: r.description,
+        completed: false,
+        taskListId: "__classroom__",
+        parentId: null,
+        origin: "google_classroom",
+        url: r.url ?? (meta.alternateLink as string | undefined) ?? null,
+      };
+      items.push(ct);
+    }
+  }
 
   return (
     <CalendarViewClient

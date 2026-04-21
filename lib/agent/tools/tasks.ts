@@ -1,12 +1,25 @@
 import "server-only";
 import { z } from "zod";
 import {
-  dueDateOnly,
   dueFromDateOnly,
   getTasksForUser,
 } from "@/lib/integrations/google/tasks";
 import { db } from "@/lib/db/client";
 import { auditLog } from "@/lib/db/schema";
+import {
+  getGoogleAccountId,
+  listEventsInRange,
+  markDeletedByExternalId,
+  shouldSync,
+  syncAllForRange,
+  upsertFromSourceRow,
+} from "@/lib/calendar/events-store";
+import { getUserTimezone } from "@/lib/agent/preferences";
+import {
+  FALLBACK_TZ,
+  addDaysToDateStr,
+  localMidnightAsUtc,
+} from "@/lib/calendar/tz-utils";
 import type { ToolExecutor } from "./types";
 
 async function logAudit(args: {
@@ -57,7 +70,7 @@ export const tasksListEvents: ToolExecutor<
   schema: {
     name: "tasks_list",
     description:
-      "List Google Tasks from the primary task list. `dueMin`/`dueMax` are YYYY-MM-DD local dates (end-exclusive). Results are flat — subtasks appear alongside parents but retain their parentId.",
+      "List Google Tasks from the primary task list. `dueMin`/`dueMax` are YYYY-MM-DD local dates (end-exclusive). Results are flat — subtasks appear alongside parents but retain their parentId. Reads from the unified event store (synced from Google on demand).",
     mutability: "read",
     parameters: {
       type: "object",
@@ -73,29 +86,48 @@ export const tasksListEvents: ToolExecutor<
   },
   async execute(ctx, rawArgs) {
     const args = listArgs.parse(rawArgs);
-    const tasks = await getTasksForUser(ctx.userId);
-    const taskListId = args.taskListId ?? "@default";
-    const includeCompleted = args.includeCompleted ?? true;
-    const resp = await tasks.tasks.list({
-      tasklist: taskListId,
-      maxResults: args.limit ?? 100,
-      showCompleted: includeCompleted,
-      showHidden: includeCompleted,
-      dueMin: args.dueMin ? dueFromDateOnly(args.dueMin) : undefined,
-      dueMax: args.dueMax ? dueFromDateOnly(args.dueMax) : undefined,
+    const userTz = (await getUserTimezone(ctx.userId)) ?? FALLBACK_TZ;
+
+    // Default window: next 30 days in user tz if nothing passed.
+    const now = new Date();
+    const defaultFrom = now.toISOString();
+    const defaultTo = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const fromISO = args.dueMin
+      ? localMidnightAsUtc(args.dueMin, userTz).toISOString()
+      : defaultFrom;
+    const toISO = args.dueMax
+      ? localMidnightAsUtc(args.dueMax, userTz).toISOString()
+      : defaultTo;
+
+    if (shouldSync(ctx.userId, fromISO, toISO)) {
+      await syncAllForRange(ctx.userId, fromISO, toISO);
+    }
+    const rows = await listEventsInRange(ctx.userId, fromISO, toISO, {
+      sourceTypes: ["google_tasks"],
     });
-    const items: TaskListed[] = (resp.data.items ?? [])
-      .filter((t): t is typeof t & { id: string } => Boolean(t.id))
-      .map((t) => ({
-        id: t.id,
-        title: t.title ?? "(untitled)",
-        notes: t.notes ?? null,
-        due: dueDateOnly(t.due),
-        status: t.status === "completed" ? "completed" : "needsAction",
-        taskListId,
-        parentId: t.parent ?? null,
-      }));
-    return { tasks: items };
+    const includeCompleted = args.includeCompleted ?? true;
+    const limit = args.limit ?? 100;
+    const out: TaskListed[] = [];
+    for (const r of rows) {
+      const meta = (r.sourceMetadata ?? {}) as Record<string, unknown>;
+      const listId = (meta.taskListId as string | undefined) ?? "@default";
+      if (args.taskListId && args.taskListId !== "@default" && listId !== args.taskListId) {
+        continue;
+      }
+      if (!includeCompleted && r.status === "completed") continue;
+      const dueDate = (meta.dueDate as string | undefined) ?? null;
+      out.push({
+        id: r.externalId,
+        title: r.title,
+        notes: r.description ?? null,
+        due: dueDate,
+        status: r.status === "completed" ? "completed" : "needsAction",
+        taskListId: listId,
+        parentId: (meta.parentTaskId as string | null | undefined) ?? null,
+      });
+      if (out.length >= limit) break;
+    }
+    return { tasks: out };
   },
 };
 
@@ -145,6 +177,7 @@ export const tasksCreateTask: ToolExecutor<
         },
       });
       const taskId = resp.data.id ?? "";
+      await writeThroughTask(ctx.userId, taskListId, resp.data);
       await logAudit({
         userId: ctx.userId,
         action: "tasks.task.create",
@@ -199,13 +232,14 @@ export const tasksCompleteTask: ToolExecutor<
     const tasks = await getTasksForUser(ctx.userId);
     const taskListId = args.taskListId ?? "@default";
     try {
-      await tasks.tasks.patch({
+      const resp = await tasks.tasks.patch({
         tasklist: taskListId,
         task: args.taskId,
         requestBody: args.completed
           ? { status: "completed" }
           : { status: "needsAction", completed: null },
       });
+      await writeThroughTask(ctx.userId, taskListId, resp.data);
       await logAudit({
         userId: ctx.userId,
         action: args.completed ? "tasks.task.complete" : "tasks.task.reopen",
@@ -270,11 +304,12 @@ export const tasksUpdateTask: ToolExecutor<
       body.due = args.due === null ? null : dueFromDateOnly(args.due);
     }
     try {
-      await tasks.tasks.patch({
+      const resp = await tasks.tasks.patch({
         tasklist: taskListId,
         task: args.taskId,
         requestBody: body,
       });
+      await writeThroughTask(ctx.userId, taskListId, resp.data);
       await logAudit({
         userId: ctx.userId,
         action: "tasks.task.update",
@@ -330,6 +365,11 @@ export const tasksDeleteTask: ToolExecutor<
         tasklist: taskListId,
         task: args.taskId,
       });
+      await markDeletedByExternalId(
+        ctx.userId,
+        "google_tasks",
+        args.taskId
+      );
       await logAudit({
         userId: ctx.userId,
         action: "tasks.task.delete",
@@ -351,6 +391,61 @@ export const tasksDeleteTask: ToolExecutor<
     }
   },
 };
+
+async function writeThroughTask(
+  userId: string,
+  taskListId: string,
+  t: unknown
+): Promise<void> {
+  if (!t || typeof t !== "object") return;
+  const task = t as {
+    id?: string | null;
+    title?: string | null;
+    notes?: string | null;
+    due?: string | null;
+    status?: string | null;
+    selfLink?: string | null;
+    parent?: string | null;
+  };
+  if (!task.id) return;
+  const m = task.due ? /^(\d{4}-\d{2}-\d{2})/.exec(task.due) : null;
+  const date = m ? m[1] : null;
+  if (!date) {
+    // Undated — not calendar material. If an existing row exists, soft-delete.
+    await markDeletedByExternalId(userId, "google_tasks", task.id);
+    return;
+  }
+  const userTz = (await getUserTimezone(userId)) ?? FALLBACK_TZ;
+  const accountId = (await getGoogleAccountId(userId)) ?? "unknown";
+  const startsAt = localMidnightAsUtc(date, userTz);
+  const status =
+    task.status === "completed" ? ("completed" as const) : ("needs_action" as const);
+
+  await upsertFromSourceRow({
+    userId,
+    sourceType: "google_tasks",
+    sourceAccountId: accountId,
+    externalId: task.id,
+    externalParentId: taskListId,
+    kind: "task",
+    title: task.title ?? "(untitled)",
+    description: task.notes ?? null,
+    startsAt,
+    endsAt: null,
+    isAllDay: true,
+    originTimezone: userTz,
+    location: null,
+    url: task.selfLink ?? null,
+    status,
+    sourceMetadata: {
+      taskListId,
+      parentTaskId: task.parent ?? null,
+      dueDate: date,
+      dueDateEndExclusive: addDaysToDateStr(date, 1),
+    },
+    normalizedKey: null,
+  });
+}
 
 export const TASKS_TOOLS = [
   tasksListEvents,

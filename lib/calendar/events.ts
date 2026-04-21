@@ -29,6 +29,10 @@ export type CalendarTask = {
   completed: boolean;
   taskListId: string;
   parentId: string | null;
+  // origin discriminates Google Tasks (mutable) from Classroom assignments
+  // projected into the task shape (read-only; click opens external link).
+  origin?: "google_tasks" | "google_classroom";
+  url?: string | null;
 };
 
 export type CalendarItem = CalendarEvent | CalendarTask;

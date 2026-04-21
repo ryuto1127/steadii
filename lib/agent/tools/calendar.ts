@@ -3,6 +3,20 @@ import { z } from "zod";
 import { getCalendarForUser } from "@/lib/integrations/google/calendar";
 import { db } from "@/lib/db/client";
 import { auditLog } from "@/lib/db/schema";
+import {
+  getGoogleAccountId,
+  listEventsInRange,
+  markDeletedByExternalId,
+  shouldSync,
+  syncAllForRange,
+  upsertFromSourceRow,
+} from "@/lib/calendar/events-store";
+import { getUserTimezone } from "@/lib/agent/preferences";
+import {
+  FALLBACK_TZ,
+  addDaysToDateStr,
+  localMidnightAsUtc,
+} from "@/lib/calendar/tz-utils";
 import type { ToolExecutor } from "./types";
 
 async function logAudit(args: {
@@ -52,7 +66,7 @@ export const calendarListEvents: ToolExecutor<
   schema: {
     name: "calendar_list_events",
     description:
-      "List Google Calendar events. `timeMin`/`timeMax` must be RFC3339 timestamps. Defaults to the primary calendar over the next 7 days.",
+      "List Google Calendar events. `timeMin`/`timeMax` must be RFC3339 timestamps. Defaults to the primary calendar over the next 7 days. Reads from the unified event store (synced from Google on demand).",
     mutability: "read",
     parameters: {
       type: "object",
@@ -68,36 +82,59 @@ export const calendarListEvents: ToolExecutor<
   },
   async execute(ctx, rawArgs) {
     const args = listArgs.parse(rawArgs);
-    const cal = await getCalendarForUser(ctx.userId);
     const now = new Date();
-    const defaultMin = now.toISOString();
-    const defaultMax = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    const resp = await cal.events.list({
-      calendarId: args.calendarId ?? "primary",
-      timeMin: args.timeMin ?? defaultMin,
-      timeMax: args.timeMax ?? defaultMax,
-      q: args.q,
-      singleEvents: true,
-      orderBy: "startTime",
-      maxResults: args.limit ?? 25,
+    const timeMin = args.timeMin ?? now.toISOString();
+    const timeMax =
+      args.timeMax ??
+      new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    if (shouldSync(ctx.userId, timeMin, timeMax)) {
+      await syncAllForRange(ctx.userId, timeMin, timeMax);
+    }
+    const rows = await listEventsInRange(ctx.userId, timeMin, timeMax, {
+      sourceTypes: ["google_calendar"],
     });
-    const events: CalendarListedEvent[] = (resp.data.items ?? []).map((e) => {
-      const overrides = e.reminders?.overrides ?? [];
-      const popup = overrides.find((o) => o.method === "popup") ?? overrides[0];
+    const q = args.q?.toLowerCase();
+    const limit = args.limit ?? 25;
+    const events: CalendarListedEvent[] = [];
+    for (const r of rows) {
+      if (args.calendarId && r.externalParentId !== args.calendarId) continue;
+      if (q) {
+        const hay = `${r.title} ${r.description ?? ""} ${r.location ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) continue;
+      }
+      const meta = (r.sourceMetadata ?? {}) as Record<string, unknown>;
+      const origStart = meta.originalStart as
+        | { dateTime?: string | null; date?: string | null }
+        | undefined;
+      const origEnd = meta.originalEnd as
+        | { dateTime?: string | null; date?: string | null }
+        | undefined;
+      const start = r.isAllDay
+        ? origStart?.date ?? null
+        : origStart?.dateTime ?? r.startsAt.toISOString();
+      const end = r.isAllDay
+        ? origEnd?.date ?? null
+        : origEnd?.dateTime ?? r.endsAt?.toISOString() ?? null;
       const reminders =
-        popup && typeof popup.minutes === "number" ? { minutes: popup.minutes } : null;
-      return {
-        id: e.id,
-        summary: e.summary,
-        start: e.start?.dateTime ?? e.start?.date,
-        end: e.end?.dateTime ?? e.end?.date,
-        location: e.location,
-        description: e.description,
-        recurrence: e.recurrence ?? null,
-        recurringEventId: e.recurringEventId ?? null,
-        reminders,
-      };
-    });
+        (meta.reminders as { overrides?: Array<{ method?: string; minutes?: number }> } | null)
+          ?.overrides;
+      const popup = reminders?.find((o) => o.method === "popup") ?? reminders?.[0];
+      events.push({
+        id: r.externalId,
+        summary: r.title,
+        start,
+        end,
+        location: r.location,
+        description: r.description,
+        recurrence: (meta.recurrence as string[] | null) ?? null,
+        recurringEventId: (meta.recurringEventId as string | null) ?? null,
+        reminders:
+          popup && typeof popup.minutes === "number"
+            ? { minutes: popup.minutes }
+            : null,
+      });
+      if (events.length >= limit) break;
+    }
     return { events };
   },
 };
@@ -115,6 +152,10 @@ const createArgs = z.object({
   recurrence: z.array(z.string()).optional(),
   reminders: remindersArg.optional(),
 });
+
+function isAllDayStr(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
 
 export const calendarCreateEvent: ToolExecutor<
   z.infer<typeof createArgs>,
@@ -150,13 +191,12 @@ export const calendarCreateEvent: ToolExecutor<
     const args = createArgs.parse(rawArgs);
     const cal = await getCalendarForUser(ctx.userId);
     try {
-      const isAllDay = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
       const body: Record<string, unknown> = {
         summary: args.summary,
         description: args.description,
         location: args.location,
-        start: isAllDay(args.start) ? { date: args.start } : { dateTime: args.start },
-        end: isAllDay(args.end) ? { date: args.end } : { dateTime: args.end },
+        start: isAllDayStr(args.start) ? { date: args.start } : { dateTime: args.start },
+        end: isAllDayStr(args.end) ? { date: args.end } : { dateTime: args.end },
       };
       if (args.recurrence && args.recurrence.length > 0) {
         body.recurrence = args.recurrence;
@@ -167,11 +207,13 @@ export const calendarCreateEvent: ToolExecutor<
           overrides: [{ method: "popup", minutes: args.reminders.minutes }],
         };
       }
+      const calendarId = args.calendarId ?? "primary";
       const resp = await cal.events.insert({
-        calendarId: args.calendarId ?? "primary",
+        calendarId,
         requestBody: body,
       });
       const id = resp.data.id ?? "";
+      await writeThroughCalendarEvent(ctx.userId, calendarId, resp.data);
       await logAudit({
         userId: ctx.userId,
         action: "calendar.event.create",
@@ -241,15 +283,14 @@ export const calendarUpdateEvent: ToolExecutor<
   async execute(ctx, rawArgs) {
     const args = updateArgs.parse(rawArgs);
     const cal = await getCalendarForUser(ctx.userId);
-    const isAllDay = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
     const body: Record<string, unknown> = {};
     if (args.summary !== undefined) body.summary = args.summary;
     if (args.description !== undefined) body.description = args.description;
     if (args.location !== undefined) body.location = args.location;
     if (args.start)
-      body.start = isAllDay(args.start) ? { date: args.start } : { dateTime: args.start };
+      body.start = isAllDayStr(args.start) ? { date: args.start } : { dateTime: args.start };
     if (args.end)
-      body.end = isAllDay(args.end) ? { date: args.end } : { dateTime: args.end };
+      body.end = isAllDayStr(args.end) ? { date: args.end } : { dateTime: args.end };
     if (args.recurrence !== undefined) body.recurrence = args.recurrence;
     if (args.reminders !== undefined) {
       body.reminders = {
@@ -259,11 +300,13 @@ export const calendarUpdateEvent: ToolExecutor<
     }
 
     try {
-      await cal.events.patch({
-        calendarId: args.calendarId ?? "primary",
+      const calendarId = args.calendarId ?? "primary";
+      const resp = await cal.events.patch({
+        calendarId,
         eventId: args.eventId,
         requestBody: body,
       });
+      await writeThroughCalendarEvent(ctx.userId, calendarId, resp.data);
       await logAudit({
         userId: ctx.userId,
         action: "calendar.event.update",
@@ -318,6 +361,11 @@ export const calendarDeleteEvent: ToolExecutor<
         calendarId: args.calendarId ?? "primary",
         eventId: args.eventId,
       });
+      await markDeletedByExternalId(
+        ctx.userId,
+        "google_calendar",
+        args.eventId
+      );
       await logAudit({
         userId: ctx.userId,
         action: "calendar.event.delete",
@@ -339,6 +387,88 @@ export const calendarDeleteEvent: ToolExecutor<
     }
   },
 };
+
+// Write-through helper: project a Google Calendar event into canonical and
+// upsert it into L4 so readers see the mutation without a full sync.
+async function writeThroughCalendarEvent(
+  userId: string,
+  calendarId: string,
+  e: unknown
+): Promise<void> {
+  if (!e || typeof e !== "object") return;
+  const ev = e as {
+    id?: string | null;
+    summary?: string | null;
+    description?: string | null;
+    location?: string | null;
+    htmlLink?: string | null;
+    status?: string | null;
+    colorId?: string | null;
+    hangoutLink?: string | null;
+    recurrence?: string[] | null;
+    recurringEventId?: string | null;
+    reminders?: unknown;
+    start?: { date?: string | null; dateTime?: string | null; timeZone?: string | null };
+    end?: { date?: string | null; dateTime?: string | null; timeZone?: string | null };
+  };
+  if (!ev.id) return;
+
+  const accountId = (await getGoogleAccountId(userId)) ?? "unknown";
+  const userTz = (await getUserTimezone(userId)) ?? FALLBACK_TZ;
+  const originTz = ev.start?.timeZone ?? userTz;
+
+  let startsAt: Date;
+  let endsAt: Date | null = null;
+  let isAllDay = false;
+
+  if (ev.start?.date) {
+    isAllDay = true;
+    startsAt = localMidnightAsUtc(ev.start.date, originTz);
+    const endStr = ev.end?.date ?? addDaysToDateStr(ev.start.date, 1);
+    endsAt = localMidnightAsUtc(endStr, originTz);
+  } else if (ev.start?.dateTime) {
+    startsAt = new Date(ev.start.dateTime);
+    endsAt = ev.end?.dateTime ? new Date(ev.end.dateTime) : null;
+  } else {
+    return;
+  }
+
+  const status =
+    ev.status === "cancelled"
+      ? ("cancelled" as const)
+      : ev.status === "tentative"
+        ? ("tentative" as const)
+        : ("confirmed" as const);
+
+  await upsertFromSourceRow({
+    userId,
+    sourceType: "google_calendar",
+    sourceAccountId: accountId,
+    externalId: ev.id,
+    externalParentId: calendarId,
+    kind: "event",
+    title: ev.summary ?? "(untitled)",
+    description: ev.description ?? null,
+    startsAt,
+    endsAt,
+    isAllDay,
+    originTimezone: originTz,
+    location: ev.location ?? null,
+    url: ev.htmlLink ?? null,
+    status,
+    sourceMetadata: {
+      calendarId,
+      colorId: ev.colorId ?? null,
+      hangoutLink: ev.hangoutLink ?? null,
+      recurrence: ev.recurrence ?? null,
+      recurringEventId: ev.recurringEventId ?? null,
+      reminders: ev.reminders ?? null,
+      originalStart: { dateTime: ev.start?.dateTime ?? null, date: ev.start?.date ?? null },
+      originalEnd: { dateTime: ev.end?.dateTime ?? null, date: ev.end?.date ?? null },
+    },
+    normalizedKey: null,
+  });
+}
 
 export const CALENDAR_TOOLS = [
   calendarListEvents,
