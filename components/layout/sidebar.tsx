@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Settings as SettingsIcon } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { SidebarNav } from "./sidebar-nav";
 import { NAV_ITEM_KEYS } from "./nav-items";
@@ -68,12 +68,19 @@ export async function Sidebar({
 
   const creditsLabel =
     plan === "admin" ? "∞ credits" : `${creditsRemaining.toLocaleString()} credits left`;
+  const planLabel = plan === "admin" ? "Admin" : plan === "pro" ? "Pro" : "Free";
+  const planColorClass =
+    plan === "pro"
+      ? "text-[hsl(var(--primary))]"
+      : plan === "admin"
+      ? "text-[hsl(268_70%_56%)] dark:text-[hsl(268_80%_78%)]"
+      : "text-[hsl(var(--muted-foreground))]";
 
   return (
     <div className="relative z-20 w-14 shrink-0">
       <aside
         aria-label="Primary"
-        className="group/sidebar absolute inset-y-0 left-0 flex w-14 flex-col overflow-hidden rounded-xl px-2 py-3 transition-all duration-300 ease-out hover:w-60 hover:bg-[hsl(var(--background))] hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)]"
+        className="group/sidebar absolute inset-y-0 left-0 flex w-14 flex-col overflow-hidden rounded-xl px-2 py-3 transition-all duration-200 ease-out hover:w-60 hover:bg-[hsl(var(--background))] hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)]"
       >
         <Link
           href="/app"
@@ -139,13 +146,23 @@ export async function Sidebar({
             )}
           </span>
           <span className="flex min-w-0 flex-1 flex-col whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
-            <span className="truncate text-[13px] font-medium text-[hsl(var(--foreground))]">
-              {displayName}
+            <span className="flex items-center gap-1.5 truncate text-[13px] font-medium text-[hsl(var(--foreground))]">
+              <span className="truncate">{displayName}</span>
             </span>
-            <span className="truncate text-[11px] tabular-nums text-[hsl(var(--muted-foreground))]">
-              {creditsLabel}
+            <span className="flex items-center gap-1.5 truncate text-[11px] tabular-nums text-[hsl(var(--muted-foreground))]">
+              <span className={`font-semibold uppercase tracking-wider ${planColorClass}`}>
+                {planLabel}
+              </span>
+              <span aria-hidden>·</span>
+              <span className="truncate">{creditsLabel}</span>
             </span>
           </span>
+          <SettingsIcon
+            size={14}
+            strokeWidth={1.5}
+            aria-hidden
+            className="shrink-0 opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-60"
+          />
         </Link>
       </aside>
     </div>

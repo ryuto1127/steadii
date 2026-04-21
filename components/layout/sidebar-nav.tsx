@@ -8,7 +8,6 @@ import {
   MessagesSquare,
   GraduationCap,
   Calendar,
-  Settings,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -24,7 +23,6 @@ const ICONS: Record<NavItemKey, LucideIcon> = {
   chats: MessagesSquare,
   classes: GraduationCap,
   calendar: Calendar,
-  settings: Settings,
 };
 
 export function SidebarNav({ labels }: { labels: Record<string, string> }) {

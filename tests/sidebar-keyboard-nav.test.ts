@@ -6,13 +6,12 @@ import {
 } from "@/components/layout/nav-items";
 
 describe("Sidebar keyboard nav config", () => {
-  it("exposes exactly the 5 top-level items from REDESIGN §4.1", () => {
+  it("exposes exactly the 4 top-level items (settings lives in the account footer)", () => {
     expect([...NAV_ITEM_KEYS]).toEqual([
       "home",
       "chats",
       "classes",
       "calendar",
-      "settings",
     ]);
   });
 
@@ -21,7 +20,6 @@ describe("Sidebar keyboard nav config", () => {
     expect(NAV_HREFS.chats).toBe("/app/chats");
     expect(NAV_HREFS.classes).toBe("/app/classes");
     expect(NAV_HREFS.calendar).toBe("/app/calendar");
-    expect(NAV_HREFS.settings).toBe("/app/settings");
   });
 
   it("assigns a unique single-letter `g` shortcut to each item", () => {
@@ -31,7 +29,7 @@ describe("Sidebar keyboard nav config", () => {
     for (const letter of letters) expect(letter).toMatch(/^[a-z]$/);
   });
 
-  it("includes the 5 nav items in the shortcuts map", () => {
+  it("includes every nav item in the shortcuts map", () => {
     for (const key of NAV_ITEM_KEYS) {
       expect(NAV_SHORTCUTS[key]).toBeTypeOf("string");
     }
