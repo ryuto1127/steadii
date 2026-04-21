@@ -30,20 +30,24 @@ const listArgs = z.object({
   timeMax: z.string().optional(),
   q: z.string().optional(),
   calendarId: z.string().optional(),
-  limit: z.number().int().positive().max(100).optional(),
+  limit: z.number().int().positive().max(500).optional(),
 });
+
+export type CalendarListedEvent = {
+  id: string | null | undefined;
+  summary: string | null | undefined;
+  start: string | null | undefined;
+  end: string | null | undefined;
+  location?: string | null;
+  description?: string | null;
+  recurrence?: string[] | null;
+  recurringEventId?: string | null;
+  reminders?: { minutes: number } | null;
+};
 
 export const calendarListEvents: ToolExecutor<
   z.infer<typeof listArgs>,
-  {
-    events: Array<{
-      id: string | null | undefined;
-      summary: string | null | undefined;
-      start: string | null | undefined;
-      end: string | null | undefined;
-      location?: string | null;
-    }>;
-  }
+  { events: CalendarListedEvent[] }
 > = {
   schema: {
     name: "calendar_list_events",
@@ -57,7 +61,7 @@ export const calendarListEvents: ToolExecutor<
         timeMax: { type: "string" },
         q: { type: "string" },
         calendarId: { type: "string" },
-        limit: { type: "integer", minimum: 1, maximum: 100 },
+        limit: { type: "integer", minimum: 1, maximum: 500 },
       },
       additionalProperties: false,
     },
@@ -77,18 +81,30 @@ export const calendarListEvents: ToolExecutor<
       orderBy: "startTime",
       maxResults: args.limit ?? 25,
     });
-    const events = (resp.data.items ?? []).map((e) => ({
-      id: e.id,
-      summary: e.summary,
-      start: e.start?.dateTime ?? e.start?.date,
-      end: e.end?.dateTime ?? e.end?.date,
-      location: e.location,
-    }));
+    const events: CalendarListedEvent[] = (resp.data.items ?? []).map((e) => {
+      const overrides = e.reminders?.overrides ?? [];
+      const popup = overrides.find((o) => o.method === "popup") ?? overrides[0];
+      const reminders =
+        popup && typeof popup.minutes === "number" ? { minutes: popup.minutes } : null;
+      return {
+        id: e.id,
+        summary: e.summary,
+        start: e.start?.dateTime ?? e.start?.date,
+        end: e.end?.dateTime ?? e.end?.date,
+        location: e.location,
+        description: e.description,
+        recurrence: e.recurrence ?? null,
+        recurringEventId: e.recurringEventId ?? null,
+        reminders,
+      };
+    });
     return { events };
   },
 };
 
 // ---------- calendar_create_event ----------
+const remindersArg = z.object({ minutes: z.number().int().min(0).max(40320) });
+
 const createArgs = z.object({
   summary: z.string().min(1),
   start: z.string().min(1),
@@ -96,6 +112,8 @@ const createArgs = z.object({
   description: z.string().optional(),
   location: z.string().optional(),
   calendarId: z.string().optional(),
+  recurrence: z.array(z.string()).optional(),
+  reminders: remindersArg.optional(),
 });
 
 export const calendarCreateEvent: ToolExecutor<
@@ -105,7 +123,7 @@ export const calendarCreateEvent: ToolExecutor<
   schema: {
     name: "calendar_create_event",
     description:
-      "Create a Google Calendar event. `start`/`end` must be RFC3339 timestamps (with timezone) or all-day YYYY-MM-DD strings.",
+      "Create a Google Calendar event. `start`/`end` must be RFC3339 timestamps (with timezone) or all-day YYYY-MM-DD strings. `recurrence` is an array of RRULE strings (e.g. ['RRULE:FREQ=WEEKLY;BYDAY=MO,WE']). `reminders.minutes` sets a single popup reminder that many minutes before the event.",
     mutability: "write",
     parameters: {
       type: "object",
@@ -116,6 +134,13 @@ export const calendarCreateEvent: ToolExecutor<
         description: { type: "string" },
         location: { type: "string" },
         calendarId: { type: "string" },
+        recurrence: { type: "array", items: { type: "string" } },
+        reminders: {
+          type: "object",
+          properties: { minutes: { type: "integer", minimum: 0, maximum: 40320 } },
+          required: ["minutes"],
+          additionalProperties: false,
+        },
       },
       required: ["summary", "start", "end"],
       additionalProperties: false,
@@ -126,13 +151,22 @@ export const calendarCreateEvent: ToolExecutor<
     const cal = await getCalendarForUser(ctx.userId);
     try {
       const isAllDay = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
-      const body = {
+      const body: Record<string, unknown> = {
         summary: args.summary,
         description: args.description,
         location: args.location,
         start: isAllDay(args.start) ? { date: args.start } : { dateTime: args.start },
         end: isAllDay(args.end) ? { date: args.end } : { dateTime: args.end },
       };
+      if (args.recurrence && args.recurrence.length > 0) {
+        body.recurrence = args.recurrence;
+      }
+      if (args.reminders) {
+        body.reminders = {
+          useDefault: false,
+          overrides: [{ method: "popup", minutes: args.reminders.minutes }],
+        };
+      }
       const resp = await cal.events.insert({
         calendarId: args.calendarId ?? "primary",
         requestBody: body,
@@ -169,6 +203,8 @@ const updateArgs = z.object({
   description: z.string().optional(),
   location: z.string().optional(),
   calendarId: z.string().optional(),
+  recurrence: z.array(z.string()).optional(),
+  reminders: remindersArg.optional(),
 });
 
 export const calendarUpdateEvent: ToolExecutor<
@@ -177,7 +213,8 @@ export const calendarUpdateEvent: ToolExecutor<
 > = {
   schema: {
     name: "calendar_update_event",
-    description: "Patch fields on an existing calendar event.",
+    description:
+      "Patch fields on an existing calendar event. `recurrence` and `reminders` have the same shape as on calendar_create_event. When editing a single recurring instance, pass the instance's eventId — the change applies to that instance only.",
     mutability: "write",
     parameters: {
       type: "object",
@@ -189,6 +226,13 @@ export const calendarUpdateEvent: ToolExecutor<
         description: { type: "string" },
         location: { type: "string" },
         calendarId: { type: "string" },
+        recurrence: { type: "array", items: { type: "string" } },
+        reminders: {
+          type: "object",
+          properties: { minutes: { type: "integer", minimum: 0, maximum: 40320 } },
+          required: ["minutes"],
+          additionalProperties: false,
+        },
       },
       required: ["eventId"],
       additionalProperties: false,
@@ -206,6 +250,13 @@ export const calendarUpdateEvent: ToolExecutor<
       body.start = isAllDay(args.start) ? { date: args.start } : { dateTime: args.start };
     if (args.end)
       body.end = isAllDay(args.end) ? { date: args.end } : { dateTime: args.end };
+    if (args.recurrence !== undefined) body.recurrence = args.recurrence;
+    if (args.reminders !== undefined) {
+      body.reminders = {
+        useDefault: false,
+        overrides: [{ method: "popup", minutes: args.reminders.minutes }],
+      };
+    }
 
     try {
       await cal.events.patch({

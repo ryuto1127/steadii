@@ -10,7 +10,7 @@ import {
   registeredResources,
 } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { getUserConfirmationMode } from "@/lib/agent/preferences";
+import { getUserConfirmationMode, getUserTimezone } from "@/lib/agent/preferences";
 import { setConfirmationModeAction } from "./actions";
 import { getCreditBalance } from "@/lib/billing/credits";
 import { getStorageTotals } from "@/lib/billing/storage";
@@ -27,6 +27,7 @@ import { BillingActions } from "@/components/billing/billing-actions";
 import { RedeemForm } from "@/components/billing/redeem-form";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { LanguageToggle } from "@/components/settings/language-toggle";
+import { TimezoneInput } from "@/components/settings/timezone-input";
 import { getUserThemePreference } from "@/lib/theme/get-preference";
 import { isLocale } from "@/lib/i18n/config";
 
@@ -50,6 +51,7 @@ export default async function SettingsPage() {
     googleAcct,
     resources,
     theme,
+    timezone,
   ] = await Promise.all([
     getUserConfirmationMode(userId),
     getCreditBalance(userId),
@@ -78,6 +80,7 @@ export default async function SettingsPage() {
         )
       ),
     getUserThemePreference(userId),
+    getUserTimezone(userId),
   ]);
 
   const calendarConnected = googleAcct?.scope?.includes("calendar") ?? false;
@@ -330,6 +333,22 @@ export default async function SettingsPage() {
             }}
           />
         </div>
+      </Section>
+
+      <Section title={t("sections.timezone")}>
+        <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
+          {t("timezone_description")}
+        </p>
+        <TimezoneInput
+          initial={timezone}
+          labels={{
+            placeholder: t("timezone_placeholder"),
+            save: t("timezone_save"),
+            detected: t("timezone_detected"),
+            saved: t("timezone_saved"),
+            invalid: t("timezone_invalid"),
+          }}
+        />
       </Section>
 
       <Section title={t("sections.danger")} tone="warn">

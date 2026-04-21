@@ -8,9 +8,10 @@ import {
   type FormEvent,
 } from "react";
 import { useRouter } from "next/navigation";
-import { Paperclip, ArrowUp } from "lucide-react";
+import { Paperclip, SendHorizontal } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils/cn";
+import { reportDetectedTimezone } from "@/lib/utils/report-timezone";
 
 // Creates a chat and lands on /app/chat/[id]?stream=1 with the first message
 // already posted. The chat-view on the next page reads `stream=1` to auto-
@@ -70,7 +71,7 @@ async function createChatAndPost(
   return chatId;
 }
 
-const MIN_HEIGHT_PX = 48;
+const MIN_HEIGHT_PX = 44;
 const MAX_HEIGHT_PX = 200;
 
 export function NewChatInput({
@@ -86,9 +87,20 @@ export function NewChatInput({
   const [value, setValue] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Grammarly and other browser extensions inject DOM nodes into forms
+  // with a textarea. That insertion happens before React hydrates, which
+  // causes a hydration mismatch on the form's children. Gating the form
+  // contents on mount means SSR emits only the outer shell (nothing for
+  // the extension to touch yet), and the real inputs are rendered after
+  // hydration — so there is no SSR-vs-client diff to complain about.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Auto-grow the textarea up to MAX_HEIGHT_PX.
   useEffect(() => {
@@ -100,6 +112,7 @@ export function NewChatInput({
   }, [value]);
 
   const canSubmit = value.trim().length > 0 && !isPending;
+  const auraActive = isFocused || value.length > 0;
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -107,6 +120,7 @@ export function NewChatInput({
     const content = value.trim();
     const picked = file;
     setError(null);
+    reportDetectedTimezone();
     startTransition(async () => {
       const result = await createChatAndPost(content, picked);
       if (typeof result === "string") {
@@ -120,59 +134,88 @@ export function NewChatInput({
   };
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className={cn(
-        "group/input relative w-full rounded-[10px] bg-[hsl(var(--surface-raised))] transition-default",
-        "focus-within:shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]"
-      )}
-    >
-      <label htmlFor="new-chat-textarea" className="sr-only">
-        {t("placeholder")}
-      </label>
-      <div className="flex items-center gap-2 px-3.5">
-        <textarea
-          ref={textareaRef}
-          id="new-chat-textarea"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder={placeholder ?? t("placeholder")}
-          autoFocus={autoFocus}
-          rows={1}
-          style={{ height: MIN_HEIGHT_PX }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
-            }
-          }}
-          className="block w-full resize-none bg-transparent py-[14px] text-[15px] leading-[1.4] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none"
-        />
-        <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            title="Attach image or PDF"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] opacity-0 transition-hover hover:bg-[hsl(var(--surface))] hover:text-[hsl(var(--foreground))] focus-visible:opacity-100 group-hover/input:opacity-100 group-focus-within/input:opacity-100"
-            aria-label="Attach image or PDF"
+    <div className="relative w-full">
+      <span
+        aria-hidden
+        className={cn(
+          "steadii-input-aura",
+          auraActive && "is-active",
+          isFocused && "is-focused"
+        )}
+      />
+      <form
+        onSubmit={onSubmit}
+        suppressHydrationWarning
+        className={cn(
+          "steadii-input-shadow group/input relative flex w-full items-end gap-1 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] p-2 transition-default",
+          isFocused &&
+            "is-focused bg-[hsl(var(--surface))] ring-1 ring-[rgba(167,139,250,0.30)]"
+        )}
+      >
+        {!mounted ? (
+          <div
+            aria-hidden
+            className="flex h-11 flex-1 items-center px-2 text-[15px] text-[hsl(var(--muted-foreground))]"
           >
-            <Paperclip size={16} strokeWidth={1.5} />
-          </button>
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className={cn(
-              "flex h-7 w-7 items-center justify-center rounded-md transition-hover",
-              canSubmit
-                ? "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:opacity-90"
-                : "text-[hsl(var(--muted-foreground))] opacity-50"
-            )}
-            aria-label="Send"
-          >
-            <ArrowUp size={14} strokeWidth={2} />
-          </button>
-        </div>
-      </div>
+            <span className="flex-1 truncate">{placeholder ?? t("placeholder")}</span>
+          </div>
+        ) : (
+          <>
+            <label htmlFor="new-chat-textarea" className="sr-only">
+              {t("placeholder")}
+            </label>
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              title="Attach image or PDF"
+              aria-label="Attach image or PDF"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
+            >
+              <Paperclip size={18} strokeWidth={1.5} />
+            </button>
+            <textarea
+              ref={textareaRef}
+              id="new-chat-textarea"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              placeholder={placeholder ?? t("placeholder")}
+              autoFocus={autoFocus}
+              rows={1}
+              style={{ height: MIN_HEIGHT_PX }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
+                }
+              }}
+              className="min-h-[44px] flex-1 resize-none bg-transparent px-1 py-2.5 text-[15px] leading-[1.4] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none"
+            />
+            <div className="flex shrink-0 items-center gap-2 pb-1 pr-1">
+              <span className="flex items-center gap-1.5 rounded-full bg-[hsl(var(--surface))] px-2 py-1">
+                <span aria-hidden className="steadii-ai-dot" />
+                <span className="font-mono text-[10px] font-medium tracking-wide text-[hsl(var(--muted-foreground))]">
+                  AI Ready
+                </span>
+              </span>
+              <button
+                type="submit"
+                disabled={!canSubmit}
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center rounded-xl transition-default",
+                  canSubmit
+                    ? "bg-[hsl(var(--foreground))] text-[hsl(var(--surface))] hover:opacity-90"
+                    : "bg-[hsl(var(--surface))] text-[hsl(var(--muted-foreground))] opacity-60"
+                )}
+                aria-label="Send"
+              >
+                <SendHorizontal size={16} strokeWidth={2} />
+              </button>
+            </div>
+          </>
+        )}
+      </form>
       <input
         ref={fileRef}
         type="file"
@@ -181,7 +224,7 @@ export function NewChatInput({
         onChange={(e) => setFile(e.target.files?.[0] ?? null)}
       />
       {file ? (
-        <div className="flex items-center gap-2 border-t border-[hsl(var(--border))] px-3 py-1.5 text-[11px] text-[hsl(var(--muted-foreground))]">
+        <div className="mt-2 flex items-center gap-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-1.5 text-[11px] text-[hsl(var(--muted-foreground))]">
           <span className="truncate">{file.name}</span>
           <button
             type="button"
@@ -193,10 +236,21 @@ export function NewChatInput({
         </div>
       ) : null}
       {error ? (
-        <p className="border-t border-[hsl(var(--destructive)/0.3)] px-3 py-1.5 text-[11px] text-[hsl(var(--destructive))]">
+        <p className="mt-2 rounded-lg border border-[hsl(var(--destructive)/0.3)] px-3 py-1.5 text-[11px] text-[hsl(var(--destructive))]">
           {error}
         </p>
       ) : null}
-    </form>
+      <p className="mt-3 text-center font-medium text-[10px] tracking-wide text-[hsl(var(--muted-foreground))]">
+        Press{" "}
+        <span className="rounded border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-1 py-0.5 font-mono">
+          ⌘
+        </span>{" "}
+        +{" "}
+        <span className="rounded border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-1 py-0.5 font-mono">
+          Enter
+        </span>{" "}
+        to send
+      </p>
+    </div>
   );
 }

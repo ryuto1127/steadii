@@ -22,6 +22,7 @@ export const users = pgTable("users", {
     locale?: "en" | "ja";
     agentConfirmationMode?: "destructive_only" | "all" | "none";
   }>().default({}),
+  timezone: text("timezone"),
   onboardingStep: integer("onboarding_step").notNull().default(0),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),

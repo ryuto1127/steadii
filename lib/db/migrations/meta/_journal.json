@@ -57,6 +57,13 @@
       "when": 1776707480537,
       "tag": "0007_rare_chamber",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1776749498481,
+      "tag": "0008_abandoned_wendigo",
+      "breakpoints": true
     }
   ]
 }

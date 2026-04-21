@@ -59,6 +59,16 @@ type MessagesShape = {
     welcome_body: string;
     add_first_class: string;
     welcome_input_placeholder: string;
+    greeting_morning: string;
+    greeting_afternoon: string;
+    greeting_evening: string;
+    greeting_night: string;
+    summary_ready: string;
+    full_calendar: string;
+    assignments_remaining: string;
+    study_sessions: string;
+    focus_summary: string;
+    focus_summary_empty: string;
   };
   chat_input: {
     placeholder: string;
@@ -85,14 +95,25 @@ type MessagesShape = {
       redeem: string;
       appearance: string;
       language: string;
+      timezone: string;
       danger: string;
     };
     appearance_theme_label: string;
     language_description: string;
     language_option_en: string;
     language_option_ja: string;
+    timezone_description: string;
+    timezone_placeholder: string;
+    timezone_save: string;
+    timezone_detected: string;
+    timezone_saved: string;
+    timezone_invalid: string;
   };
   legal: { privacy_title: string; terms_title: string; placeholder: string };
+  seed_prompts: {
+    review_recent_mistakes: string;
+    generate_similar_problems: string;
+  };
 };
 
 export const en: MessagesShape = {
@@ -178,6 +199,16 @@ export const en: MessagesShape = {
     add_first_class: "+ Add your first class",
     welcome_input_placeholder:
       "or paste a syllabus, image, or ask anything…",
+    greeting_morning: "Good morning, {name}.",
+    greeting_afternoon: "Good afternoon, {name}.",
+    greeting_evening: "Good evening, {name}.",
+    greeting_night: "Still up, {name}?",
+    summary_ready: "Your academic summary for the week is ready.",
+    full_calendar: "Full calendar",
+    assignments_remaining: "{count} assignments remaining today",
+    study_sessions: "study sessions",
+    focus_summary: "You focused for {hours} hours this week. Great momentum!",
+    focus_summary_empty: "Not enough sessions yet — a few more and we’ll have a trend.",
   },
   chat_input: {
     placeholder: "Ask Steadii…",
@@ -204,6 +235,7 @@ export const en: MessagesShape = {
       redeem: "Redeem code",
       appearance: "Appearance",
       language: "Language",
+      timezone: "Time zone",
       danger: "Danger zone",
     },
     appearance_theme_label: "Theme",
@@ -211,12 +243,25 @@ export const en: MessagesShape = {
       "Which language should the app use? Agent responses still follow the language you type in.",
     language_option_en: "English",
     language_option_ja: "日本語",
+    timezone_description:
+      "The agent uses this to resolve relative dates like “tomorrow.” Defaults to your browser's zone on first use.",
+    timezone_placeholder: "e.g. America/Vancouver",
+    timezone_save: "Save",
+    timezone_detected: "Detected",
+    timezone_saved: "Saved.",
+    timezone_invalid: "Unknown time zone.",
   },
   legal: {
     privacy_title: "Privacy Policy",
     terms_title: "Terms of Service",
     placeholder:
       "This document is a placeholder for the α version. It will be replaced before general release.",
+  },
+  seed_prompts: {
+    review_recent_mistakes:
+      "From my mistakes notebook over the past week, pick the 3 most worth reviewing and briefly summarize the key point of each.",
+    generate_similar_problems:
+      "Based on the patterns in my mistakes notebook from the past week, create 3 practice problems in a similar format. Keep the answers hidden.",
   },
 };
 

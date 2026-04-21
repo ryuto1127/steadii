@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { serializeContextForPrompt } from "@/lib/agent/serialize-context";
 
 describe("serializeContextForPrompt", () => {
   it("marks disconnected users clearly", () => {
     const out = serializeContextForPrompt({
+      timezone: "America/Vancouver",
       notion: {
         connected: false,
         parentPageId: null,
@@ -19,6 +20,7 @@ describe("serializeContextForPrompt", () => {
 
   it("renders all 4 DB ids and registered resources", () => {
     const out = serializeContextForPrompt({
+      timezone: "America/Vancouver",
       notion: {
         connected: true,
         parentPageId: "parent",
@@ -38,5 +40,45 @@ describe("serializeContextForPrompt", () => {
     expect(out).toMatch(/Syllabi DB: syllabi/);
     expect(out).toMatch(/\[database\] Classes/);
     expect(out).toMatch(/\[page\] Extra notes/);
+  });
+
+  it("emits a Time block anchored on the user's timezone with an offset", () => {
+    const out = serializeContextForPrompt({
+      timezone: "America/Vancouver",
+      notion: {
+        connected: false,
+        parentPageId: null,
+        classesDbId: null,
+        mistakesDbId: null,
+        assignmentsDbId: null,
+        syllabiDbId: null,
+      },
+      registeredResources: [],
+    });
+    expect(out).toMatch(/^# Time/);
+    expect(out).toMatch(/America\/Vancouver/);
+    // Now must carry a real offset, not Z — Vancouver is -07:00 (PDT) or -08:00 (PST).
+    expect(out).toMatch(/Now: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} \(America\/Vancouver\)/);
+    expect(out).toMatch(/Today \(user-local\): \d{4}-\d{2}-\d{2} \(\w+\)/);
+    expect(out).not.toMatch(/Now: [^\n]*Z /);
+  });
+
+  it("falls back to UTC when timezone is null (and warns)", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const out = serializeContextForPrompt({
+      timezone: null,
+      notion: {
+        connected: false,
+        parentPageId: null,
+        classesDbId: null,
+        mistakesDbId: null,
+        assignmentsDbId: null,
+        syllabiDbId: null,
+      },
+      registeredResources: [],
+    });
+    expect(out).toMatch(/\(UTC\)/);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

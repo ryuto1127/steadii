@@ -12,6 +12,7 @@ export type TodayEvent = {
   title: string;
   start: string;
   end: string;
+  location?: string | null;
   calendarName?: string | null;
 };
 
@@ -42,6 +43,7 @@ export async function getTodaysEvents(userId: string): Promise<TodayEvent[]> {
         title: e.summary ?? "(untitled)",
         start: e.start?.dateTime ?? (e.start?.date ? `${e.start.date}T00:00:00Z` : ""),
         end: e.end?.dateTime ?? (e.end?.date ? `${e.end.date}T00:00:00Z` : ""),
+        location: e.location ?? null,
         calendarName: e.organizer?.displayName ?? null,
       }))
       .sort((a, b) => a.start.localeCompare(b.start));

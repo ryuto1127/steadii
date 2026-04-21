@@ -1,47 +1,61 @@
+import Link from "next/link";
+import { Calendar, Clock, TrendingUp, GraduationCap, ChevronRight, CheckCircle2 } from "lucide-react";
 import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { DashboardCard } from "@/components/ui/dashboard-card";
 import { NewChatInput } from "@/components/chat/new-chat-input";
-import { ActionPill } from "@/components/ui/action-pill";
 import { EmptyState } from "@/components/ui/empty-state";
-import { ClassDot } from "@/components/ui/class-dot";
-import { GhostTimeline } from "@/components/ui/ghost-timeline";
 import { getNotionClientForUser } from "@/lib/integrations/notion/client";
 import { computeWeekSummary } from "@/lib/agent/tools/summarize-week";
 import {
   getDueSoonAssignments,
   getTodaysEvents,
-  formatRelativeDue,
   formatTimeRange,
+  type TodayEvent,
+  type DueSoonAssignment,
 } from "@/lib/dashboard/today";
-import { GraduationCap } from "lucide-react";
+import { cn } from "@/lib/utils/cn";
 
 export const dynamic = "force-dynamic";
 
-function todaySubtitle(): string {
-  return new Date().toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
+function greetingKey(h: number): "morning" | "afternoon" | "evening" | "night" {
+  if (h < 5) return "night";
+  if (h < 12) return "morning";
+  if (h < 18) return "afternoon";
+  return "evening";
+}
+
+function formatCardDate(d: Date): string {
+  const mo = d.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
+  return `${mo} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+function formatRelativeDueLong(iso: string): string {
+  if (!iso) return "";
+  const now = new Date();
+  const due = new Date(iso);
+  const sameDay = now.toDateString() === due.toDateString();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const isTomorrow = tomorrow.toDateString() === due.toDateString();
+  const time = due.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
   });
+  if (sameDay) return `TODAY, ${time.toUpperCase()}`;
+  if (isTomorrow) return `TOMORROW, ${time.toUpperCase()}`;
+  const weekday = due.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
+  const mo = due.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
+  return `${weekday} ${mo} ${due.getDate()}`;
 }
 
-function dueSubtitle(): string {
-  const from = new Date();
-  const to = new Date(from.getTime() + 72 * 60 * 60 * 1000);
-  return `${formatMD(from)} — ${formatMD(to)}`;
-}
-
-function pastWeekSubtitle(startIso: string, endIso: string): string {
-  if (!startIso || !endIso) return "";
-  return `${formatMD(new Date(startIso))} — ${formatMD(new Date(endIso))}`;
-}
-
-function formatMD(d: Date): string {
-  const mm = (d.getMonth() + 1).toString().padStart(2, "0");
-  const dd = d.getDate().toString().padStart(2, "0");
-  return `${mm}/${dd}`;
+function countDueToday(items: DueSoonAssignment[]): number {
+  const todayStr = new Date().toDateString();
+  return items.filter((a) => {
+    if (!a.due) return false;
+    return new Date(a.due).toDateString() === todayStr;
+  }).length;
 }
 
 export default async function HomePage() {
@@ -55,14 +69,14 @@ export default async function HomePage() {
 
   if (!hasAnyClass) {
     return (
-      <div className="mx-auto flex max-w-3xl flex-col gap-6 py-6">
+      <div className="mx-auto flex h-full max-w-3xl flex-col gap-6 py-6">
         <EmptyState
           icon={<GraduationCap size={18} strokeWidth={1.5} />}
           title={t("welcome_title")}
           description={<div>{t("welcome_body")}</div>}
           actions={[{ label: t("add_first_class"), href: "/app/classes" }]}
         />
-        <div className="mx-auto w-full max-w-2xl">
+        <div className="mx-auto mt-auto w-full max-w-2xl">
           <NewChatInput placeholder={t("welcome_input_placeholder")} />
         </div>
       </div>
@@ -75,118 +89,350 @@ export default async function HomePage() {
     computeWeekSummary(userId),
   ]);
 
+  const firstName =
+    session.user.name?.trim().split(/\s+/)[0] ||
+    session.user.email?.split("@")[0] ||
+    "there";
+  const now = new Date();
+  const greeting = t(`greeting_${greetingKey(now.getHours())}`, {
+    name: firstName,
+  });
+
+  const dueTodayCount = countDueToday(dueSoon);
+  const sessionsCount = weekSummary.counts.chats;
+
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-8">
-      <div className="grid gap-8 md:grid-cols-3">
-        {/* Today */}
-        <DashboardCard title={t("today_schedule")} subtitle={todaySubtitle()}>
-          {events.length === 0 ? (
-            <GhostTimeline message={t("no_events")} />
-          ) : (
-            <ul className="flex flex-col gap-1.5">
-              {events.slice(0, 6).map((e) => (
-                <li
-                  key={e.id}
-                  className="flex items-baseline gap-2 text-[14px] text-[hsl(var(--foreground))]"
-                >
-                  <span className="w-[84px] shrink-0 font-mono text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]">
-                    {formatTimeRange(e.start, e.end)}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate">{e.title}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </DashboardCard>
+    <div className="relative mx-auto flex min-h-[calc(100vh-8rem)] max-w-6xl flex-col">
+      {/* Chromatic cloud — pink / purple / cyan drifting softly behind
+          the dashboard cards. Single instance, restrained. */}
+      <span
+        aria-hidden
+        className="steadii-cloud -z-10"
+        style={{ top: "60px", left: "30%" }}
+      />
+      <header className="steadii-greeting-enter relative z-0 mb-10 flex flex-col gap-2">
+        <h1 className="font-display text-[36px] font-semibold leading-[1.1] tracking-[-0.02em] text-[hsl(var(--foreground))]">
+          {greeting}
+        </h1>
+        <p className="text-[17px] text-[hsl(var(--muted-foreground))]">
+          {t("summary_ready")}
+        </p>
+      </header>
 
-        {/* Due soon */}
-        <DashboardCard title={t("due_soon")} subtitle={dueSubtitle()}>
-          {dueSoon.length === 0 ? (
-            <p className="fade-in text-[14px] text-[hsl(var(--muted-foreground))]">
-              {t("nothing_due")}
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-1.5">
-              {dueSoon.slice(0, 6).map((a) => (
-                <li
-                  key={a.id}
-                  className="flex items-center gap-2 text-[14px] text-[hsl(var(--foreground))]"
-                >
-                  <ClassDot color={a.classColor} />
-                  <span className="min-w-0 flex-1 truncate">{a.title}</span>
-                  <span className="shrink-0 text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]">
-                    {formatRelativeDue(a.due)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </DashboardCard>
-
-        {/* Past week */}
-        <DashboardCard
+      <div className="grid gap-6 md:grid-cols-3">
+        <TodayCard
+          events={events}
+          noEventsLabel={t("no_events")}
+          fullCalendarLabel={t("full_calendar")}
+          title={t("today_schedule")}
+        />
+        <DueCard
+          items={dueSoon}
+          nothingDueLabel={t("nothing_due")}
+          remainingLabel={t("assignments_remaining", { count: dueTodayCount })}
+          title={t("due_soon")}
+        />
+        <PastWeekCard
+          sessions={sessionsCount}
+          sessionsLabel={t("study_sessions")}
           title={t("past_week")}
-          subtitle={pastWeekSubtitle(
-            weekSummary.window.start,
-            weekSummary.window.end
-          )}
-        >
-          {weekSummary.empty ? (
-            <p className="fade-in text-[14px] text-[hsl(var(--muted-foreground))]">
-              {t("not_enough_history")}
-            </p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <p className="text-[14px] tabular-nums text-[hsl(var(--foreground))]">
-                {t("counts", {
-                  chats: String(weekSummary.counts.chats),
-                  mistakes: String(weekSummary.counts.mistakes),
-                  syllabi: String(weekSummary.counts.syllabi),
-                })}
-              </p>
-              {weekSummary.pattern ? (
-                <p className="text-[13px] text-[hsl(var(--muted-foreground))]">
-                  {weekSummary.pattern}
-                </p>
-              ) : null}
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                <SeedPill
-                  seed="review_recent_mistakes"
-                  label={t("review_action")}
-                  tone="primary"
-                />
-                <SeedPill
-                  seed="generate_similar_problems"
-                  label={t("generate_practice_action")}
-                />
-              </div>
-            </div>
-          )}
-        </DashboardCard>
+          pattern={weekSummary.pattern}
+          emptyLabel={t("focus_summary_empty")}
+          reviewLabel={t("review_action")}
+          practiceLabel={t("generate_practice_action")}
+          isEmpty={weekSummary.empty}
+        />
       </div>
 
-      <div className="mx-auto w-full max-w-2xl">
+      <div className="mx-auto mt-auto w-full max-w-3xl pt-16">
         <NewChatInput autoFocus />
       </div>
     </div>
   );
 }
 
-function SeedPill({
-  seed,
+function BentoCard({
+  icon,
+  iconTint,
+  topRight,
   label,
-  tone,
+  children,
+  className,
 }: {
-  seed: string;
+  icon: React.ReactNode;
+  iconTint: "indigo" | "amber" | "violet";
+  topRight?: React.ReactNode;
   label: string;
-  tone?: "primary" | "neutral";
+  children: React.ReactNode;
+  className?: string;
 }) {
+  // Pastel-candy icon tiles — softer and lighter than before, so each
+  // tile reads like a colored lozenge rather than a filled button.
+  const tintBg = {
+    indigo:
+      "bg-[rgba(219,234,254,0.55)] text-[hsl(217_91%_55%)] dark:bg-[hsl(217_70%_20%)] dark:text-[hsl(217_90%_78%)]",
+    amber:
+      "bg-[rgba(255,237,213,0.65)] text-[hsl(21_90%_48%)] dark:bg-[hsl(28_60%_20%)] dark:text-[hsl(32_92%_68%)]",
+    violet:
+      "bg-[rgba(243,232,255,0.65)] text-[hsl(271_81%_56%)] dark:bg-[hsl(268_45%_22%)] dark:text-[hsl(268_80%_80%)]",
+  }[iconTint];
+
+  return (
+    <section
+      className={cn(
+        "steadii-card-enter group flex flex-col gap-5 rounded-3xl border border-[hsl(var(--border)/0.6)] bg-[hsl(var(--surface-raised))] p-6 transition-default hover:border-[hsl(var(--border))] hover:shadow-[0_14px_36px_-18px_rgba(0,0,0,0.12)]",
+        className
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span
+          aria-hidden
+          className={cn(
+            "flex h-10 w-10 items-center justify-center rounded-2xl",
+            tintBg
+          )}
+        >
+          {icon}
+        </span>
+        {topRight}
+      </div>
+      <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[hsl(var(--muted-foreground))]">
+        {label}
+      </span>
+      <div className="flex flex-1 flex-col">{children}</div>
+    </section>
+  );
+}
+
+function TodayCard({
+  events,
+  noEventsLabel,
+  fullCalendarLabel,
+  title,
+}: {
+  events: TodayEvent[];
+  noEventsLabel: string;
+  fullCalendarLabel: string;
+  title: string;
+}) {
+  const dateLabel = formatCardDate(new Date());
+  const visible = events.slice(0, 2);
+  return (
+    <BentoCard
+      icon={<Calendar size={18} strokeWidth={1.75} />}
+      iconTint="indigo"
+      label={title}
+      topRight={
+        <span className="font-mono text-[10px] font-medium tabular-nums tracking-wider text-[hsl(var(--muted-foreground))]">
+          {dateLabel}
+        </span>
+      }
+    >
+      {events.length === 0 ? (
+        <p className="fade-in text-[13px] text-[hsl(var(--muted-foreground))]">
+          {noEventsLabel}
+        </p>
+      ) : (
+        <ul className="flex flex-col">
+          {visible.map((e, i) => (
+            <li
+              key={e.id}
+              className={cn(
+                "flex items-start gap-4 py-3",
+                i > 0 && "border-t border-[hsl(var(--border)/0.6)]"
+              )}
+            >
+              <span className="w-[44px] shrink-0 pt-0.5 font-mono text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]">
+                {formatTimeRange(e.start, e.end).split(" — ")[0] ?? ""}
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="truncate text-[14px] font-medium text-[hsl(var(--foreground))]">
+                  {e.title}
+                </span>
+                {e.location ? (
+                  <span className="truncate text-[12px] text-[hsl(var(--muted-foreground))]">
+                    {e.location}
+                  </span>
+                ) : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Link
+        href="/app/calendar"
+        className="group/btn mt-auto inline-flex items-center gap-1 pt-4 text-[12px] font-medium text-[hsl(var(--foreground))] transition-hover hover:opacity-70"
+      >
+        {fullCalendarLabel}
+        <ChevronRight
+          size={14}
+          strokeWidth={1.75}
+          className="transition-transform group-hover/btn:translate-x-0.5"
+        />
+      </Link>
+    </BentoCard>
+  );
+}
+
+function DueCard({
+  items,
+  nothingDueLabel,
+  remainingLabel,
+  title,
+}: {
+  items: DueSoonAssignment[];
+  nothingDueLabel: string;
+  remainingLabel: string;
+  title: string;
+}) {
+  const visible = items.slice(0, 2);
+  const todayCount = countDueToday(items);
+  const progressPct = items.length === 0
+    ? 0
+    : Math.min(100, Math.round((todayCount / items.length) * 100));
+  return (
+    <BentoCard
+      icon={<Clock size={18} strokeWidth={1.75} />}
+      iconTint="amber"
+      label={title}
+      topRight={
+        items.length > 0 ? (
+          <div className="flex -space-x-1.5">
+            {items.slice(0, 2).map((a) => (
+              <span
+                key={a.id}
+                aria-hidden
+                className="h-6 w-6 rounded-full border-2 border-[hsl(var(--surface))] bg-[hsl(var(--surface-raised))]"
+              />
+            ))}
+          </div>
+        ) : undefined
+      }
+    >
+      {items.length === 0 ? (
+        <p className="fade-in text-[13px] text-[hsl(var(--muted-foreground))]">
+          {nothingDueLabel}
+        </p>
+      ) : (
+        <>
+          <ul className="flex flex-col gap-4">
+            {visible.map((a) => {
+              const dueSoon =
+                a.due &&
+                new Date(a.due).getTime() - Date.now() < 24 * 60 * 60 * 1000;
+              return (
+                <li key={a.id} className="flex items-center justify-between gap-3">
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="flex items-center gap-2">
+                      <span className="truncate text-[14px] font-medium text-[hsl(var(--foreground))]">
+                        {a.title}
+                      </span>
+                      {dueSoon ? (
+                        <span
+                          aria-hidden
+                          className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--destructive))]"
+                        />
+                      ) : null}
+                    </span>
+                    <span className="truncate font-mono text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                      {formatRelativeDueLong(a.due)}
+                    </span>
+                  </span>
+                  <CheckCircle2
+                    size={18}
+                    strokeWidth={1.5}
+                    aria-hidden
+                    className="shrink-0 text-[hsl(var(--border))]"
+                  />
+                </li>
+              );
+            })}
+          </ul>
+          <div className="mt-auto flex flex-col gap-2 pt-5">
+            <div className="h-1 w-full overflow-hidden rounded-full bg-[hsl(40_15%_92%)] dark:bg-white/5">
+              <div
+                className="steadii-bar-fill h-full rounded-full bg-[hsl(21_90%_55%)]"
+                style={
+                  {
+                    "--target-width": `${progressPct}%`,
+                  } as React.CSSProperties
+                }
+              />
+            </div>
+            <span className="text-[10px] font-medium text-[hsl(var(--muted-foreground))]">
+              {remainingLabel}
+            </span>
+          </div>
+        </>
+      )}
+    </BentoCard>
+  );
+}
+
+function PastWeekCard({
+  sessions,
+  sessionsLabel,
+  title,
+  pattern,
+  emptyLabel,
+  reviewLabel,
+  practiceLabel,
+  isEmpty,
+}: {
+  sessions: number;
+  sessionsLabel: string;
+  title: string;
+  pattern: string;
+  emptyLabel: string;
+  reviewLabel: string;
+  practiceLabel: string;
+  isEmpty: boolean;
+}) {
+  return (
+    <BentoCard
+      icon={<TrendingUp size={18} strokeWidth={1.75} />}
+      iconTint="violet"
+      label={title}
+    >
+      {isEmpty ? (
+        <p className="fade-in text-[13px] text-[hsl(var(--muted-foreground))]">
+          {emptyLabel}
+        </p>
+      ) : (
+        <>
+          <div className="flex items-baseline gap-2">
+            <span className="font-mono text-[38px] font-bold leading-none tracking-tight text-[hsl(268_70%_56%)] dark:text-[hsl(268_80%_78%)] tabular-nums">
+              {sessions}
+            </span>
+            <span className="text-[12px] font-medium lowercase text-[hsl(var(--muted-foreground))]">
+              {sessionsLabel}
+            </span>
+          </div>
+          {pattern ? (
+            <p className="mt-2 text-[12px] leading-snug text-[hsl(var(--muted-foreground))]">
+              {pattern}
+            </p>
+          ) : null}
+          <div className="mt-auto grid grid-cols-2 gap-2 pt-5">
+            <SeedPill seed="review_recent_mistakes" label={reviewLabel} />
+            <SeedPill seed="generate_similar_problems" label={practiceLabel} />
+          </div>
+        </>
+      )}
+    </BentoCard>
+  );
+}
+
+function SeedPill({ seed, label }: { seed: string; label: string }) {
   return (
     <form action="/api/chat/seeded" method="post">
       <input type="hidden" name="seed" value={seed} />
-      <ActionPill tone={tone} type="submit">
+      <button
+        type="submit"
+        className="flex w-full items-center justify-center rounded-xl border border-[hsl(var(--border)/0.6)] bg-[hsl(var(--surface))] px-3 py-2.5 text-[12px] font-semibold text-[hsl(var(--foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))]"
+      >
         {label}
-      </ActionPill>
+      </button>
     </form>
   );
 }

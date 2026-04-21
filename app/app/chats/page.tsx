@@ -4,7 +4,7 @@ import { db } from "@/lib/db/client";
 import { chats } from "@/lib/db/schema";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { DenseList } from "@/components/ui/dense-list";
-import { DenseRowLink } from "@/components/ui/dense-row-link";
+import { ChatHistoryRow } from "@/components/chat/chat-history-row";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MessagesSquare, Plus } from "lucide-react";
 import Link from "next/link";
@@ -45,11 +45,11 @@ export default async function ChatsListPage() {
       ) : (
         <DenseList ariaLabel="Chats">
           {rows.map((chat) => (
-            <DenseRowLink
+            <ChatHistoryRow
               key={chat.id}
-              href={`/app/chat/${chat.id}`}
+              id={chat.id}
               title={chat.title ?? "Untitled chat"}
-              metadata={[chat.updatedAt.toLocaleDateString()]}
+              updatedAt={chat.updatedAt.toLocaleDateString()}
             />
           ))}
         </DenseList>

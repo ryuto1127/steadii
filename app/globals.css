@@ -10,11 +10,13 @@
   :root {
     /* --background is the canvas the app sits on. It's ALSO the
        sidebar color — the main content is what floats on top as a
-       white island. */
-    --background: 40 18% 96%;    /* #FAF7F2 warm canvas */
+       white island. Canvas is a warm cream (#f2f0eb), like a
+       Moleskine page under soft afternoon light — not a spreadsheet
+       gray. The island (#ffffff) reads clearly against it. */
+    --background: 40 20% 93%;     /* #f2f0eb warm cream canvas */
     --surface: 0 0% 100%;         /* #FFFFFF main content */
-    --surface-raised: 40 14% 92%; /* warm hover / inputs */
-    --border: 40 12% 88%;         /* warm tinted border */
+    --surface-raised: 40 25% 97%; /* #faf9f7 warm tile for cards/hover */
+    --border: 40 14% 88%;         /* warm tinted border */
     --foreground: 240 10% 4%;
     --muted-foreground: 240 4% 46%;
     --primary: 32 95% 44%;
@@ -54,6 +56,14 @@
     line-height: 1.5;
     font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
+  }
+
+  /* Brand text selection — highlighting anywhere in the app paints
+     the selection in chromatic purple at 30% alpha, so the three
+     colors touch every interaction. */
+  ::selection {
+    background-color: rgba(167, 139, 250, 0.30);
+    color: hsl(var(--foreground));
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -184,6 +194,175 @@
 }
 .fade-in {
   animation: steadii-fade-in 240ms cubic-bezier(0.34, 1.2, 0.64, 1) both;
+}
+
+/* Brand mark: rounded square with a warm gradient that slowly cycles
+   hue — subtle "living" feel without stealing attention. */
+@keyframes steadii-logo-hue {
+  0%   { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+.steadii-logo {
+  border-radius: 7px;
+  background:
+    radial-gradient(circle at 30% 25%, #ffe28a 0%, transparent 55%),
+    linear-gradient(135deg, #ff5db1 0%, #ff7a3d 55%, #ffc861 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.08);
+  animation: steadii-logo-hue 14s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .steadii-logo { animation: none; }
+}
+
+/* Chat input "もわもわ" aura: pink → purple → cyan gradient sitting
+   behind the composer, softly blurred and slowly breathing. Fades in
+   only while the input is focused or has content. */
+@keyframes steadii-input-aura-drift {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+.steadii-input-aura {
+  position: absolute;
+  inset: -10px;
+  z-index: -1;
+  border-radius: 28px;
+  background: linear-gradient(120deg, #f9a8d4 0%, #a78bfa 50%, #67e8f9 100%);
+  background-size: 200% 200%;
+  filter: blur(28px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 400ms ease-out;
+  animation: steadii-input-aura-drift 8s ease-in-out infinite;
+}
+.steadii-input-aura.is-active { opacity: 0.28; }
+.steadii-input-aura.is-active.is-focused { opacity: 0.42; }
+@media (prefers-reduced-motion: reduce) {
+  .steadii-input-aura { animation: none; }
+}
+
+/* Always-on chromatic triple shadow beneath the composer — saturated
+   pink, violet, and cyan stacked drop-shadows. Even at rest the box
+   floats on a soft rainbow halo; on focus the shadow roughly doubles
+   in intensity. Values mirror the reference composer. */
+.steadii-input-shadow {
+  box-shadow:
+    0 8px 32px -8px rgba(236, 72, 153, 0.15),
+    0 4px 20px -4px rgba(139, 92, 246, 0.12),
+    0 2px 12px -2px rgba(103, 232, 249, 0.10);
+  transition: box-shadow 300ms ease-out;
+}
+.steadii-input-shadow.is-focused {
+  box-shadow:
+    0 8px 32px -8px rgba(236, 72, 153, 0.30),
+    0 4px 20px -4px rgba(139, 92, 246, 0.24),
+    0 2px 12px -2px rgba(103, 232, 249, 0.20);
+}
+
+/* "AI Ready" status dot — a tiny jewel that slowly shifts between the
+   three brand colors. Both the fill and the soft halo cycle in step,
+   so the dot reads as "something is quietly listening". */
+@keyframes steadii-ai-dot-cycle {
+  0%, 100% {
+    background-color: #f9a8d4;
+    box-shadow: 0 0 8px rgba(249, 168, 212, 0.65);
+  }
+  33% {
+    background-color: #a78bfa;
+    box-shadow: 0 0 8px rgba(167, 139, 250, 0.65);
+  }
+  66% {
+    background-color: #67e8f9;
+    box-shadow: 0 0 8px rgba(103, 232, 249, 0.65);
+  }
+}
+.steadii-ai-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  animation: steadii-ai-dot-cycle 4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .steadii-ai-dot {
+    animation: none;
+    background-color: #a78bfa;
+    box-shadow: 0 0 8px rgba(167, 139, 250, 0.5);
+  }
+}
+
+/* Greeting header exhale — slides in from 20px left while fading,
+   arriving just before the cards begin rising. Matches the reference
+   motion so the page starts breathing from the headline down. */
+@keyframes steadii-greeting-enter {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.steadii-greeting-enter {
+  opacity: 0;
+  animation: steadii-greeting-enter 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .steadii-greeting-enter { animation: none; opacity: 1; }
+}
+
+/* Dashboard card entrance — rise from 12px below and fade in, one
+   after another at 120ms stagger. Cubic-bezier is ease-out soft so
+   the arrival reads as the page exhaling, not a slam. */
+@keyframes steadii-card-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.steadii-card-enter {
+  opacity: 0;
+  animation: steadii-card-rise 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.steadii-card-enter:nth-child(1) { animation-delay: 80ms; }
+.steadii-card-enter:nth-child(2) { animation-delay: 200ms; }
+.steadii-card-enter:nth-child(3) { animation-delay: 320ms; }
+@media (prefers-reduced-motion: reduce) {
+  .steadii-card-enter { animation: none; opacity: 1; }
+}
+
+/* Progress bar fill: from 0 → --target-width, starting after the
+   cards have settled (~700ms). The bar arrives empty and quietly
+   fills. */
+@keyframes steadii-bar-fill {
+  from { width: 0; }
+  to   { width: var(--target-width, 0%); }
+}
+.steadii-bar-fill {
+  width: var(--target-width, 0%);
+  animation: steadii-bar-fill 900ms cubic-bezier(0.22, 1, 0.36, 1) 700ms both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .steadii-bar-fill { animation: none; }
+}
+
+/* Drifting chromatic cloud — a single soft cloud of pink / purple /
+   cyan sitting behind the dashboard. Slowly translates and breathes.
+   Restrained, not decorative. Three radial layers so the hues feel
+   braided, not stacked. */
+@keyframes steadii-cloud-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.9; }
+  50%      { transform: translate(40px, -24px) scale(1.06); opacity: 1; }
+}
+.steadii-cloud {
+  position: absolute;
+  width: 720px;
+  height: 720px;
+  pointer-events: none;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 32% 32%, rgba(249, 168, 212, 0.55) 0%, transparent 55%),
+    radial-gradient(circle at 68% 42%, rgba(167, 139, 250, 0.48) 0%, transparent 58%),
+    radial-gradient(circle at 50% 72%, rgba(103, 232, 249, 0.45) 0%, transparent 60%);
+  filter: blur(90px);
+  animation: steadii-cloud-drift 22s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .steadii-cloud { animation: none; }
 }
 
 /* Active sidebar pill — WHITE on warm canvas. Subtle shadow lifts
