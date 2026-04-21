@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, Settings as SettingsIcon } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { SidebarNav } from "./sidebar-nav";
 import { NAV_ITEM_KEYS } from "./nav-items";
@@ -157,12 +157,6 @@ export async function Sidebar({
               <span className="truncate">{creditsLabel}</span>
             </span>
           </span>
-          <SettingsIcon
-            size={14}
-            strokeWidth={1.5}
-            aria-hidden
-            className="shrink-0 opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-60"
-          />
         </Link>
       </aside>
     </div>

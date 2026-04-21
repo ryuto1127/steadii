@@ -6,6 +6,7 @@ import { chats } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { clearSummarizeWeekCache } from "@/lib/agent/tools/summarize-week";
 
 async function requireUserId(): Promise<string> {
   const session = await auth();
@@ -36,6 +37,9 @@ export async function deleteChatAction(formData: FormData) {
     .update(chats)
     .set({ deletedAt: new Date() })
     .where(and(eq(chats.id, id), eq(chats.userId, userId)));
+  // Drop the 6h week-summary cache so /app's "study sessions" card reflects
+  // the deletion on the very next render instead of showing a stale count.
+  clearSummarizeWeekCache(userId);
   redirect("/app/chats");
 }
 
@@ -47,6 +51,7 @@ export async function deleteChatFromListAction(formData: FormData) {
     .update(chats)
     .set({ deletedAt: new Date() })
     .where(and(eq(chats.id, id), eq(chats.userId, userId)));
+  clearSummarizeWeekCache(userId);
   revalidatePath("/app/chats");
   revalidatePath("/app");
 }
