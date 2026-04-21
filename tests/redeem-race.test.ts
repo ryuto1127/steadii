@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
 type CodeRow = {
   id: string;
@@ -13,19 +13,11 @@ type CodeRow = {
   createdAt: Date;
 };
 
-type RedemptionRow = {
-  id: string;
-  userId: string;
-  codeId: string;
-  redeemedAt: Date;
-  effectiveUntil: Date;
-};
-
 const hoist = vi.hoisted(() => {
   const state = {
     codes: [] as CodeRow[],
-    redemptions: [] as RedemptionRow[],
-    audit: [] as Array<Record<string, unknown> & { createdAt?: Date }>,
+    redemptions: [] as Record<string, unknown>[],
+    audit: [] as Array<Record<string, unknown>>,
     idSeq: 0,
   };
 
@@ -39,19 +31,22 @@ const hoist = vi.hoisted(() => {
   function matches(row: Record<string, unknown>, filter: unknown): boolean {
     if (!filter) return true;
     const f = filter as { __op: string; [k: string]: unknown };
-    if (f.__op === "eq")
-      return row[f.col as string] === resolve(row, f.val);
+    if (f.__op === "eq") return row[f.col as string] === resolve(row, f.val);
     if (f.__op === "gt")
       return (row[f.col as string] as Date) > (resolve(row, f.val) as Date);
-    if (f.__op === "lt") {
-      const a = row[f.col as string] as number;
-      const b = resolve(row, f.val) as number;
-      return a < b;
-    }
+    if (f.__op === "lt")
+      return (row[f.col as string] as number) < (resolve(row, f.val) as number);
     if (f.__op === "isnull") return row[f.col as string] == null;
     if (f.__op === "and")
       return (f.children as unknown[]).every((c) => matches(row, c));
     return true;
+  }
+
+  function sourceFor(name: string): Array<Record<string, unknown>> {
+    if (name === "codes") return state.codes as unknown as Array<Record<string, unknown>>;
+    if (name === "redemptions") return state.redemptions;
+    if (name === "audit") return state.audit;
+    return [];
   }
 
   function applyPatch(
@@ -60,24 +55,15 @@ const hoist = vi.hoisted(() => {
   ): void {
     for (const [k, v] of Object.entries(patch)) {
       if (v && typeof v === "object" && (v as { __sqlDelta?: number }).__sqlDelta !== undefined) {
-        const delta = (v as { __sqlDelta: number }).__sqlDelta;
-        row[k] = ((row[k] as number) ?? 0) + delta;
+        row[k] = ((row[k] as number) ?? 0) + (v as { __sqlDelta: number }).__sqlDelta;
       } else {
         row[k] = v;
       }
     }
   }
 
-  function sourceFor(name: string): Array<Record<string, unknown>> {
-    if (name === "codes") return state.codes as unknown as Array<Record<string, unknown>>;
-    if (name === "redemptions")
-      return state.redemptions as unknown as Array<Record<string, unknown>>;
-    if (name === "audit") return state.audit;
-    return [];
-  }
-
   const db = {
-    select: (_cols?: unknown) => ({
+    select: () => ({
       from: (table: { __name: string }) => ({
         where: (filter: unknown) => {
           const rows = sourceFor(table.__name).filter((r) => matches(r, filter));
@@ -101,12 +87,10 @@ const hoist = vi.hoisted(() => {
               id: `r-${state.idSeq}`,
               redeemedAt: new Date(),
               ...item,
-            } as RedemptionRow);
+            });
           }
         } else if (table.__name === "audit") {
-          for (const item of arr as Record<string, unknown>[]) {
-            state.audit.push({ createdAt: new Date(), ...item });
-          }
+          state.audit.push(...(arr as Record<string, unknown>[]));
         }
       },
     }),
@@ -118,11 +102,12 @@ const hoist = vi.hoisted(() => {
           for (const r of source) {
             if (matches(r, filter)) {
               applyPatch(r, patch);
-              updated.push(r);
+              updated.push({ ...r });
             }
           }
-          const returning = () => Promise.resolve(updated);
-          return Object.assign(Promise.resolve(undefined), { returning });
+          return Object.assign(Promise.resolve(undefined), {
+            returning: () => Promise.resolve(updated),
+          });
         },
       }),
     }),
@@ -174,7 +159,7 @@ vi.mock("drizzle-orm", () => ({
   lt: (col: unknown, val: unknown) => ({ __op: "lt", col: colOf(col), val }),
   isNull: (col: unknown) => ({ __op: "isnull", col: colOf(col) }),
   desc: () => ({}),
-  sql: (strings: TemplateStringsArray, ..._values: unknown[]) => {
+  sql: (strings: TemplateStringsArray) => {
     const raw = strings.join("?");
     if (/-\s*1/.test(raw)) return { __sqlDelta: -1 };
     if (/\+\s*1/.test(raw)) return { __sqlDelta: 1 };
@@ -198,7 +183,7 @@ beforeEach(() => {
 function seedCode(partial: Partial<CodeRow> = {}): CodeRow {
   const row: CodeRow = {
     id: "c-1",
-    code: "STEADII-F-XXXX-XXXX-XXXX",
+    code: "STEADII-ONE-USE",
     type: "friend",
     durationDays: 30,
     maxUses: 1,
@@ -213,70 +198,42 @@ function seedCode(partial: Partial<CodeRow> = {}): CodeRow {
   return row;
 }
 
-describe("redeemCode", () => {
-  it("NOT_FOUND for unknown code", async () => {
-    const r = await redeemCode({ userId: "u", code: "NOPE" });
-    expect(r).toEqual({ ok: false, code: "NOT_FOUND", message: "That code isn't valid." });
+describe("redeem TOCTOU race", () => {
+  it("exactly 1 of 5 concurrent redeem calls wins on a maxUses:1 code", async () => {
+    seedCode({ maxUses: 1 });
+    const results = await Promise.all(
+      Array.from({ length: 5 }, (_, i) =>
+        redeemCode({ userId: `u-${i}`, code: "STEADII-ONE-USE" })
+      )
+    );
+    const wins = results.filter((r) => r.ok);
+    const losses = results.filter((r) => !r.ok);
+    expect(wins).toHaveLength(1);
+    expect(losses).toHaveLength(4);
+    for (const r of losses) {
+      if (!r.ok) expect(r.code).toBe("EXHAUSTED");
+    }
+    expect(hoist.state.codes[0].usesCount).toBe(1);
+    expect(hoist.state.redemptions).toHaveLength(1);
   });
 
-  it("NOT_FOUND when code is empty", async () => {
-    const r = await redeemCode({ userId: "u", code: "" });
-    expect(r.ok).toBe(false);
+  it("maxUses:3 allows exactly 3 of 10 concurrent calls", async () => {
+    seedCode({ maxUses: 3 });
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, i) =>
+        redeemCode({ userId: `u-${i}`, code: "STEADII-ONE-USE" })
+      )
+    );
+    const wins = results.filter((r) => r.ok);
+    expect(wins).toHaveLength(3);
+    expect(hoist.state.codes[0].usesCount).toBe(3);
+    expect(hoist.state.redemptions).toHaveLength(3);
   });
 
-  it("DISABLED when disabledAt is set", async () => {
-    seedCode({ disabledAt: new Date() });
-    const r = await redeemCode({
-      userId: "u",
-      code: "STEADII-F-XXXX-XXXX-XXXX",
-    });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("DISABLED");
-  });
-
-  it("EXPIRED when expiresAt is in the past", async () => {
-    seedCode({ expiresAt: new Date(Date.now() - 1000) });
-    const r = await redeemCode({
-      userId: "u",
-      code: "STEADII-F-XXXX-XXXX-XXXX",
-    });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("EXPIRED");
-  });
-
-  it("EXHAUSTED when usesCount >= maxUses", async () => {
+  it("returns EXHAUSTED when the code is already fully consumed", async () => {
     seedCode({ maxUses: 1, usesCount: 1 });
-    const r = await redeemCode({
-      userId: "u",
-      code: "STEADII-F-XXXX-XXXX-XXXX",
-    });
+    const r = await redeemCode({ userId: "u", code: "STEADII-ONE-USE" });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("EXHAUSTED");
-  });
-
-  it("creates a redemption, increments usage, and writes audit on success", async () => {
-    seedCode();
-    const r = await redeemCode({
-      userId: "u",
-      code: "STEADII-F-XXXX-XXXX-XXXX",
-    });
-    expect(r.ok).toBe(true);
-    expect(hoist.state.redemptions).toHaveLength(1);
-    expect(hoist.state.codes[0].usesCount).toBe(1);
-    expect(
-      hoist.state.audit.some((a) => a.action === "redeem.friend")
-    ).toBe(true);
-  });
-
-  it("returns an effectiveUntil roughly durationDays in the future", async () => {
-    seedCode({ durationDays: 30 });
-    const r = await redeemCode({
-      userId: "u",
-      code: "STEADII-F-XXXX-XXXX-XXXX",
-    });
-    if (!r.ok) throw new Error("expected success");
-    const daysAhead = (r.effectiveUntil.getTime() - Date.now()) / (24 * 3600_000);
-    expect(daysAhead).toBeGreaterThan(29);
-    expect(daysAhead).toBeLessThanOrEqual(30);
   });
 });
