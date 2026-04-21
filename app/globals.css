@@ -506,3 +506,25 @@
   overflow-y: hidden;
   padding: 0.1rem 0;
 }
+
+/* Route fade — plays once on mount. The RouteTransition wrapper in
+   app/app/layout.tsx re-keys this element on pathname change so the
+   keyframe replays for every navigation. */
+@keyframes route-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.route-fade-in {
+  animation: route-fade-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .route-fade-in {
+    animation: none;
+  }
+}
