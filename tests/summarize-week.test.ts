@@ -28,11 +28,19 @@ const state: {
 
 // Minimal drizzle chainable. Each call returns a fluent object that also
 // resolves as a promise — matching `await db.select()...` patterns.
+// When the select shape includes a `count` field, we resolve to an
+// aggregate row instead of the raw chat rows — that matches how the
+// tool-call-filtered study-session count query is shaped.
 vi.mock("@/lib/db/client", () => {
-  const chainable = () => {
-    const resolved = Promise.resolve(state.chatRows);
+  const chainable = (shape?: Record<string, unknown>) => {
+    const isCountQuery =
+      shape !== undefined && Object.prototype.hasOwnProperty.call(shape, "count");
+    const resolved = Promise.resolve(
+      isCountQuery ? [{ count: state.chatRows.length }] : state.chatRows
+    );
     const chain = {
       from: () => chain,
+      innerJoin: () => chain,
       where: () => chain,
       orderBy: () => chain,
       limit: () => chain,
@@ -44,7 +52,7 @@ vi.mock("@/lib/db/client", () => {
   };
   return {
     db: {
-      select: () => chainable(),
+      select: (shape?: Record<string, unknown>) => chainable(shape),
       insert: () => ({ values: async () => {} }),
     },
   };

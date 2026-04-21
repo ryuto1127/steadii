@@ -6,7 +6,7 @@ import { openai } from "@/lib/integrations/openai/client";
 import { selectModel } from "@/lib/agent/models";
 import { db } from "@/lib/db/client";
 import { chats, messages, usageEvents } from "@/lib/db/schema";
-import { and, eq, gte, isNull } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { ToolExecutor } from "./types";
 
 export type WeekSummary = {
@@ -63,18 +63,26 @@ export async function computeWeekSummary(userId: string): Promise<WeekSummary> {
   return value;
 }
 
+// A chat counts as a "study session" only when the agent actually did some
+// academic work inside it — i.e. at least one message carries a tool call
+// (assistant role with `tool_calls` populated, or a `tool` role reply). A
+// chatroom full of casual "hi"s never invokes tools, so it's correctly
+// excluded. One qualifying chat = one session for the week, regardless of
+// how many tool calls it contains.
 async function countChatsThisWeek(userId: string, since: Date): Promise<number> {
-  const rows = await db
-    .select({ id: chats.id })
+  const [row] = await db
+    .select({ count: sql<number>`count(distinct ${chats.id})` })
     .from(chats)
+    .innerJoin(messages, eq(messages.chatId, chats.id))
     .where(
       and(
         eq(chats.userId, userId),
         isNull(chats.deletedAt),
-        gte(chats.updatedAt, since)
+        gte(messages.createdAt, since),
+        or(isNotNull(messages.toolCalls), eq(messages.role, "tool"))
       )
     );
-  return rows.length;
+  return Number(row?.count ?? 0);
 }
 
 async function countNotion(
