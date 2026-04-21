@@ -1,12 +1,12 @@
 import "server-only";
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
-import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/lib/db/client";
 import { users, accounts, sessions, verificationTokens } from "@/lib/db/schema";
+import { EncryptedDrizzleAdapter } from "./encrypted-adapter";
 
 export const authConfig = {
-  adapter: DrizzleAdapter(db, {
+  adapter: EncryptedDrizzleAdapter(db, {
     usersTable: users,
     accountsTable: accounts,
     sessionsTable: sessions,
