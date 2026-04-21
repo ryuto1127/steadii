@@ -185,6 +185,7 @@ export function NewChatInput({
               rows={1}
               style={{ height: MIN_HEIGHT_PX }}
               onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing || e.keyCode === 229) return;
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                   e.preventDefault();
                   (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();

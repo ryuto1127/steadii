@@ -96,7 +96,7 @@ export async function* streamChatResponse(
   const conversation: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: MAIN_SYSTEM_PROMPT },
     { role: "system", content: contextPrompt },
-    ...history.map(toOpenAIMessage),
+    ...repairDanglingToolCalls(history).map(toOpenAIMessage),
   ];
 
   const assistantId = await insertPendingAssistant(req.chatId, model);
@@ -272,37 +272,36 @@ export async function* streamChatResponse(
         toolCallId: call.id,
         args: parsedArgs,
       };
+      let resultPayload: unknown;
+      let ok = true;
       try {
-        const result = await tool.execute({ userId: req.userId }, parsedArgs);
-        conversation.push({
-          role: "tool",
-          tool_call_id: call.id,
-          content: JSON.stringify(result),
-        });
-        yield {
-          type: "tool_call_result",
-          toolName: call.name,
-          toolCallId: call.id,
-          result,
-          ok: true,
-        };
+        resultPayload = await tool.execute({ userId: req.userId }, parsedArgs);
       } catch (err) {
-        const payload = {
-          error: err instanceof Error ? err.message : "tool_failed",
-        };
-        conversation.push({
-          role: "tool",
-          tool_call_id: call.id,
-          content: JSON.stringify(payload),
-        });
-        yield {
-          type: "tool_call_result",
-          toolName: call.name,
-          toolCallId: call.id,
-          result: payload,
-          ok: false,
-        };
+        ok = false;
+        resultPayload = toolErrorPayload(err);
       }
+      const serialized = JSON.stringify(resultPayload);
+      conversation.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: serialized,
+      });
+      // Persist so a later `loadHistory` can pair this tool response with the
+      // assistant's `tool_calls` row. Without this, OpenAI rejects the next
+      // turn with "tool_call_ids did not have response messages".
+      await db.insert(messagesTable).values({
+        chatId: req.chatId,
+        role: "tool",
+        content: serialized,
+        toolCallId: call.id,
+      });
+      yield {
+        type: "tool_call_result",
+        toolName: call.name,
+        toolCallId: call.id,
+        result: resultPayload,
+        ok,
+      };
     }
 
     if (pausedForConfirmation) {
@@ -324,6 +323,65 @@ export async function* streamChatResponse(
 }
 
 import { toOpenAIMessage, type StoredMessage } from "./messages";
+
+const NOT_CONNECTED_MESSAGES: Record<string, string> = {
+  CLASSROOM_NOT_CONNECTED:
+    "Google Classroom access hasn't been granted. Ask the user to reconnect their Google account (sign out and sign back in) to enable class-related features.",
+  TASKS_NOT_CONNECTED:
+    "Google Tasks access hasn't been granted. Ask the user to reconnect their Google account to enable task features.",
+  CALENDAR_NOT_CONNECTED:
+    "Google Calendar access hasn't been granted. Ask the user to reconnect their Google account to enable calendar features.",
+  NOTION_NOT_CONNECTED:
+    "Notion isn't connected. Ask the user to connect Notion from Settings.",
+};
+
+function toolErrorPayload(err: unknown): { error: string; message: string } {
+  const code =
+    typeof err === "object" && err !== null && "code" in err
+      ? String((err as { code: unknown }).code)
+      : null;
+  if (code && NOT_CONNECTED_MESSAGES[code]) {
+    return { error: code, message: NOT_CONNECTED_MESSAGES[code] };
+  }
+  return {
+    error: code ?? "tool_failed",
+    message: err instanceof Error ? err.message : "tool_failed",
+  };
+}
+
+// Walk the history and ensure every assistant tool_call is followed by a
+// matching `tool` row. If a tool response is missing (e.g. the stream died
+// before we could persist one under an older codepath), splice in a synthetic
+// error so OpenAI doesn't 400 on the next turn. Idempotent.
+function repairDanglingToolCalls(history: StoredMessage[]): StoredMessage[] {
+  const out: StoredMessage[] = [];
+  for (let i = 0; i < history.length; i++) {
+    const msg = history[i];
+    out.push(msg);
+    if (msg.role !== "assistant" || !msg.toolCalls || msg.toolCalls.length === 0) {
+      continue;
+    }
+    const responded = new Set<string>();
+    let j = i + 1;
+    while (j < history.length && history[j].role === "tool") {
+      const id = history[j].toolCallId;
+      if (id) responded.add(id);
+      j++;
+    }
+    for (const call of msg.toolCalls) {
+      if (responded.has(call.id)) continue;
+      out.push({
+        id: `synthetic-${call.id}`,
+        role: "tool",
+        content: JSON.stringify({ error: "tool_result_missing" }),
+        toolCallId: call.id,
+        toolCalls: null,
+        attachments: [],
+      });
+    }
+  }
+  return out;
+}
 
 async function loadHistory(chatId: string): Promise<StoredMessage[]> {
   const rows = await db

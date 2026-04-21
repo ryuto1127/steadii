@@ -66,6 +66,7 @@ export function ChatView({
   const scrollAnchor = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const didAutoStream = useRef(false);
+  const sendingRef = useRef(false);
 
   useEffect(() => {
     scrollAnchor.current?.scrollIntoView({ behavior: "smooth" });
@@ -224,35 +225,45 @@ export function ChatView({
   }
 
   async function send() {
+    // Guard against double-submit: a rapid second Enter press can re-enter
+    // `send` before React flushes the `setInput("")` from the first call,
+    // so the closure's stale `input` would post the same text twice.
+    if (sendingRef.current) return;
     if (!input.trim() && !attachment) return;
+    sendingRef.current = true;
     const text = input.trim();
+    const att = attachment;
+    setInput("");
+    setAttachment(null);
     reportDetectedTimezone();
 
     const userMsg: Message = {
       id: "temp-" + Date.now(),
       role: "user",
       content: text,
-      attachments: attachment ? [attachment] : [],
+      attachments: att ? [att] : [],
     };
     setMessages((m) => [...m, userMsg]);
-    setInput("");
-    setAttachment(null);
 
-    const res = await fetch(`/api/chat/message`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chatId, content: text }),
-    });
-    if (!res.ok) {
-      setStreamError("Failed to send message.");
-      return;
+    try {
+      const res = await fetch(`/api/chat/message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId, content: text }),
+      });
+      if (!res.ok) {
+        setStreamError("Failed to send message.");
+        return;
+      }
+      const { messageId } = (await res.json()) as { messageId: string };
+      setMessages((m) =>
+        m.map((x) => (x.id === userMsg.id ? { ...x, id: messageId } : x))
+      );
+
+      await runStream();
+    } finally {
+      sendingRef.current = false;
     }
-    const { messageId } = (await res.json()) as { messageId: string };
-    setMessages((m) =>
-      m.map((x) => (x.id === userMsg.id ? { ...x, id: messageId } : x))
-    );
-
-    await runStream();
   }
 
   async function uploadFile(file: File) {
@@ -456,6 +467,9 @@ export function ChatView({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
+              // Skip Enter while the IME is composing (e.g. Japanese henkan)
+              // — pressing Enter there confirms the conversion, not submit.
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return;
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 send();
