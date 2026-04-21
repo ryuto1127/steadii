@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth/config";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { ExternalLink, GraduationCap, FileText, NotebookPen, MessagesSquare } from "lucide-react";
-import { loadClass } from "@/lib/classes/loader";
+import { loadClassById } from "@/lib/classes/loader";
 import {
   listFromDatabase,
   getTitle,
@@ -45,7 +45,7 @@ export default async function ClassDetailPage({
   const { tab: tabParam } = await searchParams;
   const tab = toTab(tabParam);
 
-  const cls = await loadClass(userId, id);
+  const cls = await loadClassById(userId, id);
   if (!cls) notFound();
 
   return (

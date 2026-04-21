@@ -141,6 +141,46 @@ export async function loadClass(
   return all.find((c) => c.id === classId) ?? null;
 }
 
+// Fetch a single class page directly — used by /app/classes/[id] which
+// only needs one row's header info, not the full class list + due/mistake
+// enrichment. Cuts detail-page Notion round-trips from 4 (three queries
+// in loadClasses + the tab's own query) to just 1 for the class metadata.
+// Counts aren't populated since the detail page doesn't render them.
+export async function loadClassById(
+  userId: string,
+  classId: string
+): Promise<ClassRow | null> {
+  const notion = await getNotionClientForUser(userId);
+  if (!notion) return null;
+  const { client } = notion;
+
+  try {
+    const page = (await client.pages.retrieve({ page_id: classId })) as {
+      id: string;
+      properties?: Record<string, unknown>;
+    };
+    const props = page.properties ?? {};
+    const name = extractTitle(props);
+    if (!name) return null;
+    const status =
+      getSelectName(props, "Status") === "archived" ? "archived" : "active";
+    return {
+      id: page.id,
+      name,
+      code: getRichText(props, "Code"),
+      professor: getRichText(props, "Professor"),
+      term: getSelectName(props, "Term"),
+      color: getSelectName(props, "Color") as ClassColor | null,
+      status,
+      dueCount: 0,
+      mistakesCount: 0,
+      nextSessionLabel: null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export type ClassSession = TimelineEvent;
 
 export async function loadTimelineForToday(

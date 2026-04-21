@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/config";
 import { Sidebar } from "@/components/layout/sidebar";
 import { OfflineStrip } from "@/components/layout/offline-strip";
+import { RouteTransition } from "@/components/layout/route-transition";
 import {
   getOnboardingStatus,
   isOnboardingComplete,
@@ -68,7 +69,7 @@ export default async function AppLayout({
               </div>
             </div>
           )}
-          {children}
+          <RouteTransition>{children}</RouteTransition>
         </div>
       </main>
     </div>
