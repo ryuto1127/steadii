@@ -27,103 +27,110 @@ export async function loadClasses(userId: string): Promise<ClassRow[]> {
   if (!notion || !classesDbId) return [];
   const { client, connection } = notion;
 
-  try {
+  // Fire all three Notion queries in parallel. Classes is critical; the
+  // other two enrich row counts and are optional — on failure we silently
+  // keep counts at 0 rather than dropping the whole page.
+  const now = new Date();
+  const dueHorizon = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const mistakeSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const classesP = (async () => {
     const dsId = await resolveDataSourceId(client, classesDbId);
-    const resp = await client.dataSources.query({
-      data_source_id: dsId,
-      page_size: 100,
-    });
+    return client.dataSources.query({ data_source_id: dsId, page_size: 100 });
+  })();
 
-    const rows: ClassRow[] = [];
-    for (const raw of resp.results as Array<Record<string, unknown>>) {
-      const page = raw as {
-        id: string;
-        properties?: Record<string, unknown>;
-      };
-      const props = page.properties ?? {};
-      const name = extractTitle(props);
-      if (!name) continue;
-      const status = getSelectName(props, "Status") === "archived" ? "archived" : "active";
-      rows.push({
-        id: page.id,
-        name,
-        code: getRichText(props, "Code"),
-        professor: getRichText(props, "Professor"),
-        term: getSelectName(props, "Term"),
-        color: getSelectName(props, "Color") as ClassColor | null,
-        status,
-        dueCount: 0,
-        mistakesCount: 0,
-        nextSessionLabel: null,
-      });
-    }
-
-    // Enrich counts for Due (now..+14d) and Mistakes (last 30d) per class.
-    const classIdToRow = new Map(rows.map((r) => [r.id, r] as const));
-    if (connection.assignmentsDbId) {
-      try {
-        const aDs = await resolveDataSourceId(client, connection.assignmentsDbId);
-        const now = new Date();
-        const horizon = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
-        const ar = await client.dataSources.query({
+  const assignmentsP = connection.assignmentsDbId
+    ? (async () => {
+        const aDs = await resolveDataSourceId(
+          client,
+          connection.assignmentsDbId!
+        );
+        return client.dataSources.query({
           data_source_id: aDs,
           page_size: 100,
           filter: {
             and: [
-              {
-                property: "Due",
-                date: { on_or_after: now.toISOString() },
-              },
-              {
-                property: "Due",
-                date: { on_or_before: horizon.toISOString() },
-              },
+              { property: "Due", date: { on_or_after: now.toISOString() } },
+              { property: "Due", date: { on_or_before: dueHorizon.toISOString() } },
             ],
           },
         });
-        for (const row of ar.results as Array<Record<string, unknown>>) {
-          const p = (row as { properties?: Record<string, unknown> }).properties ?? {};
-          if (getSelectName(p, "Status") === "Done") continue;
-          const rel = getRelationIds(p, "Class");
-          for (const id of rel) {
-            const target = classIdToRow.get(id);
-            if (target) target.dueCount += 1;
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
+      })().catch(() => null)
+    : Promise.resolve(null);
 
-    if (connection.mistakesDbId) {
-      try {
-        const mDs = await resolveDataSourceId(client, connection.mistakesDbId);
-        const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        const mr = await client.dataSources.query({
+  const mistakesP = connection.mistakesDbId
+    ? (async () => {
+        const mDs = await resolveDataSourceId(
+          client,
+          connection.mistakesDbId!
+        );
+        return client.dataSources.query({
           data_source_id: mDs,
           page_size: 100,
           filter: {
             timestamp: "created_time",
-            created_time: { on_or_after: since.toISOString() },
+            created_time: { on_or_after: mistakeSince.toISOString() },
           },
         });
-        for (const row of mr.results as Array<Record<string, unknown>>) {
-          const p = (row as { properties?: Record<string, unknown> }).properties ?? {};
-          const rel = getRelationIds(p, "Class");
-          for (const id of rel) {
-            const target = classIdToRow.get(id);
-            if (target) target.mistakesCount += 1;
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
+      })().catch(() => null)
+    : Promise.resolve(null);
 
-    return rows;
+  let classesResp: Awaited<typeof classesP>;
+  let aResp: Awaited<typeof assignmentsP>;
+  let mResp: Awaited<typeof mistakesP>;
+  try {
+    [classesResp, aResp, mResp] = await Promise.all([
+      classesP,
+      assignmentsP,
+      mistakesP,
+    ]);
   } catch {
     return [];
   }
+
+  const rows: ClassRow[] = [];
+  for (const raw of classesResp.results as Array<Record<string, unknown>>) {
+    const page = raw as { id: string; properties?: Record<string, unknown> };
+    const props = page.properties ?? {};
+    const name = extractTitle(props);
+    if (!name) continue;
+    const status = getSelectName(props, "Status") === "archived" ? "archived" : "active";
+    rows.push({
+      id: page.id,
+      name,
+      code: getRichText(props, "Code"),
+      professor: getRichText(props, "Professor"),
+      term: getSelectName(props, "Term"),
+      color: getSelectName(props, "Color") as ClassColor | null,
+      status,
+      dueCount: 0,
+      mistakesCount: 0,
+      nextSessionLabel: null,
+    });
+  }
+
+  const classIdToRow = new Map(rows.map((r) => [r.id, r] as const));
+  if (aResp) {
+    for (const row of aResp.results as Array<Record<string, unknown>>) {
+      const p = (row as { properties?: Record<string, unknown> }).properties ?? {};
+      if (getSelectName(p, "Status") === "Done") continue;
+      for (const id of getRelationIds(p, "Class")) {
+        const target = classIdToRow.get(id);
+        if (target) target.dueCount += 1;
+      }
+    }
+  }
+  if (mResp) {
+    for (const row of mResp.results as Array<Record<string, unknown>>) {
+      const p = (row as { properties?: Record<string, unknown> }).properties ?? {};
+      for (const id of getRelationIds(p, "Class")) {
+        const target = classIdToRow.get(id);
+        if (target) target.mistakesCount += 1;
+      }
+    }
+  }
+
+  return rows;
 }
 
 export async function loadClass(
