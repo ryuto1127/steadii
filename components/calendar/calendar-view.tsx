@@ -234,6 +234,7 @@ export function CalendarView({
   };
 
   const onToggleTaskComplete = async (task: CalendarTask) => {
+    if (task.origin === "google_classroom") return; // read-only
     const next = !task.completed;
     setItems((prev) =>
       prev.map((i) =>
@@ -290,8 +291,13 @@ export function CalendarView({
   const onEventClick = (event: CalendarEvent) =>
     setPanel({ state: "edit", kind: "event", event });
 
-  const onTaskClick = (task: CalendarTask) =>
+  const onTaskClick = (task: CalendarTask) => {
+    if (task.origin === "google_classroom") {
+      if (task.url) window.open(task.url, "_blank", "noopener,noreferrer");
+      return;
+    }
     setPanel({ state: "edit", kind: "task", task });
+  };
 
   const onCreateAt = (prefill: {
     start: string;

@@ -7,6 +7,8 @@ import {
   uuid,
   jsonb,
   uniqueIndex,
+  index,
+  boolean,
 } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
 
@@ -308,3 +310,72 @@ export type NewUser = typeof users.$inferInsert;
 export type NotionConnection = typeof notionConnections.$inferSelect;
 export type RegisteredResource = typeof registeredResources.$inferSelect;
 export type AuditLogRow = typeof auditLog.$inferSelect;
+
+export const events = pgTable(
+  "events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sourceType: text("source_type")
+      .$type<
+        | "google_calendar"
+        | "google_tasks"
+        | "google_classroom_coursework"
+      >()
+      .notNull(),
+    sourceAccountId: text("source_account_id").notNull(),
+    externalId: text("external_id").notNull(),
+    externalParentId: text("external_parent_id"),
+    kind: text("kind")
+      .$type<"event" | "task" | "assignment">()
+      .notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    startsAt: timestamp("starts_at", { mode: "date", withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { mode: "date", withTimezone: true }),
+    isAllDay: boolean("is_all_day").notNull().default(false),
+    originTimezone: text("origin_timezone"),
+    location: text("location"),
+    url: text("url"),
+    status: text("status").$type<
+      | "confirmed"
+      | "tentative"
+      | "cancelled"
+      | "needs_action"
+      | "completed"
+    >(),
+    sourceMetadata: jsonb("source_metadata"),
+    normalizedKey: text("normalized_key"),
+    syncedAt: timestamp("synced_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    sourceExternalIdx: uniqueIndex("events_source_external_idx").on(
+      t.userId,
+      t.sourceType,
+      t.externalId
+    ),
+    userStartsAtIdx: index("events_user_starts_at_idx").on(
+      t.userId,
+      t.startsAt
+    ),
+    userKindStartsAtIdx: index("events_user_kind_starts_at_idx").on(
+      t.userId,
+      t.kind,
+      t.startsAt
+    ),
+  })
+);
+
+export type EventRow = typeof events.$inferSelect;
+export type NewEventRow = typeof events.$inferInsert;

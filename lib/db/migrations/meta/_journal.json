@@ -64,6 +64,13 @@
       "when": 1776749498481,
       "tag": "0008_abandoned_wendigo",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1776791304208,
+      "tag": "0009_modern_betty_ross",
+      "breakpoints": true
     }
   ]
 }

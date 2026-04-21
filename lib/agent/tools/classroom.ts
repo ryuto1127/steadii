@@ -5,6 +5,17 @@ import {
   classroomTimeToString,
   getClassroomForUser,
 } from "@/lib/integrations/google/classroom";
+import {
+  listEventsInRange,
+  shouldSync,
+  syncAllForRange,
+} from "@/lib/calendar/events-store";
+import { getUserTimezone } from "@/lib/agent/preferences";
+import {
+  FALLBACK_TZ,
+  addDaysToDateStr,
+  localMidnightAsUtc,
+} from "@/lib/calendar/tz-utils";
 import type { ToolExecutor } from "./types";
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -120,7 +131,7 @@ export const classroomListCoursework: ToolExecutor<
   schema: {
     name: "classroom_list_coursework",
     description:
-      "List Google Classroom coursework (assignments). If `courseId` is omitted, aggregates across all ACTIVE courses (capped at 200). `dueMin`/`dueMax` are YYYY-MM-DD, filtered client-side (inclusive).",
+      "List Google Classroom coursework (assignments). If `courseId` is omitted, aggregates across all ACTIVE courses (capped at 200). `dueMin`/`dueMax` are YYYY-MM-DD, filtered client-side (inclusive). Reads from the unified event store (synced from Google on demand).",
     mutability: "read",
     parameters: {
       type: "object",
@@ -135,53 +146,55 @@ export const classroomListCoursework: ToolExecutor<
   },
   async execute(ctx, rawArgs) {
     const args = listCourseworkArgs.parse(rawArgs);
-    const classroom = await getClassroomForUser(ctx.userId);
-    const courseIds = args.courseId
-      ? [args.courseId]
-      : await listActiveCourseIds(classroom);
+    const userTz = (await getUserTimezone(ctx.userId)) ?? FALLBACK_TZ;
 
+    const now = new Date();
+    const fromISO = args.dueMin
+      ? localMidnightAsUtc(args.dueMin, userTz).toISOString()
+      : now.toISOString();
+    // End-exclusive: dueMax is inclusive on the UI side, so bump to next day.
+    const toISO = args.dueMax
+      ? localMidnightAsUtc(addDaysToDateStr(args.dueMax, 1), userTz).toISOString()
+      : new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString();
+
+    if (shouldSync(ctx.userId, fromISO, toISO)) {
+      await syncAllForRange(ctx.userId, fromISO, toISO);
+    }
+    const rows = await listEventsInRange(ctx.userId, fromISO, toISO, {
+      sourceTypes: ["google_classroom_coursework"],
+    });
     const limit = args.limit ?? MAX_AGGREGATED;
     const out: ClassroomCoursework[] = [];
-    for (const courseId of courseIds) {
+    for (const r of rows) {
+      const meta = (r.sourceMetadata ?? {}) as Record<string, unknown>;
+      const courseId = (meta.courseId as string | undefined) ?? r.externalParentId ?? "";
+      if (args.courseId && args.courseId !== courseId) continue;
+      const dueDate = (meta.dueDate as string | undefined) ?? null;
+      if (!inDueRange(dueDate, args.dueMin, args.dueMax)) continue;
+      out.push({
+        id: r.externalId,
+        courseId,
+        title: r.title,
+        description: r.description,
+        dueDate,
+        dueTime: (meta.dueTime as string | null | undefined) ?? null,
+        workType: (meta.workType as string | null | undefined) ?? null,
+        state: (meta.state as string | null | undefined) ?? null,
+        alternateLink:
+          (meta.alternateLink as string | null | undefined) ?? r.url ?? null,
+        materials:
+          (meta.materials as Array<{ title: string; link: string | null }> | undefined) ??
+          [],
+      });
       if (out.length >= limit) break;
-      const resp = await classroom.courses.courseWork.list({ courseId });
-      const items = resp.data.courseWork ?? [];
-      for (const cw of items) {
-        if (!cw.id) continue;
-        const dueDate = classroomDateToString(cw.dueDate);
-        if (!inDueRange(dueDate, args.dueMin, args.dueMax)) continue;
-        out.push({
-          id: cw.id,
-          courseId,
-          title: cw.title ?? "(untitled)",
-          description: cw.description ?? null,
-          dueDate,
-          dueTime: classroomTimeToString(cw.dueTime),
-          workType: cw.workType ?? null,
-          state: cw.state ?? null,
-          alternateLink: cw.alternateLink ?? null,
-          materials: (cw.materials ?? []).map((m) => {
-            const title =
-              m.driveFile?.driveFile?.title ??
-              m.youtubeVideo?.title ??
-              m.link?.title ??
-              m.form?.title ??
-              "(material)";
-            const link =
-              m.driveFile?.driveFile?.alternateLink ??
-              m.youtubeVideo?.alternateLink ??
-              m.link?.url ??
-              m.form?.formUrl ??
-              null;
-            return { title, link };
-          }),
-        });
-        if (out.length >= limit) break;
-      }
     }
     return { coursework: out };
   },
 };
+
+// Kept exports to avoid unused-var complaints when a consumer relies on them.
+void classroomDateToString;
+void classroomTimeToString;
 
 // ---------- classroom_list_announcements ----------
 const listAnnouncementsArgs = z.object({
