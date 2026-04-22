@@ -5,7 +5,7 @@ import { useState } from "react";
 export function BillingActions({
   effectivePlan,
 }: {
-  effectivePlan: "free" | "pro" | "admin";
+  effectivePlan: "free" | "student" | "pro" | "admin";
 }) {
   const [busy, setBusy] = useState<"checkout" | "portal" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,11 +35,11 @@ export function BillingActions({
     <div>
       {effectivePlan === "admin" && (
         <p className="mb-2 text-small text-[hsl(var(--muted-foreground))]">
-          You&apos;re on an admin redemption — no Stripe subscription needed.
+          You&apos;re on an admin bypass — no Stripe subscription needed.
         </p>
       )}
       <div className="flex flex-wrap gap-2">
-        {effectivePlan !== "pro" && effectivePlan !== "admin" && (
+        {effectivePlan === "free" && (
           <button
             type="button"
             onClick={() => go("/api/stripe/checkout", "checkout")}
