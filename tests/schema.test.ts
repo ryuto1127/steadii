@@ -10,8 +10,8 @@ import {
   usageEvents,
   pendingToolCalls,
   subscriptions,
-  redeemCodes,
-  redemptions,
+  invoices,
+  processedStripeEvents,
 } from "@/lib/db/schema";
 import { getTableColumns } from "drizzle-orm";
 
@@ -109,22 +109,31 @@ describe("Drizzle schema — Phase 5 billing tables", () => {
     expect(cols.currentPeriodEnd).toBeDefined();
     expect(cols.cancelAtPeriodEnd).toBeDefined();
   });
-  it("redeem_codes has type/duration/max_uses/uses_count", () => {
-    const cols = getTableColumns(redeemCodes);
-    expect(cols.code).toBeDefined();
-    expect(cols.type).toBeDefined();
-    expect(cols.durationDays).toBeDefined();
-    expect(cols.maxUses).toBeDefined();
-    expect(cols.usesCount).toBeDefined();
-    expect(cols.expiresAt).toBeDefined();
-    expect(cols.disabledAt).toBeDefined();
-  });
-  it("redemptions has user/code + effective_until", () => {
-    const cols = getTableColumns(redemptions);
+  it("invoices mirrors Stripe invoice amounts with a reserved tax_amount", () => {
+    const cols = getTableColumns(invoices);
     expect(cols.userId).toBeDefined();
-    expect(cols.codeId).toBeDefined();
-    expect(cols.redeemedAt).toBeDefined();
-    expect(cols.effectiveUntil).toBeDefined();
+    expect(cols.stripeInvoiceId).toBeDefined();
+    expect(cols.amountTotal).toBeDefined();
+    expect(cols.amountSubtotal).toBeDefined();
+    expect(cols.taxAmount).toBeDefined();
+    expect(cols.currency).toBeDefined();
+    expect(cols.paidAt).toBeDefined();
+    expect(cols.invoicePdfUrl).toBeDefined();
+  });
+  it("processed_stripe_events is the webhook idempotency ledger", () => {
+    const cols = getTableColumns(processedStripeEvents);
+    expect(cols.eventId).toBeDefined();
+    expect(cols.type).toBeDefined();
+    expect(cols.processedAt).toBeDefined();
+  });
+  it("users has Phase 5 columns (is_admin, plan_interval, founding_member, etc.)", () => {
+    const cols = getTableColumns(users);
+    expect(cols.isAdmin).toBeDefined();
+    expect(cols.planInterval).toBeDefined();
+    expect(cols.foundingMember).toBeDefined();
+    expect(cols.grandfatherPriceLockedUntil).toBeDefined();
+    expect(cols.trialStartedAt).toBeDefined();
+    expect(cols.dataRetentionExpiresAt).toBeDefined();
   });
 });
 

@@ -1,13 +1,7 @@
 import { auth } from "@/lib/auth/config";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db/client";
-import {
-  users,
-  usageEvents,
-  redeemCodes,
-  redemptions,
-  subscriptions,
-} from "@/lib/db/schema";
+import { users, usageEvents, subscriptions } from "@/lib/db/schema";
 import { isUnlimitedPlan } from "@/lib/billing/effective-plan";
 import { count, sum, gt, desc, eq, isNull } from "drizzle-orm";
 
@@ -45,23 +39,6 @@ export default async function AdminPage() {
     .orderBy(desc(sum(usageEvents.creditsUsed)))
     .limit(10);
 
-  const activeCodes = await db
-    .select()
-    .from(redeemCodes)
-    .where(isNull(redeemCodes.disabledAt))
-    .orderBy(desc(redeemCodes.createdAt))
-    .limit(50);
-
-  const recentRedemptions = await db
-    .select({
-      redemption: redemptions,
-      code: redeemCodes,
-    })
-    .from(redemptions)
-    .innerJoin(redeemCodes, eq(redemptions.codeId, redeemCodes.id))
-    .orderBy(desc(redemptions.redeemedAt))
-    .limit(20);
-
   const activeSubs = await db
     .select({ n: count(subscriptions.id) })
     .from(subscriptions)
@@ -71,7 +48,7 @@ export default async function AdminPage() {
     <div className="mx-auto max-w-4xl">
       <h1 className="text-h1 text-[hsl(var(--foreground))]">Admin</h1>
       <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-        Visible only while you hold an active admin redemption.
+        Visible only while your user row has is_admin=true.
       </p>
 
       <section className="mt-8 grid gap-4 md:grid-cols-4">
@@ -106,48 +83,23 @@ export default async function AdminPage() {
       </section>
 
       <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
-        <h2 className="text-lg font-medium">Active redeem codes</h2>
-        {activeCodes.length === 0 ? (
-          <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-            Generate with{" "}
-            <code className="font-mono">pnpm tsx scripts/generate-redeem-code.ts</code>
-            .
-          </p>
-        ) : (
-          <ul className="mt-4 divide-y divide-[hsl(var(--border))] text-xs">
-            {activeCodes.map((c) => (
-              <li key={c.id} className="flex items-center justify-between py-2">
-                <span className="font-mono">{c.code}</span>
-                <span className="text-[hsl(var(--muted-foreground))]">
-                  {c.type} · {c.durationDays}d · {c.usesCount}/{c.maxUses}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
-        <h2 className="text-lg font-medium">Recent redemptions</h2>
-        {recentRedemptions.length === 0 ? (
-          <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-            No redemptions yet.
-          </p>
-        ) : (
-          <ul className="mt-4 divide-y divide-[hsl(var(--border))] text-xs">
-            {recentRedemptions.map((r) => (
-              <li key={r.redemption.id} className="flex justify-between py-2">
-                <span className="font-mono">
-                  {r.redemption.userId.slice(0, 8)}… · {r.code.type}
-                </span>
-                <span>
-                  {r.redemption.redeemedAt.toLocaleDateString()} → active until{" "}
-                  {r.redemption.effectiveUntil.toLocaleDateString()}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <h2 className="text-lg font-medium">Invite codes</h2>
+        <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
+          Friend invites are now Stripe Promotion Codes backed by the
+          <code className="mx-1 rounded bg-[hsl(var(--surface-raised))] px-1 font-mono text-xs">
+            FRIEND_3MO
+          </code>
+          coupon (100% off for 3 months). Create individual single-use
+          codes in the Stripe Dashboard — no in-app issuance UI.
+        </p>
+        <a
+          href="https://dashboard.stripe.com/test/coupons/STEADII_FRIEND_3MO"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex items-center gap-1 text-sm text-[hsl(var(--primary))] hover:underline"
+        >
+          Open coupon in Stripe Dashboard →
+        </a>
       </section>
     </div>
   );

@@ -126,7 +126,6 @@ export const ja: Messages = {
       resources: "登録リソース",
       agent: "エージェントの挙動",
       usage: "使用量と課金",
-      redeem: "コード入力",
       appearance: "外観",
       language: "言語",
       timezone: "タイムゾーン",

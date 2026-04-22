@@ -16,7 +16,6 @@ import { getCreditBalance } from "@/lib/billing/credits";
 import { getStorageTotals } from "@/lib/billing/storage";
 import { prettyBytes } from "@/lib/billing/plan";
 import { getEffectivePlan } from "@/lib/billing/effective-plan";
-import { listUserRedemptions } from "@/lib/billing/redeem";
 import {
   addResourceAction,
   removeResourceAction,
@@ -24,7 +23,6 @@ import {
   disconnectNotionAction,
 } from "@/app/(auth)/onboarding/actions";
 import { BillingActions } from "@/components/billing/billing-actions";
-import { RedeemForm } from "@/components/billing/redeem-form";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { LanguageToggle } from "@/components/settings/language-toggle";
 import { TimezoneInput } from "@/components/settings/timezone-input";
@@ -46,7 +44,6 @@ export default async function SettingsPage() {
     balance,
     storage,
     effective,
-    redemptions,
     notionConn,
     googleAcct,
     resources,
@@ -57,7 +54,6 @@ export default async function SettingsPage() {
     getCreditBalance(userId),
     getStorageTotals(userId),
     getEffectivePlan(userId),
-    listUserRedemptions(userId),
     db
       .select()
       .from(notionConnections)
@@ -255,20 +251,18 @@ export default async function SettingsPage() {
         <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
           {effective.plan === "admin"
             ? "Admin (flag) · unlimited"
-            : effective.plan === "student" && effective.source === "stripe"
+            : effective.plan === "student"
             ? `Student${
                 effective.until
                   ? ` · renews ${effective.until.toLocaleDateString()}`
                   : ""
               }`
-            : effective.plan === "pro" && effective.source === "stripe"
-            ? `Pro (Stripe)${
+            : effective.plan === "pro"
+            ? `Pro${
                 effective.until
                   ? ` · renews ${effective.until.toLocaleDateString()}`
                   : ""
               }`
-            : effective.plan === "pro" && effective.source === "friend_redemption"
-            ? `Pro (friend redemption) · active until ${effective.until.toLocaleDateString()}`
             : "Free"}
         </p>
         <MeterRow
@@ -294,27 +288,6 @@ export default async function SettingsPage() {
         <div className="mt-4">
           <BillingActions effectivePlan={effective.plan} />
         </div>
-      </Section>
-
-      <Section title={t("sections.redeem")}>
-        <RedeemForm />
-        {redemptions.length > 0 && (
-          <ul className="mt-4 space-y-1 text-small text-[hsl(var(--muted-foreground))]">
-            {redemptions.map((r) => (
-              <li key={r.redemption.id} className="flex justify-between">
-                <span>
-                  {r.code.type} · {r.code.durationDays} days · redeemed{" "}
-                  {r.redemption.redeemedAt.toLocaleDateString()}
-                </span>
-                <span>
-                  {r.redemption.effectiveUntil.getTime() > Date.now()
-                    ? `active until ${r.redemption.effectiveUntil.toLocaleDateString()}`
-                    : "expired"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
       </Section>
 
       <Section title={t("sections.appearance")}>

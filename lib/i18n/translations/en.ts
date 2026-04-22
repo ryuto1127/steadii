@@ -93,7 +93,6 @@ type MessagesShape = {
       resources: string;
       agent: string;
       usage: string;
-      redeem: string;
       appearance: string;
       language: string;
       timezone: string;
@@ -243,7 +242,6 @@ export const en: MessagesShape = {
       resources: "Resources",
       agent: "Agent behavior",
       usage: "Usage & billing",
-      redeem: "Redeem code",
       appearance: "Appearance",
       language: "Language",
       timezone: "Time zone",
