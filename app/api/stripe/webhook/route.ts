@@ -3,7 +3,13 @@ import type Stripe from "stripe";
 import { stripe } from "@/lib/billing/stripe";
 import { env } from "@/lib/env";
 import { db } from "@/lib/db/client";
-import { subscriptions, auditLog, users } from "@/lib/db/schema";
+import {
+  subscriptions,
+  auditLog,
+  users,
+  invoices,
+  processedStripeEvents,
+} from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { syncUsersPlanColumn } from "@/lib/billing/effective-plan";
 
@@ -34,51 +40,66 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Idempotency: Stripe retries the same event on transient failures or
+  // signed-ack timeouts. Skip anything we've already processed to avoid
+  // double-INSERTing invoice rows or double-logging audit entries. We
+  // INSERT the event id FIRST — if a duplicate arrives concurrently, one
+  // of them gets the unique-key violation and short-circuits.
   try {
-    switch (event.type) {
-      case "customer.subscription.created":
-      case "customer.subscription.updated":
-      case "customer.subscription.deleted": {
-        const sub = event.data.object as Stripe.Subscription;
-        await upsertSubscription(sub);
-        break;
-      }
-      case "invoice.paid":
-      case "invoice.payment_failed": {
-        // Subscription status changes also fire a subscription.updated event,
-        // which carries the right status. We still note the invoice outcome
-        // in audit_log for observability.
-        const invoice = event.data.object as Stripe.Invoice;
-        const customerId =
-          typeof invoice.customer === "string"
-            ? invoice.customer
-            : invoice.customer?.id ?? null;
-        const userId = await userIdForStripeCustomer(customerId);
-        if (userId) {
-          await db.insert(auditLog).values({
-            userId,
-            action:
-              event.type === "invoice.paid"
-                ? "stripe.invoice.paid"
-                : "stripe.invoice.payment_failed",
-            resourceType: "stripe_invoice",
-            resourceId: invoice.id,
-            result: event.type === "invoice.paid" ? "success" : "failure",
-            detail: { amount_due: invoice.amount_due, currency: invoice.currency },
-          });
-        }
-        break;
-      }
-      default:
-        // Unhandled types are fine; return 200 so Stripe stops retrying.
-        break;
+    await db.insert(processedStripeEvents).values({
+      eventId: event.id,
+      type: event.type,
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      // Already processed (or in-flight) — ack without re-running side effects.
+      return NextResponse.json({ received: true, duplicate: true });
     }
+    throw err;
+  }
+
+  try {
+    await routeEvent(event);
   } catch (err) {
     console.error("stripe webhook handler failed", err);
     return NextResponse.json({ error: "handler_failed" }, { status: 500 });
   }
 
   return NextResponse.json({ received: true });
+}
+
+// Exported so tests can feed parsed Stripe.Event objects directly, bypassing
+// signature verification. Per handoff DoD: unit tests must not mock the
+// Stripe SDK verifier.
+export async function routeEvent(event: Stripe.Event): Promise<void> {
+  switch (event.type) {
+    case "customer.subscription.created":
+    case "customer.subscription.updated":
+    case "customer.subscription.deleted": {
+      const sub = event.data.object as Stripe.Subscription;
+      await upsertSubscription(sub);
+      return;
+    }
+    case "invoice.paid": {
+      const invoice = event.data.object as Stripe.Invoice;
+      await recordPaidInvoice(invoice);
+      return;
+    }
+    case "invoice.payment_failed": {
+      const invoice = event.data.object as Stripe.Invoice;
+      await logInvoiceFailure(invoice);
+      return;
+    }
+    case "checkout.session.completed": {
+      // No-op for now — customer.subscription.created fires alongside with
+      // everything we need. Handled explicitly so Stripe doesn't retry.
+      return;
+    }
+    default:
+      // Unhandled types are fine; idempotency row already inserted so Stripe
+      // won't re-deliver.
+      return;
+  }
 }
 
 type SubscriptionLike = Stripe.Subscription & {
@@ -133,6 +154,13 @@ async function upsertSubscription(sub: SubscriptionLike) {
     });
   }
 
+  // Reflect plan_interval on the user row so Settings can show "renews every
+  // 4 months" vs "monthly" without re-querying Stripe.
+  await db
+    .update(users)
+    .set({ planInterval: planIntervalFromPriceId(priceId) })
+    .where(eq(users.id, userId));
+
   await db.insert(auditLog).values({
     userId,
     action: `stripe.subscription.${sub.status}`,
@@ -143,6 +171,79 @@ async function upsertSubscription(sub: SubscriptionLike) {
   });
 
   await syncUsersPlanColumn(userId);
+}
+
+// Mirror a paid Stripe invoice into our `invoices` table. Rows are inserted
+// here and nowhere else — scope per the W1 handoff. tax_amount stays at 0
+// until Stripe Tax is enabled post-α, at which point we populate it from
+// invoice.tax.
+async function recordPaidInvoice(invoice: Stripe.Invoice) {
+  const customerId =
+    typeof invoice.customer === "string"
+      ? invoice.customer
+      : invoice.customer?.id ?? null;
+  const userId = await userIdForStripeCustomer(customerId);
+  if (!userId) {
+    console.warn("stripe webhook: no user for invoice customer", customerId);
+    return;
+  }
+
+  const paidAt =
+    typeof invoice.status_transitions?.paid_at === "number"
+      ? new Date(invoice.status_transitions.paid_at * 1000)
+      : new Date();
+
+  await db.insert(invoices).values({
+    userId,
+    stripeInvoiceId: invoice.id,
+    amountTotal: invoice.amount_paid ?? invoice.amount_due ?? 0,
+    amountSubtotal: invoice.subtotal ?? 0,
+    // Reserved column — Stripe Tax not enabled for α. When it flips on, use
+    // invoice.tax (total) and invoice.total_tax_amounts (breakdown) here.
+    taxAmount: 0,
+    currency: invoice.currency ?? "usd",
+    paidAt,
+    invoicePdfUrl: invoice.invoice_pdf ?? null,
+  });
+
+  await db.insert(auditLog).values({
+    userId,
+    action: "stripe.invoice.paid",
+    resourceType: "stripe_invoice",
+    resourceId: invoice.id,
+    result: "success",
+    detail: { amount_due: invoice.amount_due, currency: invoice.currency },
+  });
+}
+
+async function logInvoiceFailure(invoice: Stripe.Invoice) {
+  const customerId =
+    typeof invoice.customer === "string"
+      ? invoice.customer
+      : invoice.customer?.id ?? null;
+  const userId = await userIdForStripeCustomer(customerId);
+  if (!userId) return;
+  await db.insert(auditLog).values({
+    userId,
+    action: "stripe.invoice.payment_failed",
+    resourceType: "stripe_invoice",
+    resourceId: invoice.id,
+    result: "failure",
+    detail: { amount_due: invoice.amount_due, currency: invoice.currency },
+  });
+}
+
+function planIntervalFromPriceId(
+  priceId: string | null
+): "monthly" | "yearly" | "four_month" | null {
+  if (!priceId) return null;
+  const e = env();
+  if (priceId === e.STRIPE_PRICE_PRO_MONTHLY) return "monthly";
+  if (priceId === e.STRIPE_PRICE_PRO_YEARLY) return "yearly";
+  if (priceId === e.STRIPE_PRICE_STUDENT_4MO) return "four_month";
+  // Legacy STRIPE_PRICE_ID_PRO and any unknown prices default to monthly.
+  // planFromStripePriceId in effective-plan.ts handles the tier dimension.
+  return "monthly";
 }
 
 async function userIdForStripeCustomer(
@@ -165,6 +266,12 @@ async function userIdForStripeCustomer(
   } catch {
     // ignore
   }
-  void users; // keep the import alive for future expansion
   return null;
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: string; cause?: { code?: string } };
+  // PostgreSQL unique_violation error code is 23505.
+  return e.code === "23505" || e.cause?.code === "23505";
 }
