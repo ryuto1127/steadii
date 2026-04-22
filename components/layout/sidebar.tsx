@@ -36,12 +36,30 @@ function initials(name: string | null | undefined, email: string | null | undefi
 // reveal wrappers so we keep the whole thing as a server component
 // (data + SSR) without any client-state glue.
 export async function Sidebar({
-  creditsRemaining,
+  creditsUsed,
+  creditsLimit,
   plan,
 }: {
-  creditsRemaining: number;
+  creditsUsed: number;
+  creditsLimit: number;
   plan: "free" | "student" | "pro" | "admin";
 }) {
+  const creditsRemaining = Math.max(0, creditsLimit - creditsUsed);
+  // Percentage consumed; 0 for admins (shown as a full bar with infinity-tone).
+  const percentUsed =
+    plan === "admin"
+      ? 0
+      : creditsLimit > 0
+      ? Math.min(100, (creditsUsed / creditsLimit) * 100)
+      : 0;
+  const barTone =
+    plan === "admin"
+      ? "bg-[hsl(268_70%_56%)] dark:bg-[hsl(268_80%_78%)]"
+      : creditsUsed >= creditsLimit
+      ? "bg-[hsl(var(--destructive))]"
+      : creditsUsed >= creditsLimit * 0.8
+      ? "bg-[hsl(38_92%_50%)]"
+      : "bg-[hsl(var(--primary))]";
   const t = await getTranslations("nav");
   const labels: Record<string, string> = {};
   for (const key of NAV_ITEM_KEYS) labels[key] = t(key);
@@ -132,9 +150,37 @@ export async function Sidebar({
           </div>
         ) : null}
 
+        {/*
+          Credits progress bar. Per product decision (2026-04-21): the sidebar
+          shows a visual bar only — numbers live in Settings. Rendered only in
+          the expanded (hover) state so the collapsed rail stays minimal.
+          Admin accounts get a full-width tinted bar (no meaningful percent).
+        */}
+        <div
+          className="mt-auto px-1.5 pb-2 opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"
+          aria-hidden
+        >
+          <Link
+            href="/app/settings/billing"
+            aria-label={
+              plan === "admin"
+                ? "Credits: unlimited (admin)"
+                : `Credits: ${creditsUsed} of ${creditsLimit} used`
+            }
+            className="block"
+          >
+            <div className="h-1 w-full overflow-hidden rounded-full bg-[hsl(var(--surface-raised))]">
+              <div
+                className={`h-full rounded-full ${barTone} transition-[width] duration-300 ease-out`}
+                style={{ width: plan === "admin" ? "100%" : `${percentUsed}%` }}
+              />
+            </div>
+          </Link>
+        </div>
+
         <Link
           href="/app/settings"
-          className="mt-auto flex h-10 items-center gap-2.5 rounded-lg px-1.5 text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
+          className="flex h-10 items-center gap-2.5 rounded-lg px-1.5 text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
         >
           <span
             aria-hidden

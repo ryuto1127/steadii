@@ -40,7 +40,8 @@ export default async function AppLayout({
   return (
     <div className="flex h-screen gap-3 bg-[hsl(var(--background))] p-3">
       <Sidebar
-        creditsRemaining={Math.max(0, balance.limit - balance.used)}
+        creditsUsed={balance.used}
+        creditsLimit={balance.limit}
         plan={effective.plan}
       />
       <main className="relative flex-1 overflow-y-auto rounded-xl bg-[hsl(var(--surface))] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.04]">
