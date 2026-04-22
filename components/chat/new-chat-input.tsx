@@ -99,8 +99,11 @@ export function NewChatInput({
   // can ask the agent. Stops the moment the user engages so we don't yank
   // their reference text mid-type.
   const examples = (t.raw("example_prompts") as string[]) ?? [];
+  // Rotate whenever the field is empty — even while focused. The input is
+  // auto-focused on /app load, so gating on !isFocused meant users never
+  // saw the rotation. We only want to stop once they actually start typing.
   const useRotation =
-    !placeholder && examples.length > 1 && !isFocused && value.length === 0;
+    !placeholder && examples.length > 1 && value.length === 0;
   useEffect(() => {
     if (!useRotation) return;
     if (typeof window !== "undefined") {
@@ -233,7 +236,7 @@ export function NewChatInput({
                   }
                 }}
                 className={cn(
-                  "min-h-[44px] w-full resize-none bg-transparent px-1 py-2.5 text-[15px] leading-[1.4] text-[hsl(var(--foreground))] focus:outline-none",
+                  "min-h-[44px] w-full resize-none bg-transparent px-3 py-2.5 text-[15px] leading-[1.4] text-[hsl(var(--foreground))] focus:outline-none",
                   useRotation
                     ? "placeholder:text-transparent"
                     : "placeholder:text-[hsl(var(--muted-foreground))]"
@@ -243,7 +246,7 @@ export function NewChatInput({
                 <span
                   aria-hidden
                   className={cn(
-                    "pointer-events-none absolute left-1 top-2.5 max-w-full truncate text-[15px] leading-[1.4] text-[hsl(var(--muted-foreground))] transition-opacity duration-[260ms] ease-out",
+                    "pointer-events-none absolute left-3 top-2.5 max-w-[calc(100%-1.5rem)] truncate text-[15px] leading-[1.4] text-[hsl(var(--muted-foreground))] transition-opacity duration-[260ms] ease-out",
                     fadeIn ? "opacity-100" : "opacity-0"
                   )}
                 >
@@ -251,7 +254,7 @@ export function NewChatInput({
                 </span>
               ) : null}
             </div>
-            <div className="flex shrink-0 items-center gap-2 pb-1 pr-1">
+            <div className="flex h-11 shrink-0 items-center gap-2">
               <span className="flex items-center gap-1.5 rounded-full bg-[hsl(var(--surface))] px-2 py-1">
                 <span aria-hidden className="steadii-ai-dot" />
                 <span className="font-mono text-[10px] font-medium tracking-wide text-[hsl(var(--muted-foreground))]">
@@ -262,14 +265,14 @@ export function NewChatInput({
                 type="submit"
                 disabled={!canSubmit}
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-xl transition-default",
+                  "flex h-11 w-11 items-center justify-center rounded-xl transition-default",
                   canSubmit
                     ? "bg-[hsl(var(--foreground))] text-[hsl(var(--surface))] hover:opacity-90"
                     : "bg-[hsl(var(--surface))] text-[hsl(var(--muted-foreground))] opacity-60"
                 )}
                 aria-label="Send"
               >
-                <SendHorizontal size={16} strokeWidth={2} />
+                <SendHorizontal size={18} strokeWidth={2} />
               </button>
             </div>
           </>
