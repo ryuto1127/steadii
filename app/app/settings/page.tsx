@@ -254,7 +254,13 @@ export default async function SettingsPage() {
       <Section title={t("sections.usage")}>
         <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
           {effective.plan === "admin"
-            ? `Admin (redemption) · active until ${effective.until.toLocaleDateString()}`
+            ? "Admin (flag) · unlimited"
+            : effective.plan === "student" && effective.source === "stripe"
+            ? `Student${
+                effective.until
+                  ? ` · renews ${effective.until.toLocaleDateString()}`
+                  : ""
+              }`
             : effective.plan === "pro" && effective.source === "stripe"
             ? `Pro (Stripe)${
                 effective.until

@@ -40,7 +40,7 @@ export async function Sidebar({
   plan,
 }: {
   creditsRemaining: number;
-  plan: "free" | "pro" | "admin";
+  plan: "free" | "student" | "pro" | "admin";
 }) {
   const t = await getTranslations("nav");
   const labels: Record<string, string> = {};
@@ -68,9 +68,16 @@ export async function Sidebar({
 
   const creditsLabel =
     plan === "admin" ? "∞ credits" : `${creditsRemaining.toLocaleString()} credits left`;
-  const planLabel = plan === "admin" ? "Admin" : plan === "pro" ? "Pro" : "Free";
+  const planLabel =
+    plan === "admin"
+      ? "Admin"
+      : plan === "pro"
+      ? "Pro"
+      : plan === "student"
+      ? "Student"
+      : "Free";
   const planColorClass =
-    plan === "pro"
+    plan === "pro" || plan === "student"
       ? "text-[hsl(var(--primary))]"
       : plan === "admin"
       ? "text-[hsl(268_70%_56%)] dark:text-[hsl(268_80%_78%)]"
