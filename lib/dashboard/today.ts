@@ -6,6 +6,29 @@ import {
 import { getNotionClientForUser } from "@/lib/integrations/notion/client";
 import { resolveDataSourceId } from "@/lib/integrations/notion/data-source";
 import type { ClassColor } from "@/components/ui/class-color";
+import { getUserTimezone } from "@/lib/agent/preferences";
+import {
+  addDaysToDateStr,
+  FALLBACK_TZ,
+  localMidnightAsUtc,
+} from "@/lib/calendar/tz-utils";
+
+// Returns "YYYY-MM-DD" for the calendar day the user is currently in,
+// evaluated against their persisted IANA timezone. Crucial on Vercel
+// (server TZ = UTC) — without this, Vancouver evenings quietly render
+// tomorrow's events as "today".
+export function todayDateInTz(tz: string, now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const y = parts.find((p) => p.type === "year")?.value ?? "1970";
+  const m = parts.find((p) => p.type === "month")?.value ?? "01";
+  const d = parts.find((p) => p.type === "day")?.value ?? "01";
+  return `${y}-${m}-${d}`;
+}
 
 export type TodayEvent = {
   id: string;
@@ -27,7 +50,10 @@ export type DueSoonAssignment = {
 export async function getTodaysEvents(userId: string): Promise<TodayEvent[]> {
   try {
     const cal = await getCalendarForUser(userId);
-    const { start, end } = dayRange(new Date());
+    const tz = (await getUserTimezone(userId)) ?? FALLBACK_TZ;
+    const today = todayDateInTz(tz);
+    const start = localMidnightAsUtc(today, tz);
+    const end = localMidnightAsUtc(addDaysToDateStr(today, 1), tz);
     const resp = await cal.events.list({
       calendarId: "primary",
       timeMin: start.toISOString(),
@@ -139,14 +165,6 @@ export async function getDueSoonAssignments(
   }
 }
 
-function dayRange(d: Date): { start: Date; end: Date } {
-  const start = new Date(d);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(d);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-}
-
 function extractTitle(props: Record<string, unknown>): string | null {
   for (const value of Object.values(props)) {
     const v = value as { type?: string; title?: Array<{ plain_text?: string }> };
@@ -157,13 +175,22 @@ function extractTitle(props: Record<string, unknown>): string | null {
   return null;
 }
 
-export function formatTimeRange(start: string, end: string): string {
+export function formatTimeRange(
+  start: string,
+  end: string,
+  tz?: string
+): string {
   if (!start) return "";
   try {
     const s = new Date(start);
     const e = end ? new Date(end) : null;
     const fmt = (d: Date) =>
-      d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+      d.toLocaleTimeString([], {
+        ...(tz ? { timeZone: tz } : {}),
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
     return e ? `${fmt(s)} — ${fmt(e)}` : fmt(s);
   } catch {
     return "";
