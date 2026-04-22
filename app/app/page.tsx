@@ -14,6 +14,8 @@ import {
   type TodayEvent,
   type DueSoonAssignment,
 } from "@/lib/dashboard/today";
+import { getUserTimezone } from "@/lib/agent/preferences";
+import { FALLBACK_TZ } from "@/lib/calendar/tz-utils";
 import { cn } from "@/lib/utils/cn";
 
 export const dynamic = "force-dynamic";
@@ -25,36 +27,64 @@ function greetingKey(h: number): "morning" | "afternoon" | "evening" | "night" {
   return "evening";
 }
 
-function formatCardDate(d: Date): string {
-  const mo = d.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
-  return `${mo} ${d.getDate()}, ${d.getFullYear()}`;
+function formatCardDate(d: Date, tz: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).formatToParts(d);
+  const mo = parts.find((p) => p.type === "month")?.value.toUpperCase() ?? "";
+  const day = parts.find((p) => p.type === "day")?.value ?? "";
+  const year = parts.find((p) => p.type === "year")?.value ?? "";
+  return `${mo} ${day}, ${year}`;
 }
 
-function formatRelativeDueLong(iso: string): string {
+function ymdInTz(d: Date, tz: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === "year")?.value ?? "";
+  const m = parts.find((p) => p.type === "month")?.value ?? "";
+  const day = parts.find((p) => p.type === "day")?.value ?? "";
+  return `${y}-${m}-${day}`;
+}
+
+function formatRelativeDueLong(iso: string, tz: string): string {
   if (!iso) return "";
   const now = new Date();
   const due = new Date(iso);
-  const sameDay = now.toDateString() === due.toDateString();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const isTomorrow = tomorrow.toDateString() === due.toDateString();
+  const nowYmd = ymdInTz(now, tz);
+  const dueYmd = ymdInTz(due, tz);
+  const tomorrowDate = new Date(now);
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowYmd = ymdInTz(tomorrowDate, tz);
   const time = due.toLocaleTimeString([], {
+    timeZone: tz,
     hour: "2-digit",
     minute: "2-digit",
     hour12: true,
   });
-  if (sameDay) return `TODAY, ${time.toUpperCase()}`;
-  if (isTomorrow) return `TOMORROW, ${time.toUpperCase()}`;
-  const weekday = due.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
-  const mo = due.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
-  return `${weekday} ${mo} ${due.getDate()}`;
+  if (nowYmd === dueYmd) return `TODAY, ${time.toUpperCase()}`;
+  if (tomorrowYmd === dueYmd) return `TOMORROW, ${time.toUpperCase()}`;
+  const weekday = due
+    .toLocaleDateString("en-US", { timeZone: tz, weekday: "short" })
+    .toUpperCase();
+  const mo = due
+    .toLocaleDateString("en-US", { timeZone: tz, month: "short" })
+    .toUpperCase();
+  const day = due.toLocaleDateString("en-US", { timeZone: tz, day: "numeric" });
+  return `${weekday} ${mo} ${day}`;
 }
 
-function countDueToday(items: DueSoonAssignment[]): number {
-  const todayStr = new Date().toDateString();
+function countDueToday(items: DueSoonAssignment[], tz: string): number {
+  const todayYmd = ymdInTz(new Date(), tz);
   return items.filter((a) => {
     if (!a.due) return false;
-    return new Date(a.due).toDateString() === todayStr;
+    return ymdInTz(new Date(a.due), tz) === todayYmd;
   }).length;
 }
 
@@ -83,22 +113,33 @@ export default async function HomePage() {
     );
   }
 
-  const [events, dueSoon, weekSummary] = await Promise.all([
+  const [events, dueSoon, weekSummary, tzPref] = await Promise.all([
     getTodaysEvents(userId),
     getDueSoonAssignments(userId),
     computeWeekSummary(userId),
+    getUserTimezone(userId),
   ]);
+  const tz = tzPref ?? FALLBACK_TZ;
 
   const firstName =
     session.user.name?.trim().split(/\s+/)[0] ||
     session.user.email?.split("@")[0] ||
     "there";
   const now = new Date();
-  const greeting = t(`greeting_${greetingKey(now.getHours())}`, {
+  const userHour = Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "2-digit",
+      hour12: false,
+    })
+      .format(now)
+      .replace(/[^0-9]/g, "")
+  );
+  const greeting = t(`greeting_${greetingKey(Number.isNaN(userHour) ? now.getHours() : userHour)}`, {
     name: firstName,
   });
 
-  const dueTodayCount = countDueToday(dueSoon);
+  const dueTodayCount = countDueToday(dueSoon, tz);
   const sessionsCount = weekSummary.counts.chats;
 
   return (
@@ -122,12 +163,14 @@ export default async function HomePage() {
       <div className="grid gap-6 md:grid-cols-3">
         <TodayCard
           events={events}
+          tz={tz}
           noEventsLabel={t("no_events")}
           fullCalendarLabel={t("full_calendar")}
           title={t("today_schedule")}
         />
         <DueCard
           items={dueSoon}
+          tz={tz}
           nothingDueLabel={t("nothing_due")}
           remainingLabel={t("assignments_remaining", { count: dueTodayCount })}
           title={t("due_soon")}
@@ -206,16 +249,18 @@ function BentoCard({
 
 function TodayCard({
   events,
+  tz,
   noEventsLabel,
   fullCalendarLabel,
   title,
 }: {
   events: TodayEvent[];
+  tz: string;
   noEventsLabel: string;
   fullCalendarLabel: string;
   title: string;
 }) {
-  const dateLabel = formatCardDate(new Date());
+  const dateLabel = formatCardDate(new Date(), tz);
   const visible = events.slice(0, 2);
   return (
     <BentoCard
@@ -243,7 +288,7 @@ function TodayCard({
               )}
             >
               <span className="w-[44px] shrink-0 pt-0.5 font-mono text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]">
-                {formatTimeRange(e.start, e.end).split(" — ")[0] ?? ""}
+                {formatTimeRange(e.start, e.end, tz).split(" — ")[0] ?? ""}
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="truncate text-[14px] font-medium text-[hsl(var(--foreground))]">
@@ -276,17 +321,19 @@ function TodayCard({
 
 function DueCard({
   items,
+  tz,
   nothingDueLabel,
   remainingLabel,
   title,
 }: {
   items: DueSoonAssignment[];
+  tz: string;
   nothingDueLabel: string;
   remainingLabel: string;
   title: string;
 }) {
   const visible = items.slice(0, 2);
-  const todayCount = countDueToday(items);
+  const todayCount = countDueToday(items, tz);
   const progressPct = items.length === 0
     ? 0
     : Math.min(100, Math.round((todayCount / items.length) * 100));
@@ -335,7 +382,7 @@ function DueCard({
                       ) : null}
                     </span>
                     <span className="truncate font-mono text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                      {formatRelativeDueLong(a.due)}
+                      {formatRelativeDueLong(a.due, tz)}
                     </span>
                   </span>
                   <CheckCircle2
