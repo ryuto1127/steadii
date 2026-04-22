@@ -16,7 +16,7 @@ beforeEach(() => {
 });
 
 describe("admin gate uses isUnlimitedPlan", () => {
-  it("returns true only while an admin redemption is active", async () => {
+  it("returns true only while users.is_admin is set", async () => {
     expect(await isUnlimitedPlan("u")).toBe(false);
     hoist.state.isUnlimited = true;
     expect(await isUnlimitedPlan("u")).toBe(true);

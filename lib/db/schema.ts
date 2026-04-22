@@ -267,36 +267,7 @@ export const subscriptions = pgTable("subscriptions", {
   ),
 }));
 
-export const redeemCodes = pgTable("redeem_codes", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  code: text("code").notNull(),
-  type: text("type").$type<"admin" | "friend">().notNull(),
-  durationDays: integer("duration_days").notNull(),
-  maxUses: integer("max_uses").notNull().default(1),
-  usesCount: integer("uses_count").notNull().default(0),
-  note: text("note"),
-  expiresAt: timestamp("expires_at", { mode: "date" }),
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-  disabledAt: timestamp("disabled_at", { mode: "date" }),
-}, (t) => ({
-  codeIdx: uniqueIndex("redeem_codes_code_idx").on(t.code),
-}));
-
-export const redemptions = pgTable("redemptions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  codeId: uuid("code_id")
-    .notNull()
-    .references(() => redeemCodes.id, { onDelete: "restrict" }),
-  redeemedAt: timestamp("redeemed_at", { mode: "date" }).notNull().defaultNow(),
-  effectiveUntil: timestamp("effective_until", { mode: "date" }).notNull(),
-});
-
 export type Subscription = typeof subscriptions.$inferSelect;
-export type RedeemCode = typeof redeemCodes.$inferSelect;
-export type Redemption = typeof redemptions.$inferSelect;
 
 // Invoices — mirror of Stripe invoices for display in Settings > Billing and
 // for auditability. Rows are inserted by the invoice.paid webhook and nowhere

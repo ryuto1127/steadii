@@ -1,12 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db/client";
-import {
-  users,
-  subscriptions,
-  redeemCodes,
-  redemptions,
-} from "@/lib/db/schema";
-import { and, desc, eq, gt } from "drizzle-orm";
+import { users, subscriptions } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { env } from "@/lib/env";
 import type { Plan } from "./plan";
 
@@ -14,19 +9,12 @@ export type EffectivePlan =
   | { plan: "admin"; source: "flag" }
   | { plan: "pro"; source: "stripe"; until: Date | null }
   | { plan: "student"; source: "stripe"; until: Date | null }
-  // Transitional: populated from the legacy redeemCodes/redemptions tables.
-  // Friend codes are moving to Stripe Coupons (100% off 3mo); once the last
-  // pre-migration friend redemption expires, this path and the underlying
-  // tables are removed (Commit 7).
-  | { plan: "pro"; source: "friend_redemption"; until: Date }
   | { plan: "free"; source: "default" };
 
 export async function getEffectivePlan(userId: string): Promise<EffectivePlan> {
   const now = new Date();
 
   // 1. Admin flag — direct bypass of everything, checked first.
-  // Replaces the older "admin redemption" mechanism; run scripts/backfill-
-  // admin-flag.ts once to populate is_admin for pre-existing admin redemptions.
   const [userRow] = await db
     .select({ isAdmin: users.isAdmin })
     .from(users)
@@ -36,7 +24,10 @@ export async function getEffectivePlan(userId: string): Promise<EffectivePlan> {
     return { plan: "admin", source: "flag" };
   }
 
-  // 2. Active Stripe subscription. price_id tells us which tier.
+  // 2. Active Stripe subscription. price_id tells us which tier. Friend
+  // access is now a Stripe Coupon applied to a subscription — no separate
+  // code path here; it appears as a normal active subscription (possibly
+  // with a discount visible in Stripe Dashboard only).
   const [sub] = await db
     .select()
     .from(subscriptions)
@@ -62,32 +53,7 @@ export async function getEffectivePlan(userId: string): Promise<EffectivePlan> {
     };
   }
 
-  // 3. Active friend redemption — transitional, see comment on EffectivePlan.
-  const friendRows = await db
-    .select({
-      effectiveUntil: redemptions.effectiveUntil,
-      type: redeemCodes.type,
-    })
-    .from(redemptions)
-    .innerJoin(redeemCodes, eq(redemptions.codeId, redeemCodes.id))
-    .where(
-      and(
-        eq(redemptions.userId, userId),
-        eq(redeemCodes.type, "friend"),
-        gt(redemptions.effectiveUntil, now)
-      )
-    )
-    .orderBy(desc(redemptions.effectiveUntil))
-    .limit(1);
-  if (friendRows.length) {
-    return {
-      plan: "pro",
-      source: "friend_redemption",
-      until: friendRows[0].effectiveUntil,
-    };
-  }
-
-  // 4. Default free.
+  // 3. Default free.
   return { plan: "free", source: "default" };
 }
 
