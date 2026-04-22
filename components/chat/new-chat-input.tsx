@@ -216,7 +216,7 @@ export function NewChatInput({
             >
               <Paperclip size={18} strokeWidth={1.5} />
             </button>
-            <div className="relative flex-1">
+            <div className="relative flex min-h-11 flex-1 items-center">
               <textarea
                 ref={textareaRef}
                 id="new-chat-textarea"
@@ -227,7 +227,6 @@ export function NewChatInput({
                 placeholder={nativePlaceholder}
                 autoFocus={autoFocus}
                 rows={1}
-                style={{ height: MIN_HEIGHT_PX }}
                 onKeyDown={(e) => {
                   if (e.nativeEvent.isComposing || e.keyCode === 229) return;
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -236,7 +235,7 @@ export function NewChatInput({
                   }
                 }}
                 className={cn(
-                  "min-h-[44px] w-full resize-none bg-transparent px-3 py-2.5 text-[15px] leading-[1.4] text-[hsl(var(--foreground))] focus:outline-none",
+                  "block w-full resize-none bg-transparent px-3 text-[15px] leading-[1.4] text-[hsl(var(--foreground))] focus:outline-none",
                   useRotation
                     ? "placeholder:text-transparent"
                     : "placeholder:text-[hsl(var(--muted-foreground))]"
@@ -246,7 +245,7 @@ export function NewChatInput({
                 <span
                   aria-hidden
                   className={cn(
-                    "pointer-events-none absolute left-3 top-2.5 max-w-[calc(100%-1.5rem)] truncate text-[15px] leading-[1.4] text-[hsl(var(--muted-foreground))] transition-opacity duration-[260ms] ease-out",
+                    "pointer-events-none absolute left-3 top-1/2 max-w-[calc(100%-1.5rem)] -translate-y-1/2 truncate text-[15px] leading-[1.4] text-[hsl(var(--muted-foreground))] transition-opacity duration-[260ms] ease-out",
                     fadeIn ? "opacity-100" : "opacity-0"
                   )}
                 >
