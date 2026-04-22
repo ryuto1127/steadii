@@ -2,10 +2,10 @@ import "server-only";
 import { db } from "@/lib/db/client";
 import { usageEvents } from "@/lib/db/schema";
 import { and, eq, gte, sum } from "drizzle-orm";
-import { getPlanLimits } from "./plan";
+import { getPlanLimits, type Plan } from "./plan";
 
 export type CreditBalance = {
-  plan: "free" | "pro";
+  plan: Plan;
   used: number;
   limit: number;
   remaining: number;

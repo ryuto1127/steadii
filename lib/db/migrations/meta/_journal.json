@@ -71,6 +71,13 @@
       "when": 1776791304208,
       "tag": "0009_modern_betty_ross",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1776895375764,
+      "tag": "0010_wonderful_tiger_shark",
+      "breakpoints": true
     }
   ]
 }

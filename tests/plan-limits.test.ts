@@ -92,10 +92,16 @@ beforeEach(() => {
 });
 
 describe("PLAN_LIMITS constants", () => {
-  it("Free: 250 credits, 5 MB per file, 200 MB total", () => {
-    expect(PLAN_LIMITS.free.monthlyCredits).toBe(250);
+  it("Free: 300 credits, 5 MB per file, 200 MB total", () => {
+    expect(PLAN_LIMITS.free.monthlyCredits).toBe(300);
     expect(PLAN_LIMITS.free.maxFileBytes).toBe(5 * 1024 * 1024);
     expect(PLAN_LIMITS.free.maxTotalBytes).toBe(200 * 1024 * 1024);
+  });
+
+  it("Student: 1000 credits, 50 MB per file, 2 GB total (same as Pro)", () => {
+    expect(PLAN_LIMITS.student.monthlyCredits).toBe(1000);
+    expect(PLAN_LIMITS.student.maxFileBytes).toBe(50 * 1024 * 1024);
+    expect(PLAN_LIMITS.student.maxTotalBytes).toBe(2 * 1024 * 1024 * 1024);
   });
 
   it("Pro: 1000 credits, 50 MB per file, 2 GB total", () => {

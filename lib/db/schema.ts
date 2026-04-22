@@ -18,7 +18,11 @@ export const users = pgTable("users", {
   email: text("email").notNull(),
   emailVerified: timestamp("email_verified", { mode: "date" }),
   image: text("image"),
-  plan: text("plan").$type<"free" | "pro">().notNull().default("free"),
+  plan: text("plan").$type<"free" | "student" | "pro">().notNull().default("free"),
+  // "monthly" for Pro Monthly, "yearly" for Pro Yearly, "four_month" for
+  // Student's rolling 4-month plan. Null while on Free or before first
+  // subscription. NOT calendar-semester-aligned — see project_decisions.md.
+  planInterval: text("plan_interval").$type<"monthly" | "yearly" | "four_month">(),
   preferences: jsonb("preferences").$type<{
     theme?: "light" | "dark" | "system";
     locale?: "en" | "ja";
@@ -26,6 +30,24 @@ export const users = pgTable("users", {
   }>().default({}),
   timezone: text("timezone"),
   onboardingStep: integer("onboarding_step").notNull().default(0),
+  // Admin flag — grants unlimited-credits bypass in W2 credit middleware.
+  // Set via db:studio for Ryuto's account; no in-app UI toggles this.
+  // Replaces the prior admin-via-redemption mechanism.
+  isAdmin: boolean("is_admin").notNull().default(false),
+  // Grandfather / founding-member flags. Column-only in W1; automation that
+  // flips them lives in a later week (first 100 paid users + α invitees).
+  foundingMember: boolean("founding_member").notNull().default(false),
+  grandfatherPriceLockedUntil: timestamp("grandfather_price_locked_until", {
+    mode: "date",
+  }),
+  // 14-day Pro trial start timestamp. Column-only in W1; trial state machine
+  // is W3. When non-null and still within 14 days, W3 middleware grants Pro.
+  trialStartedAt: timestamp("trial_started_at", { mode: "date" }),
+  // Set when the user purchases the $10 Extended Data Retention add-on, or
+  // computed/refreshed by the retention job (default 120 days after cancel).
+  dataRetentionExpiresAt: timestamp("data_retention_expires_at", {
+    mode: "date",
+  }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { mode: "date" }),
@@ -275,6 +297,49 @@ export const redemptions = pgTable("redemptions", {
 export type Subscription = typeof subscriptions.$inferSelect;
 export type RedeemCode = typeof redeemCodes.$inferSelect;
 export type Redemption = typeof redemptions.$inferSelect;
+
+// Invoices — mirror of Stripe invoices for display in Settings > Billing and
+// for auditability. Rows are inserted by the invoice.paid webhook and nowhere
+// else. tax_amount is reserved (always 0) until Stripe Tax is enabled post-α.
+export const invoices = pgTable(
+  "invoices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    stripeInvoiceId: text("stripe_invoice_id").notNull(),
+    // All amounts in minor units (cents for USD).
+    amountTotal: integer("amount_total").notNull(),
+    amountSubtotal: integer("amount_subtotal").notNull(),
+    taxAmount: integer("tax_amount").notNull().default(0),
+    currency: text("currency").notNull().default("usd"),
+    paidAt: timestamp("paid_at", { mode: "date" }),
+    invoicePdfUrl: text("invoice_pdf_url"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    stripeInvoiceIdx: uniqueIndex("invoices_stripe_invoice_idx").on(
+      t.stripeInvoiceId
+    ),
+    userCreatedIdx: index("invoices_user_created_idx").on(t.userId, t.createdAt),
+  })
+);
+
+export type Invoice = typeof invoices.$inferSelect;
+
+// Webhook idempotency ledger. Stripe retries the same event on 5xx/timeouts;
+// without this table the handler would double-insert invoice rows and
+// double-log audit entries. Flow: before processing, INSERT the event_id in
+// the same transaction as the side effects — ON CONFLICT DO NOTHING short-
+// circuits retries and we return 200 immediately.
+export const processedStripeEvents = pgTable("processed_stripe_events", {
+  eventId: text("event_id").primaryKey(),
+  type: text("type").notNull(),
+  processedAt: timestamp("processed_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+export type ProcessedStripeEvent = typeof processedStripeEvents.$inferSelect;
 
 export const pendingToolCalls = pgTable("pending_tool_calls", {
   id: uuid("id").primaryKey().defaultRandom(),

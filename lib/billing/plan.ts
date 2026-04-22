@@ -3,7 +3,7 @@ import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
-export type Plan = "free" | "pro";
+export type Plan = "free" | "student" | "pro";
 
 export type PlanLimits = {
   monthlyCredits: number;
@@ -11,11 +11,21 @@ export type PlanLimits = {
   maxTotalBytes: number;
 };
 
+// Credit figures are in the new unit (1 credit = $0.005 of token spend).
+// Free raised from 250 → 300 to soften the 2x-per-operation cost under the
+// new unit; see project_decisions.md.
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   free: {
-    monthlyCredits: 250,
+    monthlyCredits: 300,
     maxFileBytes: 5 * 1024 * 1024,
     maxTotalBytes: 200 * 1024 * 1024,
+  },
+  student: {
+    // Student capability is identical to Pro — the price difference (student
+    // discount) is the only delta. Same credit pool, same storage.
+    monthlyCredits: 1000,
+    maxFileBytes: 50 * 1024 * 1024,
+    maxTotalBytes: 2 * 1024 * 1024 * 1024,
   },
   pro: {
     monthlyCredits: 1000,
@@ -38,7 +48,9 @@ export async function getUsersPlanColumn(userId: string): Promise<Plan> {
     .where(eq(users.id, userId))
     .limit(1);
   const p = row?.plan;
-  return p === "pro" ? "pro" : "free";
+  if (p === "pro") return "pro";
+  if (p === "student") return "student";
+  return "free";
 }
 
 export async function getPlanLimits(userId: string): Promise<PlanLimits & { plan: Plan }> {
