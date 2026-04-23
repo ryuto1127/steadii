@@ -49,14 +49,21 @@ export function BillingActions({
             {busy === "checkout" ? "Opening…" : "Upgrade to Pro"}
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => go("/api/stripe/portal", "portal")}
-          disabled={busy !== null}
-          className="inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))] disabled:opacity-40"
-        >
-          {busy === "portal" ? "Opening…" : "Manage subscription"}
-        </button>
+        {/*
+          Manage-subscription button only for paid tiers with an actual Stripe
+          customer on file. Admins don't have one (the "no customer" red-text
+          error used to leak here — suppressed now).
+        */}
+        {(effectivePlan === "pro" || effectivePlan === "student") && (
+          <button
+            type="button"
+            onClick={() => go("/api/stripe/portal", "portal")}
+            disabled={busy !== null}
+            className="inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))] disabled:opacity-40"
+          >
+            {busy === "portal" ? "Opening…" : "Manage subscription"}
+          </button>
+        )}
       </div>
       {error && (
         <p className="mt-2 text-small text-[hsl(var(--destructive))]">{error}</p>
