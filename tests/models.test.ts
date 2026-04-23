@@ -3,6 +3,7 @@ import {
   selectModel,
   estimateUsdCost,
   usdToCredits,
+  taskTypeMetersCredits,
   type TaskType,
 } from "@/lib/agent/models";
 
@@ -55,9 +56,27 @@ describe("credit accounting", () => {
     expect(halfCached).toBeLessThan(fullUncached);
   });
 
-  it("usdToCredits floors at cent granularity", () => {
-    expect(usdToCredits(0.019)).toBe(1);
-    expect(usdToCredits(0.02)).toBe(2);
-    expect(usdToCredits(1.0)).toBe(100);
+  it("taskTypeMetersCredits: only mistake_explain + syllabus_extract meter", () => {
+    expect(taskTypeMetersCredits("mistake_explain")).toBe(true);
+    expect(taskTypeMetersCredits("syllabus_extract")).toBe(true);
+    // Chat is rate-limited by plan tier, not credit-gated.
+    expect(taskTypeMetersCredits("chat")).toBe(false);
+    expect(taskTypeMetersCredits("tool_call")).toBe(false);
+    // Meta (titles/tags) is negligible nano work — unmetered.
+    expect(taskTypeMetersCredits("chat_title")).toBe(false);
+    expect(taskTypeMetersCredits("tag_suggest")).toBe(false);
+  });
+
+  it("usdToCredits floors at half-cent granularity (1 credit = $0.005)", () => {
+    // $0.019 * 200 = 3.8 → floor = 3
+    expect(usdToCredits(0.019)).toBe(3);
+    // $0.02 * 200 = 4
+    expect(usdToCredits(0.02)).toBe(4);
+    // $1.00 * 200 = 200
+    expect(usdToCredits(1.0)).toBe(200);
+    // $0.001 * 200 = 0.2 → floor = 0
+    expect(usdToCredits(0.001)).toBe(0);
+    // $0.005 * 200 = 1
+    expect(usdToCredits(0.005)).toBe(1);
   });
 });
