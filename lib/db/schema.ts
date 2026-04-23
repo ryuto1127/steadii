@@ -10,9 +10,32 @@ import {
   index,
   boolean,
   smallint,
+  customType,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { AdapterAccountType } from "next-auth/adapters";
+
+// pgvector column type. Drizzle doesn't ship a first-class `vector` column,
+// so we wrap pgvector's `[0.1,0.2,...]` wire format via customType. The
+// driver-side representation is a string; the JS side is number[].
+// `fromDriver` tolerates both string ("[1,2]") and already-parsed array
+// shapes in case a driver deserializes pgvector for us in the future.
+const vector = (name: string, dimensions: number) =>
+  customType<{ data: number[]; driverData: string }>({
+    dataType() {
+      return `vector(${dimensions})`;
+    },
+    toDriver(value: number[]): string {
+      return `[${value.join(",")}]`;
+    },
+    fromDriver(value: unknown): number[] {
+      if (Array.isArray(value)) return value as number[];
+      const s = String(value);
+      const inner = s.startsWith("[") && s.endsWith("]") ? s.slice(1, -1) : s;
+      if (!inner) return [];
+      return inner.split(",").map(Number);
+    },
+  })(name);
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -635,9 +658,28 @@ export type AgentDraftStatus =
   | "approved"
   | "sent"
   | "dismissed"
-  | "expired";
+  | "expired"
+  // W2 addition — status set when credit gate denies deep/draft mid-pipeline.
+  // `paused_at_step` records which step hit the gate so W3 UI can explain.
+  | "paused";
 
-// W1 writes no rows here; schema lands now so W2 doesn't reshape it.
+// Retrieval provenance blob. Populated by L2 deep pass; surfaces in W3 UI.
+// Schema is frozen per phase6-w2.md "§Concrete decisions handed over #15".
+export type RetrievalProvenance = {
+  sources: Array<{
+    type: "email";
+    id: string; // inbox_items.id
+    similarity: number; // 0..1
+    snippet: string; // <=200 chars
+  }>;
+  total_candidates: number;
+  returned: number;
+};
+
+// W1 writes no rows; W2 starts populating. The W2-added columns
+// (retrieval_provenance, risk_pass_usage_id, paused_at_step) + the rename of
+// classify_usage_id → deep_pass_usage_id reflect the risk/deep two-pass
+// pipeline introduced in Phase 6 W2.
 export const agentDrafts = pgTable(
   "agent_drafts",
   {
@@ -651,7 +693,13 @@ export const agentDrafts = pgTable(
 
     classifyModel: text("classify_model"),
     draftModel: text("draft_model"),
-    classifyUsageId: uuid("classify_usage_id").references(() => usageEvents.id, {
+    // Renamed in W2: was `classify_usage_id`. The risk pass is a separate
+    // LLM call now, so the "classify" usage pointer is specifically the
+    // deep pass.
+    riskPassUsageId: uuid("risk_pass_usage_id").references(() => usageEvents.id, {
+      onDelete: "set null",
+    }),
+    deepPassUsageId: uuid("deep_pass_usage_id").references(() => usageEvents.id, {
       onDelete: "set null",
     }),
     draftUsageId: uuid("draft_usage_id").references(() => usageEvents.id, {
@@ -661,6 +709,7 @@ export const agentDrafts = pgTable(
     riskTier: text("risk_tier").$type<InboxRiskTier>().notNull(),
     action: text("action").$type<AgentDraftAction>().notNull(),
     reasoning: text("reasoning"),
+    retrievalProvenance: jsonb("retrieval_provenance").$type<RetrievalProvenance>(),
 
     draftSubject: text("draft_subject"),
     draftBody: text("draft_body"),
@@ -675,6 +724,8 @@ export const agentDrafts = pgTable(
     draftInReplyTo: text("draft_in_reply_to"),
 
     status: text("status").$type<AgentDraftStatus>().notNull().default("pending"),
+    // Set when status transitions to 'paused'. Values: 'risk' | 'deep' | 'draft'.
+    pausedAtStep: text("paused_at_step").$type<"risk" | "deep" | "draft">(),
     approvedAt: timestamp("approved_at", { mode: "date", withTimezone: true }),
     sentAt: timestamp("sent_at", { mode: "date", withTimezone: true }),
     gmailSentMessageId: text("gmail_sent_message_id"),
@@ -698,3 +749,35 @@ export const agentDrafts = pgTable(
 
 export type AgentDraft = typeof agentDrafts.$inferSelect;
 export type NewAgentDraft = typeof agentDrafts.$inferInsert;
+
+// One row per inbox_item holding the OpenAI `text-embedding-3-small` 1536-dim
+// vector of its subject+body. Used by L2 deep-pass retrieval to surface
+// similar past emails. Scope is per-user — cross-user retrieval is a privacy
+// boundary enforced with WHERE user_id = $1 at every call site.
+export const emailEmbeddings = pgTable(
+  "email_embeddings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    inboxItemId: uuid("inbox_item_id")
+      .notNull()
+      .references(() => inboxItems.id, { onDelete: "cascade" }),
+    embedding: vector("embedding", 1536).notNull(),
+    model: text("model").notNull().default("text-embedding-3-small"),
+    tokenCount: integer("token_count").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    inboxItemUnique: uniqueIndex("email_embeddings_inbox_item_unique").on(
+      t.inboxItemId
+    ),
+    userIdx: index("email_embeddings_user_idx").on(t.userId),
+  })
+);
+
+export type EmailEmbedding = typeof emailEmbeddings.$inferSelect;
+export type NewEmailEmbedding = typeof emailEmbeddings.$inferInsert;
