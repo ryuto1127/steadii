@@ -48,7 +48,7 @@ import {
   getPersistedOnboardingStep,
 } from "@/lib/onboarding/progress";
 
-describe("onboarding resumability", () => {
+describe("onboarding resumability (Phase 6 step order)", () => {
   beforeEach(() => {
     store.clear();
     store.set("u1", { onboardingStep: 0 });
@@ -56,42 +56,72 @@ describe("onboarding resumability", () => {
   });
 
   describe("stepFromStatus", () => {
-    it("starts at step 1 when nothing is connected", () => {
+    it("starts at step 1 (Google) when nothing is connected", () => {
       expect(
         stepFromStatus({
           notionConnected: false,
           notionSetupComplete: false,
           calendarConnected: false,
+          gmailConnected: false,
         })
       ).toBe(1);
     });
 
-    it("advances to step 2 after Notion is connected", () => {
+    it("stays on step 1 when only calendar scope is granted (pre-Gmail user)", () => {
       expect(
         stepFromStatus({
-          notionConnected: true,
+          notionConnected: false,
           notionSetupComplete: false,
-          calendarConnected: false,
+          calendarConnected: true,
+          gmailConnected: false,
+        })
+      ).toBe(1);
+    });
+
+    it("advances to step 2 (Notion, optional) after Google is fully connected", () => {
+      expect(
+        stepFromStatus({
+          notionConnected: false,
+          notionSetupComplete: false,
+          calendarConnected: true,
+          gmailConnected: true,
         })
       ).toBe(2);
     });
 
-    it("advances to step 3 (auto-setup) after calendar is granted", () => {
+    it("skips past step 2 when the user has advanced persistedStep (Notion skipped)", () => {
+      // persistedStep >= 2 means the Notion screen was seen or explicitly skipped.
+      expect(
+        stepFromStatus(
+          {
+            notionConnected: false,
+            notionSetupComplete: false,
+            calendarConnected: true,
+            gmailConnected: true,
+          },
+          4
+        )
+      ).toBe(4);
+    });
+
+    it("advances to step 3 (auto-setup) after Notion is connected", () => {
       expect(
         stepFromStatus({
           notionConnected: true,
           notionSetupComplete: false,
           calendarConnected: true,
+          gmailConnected: true,
         })
       ).toBe(3);
     });
 
-    it("lands on step 4 (skip-or-add) after setup completes", () => {
+    it("lands on step 4 (resources) after setup completes", () => {
       expect(
         stepFromStatus({
           notionConnected: true,
           notionSetupComplete: true,
           calendarConnected: true,
+          gmailConnected: true,
         })
       ).toBe(4);
     });
