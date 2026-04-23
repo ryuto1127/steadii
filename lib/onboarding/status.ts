@@ -19,11 +19,14 @@ export async function getOnboardingStatus(userId: string): Promise<OnboardingSta
     .where(and(eq(accounts.userId, userId), eq(accounts.provider, "google")))
     .limit(1);
 
-  const calendarConnected = googleAcct[0]?.scope?.includes("calendar") ?? false;
+  const scope = googleAcct[0]?.scope ?? "";
+  const calendarConnected = scope.includes("calendar");
+  const gmailConnected = scope.includes("gmail");
 
   return {
     notionConnected: !!conn,
     notionSetupComplete: !!(conn && conn.setupCompletedAt),
     calendarConnected,
+    gmailConnected,
   };
 }
