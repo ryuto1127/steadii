@@ -24,7 +24,9 @@ vi.mock("@/lib/db/client", () => ({
         return {
           values: (v: unknown) => {
             usageInsertSpy(v);
-            return Promise.resolve();
+            return {
+              returning: async () => [{ id: "usage-row-1" }],
+            };
           },
         };
       }
