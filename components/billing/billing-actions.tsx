@@ -55,14 +55,36 @@ export function BillingActions({
       )}
       <div className="flex flex-wrap gap-2">
         {effectivePlan === "free" && (
-          <button
-            type="button"
-            onClick={() => go("/api/stripe/checkout", "checkout")}
-            disabled={busy !== null}
-            className="inline-flex items-center rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-40"
-          >
-            {busy === "checkout" ? "Opening…" : "Upgrade to Pro"}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() =>
+                go("/api/stripe/checkout", "checkout", {
+                  plan_tier: "pro",
+                  plan_interval: "monthly",
+                })
+              }
+              disabled={busy !== null}
+              className="inline-flex items-center rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-40"
+            >
+              {busy === "checkout" ? "Opening…" : "Upgrade to Pro · $20/mo"}
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                go("/api/stripe/checkout", "checkout", {
+                  plan_tier: "student",
+                  plan_interval: "four_month",
+                })
+              }
+              disabled={busy !== null}
+              className="inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))] disabled:opacity-40"
+            >
+              {busy === "checkout"
+                ? "Opening…"
+                : "Student · $40 / 4 months (.edu required)"}
+            </button>
+          </>
         )}
         {/*
           Manage-subscription button only for paid tiers with an actual Stripe
