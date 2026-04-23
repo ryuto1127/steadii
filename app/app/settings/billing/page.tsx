@@ -64,9 +64,10 @@ export default async function BillingPage({
 
         <div className="mt-5">
           <div className="flex items-baseline justify-between text-sm">
-            <span>Credits this month</span>
+            <span>Credits this cycle</span>
             <span className="font-mono text-xs">
-              {balance.used} / {balance.limit}
+              {balance.used.toLocaleString()} /{" "}
+              {balance.limit.toLocaleString()}
               {effective.plan === "admin" && (
                 <span className="ml-1 text-[hsl(var(--muted-foreground))]">
                   (unlimited)
@@ -86,6 +87,14 @@ export default async function BillingPage({
                 : "primary"
             }
           />
+          <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+            {effective.plan === "admin"
+              ? "Admin bypass — quota not enforced."
+              : `${balance.remaining.toLocaleString()} credits remaining · resets ${balance.windowEnd.toLocaleDateString(
+                  undefined,
+                  { month: "short", day: "numeric" }
+                )}`}
+          </p>
         </div>
 
         <div className="mt-5">
