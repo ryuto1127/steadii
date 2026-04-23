@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db/client";
-import { usageEvents, users } from "@/lib/db/schema";
-import { and, eq, gte, sum } from "drizzle-orm";
+import { usageEvents, users, topupBalances } from "@/lib/db/schema";
+import { and, eq, gte, gt, sum } from "drizzle-orm";
 import { getPlanLimits, type Plan } from "./plan";
 
 export type CreditBalance = {
@@ -9,6 +9,10 @@ export type CreditBalance = {
   used: number;
   limit: number;
   remaining: number;
+  // Top-up is a separate bucket that stacks on top of the monthly pool.
+  // It expires 90 days after purchase and each pack's credits are tracked
+  // independently. For display we surface the aggregated remaining.
+  topupRemaining: number;
   windowStart: Date;
   windowEnd: Date;
   exceeded: boolean;
@@ -83,6 +87,7 @@ export async function getCreditBalance(userId: string): Promise<CreditBalance> {
     .limit(1);
   const createdAt = userRow?.createdAt ?? new Date();
   const { start, end } = creditWindowForAnchor(createdAt);
+  const now = new Date();
 
   const [row] = await db
     .select({ total: sum(usageEvents.creditsUsed) })
@@ -97,15 +102,36 @@ export async function getCreditBalance(userId: string): Promise<CreditBalance> {
   const used = Number(row?.total ?? 0);
   const remaining = Math.max(0, monthlyCredits - used);
 
+  // Sum non-expired top-up packs. For α we don't decrement per-operation —
+  // top-up just extends the ceiling by its total purchased amount. When the
+  // monthly pool is exhausted, users keep going against top-up until
+  // monthly+topup together are exceeded. Good enough for ≤10 users; cross-
+  // cycle accounting accuracy is a post-α refinement.
+  const [topupRow] = await db
+    .select({ total: sum(topupBalances.creditsRemaining) })
+    .from(topupBalances)
+    .where(
+      and(
+        eq(topupBalances.userId, userId),
+        gt(topupBalances.expiresAt, now)
+      )
+    );
+  const topupTotal = Number(topupRow?.total ?? 0);
+  const topupUsedThisCycle = Math.min(topupTotal, Math.max(0, used - monthlyCredits));
+  const topupRemaining = topupTotal - topupUsedThisCycle;
+
+  const combinedCeiling = monthlyCredits + topupTotal;
+
   return {
     plan,
     used,
     limit: monthlyCredits,
     remaining,
+    topupRemaining,
     windowStart: start,
     windowEnd: end,
-    exceeded: used >= monthlyCredits,
-    nearLimit: used >= monthlyCredits * 0.8,
+    exceeded: used >= combinedCeiling,
+    nearLimit: used >= combinedCeiling * 0.8,
   };
 }
 
