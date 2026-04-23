@@ -125,7 +125,7 @@ export default async function HomePage() {
   const sessionsCount = weekSummary.counts.chats;
 
   return (
-    <div className="relative isolate mx-auto flex min-h-[calc(100vh-8rem)] max-w-6xl flex-col overflow-hidden">
+    <div className="relative isolate mx-auto flex min-h-[calc(100vh-5.5rem)] max-w-6xl flex-col overflow-hidden">
       {/* Chromatic cloud — centered behind the dashboard, heavily blurred
           and low-opacity so it reads as ambient warmth rather than a
           discrete object. `isolate` on the parent pins its stacking
