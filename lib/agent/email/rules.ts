@@ -108,13 +108,14 @@ export function classifyEmail(
   const highMatches = collectKeywordMatches(haystack, AUTO_HIGH_KEYWORDS);
   for (const m of highMatches) provenance.push(globalProv(m));
 
-  const supervisorRole =
-    senderRole === "professor" || senderRole === "admin" ? senderRole : null;
+  // Only the "admin" role (supervisor / PI / lab director) escalates to
+  // AUTO_HIGH here. Professors and TAs are AUTO_MEDIUM — checked below.
+  const supervisorRole = senderRole === "admin" ? senderRole : null;
   if (supervisorRole) {
     provenance.push({
       ruleId: "USER_AUTO_HIGH_SUPERVISOR",
-      source: learnedSender?.senderRole ? "learned" : "learned",
-      why: `Learned ${supervisorRole} for this sender/domain.`,
+      source: "learned",
+      why: `Learned ${supervisorRole} (supervisor/PI/lab director) for this sender/domain.`,
     });
   }
 
