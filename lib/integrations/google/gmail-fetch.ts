@@ -1,4 +1,5 @@
 import "server-only";
+import * as Sentry from "@sentry/nextjs";
 import type { gmail_v1 } from "googleapis";
 import { getGmailForUser } from "./gmail";
 
@@ -22,30 +23,47 @@ export async function listRecentMessages(
   sinceUnixSeconds: number,
   hardLimit: number = LIST_HARD_LIMIT
 ): Promise<GmailListHit[]> {
-  const gmail = await getGmailForUser(userId);
-  const q = `after:${sinceUnixSeconds}`;
-  const out: GmailListHit[] = [];
-  let pageToken: string | undefined = undefined;
+  return Sentry.startSpan(
+    {
+      name: "gmail.messages.list",
+      op: "http.client",
+      attributes: { "steadii.user_id": userId, "gmail.since": sinceUnixSeconds },
+    },
+    async () => {
+      try {
+        const gmail = await getGmailForUser(userId);
+        const q = `after:${sinceUnixSeconds}`;
+        const out: GmailListHit[] = [];
+        let pageToken: string | undefined = undefined;
 
-  while (out.length < hardLimit) {
-    const res = await requestWithRetry(() =>
-      gmail.users.messages.list({
-        userId: "me",
-        q,
-        maxResults: Math.min(LIST_PAGE_SIZE, hardLimit - out.length),
-        pageToken,
-      })
-    );
-    const page = res.data.messages ?? [];
-    for (const m of page) {
-      if (m.id) out.push({ id: m.id, threadId: m.threadId ?? null });
+        while (out.length < hardLimit) {
+          const res = await requestWithRetry(() =>
+            gmail.users.messages.list({
+              userId: "me",
+              q,
+              maxResults: Math.min(LIST_PAGE_SIZE, hardLimit - out.length),
+              pageToken,
+            })
+          );
+          const page = res.data.messages ?? [];
+          for (const m of page) {
+            if (m.id) out.push({ id: m.id, threadId: m.threadId ?? null });
+          }
+          const next = res.data.nextPageToken;
+          if (!next) break;
+          pageToken = next;
+        }
+
+        return out;
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: { integration: "gmail", op: "messages.list" },
+          user: { id: userId },
+        });
+        throw err;
+      }
     }
-    const next = res.data.nextPageToken;
-    if (!next) break;
-    pageToken = next;
-  }
-
-  return out;
+  );
 }
 
 // Full message fetch. `format: "metadata"` returns headers + snippet without
@@ -55,26 +73,46 @@ export async function getMessage(
   userId: string,
   messageId: string
 ): Promise<gmail_v1.Schema$Message> {
-  const gmail = await getGmailForUser(userId);
-  const res = await requestWithRetry(() =>
-    gmail.users.messages.get({
-      userId: "me",
-      id: messageId,
-      format: "metadata",
-      metadataHeaders: [
-        "From",
-        "To",
-        "Cc",
-        "Subject",
-        "Date",
-        "List-Unsubscribe",
-        "In-Reply-To",
-        "References",
-        "Reply-To",
-      ],
-    })
+  return Sentry.startSpan(
+    {
+      name: "gmail.messages.get",
+      op: "http.client",
+      attributes: {
+        "steadii.user_id": userId,
+        "gmail.message_id": messageId,
+      },
+    },
+    async () => {
+      try {
+        const gmail = await getGmailForUser(userId);
+        const res = await requestWithRetry(() =>
+          gmail.users.messages.get({
+            userId: "me",
+            id: messageId,
+            format: "metadata",
+            metadataHeaders: [
+              "From",
+              "To",
+              "Cc",
+              "Subject",
+              "Date",
+              "List-Unsubscribe",
+              "In-Reply-To",
+              "References",
+              "Reply-To",
+            ],
+          })
+        );
+        return res.data;
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: { integration: "gmail", op: "messages.get" },
+          user: { id: userId },
+        });
+        throw err;
+      }
+    }
   );
-  return res.data;
 }
 
 // Helpers — header extraction. Gmail's `payload.headers` is an array of
