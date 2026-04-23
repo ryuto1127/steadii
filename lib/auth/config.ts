@@ -1,6 +1,7 @@
 import "server-only";
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, accounts, sessions, verificationTokens } from "@/lib/db/schema";
 import { EncryptedDrizzleAdapter } from "./encrypted-adapter";
@@ -47,6 +48,20 @@ export const authConfig = {
         session.user.id = token.id;
       }
       return session;
+    },
+  },
+  events: {
+    // Start the 14-day Pro trial the moment a user row is first created
+    // (first OAuth sign-in). No credit card required; after 14 days the
+    // effective-plan check stops returning trial and the user falls back
+    // to Free unless they've subscribed. Idempotent safety: only write
+    // when trial_started_at is still null.
+    async createUser({ user }) {
+      if (!user.id) return;
+      await db
+        .update(users)
+        .set({ trialStartedAt: new Date() })
+        .where(eq(users.id, user.id));
     },
   },
 } satisfies NextAuthConfig;
