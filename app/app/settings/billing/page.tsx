@@ -159,6 +159,17 @@ export default async function BillingPage({
       </section>
 
       <BillingActions effectivePlan={effective.plan} />
+
+      {(effective.plan === "pro" || effective.plan === "student") && (
+        <section className="mt-10 border-t border-[hsl(var(--border))] pt-6">
+          <a
+            href="/app/settings/billing/cancel"
+            className="text-xs text-[hsl(var(--muted-foreground))] underline-offset-2 hover:text-[hsl(var(--foreground))] hover:underline"
+          >
+            Cancel subscription
+          </a>
+        </section>
+      )}
     </div>
   );
 }
