@@ -17,7 +17,7 @@ export type CalendarEvent = {
   description?: string | null;
   recurrence?: string[] | null;
   recurringEventId?: string | null;
-  reminders?: { minutes: number } | null;
+  reminders?: { minutes: number[] } | null;
 };
 
 export type CalendarTask = {
