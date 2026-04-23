@@ -12,9 +12,13 @@ export const runtime = "nodejs";
 // Payload shape accepted by the checkout endpoint. Body is optional to keep
 // the existing "click Upgrade to Pro" POST-with-no-body flow working — it
 // falls back to Pro Monthly, which matches legacy STRIPE_PRICE_ID_PRO.
+// promo_code, when present, is the human-readable Stripe Promotion Code
+// string (e.g. one issued against FRIEND_3MO). The route resolves it to the
+// internal promo_xxx id before passing to Checkout.
 type CheckoutRequest = {
   plan_tier?: "pro" | "student";
   plan_interval?: "monthly" | "yearly" | "four_month";
+  promo_code?: string;
 };
 
 function priceIdFor(
@@ -125,16 +129,42 @@ export async function POST(request: NextRequest) {
     customerId = customer.id;
   }
 
+  // Resolve promo_code → Stripe promotion_code id if provided. Falls back
+  // to allow_promotion_codes so the user can type one in at Checkout too.
+  let discounts: Array<{ promotion_code: string }> | undefined;
+  if (body.promo_code) {
+    const list = await stripe().promotionCodes.list({
+      code: body.promo_code,
+      active: true,
+      limit: 1,
+    });
+    const promo = list.data[0];
+    if (!promo) {
+      return NextResponse.json(
+        { error: `Invalid or expired invite code: ${body.promo_code}` },
+        { status: 400 }
+      );
+    }
+    discounts = [{ promotion_code: promo.id }];
+  }
+
   const checkout = await stripe().checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
     line_items: [{ price: picked.priceId, quantity: 1 }],
     success_url: `${env().APP_URL}/app/settings/billing?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${env().APP_URL}/app/settings/billing?canceled=1`,
-    allow_promotion_codes: true,
+    // Can't set allow_promotion_codes when discounts is already applied —
+    // Stripe rejects the combo. Leave the input open only when we're not
+    // pre-applying one.
+    ...(discounts ? { discounts } : { allow_promotion_codes: true }),
     client_reference_id: userId,
     subscription_data: {
-      metadata: { steadii_user_id: userId, steadii_plan_tier: tier },
+      metadata: {
+        steadii_user_id: userId,
+        steadii_plan_tier: tier,
+        ...(body.promo_code ? { steadii_invite_code: body.promo_code } : {}),
+      },
     },
   });
 
