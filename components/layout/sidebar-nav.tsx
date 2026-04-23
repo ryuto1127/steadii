@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import {
+  Inbox,
   Home,
   MessagesSquare,
   GraduationCap,
@@ -19,6 +20,7 @@ import {
 import { cn } from "@/lib/utils/cn";
 
 const ICONS: Record<NavItemKey, LucideIcon> = {
+  inbox: Inbox,
   home: Home,
   chats: MessagesSquare,
   classes: GraduationCap,

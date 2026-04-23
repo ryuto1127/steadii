@@ -1,0 +1,15 @@
+{
+  "id": "m_l2_fallback",
+  "threadId": "t5",
+  "labelIds": ["INBOX"],
+  "snippet": "Here are the lecture notes you asked for.",
+  "internalDate": "1713828600000",
+  "payload": {
+    "headers": [
+      { "name": "From", "value": "friend@known.edu" },
+      { "name": "To", "value": "student@example.com" },
+      { "name": "Subject", "value": "Lecture notes" },
+      { "name": "Date", "value": "Mon, 22 Apr 2026 12:30:00 -0700" }
+    ]
+  }
+}

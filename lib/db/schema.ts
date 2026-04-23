@@ -9,7 +9,9 @@ import {
   uniqueIndex,
   index,
   boolean,
+  smallint,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import type { AdapterAccountType } from "next-auth/adapters";
 
 export const users = pgTable("users", {
@@ -48,6 +50,11 @@ export const users = pgTable("users", {
   dataRetentionExpiresAt: timestamp("data_retention_expires_at", {
     mode: "date",
   }),
+  // Hour (0–23) in the user's local timezone to deliver the morning digest.
+  // Column-only in W1; W3 reads it. Default 7 matches the memory-locked
+  // 7am digest.
+  digestHourLocal: smallint("digest_hour_local").notNull().default(7),
+  digestEnabled: boolean("digest_enabled").notNull().default(true),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { mode: "date" }),
@@ -446,3 +453,248 @@ export const events = pgTable(
 
 export type EventRow = typeof events.$inferSelect;
 export type NewEventRow = typeof events.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Phase 6 — Inbox, Agent Rules, Agent Drafts
+// ---------------------------------------------------------------------------
+
+export type InboxBucket =
+  | "auto_high"
+  | "auto_medium"
+  | "auto_low"
+  | "ignore"
+  | "l2_pending";
+
+export type InboxRiskTier = "low" | "medium" | "high";
+
+export type InboxStatus =
+  | "open"
+  | "snoozed"
+  | "archived"
+  | "sent"
+  | "dismissed";
+
+export type SenderRole =
+  | "professor"
+  | "ta"
+  | "classmate"
+  | "admin"
+  | "other";
+
+// One entry in the provenance chain. `source` is 'global' for hard-coded
+// rules and mirrors `agent_rules.source` values ('learned'|'manual'|'chat')
+// for per-user rules.
+export type RuleProvenance = {
+  ruleId: string;
+  source: "global" | "learned" | "manual" | "chat";
+  why: string;
+};
+
+// The agent's Gmail queue. One row per message seen by L1.
+export const inboxItems = pgTable(
+  "inbox_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    sourceType: text("source_type").notNull(), // 'gmail' in W1
+    sourceAccountId: text("source_account_id").notNull(),
+    externalId: text("external_id").notNull(),
+    threadExternalId: text("thread_external_id"),
+
+    senderEmail: text("sender_email").notNull(),
+    senderName: text("sender_name"),
+    // Generated column so "have we seen this domain before?" stays a cheap
+    // index probe. Drizzle emits: GENERATED ALWAYS AS (...) STORED.
+    senderDomain: text("sender_domain")
+      .notNull()
+      .generatedAlwaysAs(sql`split_part(sender_email, '@', 2)`),
+    senderRole: text("sender_role").$type<SenderRole>(),
+    recipientTo: text("recipient_to")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    recipientCc: text("recipient_cc")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    subject: text("subject"),
+    snippet: text("snippet"),
+    receivedAt: timestamp("received_at", { mode: "date", withTimezone: true })
+      .notNull(),
+
+    bucket: text("bucket").$type<InboxBucket>().notNull(),
+    riskTier: text("risk_tier").$type<InboxRiskTier>(),
+    ruleProvenance: jsonb("rule_provenance").$type<RuleProvenance[]>(),
+    firstTimeSender: boolean("first_time_sender").notNull().default(false),
+
+    status: text("status").$type<InboxStatus>().notNull().default("open"),
+    reviewedAt: timestamp("reviewed_at", { mode: "date", withTimezone: true }),
+    resolvedAt: timestamp("resolved_at", { mode: "date", withTimezone: true }),
+
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { mode: "date", withTimezone: true }),
+  },
+  (t) => ({
+    externalUnique: uniqueIndex("inbox_items_external_unique").on(
+      t.userId,
+      t.sourceType,
+      t.externalId
+    ),
+    userStatusReceivedIdx: index(
+      "inbox_items_user_status_received_idx"
+    )
+      .on(t.userId, t.status, t.receivedAt)
+      .where(sql`deleted_at IS NULL`),
+    userBucketIdx: index("inbox_items_user_bucket_idx")
+      .on(t.userId, t.bucket)
+      .where(sql`deleted_at IS NULL`),
+    userThreadIdx: index("inbox_items_user_thread_idx").on(
+      t.userId,
+      t.threadExternalId
+    ),
+  })
+);
+
+export type InboxItem = typeof inboxItems.$inferSelect;
+export type NewInboxItem = typeof inboxItems.$inferInsert;
+
+export type AgentRuleScope =
+  | "sender"
+  | "domain"
+  | "subject_keyword"
+  | "thread";
+export type AgentRuleSource = "learned" | "manual" | "chat";
+
+// Per-user rules that shape L1 triage. Globals (operator-maintained) stay in
+// code under `lib/agent/email/rules-global.ts`; only user-specific rules
+// live here. Learned rules are inserted automatically by L2/L3 feedback
+// loops (post-α); manual ones come from Settings → Agent Rules (W3); chat
+// ones come from a chat tool call (W3+).
+export const agentRules = pgTable(
+  "agent_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    scope: text("scope").$type<AgentRuleScope>().notNull(),
+    matchValue: text("match_value").notNull(),
+    matchNormalized: text("match_normalized").notNull(),
+
+    riskTier: text("risk_tier").$type<InboxRiskTier>(),
+    bucket: text("bucket").$type<InboxBucket>(),
+    senderRole: text("sender_role").$type<SenderRole>(),
+
+    source: text("source").$type<AgentRuleSource>().notNull(),
+    reason: text("reason"),
+
+    enabled: boolean("enabled").notNull().default(true),
+
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { mode: "date", withTimezone: true }),
+  },
+  (t) => ({
+    userScopeMatchUnique: uniqueIndex("agent_rules_user_scope_match_unique").on(
+      t.userId,
+      t.scope,
+      t.matchNormalized
+    ),
+    userScopeEnabledIdx: index("agent_rules_user_scope_enabled_idx")
+      .on(t.userId, t.scope)
+      .where(sql`enabled = true AND deleted_at IS NULL`),
+  })
+);
+
+export type AgentRule = typeof agentRules.$inferSelect;
+export type NewAgentRule = typeof agentRules.$inferInsert;
+
+export type AgentDraftAction =
+  | "draft_reply"
+  | "archive"
+  | "snooze"
+  | "no_op"
+  | "ask_clarifying";
+
+export type AgentDraftStatus =
+  | "pending"
+  | "edited"
+  | "approved"
+  | "sent"
+  | "dismissed"
+  | "expired";
+
+// W1 writes no rows here; schema lands now so W2 doesn't reshape it.
+export const agentDrafts = pgTable(
+  "agent_drafts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    inboxItemId: uuid("inbox_item_id")
+      .notNull()
+      .references(() => inboxItems.id, { onDelete: "cascade" }),
+
+    classifyModel: text("classify_model"),
+    draftModel: text("draft_model"),
+    classifyUsageId: uuid("classify_usage_id").references(() => usageEvents.id, {
+      onDelete: "set null",
+    }),
+    draftUsageId: uuid("draft_usage_id").references(() => usageEvents.id, {
+      onDelete: "set null",
+    }),
+
+    riskTier: text("risk_tier").$type<InboxRiskTier>().notNull(),
+    action: text("action").$type<AgentDraftAction>().notNull(),
+    reasoning: text("reasoning"),
+
+    draftSubject: text("draft_subject"),
+    draftBody: text("draft_body"),
+    draftTo: text("draft_to")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    draftCc: text("draft_cc")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    draftInReplyTo: text("draft_in_reply_to"),
+
+    status: text("status").$type<AgentDraftStatus>().notNull().default("pending"),
+    approvedAt: timestamp("approved_at", { mode: "date", withTimezone: true }),
+    sentAt: timestamp("sent_at", { mode: "date", withTimezone: true }),
+    gmailSentMessageId: text("gmail_sent_message_id"),
+
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userStatusCreatedIdx: index("agent_drafts_user_status_idx").on(
+      t.userId,
+      t.status,
+      t.createdAt
+    ),
+    inboxItemIdx: index("agent_drafts_inbox_item_idx").on(t.inboxItemId),
+  })
+);
+
+export type AgentDraft = typeof agentDrafts.$inferSelect;
+export type NewAgentDraft = typeof agentDrafts.$inferInsert;
