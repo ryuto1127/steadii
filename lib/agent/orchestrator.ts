@@ -8,10 +8,6 @@ import { getUserConfirmationMode } from "./preferences";
 import { requiresConfirmation } from "./confirmation";
 import { getToolByName, openAIToolDefs } from "./tool-registry";
 import { discoverResources } from "@/lib/integrations/notion/discovery";
-import {
-  assertCreditsAvailable,
-  BillingQuotaExceededError,
-} from "@/lib/billing/credits";
 import { db } from "@/lib/db/client";
 import {
   messages as messagesTable,
@@ -64,24 +60,10 @@ export async function* streamChatResponse(
     return;
   }
 
-  try {
-    await assertCreditsAvailable(req.userId);
-  } catch (err) {
-    if (err instanceof BillingQuotaExceededError) {
-      const { used, limit, plan } = err.balance;
-      yield {
-        type: "error",
-        code: "BILLING_QUOTA_EXCEEDED",
-        message: `You've used ${used} of ${limit} credits this month on the ${plan} plan. ${
-          plan === "free"
-            ? "Upgrade to Pro or wait until the cycle resets."
-            : "Wait until the cycle resets."
-        }`,
-      };
-      return;
-    }
-    throw err;
-  }
+  // Chat no longer consumes credits — enforced by the plan-tier chat rate
+  // limiter in /api/chat, not by the monthly credit pool. Tools that invoke
+  // metered LLMs (mistake_explain, syllabus_extract, future agent L2 draft)
+  // are responsible for their own credit checks.
 
   try {
     await discoverResources(req.userId);

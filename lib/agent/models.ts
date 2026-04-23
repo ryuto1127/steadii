@@ -90,8 +90,29 @@ export function estimateUsdCost(
   return dollars;
 }
 
+// 1 credit = $0.005 of token spend (revised 2026-04-21; was $0.01). Per-
+// operation credit cost doubles under this unit so Pro Student ($10 / 1000
+// credits) and free-tier loss become sustainable — see project_decisions.md.
+// Math: usd / 0.005 === usd * 200.
 export function usdToCredits(usd: number): number {
-  return Math.floor(usd * 100);
+  return Math.floor(usd * 200);
+}
+
+// Task types that CONSUME credits. Chat and meta/title/tag work are tracked
+// for analytics but don't deduct from the monthly credit pool — chat gets
+// rate-limited by plan tier instead, and nano work is negligible.
+// See project_decisions.md "Chat is NOT credit-metered".
+export function taskTypeMetersCredits(t: TaskType): boolean {
+  switch (t) {
+    case "mistake_explain":
+    case "syllabus_extract":
+      return true;
+    case "chat":
+    case "tool_call":
+    case "chat_title":
+    case "tag_suggest":
+      return false;
+  }
 }
 
 // Re-export for legacy callers that imported OpenAIModel.

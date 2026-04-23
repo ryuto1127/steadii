@@ -3,6 +3,7 @@ import { db } from "@/lib/db/client";
 import { usageEvents } from "@/lib/db/schema";
 import {
   estimateUsdCost,
+  taskTypeMetersCredits,
   usdToCredits,
   type OpenAIModel,
   type TaskType,
@@ -25,7 +26,10 @@ export async function recordUsage(r: UsageRecord) {
     output: r.outputTokens,
     cached: r.cachedTokens,
   });
-  const credits = usdToCredits(usd);
+  // Always log tokens for analytics. Only charge the credit pool for tasks
+  // that meter — chat/tool_call/meta tasks are tracked at 0 credits here
+  // and gated instead by the per-plan chat rate limiter.
+  const credits = taskTypeMetersCredits(r.taskType) ? usdToCredits(usd) : 0;
   await db.insert(usageEvents).values({
     userId: r.userId,
     chatId: r.chatId ?? null,
