@@ -63,12 +63,55 @@ export function enforceRateLimit(
 }
 
 // Preset buckets for the α OpenAI-hitting endpoints. Tune via env later.
+// chatMessage / chatStream are the burst-protection layer (anti-spam /
+// anti-abuse within a minute). On top of those, a plan-tier-aware pair of
+// buckets — see CHAT_PLAN_LIMITS below — caps hourly and daily usage.
 export const BUCKETS = {
   chatMessage: { capacity: 20, refillPerSec: 20 / 60 },
   chatStream: { capacity: 20, refillPerSec: 20 / 60 },
   syllabusExtract: { capacity: 10, refillPerSec: 10 / 300 },
   chatAttachment: { capacity: 30, refillPerSec: 30 / 60 },
 } as const satisfies Record<string, BucketConfig>;
+
+// Per-plan chat caps from project_decisions.md. Hourly + daily enforced
+// together; the first to run dry blocks the request with a 429. Chat is NOT
+// credit-metered — these limits are the *only* chat gate.
+export type ChatPlanLimits = {
+  dailyCap: number;
+  hourlyCap: number;
+};
+
+export const CHAT_PLAN_LIMITS: Record<
+  "free" | "student" | "pro" | "admin",
+  ChatPlanLimits
+> = {
+  free: { dailyCap: 15, hourlyCap: 5 },
+  student: { dailyCap: 80, hourlyCap: 20 },
+  pro: { dailyCap: 120, hourlyCap: 25 },
+  // Admins aren't rate-limited on chat — give them "effectively unlimited"
+  // numbers so the same pipeline works without a conditional.
+  admin: { dailyCap: 10_000, hourlyCap: 10_000 },
+};
+
+export function chatBucketsFor(plan: "free" | "student" | "pro" | "admin"): {
+  hourly: BucketConfig;
+  daily: BucketConfig;
+} {
+  const limits = CHAT_PLAN_LIMITS[plan];
+  return {
+    hourly: { capacity: limits.hourlyCap, refillPerSec: limits.hourlyCap / 3600 },
+    daily: { capacity: limits.dailyCap, refillPerSec: limits.dailyCap / 86_400 },
+  };
+}
+
+export function enforceChatLimits(
+  userId: string,
+  plan: "free" | "student" | "pro" | "admin"
+): void {
+  const { hourly, daily } = chatBucketsFor(plan);
+  enforceRateLimit(userId, "chat.plan.hour", hourly);
+  enforceRateLimit(userId, "chat.plan.day", daily);
+}
 
 export function rateLimitResponse(err: RateLimitError): Response {
   return new Response(
