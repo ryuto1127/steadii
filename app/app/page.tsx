@@ -125,9 +125,11 @@ export default async function HomePage() {
   const sessionsCount = weekSummary.counts.chats;
 
   return (
-    <div className="relative mx-auto flex min-h-[calc(100vh-8rem)] max-w-6xl flex-col">
+    <div className="relative isolate mx-auto flex min-h-[calc(100vh-8rem)] max-w-6xl flex-col">
       {/* Chromatic cloud — pink / purple / cyan drifting softly behind
-          the dashboard cards. Single instance, restrained. */}
+          the dashboard cards. `isolate` on the parent pins the cloud's
+          stacking context so -z-10 doesn't push it behind the body bg
+          (which caused a flash-then-disappear during hydration). */}
       <span
         aria-hidden
         className="steadii-cloud -z-10"
