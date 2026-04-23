@@ -125,16 +125,18 @@ export default async function HomePage() {
   const sessionsCount = weekSummary.counts.chats;
 
   return (
-    // Negative mx-10 / mt-[-2rem] break OUT of the shell's px-10 py-8 wrapper
-    // so the cloud reaches the rounded main island edges. The inner wrapper
-    // restores padding so the content still respects the shell's rhythm.
-    <div className="relative isolate -mx-10 -mt-8 flex min-h-[calc(100vh-5.5rem+2rem)] flex-col overflow-hidden">
+    // Negative mx-10 / -mt-8 / -mb-8 break OUT of the shell's px-10 py-8
+    // wrapper so the cloud reaches all four rounded edges of the main
+    // island. The inner wrapper restores the padding so content keeps
+    // the shell's rhythm. Only the outer p-3 (12px each side) remains
+    // as vertical chrome, so min-h reclaims the 4rem of py-8 we took back.
+    <div className="relative isolate -mx-10 -mb-8 -mt-8 flex min-h-[calc(100vh-1.5rem)] flex-col overflow-hidden">
       {/* Chromatic cloud — spans the entire main island edge-to-edge via
           inset:-120px on .steadii-cloud. Lives OUTSIDE the max-w-6xl
           content wrapper so the wash fills the full surface, not just
           the centered column. */}
       <span aria-hidden className="steadii-cloud -z-10" />
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-10 pt-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-10 py-8">
       <header className="steadii-greeting-enter relative z-0 mb-10 flex flex-col gap-2">
         <h1 className="font-display text-[36px] font-semibold leading-[1.1] tracking-[-0.02em] text-[hsl(var(--foreground))]">
           {greeting}
