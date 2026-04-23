@@ -125,13 +125,15 @@ export default async function HomePage() {
   const sessionsCount = weekSummary.counts.chats;
 
   return (
-    <div className="relative isolate mx-auto flex min-h-[calc(100vh-5.5rem)] max-w-6xl flex-col overflow-hidden">
-      {/* Chromatic cloud — spans the entire dashboard via inset:-120px
-          (defined on .steadii-cloud). `isolate` pins the stacking
-          context so -z-10 doesn't fall behind the body bg and flash on
-          hydration; `overflow-hidden` keeps the bleed off-canvas so the
-          visible wash reads as edge-to-edge ambient warmth. */}
+    <div className="relative isolate flex min-h-[calc(100vh-5.5rem)] flex-col overflow-hidden">
+      {/* Chromatic cloud — spans the entire main island edge-to-edge via
+          inset:-120px on .steadii-cloud. Lives OUTSIDE the max-w-6xl
+          content wrapper so the wash fills the full surface, not just
+          the centered column. `isolate` pins the stacking context (so
+          -z-10 doesn't fall behind the body bg during hydration);
+          `overflow-hidden` keeps the bleed off-canvas. */}
       <span aria-hidden className="steadii-cloud -z-10" />
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col">
       <header className="steadii-greeting-enter relative z-0 mb-10 flex flex-col gap-2">
         <h1 className="font-display text-[36px] font-semibold leading-[1.1] tracking-[-0.02em] text-[hsl(var(--foreground))]">
           {greeting}
@@ -170,6 +172,7 @@ export default async function HomePage() {
 
       <div className="mx-auto mt-auto w-full max-w-3xl pt-16">
         <NewChatInput autoFocus />
+      </div>
       </div>
     </div>
   );
