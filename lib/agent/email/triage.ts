@@ -1,4 +1,5 @@
 import "server-only";
+import * as Sentry from "@sentry/nextjs";
 import { db } from "@/lib/db/client";
 import {
   inboxItems,
@@ -12,6 +13,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { classifyEmail } from "./rules";
 import type { ClassifyInput, TriageResult, UserContext } from "./types";
 import { logEmailAudit } from "./audit";
+import { embedAndStoreInboxItem } from "./embeddings";
 
 // Public API. `triageMessage` is pure-enough: it reads user context from
 // DB but does not write. `applyTriageResult` writes the inbox row and
@@ -81,6 +83,32 @@ export async function applyTriageResult(
         provenanceCount: result.ruleProvenance.length,
       },
     });
+
+    // Embed synchronously on ingest so the retrieval corpus grows with every
+    // triaged item, including bucket='ignore' rows — cost is negligible
+    // (~$0.00001 per email at text-embedding-3-small pricing) and it lets
+    // future "what did we dismiss?" queries succeed. Failures don't block
+    // the ingest — they're logged and retried by the backfill script.
+    try {
+      await embedAndStoreInboxItem({
+        userId,
+        inboxItemId: created.id,
+        subject: input.subject,
+        body: input.bodySnippet ?? input.snippet,
+      });
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { feature: "email_embed", phase: "on_ingest" },
+        user: { id: userId },
+      });
+      await logEmailAudit({
+        userId,
+        action: "email_embed_failed",
+        result: "failure",
+        resourceId: created.id,
+        detail: { message: err instanceof Error ? err.message : String(err) },
+      });
+    }
   } else {
     await logEmailAudit({
       userId,
