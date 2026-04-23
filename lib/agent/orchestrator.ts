@@ -336,17 +336,36 @@ function toolErrorPayload(err: unknown): { error: string; message: string } {
 // before we could persist one under an older codepath), splice in a synthetic
 // error so OpenAI doesn't 400 on the next turn. Idempotent.
 function repairDanglingToolCalls(history: StoredMessage[]): StoredMessage[] {
+  // Pass 1: drop orphan tool messages whose tool_call_id has no matching
+  // tool_call in ANY preceding assistant message. OpenAI 400s on these
+  // ("tool_call_id X not found in tool_calls of previous message") and
+  // they can appear if a tool row was persisted while its assistant
+  // tool_calls write got lost (crash mid-stream, etc.).
+  const validCallIds = new Set<string>();
+  const cleaned: StoredMessage[] = [];
+  for (const msg of history) {
+    if (msg.role === "assistant" && msg.toolCalls) {
+      for (const c of msg.toolCalls) validCallIds.add(c.id);
+    }
+    if (msg.role === "tool") {
+      if (!msg.toolCallId || !validCallIds.has(msg.toolCallId)) continue;
+    }
+    cleaned.push(msg);
+  }
+
+  // Pass 2: fill in synthetic tool responses for assistant tool_calls
+  // that never got a matching tool row (stream died before persist).
   const out: StoredMessage[] = [];
-  for (let i = 0; i < history.length; i++) {
-    const msg = history[i];
+  for (let i = 0; i < cleaned.length; i++) {
+    const msg = cleaned[i];
     out.push(msg);
     if (msg.role !== "assistant" || !msg.toolCalls || msg.toolCalls.length === 0) {
       continue;
     }
     const responded = new Set<string>();
     let j = i + 1;
-    while (j < history.length && history[j].role === "tool") {
-      const id = history[j].toolCallId;
+    while (j < cleaned.length && cleaned[j].role === "tool") {
+      const id = cleaned[j].toolCallId;
       if (id) responded.add(id);
       j++;
     }
