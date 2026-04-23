@@ -106,6 +106,11 @@ async function runPipeline(inboxItemId: string): Promise<L2Outcome> {
         deep: null,
       });
     }
+    Sentry.captureException(err, {
+      tags: { feature: "email_l2", step: "risk" },
+      user: { id: item.userId },
+      extra: { inboxItemId: item.id },
+    });
     await logEmailAudit({
       userId: item.userId,
       action: "email_l2_failed",
