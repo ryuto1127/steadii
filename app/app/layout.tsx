@@ -10,6 +10,9 @@ import {
 } from "@/lib/onboarding/status";
 import { getCreditBalance } from "@/lib/billing/credits";
 import { getEffectivePlan } from "@/lib/billing/effective-plan";
+import { db } from "@/lib/db/client";
+import { subscriptions } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 export default async function AppLayout({
   children,
@@ -26,11 +29,21 @@ export default async function AppLayout({
     redirect("/onboarding");
   }
 
-  const [balance, effective] = await Promise.all([
+  const [balance, effective, subRow] = await Promise.all([
     getCreditBalance(session.user.id),
     getEffectivePlan(session.user.id),
+    db
+      .select({ status: subscriptions.status })
+      .from(subscriptions)
+      .where(eq(subscriptions.userId, session.user.id))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
   ]);
-  const showBanner = effective.plan !== "admin" && balance.nearLimit;
+  // Dunning takes priority over credit near-limit — a failed payment is
+  // more urgent than approaching the quota ceiling.
+  const pastDue = subRow?.status === "past_due";
+  const showBanner =
+    pastDue || (effective.plan !== "admin" && balance.nearLimit);
   const pct = Math.min(100, Math.round((balance.used / balance.limit) * 100));
 
   // Arc-style island: body bg = warm canvas (--background); 12px padding
@@ -47,7 +60,24 @@ export default async function AppLayout({
       <main className="relative flex-1 overflow-y-auto rounded-xl bg-[hsl(var(--surface))] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.04]">
         <OfflineStrip />
         <div className="px-10 py-8">
-          {showBanner && (
+          {pastDue && (
+            <div className="mx-auto mb-5 max-w-4xl rounded-lg bg-[hsl(var(--destructive)/0.08)] px-4 py-2.5 text-small text-[hsl(var(--destructive))]">
+              <div className="flex items-center justify-between gap-4">
+                <span>
+                  Your last payment failed. Update your card to keep Pro
+                  access — Stripe will retry automatically over the next two
+                  weeks before we downgrade to Free.
+                </span>
+                <Link
+                  href="/app/settings/billing"
+                  className="shrink-0 rounded-md px-3 py-1 text-small transition-hover hover:bg-[hsl(var(--surface))]"
+                >
+                  Update payment
+                </Link>
+              </div>
+            </div>
+          )}
+          {!pastDue && showBanner && (
             <div
               className={`mx-auto mb-5 max-w-4xl rounded-lg px-4 py-2.5 text-small ${
                 balance.exceeded
@@ -58,14 +88,18 @@ export default async function AppLayout({
               <div className="flex items-center justify-between gap-4">
                 <span>
                   {balance.exceeded
-                    ? `Out of credits for this month (${balance.used} / ${balance.limit}). Chat is paused.`
-                    : `You've used ${pct}% of your monthly credits (${balance.used} / ${balance.limit}).`}
+                    ? `Out of credits this cycle (${balance.used.toLocaleString()} / ${balance.limit.toLocaleString()}). Chat continues; agent drafts and other metered features pause until reset or top-up.`
+                    : `You've used ${pct}% of your cycle credits (${balance.used.toLocaleString()} / ${balance.limit.toLocaleString()}).`}
                 </span>
                 <Link
-                  href="/app/settings"
+                  href="/app/settings/billing"
                   className="shrink-0 rounded-md px-3 py-1 text-small transition-hover hover:bg-[hsl(var(--surface))]"
                 >
-                  {effective.plan === "free" ? "Upgrade" : "Manage"}
+                  {effective.plan === "free"
+                    ? "Upgrade"
+                    : balance.exceeded
+                    ? "Top up"
+                    : "Manage"}
                 </Link>
               </div>
             </div>
