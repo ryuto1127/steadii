@@ -97,6 +97,7 @@ describe("BillingQuotaExceededError", () => {
       used: 250,
       limit: 250,
       remaining: 0,
+      topupRemaining: 0,
       windowStart: new Date(),
       windowEnd: new Date(),
       exceeded: true,

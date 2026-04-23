@@ -97,6 +97,12 @@ export default async function BillingPage({
                   { month: "short", day: "numeric" }
                 )}`}
           </p>
+          {balance.topupRemaining > 0 && (
+            <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+              + {balance.topupRemaining.toLocaleString()} top-up credits (expire
+              90 days after purchase)
+            </p>
+          )}
         </div>
 
         <div className="mt-5">
