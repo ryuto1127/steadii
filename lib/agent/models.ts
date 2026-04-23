@@ -6,10 +6,11 @@ export type TaskType =
   | "chat_title"
   | "tag_suggest";
 
-// Canonical defaults per PRD §5. These are the target IDs; the operator can
+// Canonical model defaults. These are the target IDs; the operator can
 // override them at runtime with OPENAI_CHAT_MODEL / OPENAI_COMPLEX_MODEL /
 // OPENAI_NANO_MODEL without a code change — useful when the listed IDs
-// haven't rolled out to a particular account yet.
+// haven't rolled out to a particular account yet. The full routing policy
+// (which task type uses which tier) lives in memory/project_decisions.md.
 export type DefaultOpenAIModel = "gpt-5.4-mini" | "gpt-5.4" | "gpt-5.4-nano";
 
 const DEFAULTS: Record<

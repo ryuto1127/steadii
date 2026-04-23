@@ -6,7 +6,7 @@ import {
 } from "@/lib/agent/models";
 
 describe("selectModel env overrides", () => {
-  it("falls back to PRD §5 defaults when env is empty", () => {
+  it("falls back to canonical defaults when env is empty", () => {
     const env = {} as NodeJS.ProcessEnv;
     expect(selectModel("chat", env)).toBe("gpt-5.4-mini");
     expect(selectModel("tool_call", env)).toBe("gpt-5.4-mini");
