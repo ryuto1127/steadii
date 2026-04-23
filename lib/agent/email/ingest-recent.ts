@@ -11,8 +11,10 @@ import {
   GmailNotConnectedError,
   getGoogleProviderAccountId,
 } from "@/lib/integrations/google/gmail";
+import * as Sentry from "@sentry/nextjs";
 import { applyTriageResult, triageMessage } from "./triage";
 import { logEmailAudit } from "./audit";
+import { processL2 } from "./l2";
 import type { ClassifyInput } from "./types";
 
 export type IngestSummary = {
@@ -100,8 +102,25 @@ export async function ingestLast24h(
         input,
         result
       );
-      if (row) created++;
-      else skipped++;
+      if (row) {
+        created++;
+        // Synchronously run the L2 pipeline for ambiguous messages. α
+        // volume is ≤20 l2_pending items per user per 24h — queue is
+        // post-α. Failures are isolated per item so one bad message
+        // doesn't poison the ingest.
+        if (result.bucket === "l2_pending") {
+          try {
+            await processL2(row.id);
+          } catch (err) {
+            Sentry.captureException(err, {
+              tags: { feature: "email_l2", phase: "ingest" },
+              user: { id: userId },
+            });
+          }
+        }
+      } else {
+        skipped++;
+      }
     } catch (err) {
       skipped++;
       await logEmailAudit({
