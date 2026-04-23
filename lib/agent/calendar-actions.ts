@@ -15,7 +15,7 @@ export type CalendarEventInput = {
   description?: string;
   location?: string;
   recurrence?: string[];
-  reminders?: { minutes: number } | null;
+  reminders?: { minutes: number[] } | null;
 };
 
 async function requireUserId(): Promise<string> {
@@ -52,7 +52,7 @@ export type CalendarEventPatch = {
   description?: string;
   location?: string;
   recurrence?: string[];
-  reminders?: { minutes: number } | null;
+  reminders?: { minutes: number[] } | null;
 };
 
 export async function updateCalendarEventAction(

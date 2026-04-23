@@ -89,7 +89,10 @@ function initFromEvent(ev: CalendarEvent): EventFormState {
     location: ev.location ?? "",
     description: ev.description ?? "",
     recurrence: parseRecurrence(ev.recurrence),
-    reminderMinutes: ev.reminders?.minutes ?? null,
+    // UI currently exposes one reminder at a time; read the first if any.
+    // Multi-reminder events can still be created by the agent via
+    // calendar_create_event with an array.
+    reminderMinutes: ev.reminders?.minutes?.[0] ?? null,
   };
 }
 
@@ -180,7 +183,7 @@ function EventModePanel({
     try {
       const recurrence = formatRecurrence(form.recurrence);
       const reminders =
-        form.reminderMinutes === null ? null : { minutes: form.reminderMinutes };
+        form.reminderMinutes === null ? null : { minutes: [form.reminderMinutes] };
       const start = form.allDay ? form.start : localDateTimeToRfc3339(form.start);
       const end = form.allDay
         ? shiftDays(form.end, 1)
