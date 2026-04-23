@@ -6,16 +6,21 @@ import {
 } from "@/components/layout/nav-items";
 
 describe("Sidebar keyboard nav config", () => {
-  it("exposes exactly the 4 top-level items (settings lives in the account footer)", () => {
+  it("exposes exactly 5 top-level items with Inbox at the top", () => {
+    // Settings lives in the account footer, not the rail.
     expect([...NAV_ITEM_KEYS]).toEqual([
+      "inbox",
       "home",
       "chats",
       "classes",
       "calendar",
     ]);
+    // Inbox is the first item; memory-locked.
+    expect(NAV_ITEM_KEYS[0]).toBe("inbox");
   });
 
   it("maps each item to its documented href", () => {
+    expect(NAV_HREFS.inbox).toBe("/app/inbox");
     expect(NAV_HREFS.home).toBe("/app");
     expect(NAV_HREFS.chats).toBe("/app/chats");
     expect(NAV_HREFS.classes).toBe("/app/classes");
@@ -27,6 +32,10 @@ describe("Sidebar keyboard nav config", () => {
     const unique = new Set(letters);
     expect(unique.size).toBe(letters.length);
     for (const letter of letters) expect(letter).toMatch(/^[a-z]$/);
+  });
+
+  it("binds `g i` to the Inbox item", () => {
+    expect(NAV_SHORTCUTS.inbox).toBe("i");
   });
 
   it("includes every nav item in the shortcuts map", () => {

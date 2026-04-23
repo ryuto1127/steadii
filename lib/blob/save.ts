@@ -34,7 +34,7 @@ export async function uploadAndRecord(args: {
   // but anyone with the URL can fetch the file. Acceptable for α because
   // (1) invite-only users, (2) syllabi are typically public, (3) Notion
   // file blocks require public URLs. Post-α: split into public syllabus
-  // store + private chat-attachment store with a proxy route. See PRD §9.6.
+  // store + private chat-attachment store with a proxy route (post-α task).
   const uploaded = await put(path, args.file, {
     access: "public",
     contentType: args.file.type,
