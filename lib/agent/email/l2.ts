@@ -18,9 +18,16 @@ import { selectModel } from "@/lib/agent/models";
 import { runRiskPass, type RiskPassResult } from "./classify-risk";
 import { runDeepPass, type DeepPassResult, type DeepAction } from "./classify-deep";
 import { runDraft, type DraftResult } from "./draft";
-import { searchSimilarEmails, DEEP_PASS_TOP_K } from "./retrieval";
+import { searchSimilarEmails, DEEP_PASS_TOP_K, type SimilarEmail } from "./retrieval";
 import { buildEmbedInput } from "./embeddings";
+import { fetchRecentThreadMessages } from "./thread";
 import { logEmailAudit } from "./audit";
+
+// Hand-tuned K for the shallower medium-risk draft retrieval. Smaller than
+// DEEP_PASS_TOP_K because medium items don't get the deep reasoning pass,
+// so we don't need the full 20-item slate — just enough style/tone
+// anchoring for the draft.
+const MEDIUM_DRAFT_TOP_K = 5;
 
 // A concise summary returned to the ingest caller — useful in logs + tests.
 export type L2Outcome = {
@@ -31,17 +38,14 @@ export type L2Outcome = {
   riskTier: "low" | "medium" | "high" | null;
 };
 
-// Run the L2 pipeline for one inbox item. Risk → (deep if high) →
-// (draft if action === 'draft_reply'). Each step gated by
-// assertCreditsAvailable; if the gate throws BillingQuotaExceededError we
-// persist a 'paused' draft row and bail cleanly.
+// Run the L2 pipeline for one inbox item.
 //
 // Memory (2026-04-23 C6): "Risk pass continues even when balance.exceeded
-// (Mini is cheap). Deep pass + draft skipped when exhausted."
-// assertCreditsAvailable is still called before risk pass for observability,
-// but risk-pass failure mode is "skip the whole pipeline with paused=risk",
-// which matches the UI semantics (inbox item exists; draft generation
-// didn't happen).
+// (Mini is cheap). Deep pass + draft skipped when exhausted." We honour
+// that literally: there is NO credit gate before the risk pass. Mini cost
+// rounds to 0 credits per call so gating would block a free operation and
+// rob exhausted users of their classification/reasoning visibility (which
+// the glass-box UI depends on). The gate lives before deep and draft.
 export async function processL2(inboxItemId: string): Promise<L2Outcome> {
   return Sentry.startSpan(
     {
@@ -82,10 +86,9 @@ async function runPipeline(inboxItemId: string): Promise<L2Outcome> {
     resourceId: item.id,
   });
 
-  // ---- Step 1: risk pass (Mini) ----
+  // ---- Step 1: risk pass (Mini, always runs) ----
   let risk: RiskPassResult;
   try {
-    await assertCreditsAvailable(item.userId);
     risk = await runRiskPass({
       userId: item.userId,
       senderEmail: item.senderEmail,
@@ -96,16 +99,6 @@ async function runPipeline(inboxItemId: string): Promise<L2Outcome> {
       firstTimeSender: item.firstTimeSender,
     });
   } catch (err) {
-    if (err instanceof BillingQuotaExceededError) {
-      return persistPaused({
-        userId: item.userId,
-        inboxItemId: item.id,
-        step: "risk",
-        riskTier: null,
-        risk: null,
-        deep: null,
-      });
-    }
     Sentry.captureException(err, {
       tags: { feature: "email_l2", step: "risk" },
       user: { id: item.userId },
@@ -125,6 +118,17 @@ async function runPipeline(inboxItemId: string): Promise<L2Outcome> {
   }
 
   const riskTier = risk.riskTier;
+
+  // Prior thread messages (oldest-first, last 2) — cheap DB-only lookup
+  // against our own inbox_items. Gmail API call would be accurate but adds
+  // latency + external failure surface; using our materialized copy is
+  // sufficient since we ingest every triaged message.
+  const threadMessages = await fetchRecentThreadMessages({
+    userId: item.userId,
+    threadExternalId: item.threadExternalId,
+    beforeReceivedAt: item.receivedAt,
+    limit: 2,
+  });
 
   // ---- Step 2: deep pass (Full, high-risk only) ----
   let deep: DeepPassResult | null = null;
@@ -166,7 +170,7 @@ async function runPipeline(inboxItemId: string): Promise<L2Outcome> {
       riskPass: risk,
       similarEmails: similar,
       totalCandidates,
-      threadRecentMessages: [],
+      threadRecentMessages: threadMessages,
     });
   }
 
@@ -201,19 +205,31 @@ async function runPipeline(inboxItemId: string): Promise<L2Outcome> {
       throw err;
     }
 
-    // Medium-risk drafts get thread context only. High-risk drafts reuse
-    // the deep pass's similarEmails (if any).
-    const similarForDraft =
-      riskTier === "high" && deep
-        ? deep.retrievalProvenance.sources.map((s) => ({
-            inboxItemId: s.id,
-            similarity: s.similarity,
-            subject: null,
-            snippet: s.snippet,
-            receivedAt: new Date(0),
-            senderEmail: "",
-          }))
-        : [];
+    // High-risk drafts reuse the deep pass's retrieval (already paid for).
+    // Medium-risk drafts pull a smaller top-K slate of similar emails to
+    // anchor tone/style — shallower than deep pass, but not empty.
+    let similarForDraft: SimilarEmail[] = [];
+    if (riskTier === "high" && deep) {
+      similarForDraft = deep.retrievalProvenance.sources.map((s) => ({
+        inboxItemId: s.id,
+        similarity: s.similarity,
+        subject: null,
+        snippet: s.snippet,
+        receivedAt: new Date(0),
+        senderEmail: "",
+      }));
+    } else if (riskTier === "medium") {
+      const similarQuery = buildEmbedInput(item.subject, item.snippet);
+      if (similarQuery) {
+        const { results } = await searchSimilarEmails({
+          userId: item.userId,
+          queryText: similarQuery,
+          topK: MEDIUM_DRAFT_TOP_K,
+          excludeInboxItemId: item.id,
+        });
+        similarForDraft = results;
+      }
+    }
 
     draft = await runDraft({
       userId: item.userId,
@@ -224,7 +240,7 @@ async function runPipeline(inboxItemId: string): Promise<L2Outcome> {
       snippet: item.snippet,
       bodySnippet: item.snippet,
       inReplyTo: null,
-      threadRecentMessages: [],
+      threadRecentMessages: threadMessages,
       similarEmails: similarForDraft,
       userName: userRow?.name ?? null,
       userEmail: userRow?.email ?? null,
@@ -295,27 +311,22 @@ async function runPipeline(inboxItemId: string): Promise<L2Outcome> {
 async function persistPaused(args: {
   userId: string;
   inboxItemId: string;
-  step: "risk" | "deep" | "draft";
-  riskTier: "low" | "medium" | "high" | null;
-  risk: RiskPassResult | null;
+  step: "deep" | "draft";
+  riskTier: "low" | "medium" | "high";
+  risk: RiskPassResult;
   deep: DeepPassResult | null;
 }): Promise<L2Outcome> {
   const row: NewAgentDraft = {
     userId: args.userId,
     inboxItemId: args.inboxItemId,
-    classifyModel: args.risk ? selectModel("email_classify_risk") : null,
+    classifyModel: selectModel("email_classify_risk"),
     draftModel: null,
-    riskPassUsageId: args.risk?.usageId ?? null,
+    riskPassUsageId: args.risk.usageId,
     deepPassUsageId: args.deep?.usageId ?? null,
     draftUsageId: null,
-    // When paused at the risk step we have no classified tier. Safety bias:
-    // log as medium so downstream UI defaults to review-required.
-    riskTier: args.riskTier ?? "medium",
-    action: "ask_clarifying",
-    reasoning:
-      args.deep?.reasoning ??
-      args.risk?.reasoning ??
-      "Credit quota exceeded before any L2 step completed.",
+    riskTier: args.riskTier,
+    action: "paused",
+    reasoning: args.deep?.reasoning ?? args.risk.reasoning,
     retrievalProvenance: args.deep?.retrievalProvenance ?? null,
     draftSubject: null,
     draftBody: null,
@@ -328,6 +339,14 @@ async function persistPaused(args: {
   const [persisted] = await db.insert(agentDrafts).values(row).returning({
     id: agentDrafts.id,
   });
+
+  // Write the risk_tier back even on pause so downstream UI can filter /
+  // style inbox items by tier regardless of whether the draft completed.
+  await db
+    .update(inboxItems)
+    .set({ riskTier: args.riskTier, updatedAt: new Date() })
+    .where(eq(inboxItems.id, args.inboxItemId));
+
   await logEmailAudit({
     userId: args.userId,
     action: "email_l2_paused",
@@ -341,7 +360,7 @@ async function persistPaused(args: {
   return {
     agentDraftId: persisted?.id ?? null,
     status: "paused",
-    action: "ask_clarifying",
+    action: "paused",
     pausedAtStep: args.step,
     riskTier: args.riskTier,
   };

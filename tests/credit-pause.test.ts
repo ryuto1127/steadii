@@ -80,6 +80,9 @@ vi.mock("@/lib/agent/email/embeddings", () => ({
   buildEmbedInput: (a: string | null, b: string | null) =>
     `${a ?? ""}\n${b ?? ""}`.trim(),
 }));
+vi.mock("@/lib/agent/email/thread", () => ({
+  fetchRecentThreadMessages: async () => [],
+}));
 vi.mock("@/lib/agent/email/audit", () => ({
   logEmailAudit: async () => {},
 }));
@@ -118,11 +121,10 @@ beforeEach(() => {
 });
 
 describe("credit exhaustion behavior (C6)", () => {
-  it("risk pass completes; deep+draft skipped; row paused at deep", async () => {
+  it("high risk + exhausted deep → risk completes, deep+draft skipped, paused='deep'", async () => {
     addInbox();
-    // Let the risk pass's assertCreditsAvailable succeed, then deny the
-    // second call (before deep pass).
-    assertMock.mockResolvedValueOnce({ exceeded: false });
+    // No gate before risk (memory: "classify continues"). First assert
+    // call is before deep → denied.
     assertMock.mockRejectedValueOnce(new FakeBillingErr());
     riskMock.mockResolvedValue({
       riskTier: "high",
@@ -140,18 +142,20 @@ describe("credit exhaustion behavior (C6)", () => {
     expect(out.status).toBe("paused");
     expect(out.pausedAtStep).toBe("deep");
     expect(out.riskTier).toBe("high");
+    expect(out.action).toBe("paused");
     expect(draftInserts).toHaveLength(1);
     const row = draftInserts[0];
     expect(row.status).toBe("paused");
+    expect(row.action).toBe("paused");
     expect(row.pausedAtStep).toBe("deep");
     expect(row.riskPassUsageId).toBe("risk-uid");
     expect(row.draftUsageId).toBeNull();
+    expect(row.riskTier).toBe("high");
   });
 
-  it("exhaustion at draft step (medium risk) → paused='draft'", async () => {
+  it("medium risk + exhausted draft → risk completes, draft skipped, paused='draft'", async () => {
     addInbox();
-    // risk ok, draft pass denied.
-    assertMock.mockResolvedValueOnce({ exceeded: false });
+    // risk has no gate; draft gate denied.
     assertMock.mockRejectedValueOnce(new FakeBillingErr());
     riskMock.mockResolvedValue({
       riskTier: "medium",
@@ -163,25 +167,39 @@ describe("credit exhaustion behavior (C6)", () => {
     const { processL2 } = await import("@/lib/agent/email/l2");
     const out = await processL2("ibx");
 
+    expect(riskMock).toHaveBeenCalledTimes(1);
     expect(draftMock).not.toHaveBeenCalled();
     expect(out.pausedAtStep).toBe("draft");
     expect(out.riskTier).toBe("medium");
+    expect(out.action).toBe("paused");
     expect(draftInserts[0].status).toBe("paused");
+    expect(draftInserts[0].action).toBe("paused");
+    expect(draftInserts[0].riskTier).toBe("medium");
   });
 
-  it("exhaustion at risk step → paused='risk' (worst case)", async () => {
+  it("low risk + exhausted → completes normally (no_op, no gate hit)", async () => {
     addInbox();
-    // Even the Mini risk-pass gate is denied. Per memory, this is rare
-    // (risk pass costs ~0 credits) but we still handle it.
-    assertMock.mockRejectedValueOnce(new FakeBillingErr());
+    // assertCreditsAvailable is only called before deep/draft; low risk
+    // never reaches either, so credit exhaustion is irrelevant and the
+    // draft row persists as status='pending' action='no_op'.
+    riskMock.mockResolvedValue({
+      riskTier: "low",
+      confidence: 0.85,
+      reasoning: "acknowledgement",
+      usageId: "risk-uid",
+    });
 
     const { processL2 } = await import("@/lib/agent/email/l2");
     const out = await processL2("ibx");
 
-    expect(riskMock).not.toHaveBeenCalled();
-    expect(out.pausedAtStep).toBe("risk");
-    expect(out.riskTier).toBeNull();
-    // We default paused riskTier to medium for UI safety.
-    expect(draftInserts[0].riskTier).toBe("medium");
+    expect(riskMock).toHaveBeenCalledTimes(1);
+    expect(deepMock).not.toHaveBeenCalled();
+    expect(draftMock).not.toHaveBeenCalled();
+    expect(assertMock).not.toHaveBeenCalled();
+    expect(out.status).toBe("pending");
+    expect(out.pausedAtStep).toBeNull();
+    expect(out.action).toBe("no_op");
+    expect(draftInserts[0].status).toBe("pending");
+    expect(draftInserts[0].action).toBe("no_op");
   });
 });
