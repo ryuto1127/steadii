@@ -1,0 +1,15 @@
+{
+  "id": "m_auto_high_plagiarism",
+  "threadId": "t1",
+  "labelIds": ["INBOX", "UNREAD"],
+  "snippet": "I'm writing regarding a suspected case of plagiarism in your final paper.",
+  "internalDate": "1713828600000",
+  "payload": {
+    "headers": [
+      { "name": "From", "value": "\"Prof. Adams\" <prof.adams@known.edu>" },
+      { "name": "To", "value": "student@example.com" },
+      { "name": "Subject", "value": "Re: Final paper — plagiarism review" },
+      { "name": "Date", "value": "Mon, 22 Apr 2026 12:30:00 -0700" }
+    ]
+  }
+}

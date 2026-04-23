@@ -8,8 +8,13 @@ import {
 import {
   stepFromStatus,
   persistOnboardingStep,
+  getPersistedOnboardingStep,
 } from "@/lib/onboarding/progress";
-import { runSetupAction } from "./actions";
+import {
+  runSetupAction,
+  skipNotionAction,
+  finishOnboardingAction,
+} from "./actions";
 import { NotionConnectPanel } from "@/components/onboarding/notion-connect-panel";
 import { ProgressDots } from "@/components/onboarding/progress-dots";
 import { WhyDisclosure } from "@/components/onboarding/why-disclosure";
@@ -27,11 +32,14 @@ export default async function OnboardingPage({
 
   const status = await getOnboardingStatus(session.user.id);
   if (isOnboardingComplete(status)) {
+    // First-24h email ingest only needs to run on the final step actions.
+    // If the user is already complete, send them to the app.
     redirect("/app");
   }
 
   const { step: stepParam, notion_error } = await searchParams;
-  const derivedStep = stepFromStatus(status);
+  const persistedStep = await getPersistedOnboardingStep(session.user.id);
+  const derivedStep = stepFromStatus(status, persistedStep);
   // Allow ?step= to hold at step 4 (skip-or-add) once server state says 4.
   const requestedStep =
     stepParam === "resources" || stepParam === "4" ? 4 : undefined;
@@ -39,7 +47,7 @@ export default async function OnboardingPage({
 
   await persistOnboardingStep(session.user.id, currentStep);
 
-  async function reconnectCalendar() {
+  async function connectGoogle() {
     "use server";
     await signIn("google", { redirectTo: "/onboarding" });
   }
@@ -59,41 +67,51 @@ export default async function OnboardingPage({
 
         {currentStep === 1 && (
           <StepPane
-            title="Connect Notion"
-            oneLine="Steadii saves your mistakes, assignments, and syllabi into a Notion workspace you own."
-            whyTitle="Why do we need this?"
+            title="Connect Google"
+            oneLine="One consent grants Calendar + Gmail so Steadii can schedule, triage, and draft."
+            whyTitle="What does this grant?"
             why={
               <>
-                Notion is where your notes live. Steadii creates one parent page
-                with 4 databases (Classes, Mistakes, Assignments, Syllabi) and
-                only touches pages under that parent. You can revoke access any
-                time from Notion&apos;s integrations page.
+                Read + write access to your Calendar and read/modify/send on
+                Gmail. The agent triages incoming mail and prepares drafts for
+                your review — nothing sends without your confirmation and a
+                20-second undo window. You can revoke access anytime from your
+                Google account.
               </>
             }
           >
-            <NotionConnectPanel connected={status.notionConnected} />
+            <form action={connectGoogle}>
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center rounded-md bg-[hsl(var(--primary))] px-3.5 py-2 text-body font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
+              >
+                Grant Google access
+              </button>
+            </form>
           </StepPane>
         )}
 
         {currentStep === 2 && (
           <StepPane
-            title="Connect Google Calendar"
-            oneLine="So Steadii can show today's schedule and add class sessions and assignment blocks for you."
-            whyTitle="Why do we need this?"
+            title="Connect Notion (optional)"
+            oneLine="Adds class-relation context to triage. Skip if you don't use Notion — you can add it later in Settings."
+            whyTitle="Why bother?"
             why={
               <>
-                Read + write access to your primary calendar. We don&apos;t
-                create events without your input — the agent asks before writing
-                destructive changes.
+                Notion gives Steadii the map of your classes, mistakes,
+                assignments, and syllabi. With it, the agent can tie an incoming
+                email to the right course. Without it, triage still works —
+                you just get less context in each draft.
               </>
             }
           >
-            <form action={reconnectCalendar}>
+            <NotionConnectPanel connected={status.notionConnected} />
+            <form action={skipNotionAction} className="mt-2">
               <button
                 type="submit"
-                className="inline-flex items-center justify-center rounded-md bg-[hsl(var(--primary))] px-3.5 py-2 text-body font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
+                className="text-small text-[hsl(var(--muted-foreground))] underline-offset-4 transition-hover hover:text-[hsl(var(--foreground))] hover:underline"
               >
-                Grant calendar access
+                Skip for now
               </button>
             </form>
           </StepPane>
@@ -142,12 +160,14 @@ export default async function OnboardingPage({
             }
           >
             <div className="flex flex-wrap items-center justify-center gap-2">
-              <Link
-                href="/app"
-                className="inline-flex items-center justify-center rounded-md bg-[hsl(var(--primary))] px-3.5 py-2 text-body font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
-              >
-                Skip for now
-              </Link>
+              <form action={finishOnboardingAction}>
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center rounded-md bg-[hsl(var(--primary))] px-3.5 py-2 text-body font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
+                >
+                  Skip for now
+                </button>
+              </form>
               <Link
                 href="/app/settings"
                 className="inline-flex items-center justify-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3.5 py-2 text-body font-medium text-[hsl(var(--foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))]"

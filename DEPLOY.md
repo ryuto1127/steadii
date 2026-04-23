@@ -1,120 +1,187 @@
 # DEPLOY.md — Steadii α pre-launch checklist
 
-Run through this before inviting the first ten users. Each item should be
-explicitly verified, not inferred.
+Run through this before inviting the first ten users. Every item gets
+explicitly verified — no assumptions.
+
+Product-level decisions (pricing, tiers, agent scope, visual language) are
+not repeated here; read `project_decisions.md` and `project_agent_model.md`
+in the Claude memory for those.
 
 ---
 
 ## 1. Environment variables (Vercel Production + Preview)
 
-All of these must be set in both environments. Pull from `.env.example` as
-the canonical list.
+Pull from `.env.example` as the canonical list.
 
+**Infra**
 - [ ] `DATABASE_URL` — Neon prod branch connection string
 - [ ] `AUTH_SECRET` — `openssl rand -base64 32`
 - [ ] `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`
-- [ ] `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET`
-- [ ] `OPENAI_API_KEY`
-- [ ] `OPENAI_CHAT_MODEL`, `OPENAI_COMPLEX_MODEL`, `OPENAI_NANO_MODEL` —
-      leave blank to use PRD §5 defaults, set explicitly if the defaults
-      aren't enabled on the account yet
-- [ ] `STRIPE_SECRET_KEY` (test mode during α)
-- [ ] `STRIPE_PRICE_ID_PRO`
-- [ ] `STRIPE_WEBHOOK_SECRET` — copy after creating the webhook endpoint
-      in the Stripe dashboard
-- [ ] `ENCRYPTION_KEY` — `openssl rand -base64 32`
+- [ ] `ENCRYPTION_KEY` — `openssl rand -base64 32` (32-byte)
+- [ ] `APP_URL` — `https://mysteadii.xyz`
 - [ ] `BLOB_READ_WRITE_TOKEN` — Vercel Storage → Blob store token
 - [ ] `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`
-- [ ] `APP_URL` — prod domain, e.g. `https://steadii-alpha.xyz`
+
+**Notion**
+- [ ] `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET`
+
+**OpenAI**
+- [ ] `OPENAI_API_KEY`
+- [ ] `OPENAI_CHAT_MODEL` / `OPENAI_COMPLEX_MODEL` / `OPENAI_NANO_MODEL` —
+      blank to use defaults, or override if the default IDs aren't live
+      on the account yet
+
+**Stripe — keys**
+- [ ] `STRIPE_SECRET_KEY` (test mode during α — `sk_test_...`)
+- [ ] `STRIPE_WEBHOOK_SECRET` — copy after creating the webhook endpoint
+
+**Stripe — catalog** (populated by `pnpm tsx scripts/stripe-setup.ts`, then
+paste output into Vercel env)
+- [ ] `STRIPE_PRICE_PRO_MONTHLY`
+- [ ] `STRIPE_PRICE_PRO_YEARLY`
+- [ ] `STRIPE_PRICE_STUDENT_4MO`
+- [ ] `STRIPE_PRICE_TOPUP_500`
+- [ ] `STRIPE_PRICE_TOPUP_2000`
+- [ ] `STRIPE_PRICE_DATA_RETENTION`
+- [ ] `STRIPE_COUPON_ADMIN`
+- [ ] `STRIPE_COUPON_FRIEND_3MO`
+- [ ] `STRIPE_PRICE_ID_PRO` — legacy alias; set to the same value as
+      `STRIPE_PRICE_PRO_MONTHLY` until the last caller migrates off
+
+---
 
 ## 2. Databases
 
 - [ ] Neon prod branch provisioned
-- [ ] `pnpm db:migrate` applied on prod DB
-- [ ] Run `pnpm tsx scripts/fix-stale-notion-setup.ts --dry-run` to confirm
-      no stale rows remain from pre-prod testing
+- [ ] `pnpm db:migrate` applied on prod DB (latest: 0012, adds
+      `topup_balances`)
+- [ ] Ryuto's own user row has `is_admin = true` (set via Neon SQL editor
+      or Drizzle Studio — the previous redemption-based admin mechanism
+      was removed)
+
+---
 
 ## 3. Google OAuth
 
 - [ ] Google Cloud project OAuth consent screen: Testing mode
-- [ ] Scopes: `openid`, `email`, `profile`, `calendar`, `calendar.events`
+- [ ] Scopes (matches `lib/auth/config.ts`):
+  - `openid email profile`
+  - `https://www.googleapis.com/auth/calendar`
+  - `https://www.googleapis.com/auth/calendar.events`
+  - `https://www.googleapis.com/auth/tasks`
+  - `https://www.googleapis.com/auth/classroom.courses.readonly`
+  - `https://www.googleapis.com/auth/classroom.coursework.me.readonly`
+  - `https://www.googleapis.com/auth/classroom.announcements.readonly`
 - [ ] All ten α users added as test users in Google Cloud Console
-- [ ] OAuth redirect URIs include both
-      `http://localhost:3000/api/auth/callback/google` and
-      `https://<prod-domain>/api/auth/callback/google`
+- [ ] OAuth redirect URIs include both:
+  - `http://localhost:3000/api/auth/callback/google`
+  - `https://mysteadii.xyz/api/auth/callback/google`
+
+---
 
 ## 4. Notion
 
 - [ ] Public integration created at notion.so/my-integrations
 - [ ] OAuth redirect URIs:
-      `http://localhost:3000/api/integrations/notion/callback` and
-      `https://<prod-domain>/api/integrations/notion/callback`
-- [ ] Integration capabilities include "Read content," "Update content,"
-      "Insert content"
+  - `http://localhost:3000/api/integrations/notion/callback`
+  - `https://mysteadii.xyz/api/integrations/notion/callback`
+- [ ] Integration capabilities: Read content, Update content, Insert content
+
+---
 
 ## 5. Stripe
 
-- [ ] Stripe in **Test mode** — verified in dashboard header
-- [ ] Product "Steadii Pro" with recurring $20 USD/month price
-- [ ] `STRIPE_PRICE_ID_PRO` matches the actual price ID
-- [ ] Webhook endpoint registered at `https://<prod-domain>/api/stripe/webhook`
-      with events: `customer.subscription.*`, `invoice.paid`,
-      `invoice.payment_failed`
+- [ ] Stripe in **Test mode** (α). Live cutover is a separate launch step.
+- [ ] Run `pnpm tsx scripts/stripe-setup.ts` to create the full catalog
+      idempotently — Products (Pro M/Y, Student 4mo, Top-up 500/2000,
+      Data Retention Extension) and Coupons (`STEADII_ADMIN_FOREVER`,
+      `STEADII_FRIEND_3MO`)
+- [ ] Paste the printed env var lines into Vercel (see §1)
+- [ ] Set `is_admin = true` on Ryuto's user row so his own account
+      bypasses quota (he does not redeem the Admin coupon unless he
+      wants to test the checkout path)
+- [ ] Friend invite codes: create individual Promotion Codes under the
+      `STEADII_FRIEND_3MO` coupon in Stripe Dashboard. Share URLs like
+      `https://mysteadii.xyz/invite/<code>`.
+- [ ] Webhook endpoint registered at `https://mysteadii.xyz/api/stripe/webhook`
+      with events:
+  - `checkout.session.completed` (covers subscription-mode + one-time top-ups)
+  - `customer.subscription.created`
+  - `customer.subscription.updated`
+  - `customer.subscription.deleted`
+  - `invoice.paid`
+  - `invoice.payment_failed`
 - [ ] `STRIPE_WEBHOOK_SECRET` in Vercel matches the webhook's signing
-      secret
-- [ ] Manual test: trigger `customer.subscription.created` via Stripe CLI
-      (`stripe trigger customer.subscription.created`), confirm the
-      `subscriptions` row appears and audit_log carries
-      `stripe.subscription.active`
+      secret; after updating env, trigger a Vercel redeploy
+
+---
 
 ## 6. Sentry
 
-- [ ] Sentry project created (Next.js platform)
+- [ ] Sentry project (Next.js platform)
 - [ ] DSNs set (server + public)
-- [ ] Deliberately trigger an error from staging (e.g., navigate to
-      `/app/chat/00000000-0000-0000-0000-000000000000`) and confirm
-      Sentry captures it
-- [ ] Source maps uploaded via Vercel build integration — check Sentry
-      → Settings → Projects → Steadii → Source Maps has recent uploads
+- [ ] Deliberately trigger an error (e.g. navigate to a bad chat id),
+      confirm Sentry captures it
+- [ ] Source maps uploading via Vercel build integration
+
+---
 
 ## 7. Vercel Blob
 
-- [ ] Blob store created under Vercel Storage → Blob
-- [ ] Access: `public` (α; β will split)
-- [ ] `BLOB_READ_WRITE_TOKEN` wired. Upload a test PDF via the running
-      app, confirm the saved Notion file block is publicly fetchable
+- [ ] Blob store created under Vercel Storage → Blob (public access for α)
+- [ ] `BLOB_READ_WRITE_TOKEN` in env; upload a test PDF via the app and
+      confirm the resulting Notion file block is publicly fetchable
 
-## 8. Smoke test the full journey
+---
 
-Do this in an incognito window with a fresh Google account:
+## 8. Smoke test the full journey (incognito + fresh Google account)
 
-- [ ] `/` loads, Privacy and Terms links work
-- [ ] Click "Sign in with Google" → consent screen shows calendar scopes
-- [ ] Redirected to `/onboarding` with the instructional panel
-- [ ] "Connect Notion" → select **All pages** → redirected back
+- [ ] `/` loads; Privacy and Terms links work
+- [ ] "Sign in with Google" → consent screen shows all expected scopes
+- [ ] Redirected to `/onboarding` with instructional panel
+- [ ] `users.trial_started_at` is populated (14-day Pro trial started)
+- [ ] "Connect Notion" → select All pages → redirected back
 - [ ] "Run setup" → Steadii parent + 4 DBs appear in Notion
-- [ ] `/app/chat` loads; send "Hello" → agent replies with streaming text
-- [ ] Upload a real syllabus PDF via `/app/syllabus/new` → preview
-      populates → save → Notion has file block + `Full source content`
-      toggle
-- [ ] Paste a math problem screenshot in chat → "Add to mistake
-      notebook" → save → Notion row appears with image + explanation
-- [ ] `/app/calendar` shows this week's Google Calendar events
-- [ ] `/app/settings/billing` shows correct plan and usage bars
-- [ ] Redeem a friend code generated via
-      `pnpm tsx scripts/generate-redeem-code.ts friend --days 30`
-- [ ] Trigger `BILLING_QUOTA_EXCEEDED` by temporarily lowering the Free
-      plan cap, confirm the banner + error bubble surface correctly
+- [ ] `/app` loads Home (Dashboard + chat input); send a message, agent
+      streams a response
+- [ ] `/app/settings/billing` shows **"Pro (14-day trial) · ends <date>"**
+      plus credit / storage bars with reset date
+- [ ] As Free user (admin flag off): click "Upgrade to Pro" → Stripe
+      Checkout with `4242 4242 4242 4242` → redirected back → webhook
+      mirrors subscription → `plan_tier='pro'` in DB
+- [ ] First paid subscription triggers `founding_member=true` → badge
+      shows in Billing UI ("Founding member. Your current price is
+      locked in for life.")
+- [ ] "+500 credits · \$10" → one-time Checkout → `topup_balances` row
+      inserted, expiry ~90 days out, Billing UI shows "+500 top-up credits"
+- [ ] "Extend data retention · \$10" → `users.data_retention_expires_at`
+      set ~1 year out
+- [ ] Student plan from a non-`.edu` account → 403 with
+      `STUDENT_EMAIL_REQUIRED`
+- [ ] Friend invite flow: create Promotion Code `FRIEND_TEST` under
+      `STEADII_FRIEND_3MO`; open `/invite/FRIEND_TEST` in another
+      session; "Accept invite" → Checkout at \$0 for 3 months
+- [ ] "Cancel subscription" link at the bottom of Billing → two-step
+      flow → Confirm → `subscriptions.cancel_at_period_end = 1`;
+      `audit_log` has `action='billing.canceled'` with the reason
+- [ ] Mark a subscription past_due in Stripe (or force a failed payment)
+      → app shell banner "Your last payment failed…" surfaces at top of
+      every `/app/*` page
+
+---
 
 ## 9. Monitoring
 
-- [ ] Vercel production logs: open a second browser tab on the live site,
-      follow along with `vercel logs --follow`
-- [ ] Uptime check: Vercel deployment shows green, no build warnings
-- [ ] OpenAI dashboard: monthly usage cap set to $100
+- [ ] `vercel logs --follow` during smoke tests
+- [ ] OpenAI dashboard usage cap: \$100/month for α
+- [ ] Sentry clean (no unresolved errors from smoke tests)
+
+---
 
 ## 10. Launch
 
-- [ ] Invite emails drafted with the onboarding URL
-- [ ] Known-issues note: Stripe is test-mode; billing UI doesn't charge
-- [ ] Admin (you) has redeemed an admin code so `/app/admin` is visible
+- [ ] Invite emails drafted with onboarding URL (use `/invite/<code>`
+      links to pre-fund the 3-month Pro via `FRIEND_3MO`)
+- [ ] Known-issue note: Stripe is test-mode; UI shows real flow but no
+      charges post
+- [ ] Ryuto's admin flag confirmed on in production DB

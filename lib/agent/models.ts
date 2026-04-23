@@ -4,12 +4,17 @@ export type TaskType =
   | "mistake_explain"
   | "syllabus_extract"
   | "chat_title"
-  | "tag_suggest";
+  | "tag_suggest"
+  // Phase 6 email agent. W1 doesn't emit these; landing the types now
+  // avoids a tree-shaking churn in W2 when the L2 pipeline wires up.
+  | "email_classify"
+  | "email_draft";
 
-// Canonical defaults per PRD §5. These are the target IDs; the operator can
+// Canonical model defaults. These are the target IDs; the operator can
 // override them at runtime with OPENAI_CHAT_MODEL / OPENAI_COMPLEX_MODEL /
 // OPENAI_NANO_MODEL without a code change — useful when the listed IDs
-// haven't rolled out to a particular account yet.
+// haven't rolled out to a particular account yet. The full routing policy
+// (which task type uses which tier) lives in memory/project_decisions.md.
 export type DefaultOpenAIModel = "gpt-5.4-mini" | "gpt-5.4" | "gpt-5.4-nano";
 
 const DEFAULTS: Record<
@@ -57,10 +62,13 @@ export function selectModel(
       return env.OPENAI_CHAT_MODEL?.trim() || DEFAULTS.chat;
     case "mistake_explain":
     case "syllabus_extract":
+    case "email_draft":
       return env.OPENAI_COMPLEX_MODEL?.trim() || DEFAULTS.complex;
     case "chat_title":
     case "tag_suggest":
       return env.OPENAI_NANO_MODEL?.trim() || DEFAULTS.nano;
+    case "email_classify":
+      return env.OPENAI_CHAT_MODEL?.trim() || DEFAULTS.chat;
   }
 }
 
@@ -106,6 +114,8 @@ export function taskTypeMetersCredits(t: TaskType): boolean {
   switch (t) {
     case "mistake_explain":
     case "syllabus_extract":
+    case "email_classify":
+    case "email_draft":
       return true;
     case "chat":
     case "tool_call":

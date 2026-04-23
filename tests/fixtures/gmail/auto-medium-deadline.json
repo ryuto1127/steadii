@@ -1,0 +1,15 @@
+{
+  "id": "m_auto_medium_deadline",
+  "threadId": "t2",
+  "labelIds": ["INBOX"],
+  "snippet": "Can we discuss an extension on the problem set?",
+  "internalDate": "1713828600000",
+  "payload": {
+    "headers": [
+      { "name": "From", "value": "classmate@known.edu" },
+      { "name": "To", "value": "student@example.com" },
+      { "name": "Subject", "value": "Extension on PS4 deadline?" },
+      { "name": "Date", "value": "Mon, 22 Apr 2026 12:30:00 -0700" }
+    ]
+  }
+}

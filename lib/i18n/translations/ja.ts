@@ -52,6 +52,7 @@ export const ja: Messages = {
     sign_in: "サインイン",
   },
   nav: {
+    inbox: "受信箱",
     home: "ホーム",
     chats: "チャット",
     classes: "授業",
