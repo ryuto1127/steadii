@@ -99,6 +99,13 @@
       "when": 1776977446126,
       "tag": "0013_fluffy_havok",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1777147200000,
+      "tag": "0014_enable_pgvector",
+      "breakpoints": true
     }
   ]
 }
