@@ -71,7 +71,9 @@ async function createChatAndPost(
   return chatId;
 }
 
-const MIN_HEIGHT_PX = 44;
+// Textarea auto-grows from a single-line height up to MAX_HEIGHT_PX, then
+// scrolls. The parent wrapper has min-h-11 + items-center, so the surrounding
+// chrome stays a stable 44px tall even when the textarea is shorter.
 const MAX_HEIGHT_PX = 200;
 
 export function NewChatInput({
@@ -145,13 +147,17 @@ export function NewChatInput({
     setMounted(true);
   }, []);
 
-  // Auto-grow the textarea up to MAX_HEIGHT_PX.
+  // Auto-grow the textarea up to MAX_HEIGHT_PX. No minimum clamp here —
+  // one line of text produces a one-line-tall textarea; the parent wrapper
+  // (min-h-11 + items-center) keeps the visual chrome at 44px so the input
+  // never looks cramped.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    const next = Math.min(MAX_HEIGHT_PX, Math.max(MIN_HEIGHT_PX, el.scrollHeight));
+    const next = Math.min(MAX_HEIGHT_PX, el.scrollHeight);
     el.style.height = `${next}px`;
+    el.style.overflowY = el.scrollHeight > MAX_HEIGHT_PX ? "auto" : "hidden";
   }, [value]);
 
   const canSubmit = value.trim().length > 0 && !isPending;
