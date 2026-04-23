@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
 import { chats, messages as messagesTable } from "@/lib/db/schema";
 import { and, asc, eq } from "drizzle-orm";
+import { z } from "zod";
 import {
   streamChatResponse,
   generateChatTitle,
@@ -19,16 +20,62 @@ import { getEffectivePlan } from "@/lib/billing/effective-plan";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function POST() {
+// Accepts an optional first-message payload. When `content` is present we
+// create the chat AND persist the first user message in a single request,
+// so the client can navigate to /app/chat/[id] after one round-trip instead
+// of three (create → message → navigate).
+const createBodySchema = z
+  .object({ content: z.string().max(16_000).optional() })
+  .optional();
+
+export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
+  const userId = session.user.id;
+
+  let content: string | undefined;
+  const ctype = request.headers.get("content-type") ?? "";
+  if (ctype.includes("application/json")) {
+    try {
+      const raw = await request.json();
+      const parsed = createBodySchema.safeParse(raw);
+      if (parsed.success) content = parsed.data?.content?.trim() || undefined;
+    } catch {
+      // Empty body / non-JSON — legacy callers just POST with no body.
+    }
+  }
+
+  // If the caller is creating a chat with a first message, apply the same
+  // rate-limit gate that /api/chat/message does. Empty creates (legacy
+  // client) skip the gate to stay backwards-compatible.
+  if (content) {
+    try {
+      enforceRateLimit(userId, "chat.message", BUCKETS.chatMessage);
+      const eff = await getEffectivePlan(userId);
+      enforceChatLimits(userId, eff.plan);
+    } catch (err) {
+      if (err instanceof RateLimitError) return rateLimitResponse(err);
+      throw err;
+    }
+  }
+
   const [row] = await db
     .insert(chats)
-    .values({ userId: session.user.id })
+    .values({ userId })
     .returning({ id: chats.id });
-  return NextResponse.json({ id: row.id });
+  const chatId = row.id;
+
+  if (content) {
+    await db.insert(messagesTable).values({
+      chatId,
+      role: "user",
+      content,
+    });
+  }
+
+  return NextResponse.json({ id: chatId });
 }
 
 export async function GET(request: NextRequest) {
