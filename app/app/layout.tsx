@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth/config";
 import { Sidebar } from "@/components/layout/sidebar";
 import { OfflineStrip } from "@/components/layout/offline-strip";
 import { RouteTransition } from "@/components/layout/route-transition";
+import { ReauthBanner } from "@/components/layout/reauth-banner";
 import {
   getOnboardingStatus,
   isOnboardingComplete,
@@ -39,6 +40,12 @@ export default async function AppLayout({
       .limit(1)
       .then((rows) => rows[0] ?? null),
   ]);
+  // Pre-Gmail users: they completed onboarding under the old scope set
+  // (Calendar only). isOnboardingComplete now requires Gmail, so in
+  // practice such users get redirected to /onboarding — but the banner
+  // remains as a safety net and a discoverability nudge in case the
+  // redirect is bypassed (e.g. re-consent flow in progress).
+  const gmailConnected = status.gmailConnected;
   // Dunning takes priority over credit near-limit — a failed payment is
   // more urgent than approaching the quota ceiling.
   const pastDue = subRow?.status === "past_due";
@@ -60,6 +67,7 @@ export default async function AppLayout({
       <main className="relative flex-1 overflow-y-auto rounded-xl bg-[hsl(var(--surface))] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.04]">
         <OfflineStrip />
         <div className="px-10 py-8">
+          {!gmailConnected && <ReauthBanner />}
           {pastDue && (
             <div className="mx-auto mb-5 max-w-4xl rounded-lg bg-[hsl(var(--destructive)/0.08)] px-4 py-2.5 text-small text-[hsl(var(--destructive))]">
               <div className="flex items-center justify-between gap-4">
