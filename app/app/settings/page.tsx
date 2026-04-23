@@ -257,6 +257,8 @@ export default async function SettingsPage() {
                   ? ` · renews ${effective.until.toLocaleDateString()}`
                   : ""
               }`
+            : effective.plan === "pro" && effective.source === "trial"
+            ? `Pro (14-day trial) · ends ${effective.until.toLocaleDateString()}`
             : effective.plan === "pro"
             ? `Pro${
                 effective.until

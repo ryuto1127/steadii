@@ -9,14 +9,19 @@ export type EffectivePlan =
   | { plan: "admin"; source: "flag" }
   | { plan: "pro"; source: "stripe"; until: Date | null }
   | { plan: "student"; source: "stripe"; until: Date | null }
+  | { plan: "pro"; source: "trial"; until: Date }
   | { plan: "free"; source: "default" };
+
+// Trial window = 14 days from users.trial_started_at. No credit card required;
+// auto-downgrades to Free when this check starts returning false.
+export const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
 
 export async function getEffectivePlan(userId: string): Promise<EffectivePlan> {
   const now = new Date();
 
   // 1. Admin flag — direct bypass of everything, checked first.
   const [userRow] = await db
-    .select({ isAdmin: users.isAdmin })
+    .select({ isAdmin: users.isAdmin, trialStartedAt: users.trialStartedAt })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
@@ -53,7 +58,18 @@ export async function getEffectivePlan(userId: string): Promise<EffectivePlan> {
     };
   }
 
-  // 3. Default free.
+  // 3. 14-day Pro trial (set on user creation by Auth.js events.createUser).
+  // Falls through when expired or when trial_started_at was never set.
+  if (userRow?.trialStartedAt) {
+    const trialEnd = new Date(
+      userRow.trialStartedAt.getTime() + TRIAL_DURATION_MS
+    );
+    if (trialEnd.getTime() > now.getTime()) {
+      return { plan: "pro", source: "trial", until: trialEnd };
+    }
+  }
+
+  // 4. Default free.
   return { plan: "free", source: "default" };
 }
 
