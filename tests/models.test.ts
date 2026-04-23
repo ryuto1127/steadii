@@ -88,14 +88,14 @@ describe("credit accounting", () => {
     expect(taskTypeMetersCredits("tag_suggest")).toBe(false);
   });
 
-  it("usdToCredits floors at half-cent granularity (1 credit = $0.005)", () => {
-    // $0.019 * 200 = 3.8 → floor = 3
-    expect(usdToCredits(0.019)).toBe(3);
+  it("usdToCredits rounds at half-cent granularity (1 credit = $0.005)", () => {
+    // $0.019 * 200 = 3.8 → round = 4 (was 3 under floor)
+    expect(usdToCredits(0.019)).toBe(4);
     // $0.02 * 200 = 4
     expect(usdToCredits(0.02)).toBe(4);
     // $1.00 * 200 = 200
     expect(usdToCredits(1.0)).toBe(200);
-    // $0.001 * 200 = 0.2 → floor = 0
+    // $0.001 * 200 = 0.2 → round = 0 still
     expect(usdToCredits(0.001)).toBe(0);
     // $0.005 * 200 = 1
     expect(usdToCredits(0.005)).toBe(1);

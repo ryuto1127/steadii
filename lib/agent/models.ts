@@ -127,8 +127,14 @@ export function estimateUsdCost(
 // operation credit cost doubles under this unit so Pro Student ($10 / 1000
 // credits) and free-tier loss become sustainable — see project_decisions.md.
 // Math: usd / 0.005 === usd * 200.
+//
+// 2026-04-23 (C7 fix in Phase 6 W2): switched from Math.floor → Math.round.
+// Under floor, a 3.9-credit draft silently rounded to 3 (and a 0.75-credit
+// classify to 0). Half-up rounding keeps the integer pool honest without
+// inventing sub-unit credits. Sub-rounding-boundary tasks (< 0.5 credits)
+// still round to 0 and remain free — fine for embedding + risk-pass.
 export function usdToCredits(usd: number): number {
-  return Math.floor(usd * 200);
+  return Math.round(usd * 200);
 }
 
 // Task types that CONSUME credits. Chat and meta/title/tag work are tracked
