@@ -1,4 +1,5 @@
 import "server-only";
+import * as Sentry from "@sentry/nextjs";
 import { google, type gmail_v1 } from "googleapis";
 import { db } from "@/lib/db/client";
 import { accounts } from "@/lib/db/schema";
@@ -44,21 +45,28 @@ export async function getGmailForUser(
 
   oauth2.on("tokens", async (tokens) => {
     if (tokens.access_token) {
-      await db
-        .update(accounts)
-        .set({
-          access_token: encryptOAuthToken(tokens.access_token),
-          expires_at: tokens.expiry_date
-            ? Math.floor(tokens.expiry_date / 1000)
-            : row.expires_at,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(accounts.provider, "google"),
-            eq(accounts.providerAccountId, row.providerAccountId)
-          )
-        );
+      try {
+        await db
+          .update(accounts)
+          .set({
+            access_token: encryptOAuthToken(tokens.access_token),
+            expires_at: tokens.expiry_date
+              ? Math.floor(tokens.expiry_date / 1000)
+              : row.expires_at,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(accounts.provider, "google"),
+              eq(accounts.providerAccountId, row.providerAccountId)
+            )
+          );
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: { integration: "gmail", op: "token_refresh_persist" },
+          user: { id: userId },
+        });
+      }
     }
   });
 
