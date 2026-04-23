@@ -138,10 +138,12 @@ export default async function CalendarPage({
             ? zoneDateString(r.endsAt, r.originTimezone ?? userTz)
             : utcToZoneWallClock(r.endsAt, r.originTimezone ?? userTz);
       const meta = (r.sourceMetadata ?? {}) as Record<string, unknown>;
-      const reminders =
+      const reminderOverrides =
         (meta.reminders as { overrides?: Array<{ method?: string; minutes?: number }> } | null)
-          ?.overrides;
-      const popup = reminders?.find((o) => o.method === "popup") ?? reminders?.[0];
+          ?.overrides ?? [];
+      const popupMinutes = reminderOverrides
+        .filter((o) => o.method === "popup" && typeof o.minutes === "number")
+        .map((o) => o.minutes as number);
       const ce: CalendarEvent = {
         kind: "event",
         id: r.externalId,
@@ -153,10 +155,7 @@ export default async function CalendarPage({
         description: r.description,
         recurrence: (meta.recurrence as string[] | null) ?? null,
         recurringEventId: (meta.recurringEventId as string | null) ?? null,
-        reminders:
-          popup && typeof popup.minutes === "number"
-            ? { minutes: popup.minutes }
-            : null,
+        reminders: popupMinutes.length > 0 ? { minutes: popupMinutes } : null,
       };
       items.push(ce);
     } else if (r.kind === "task") {

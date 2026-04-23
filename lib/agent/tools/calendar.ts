@@ -56,7 +56,10 @@ export type CalendarListedEvent = {
   description?: string | null;
   recurrence?: string[] | null;
   recurringEventId?: string | null;
-  reminders?: { minutes: number } | null;
+  // Array of popup reminder minutes before the event. Empty array = no
+  // overrides (event uses the calendar's default reminders). null = data
+  // not materialized in the L4 row yet.
+  reminders?: { minutes: number[] } | null;
 };
 
 export const calendarListEvents: ToolExecutor<
@@ -115,10 +118,12 @@ export const calendarListEvents: ToolExecutor<
       const end = r.isAllDay
         ? origEnd?.date ?? null
         : origEnd?.dateTime ?? r.endsAt?.toISOString() ?? null;
-      const reminders =
+      const reminderOverrides =
         (meta.reminders as { overrides?: Array<{ method?: string; minutes?: number }> } | null)
-          ?.overrides;
-      const popup = reminders?.find((o) => o.method === "popup") ?? reminders?.[0];
+          ?.overrides ?? [];
+      const popupMinutes = reminderOverrides
+        .filter((o) => o.method === "popup" && typeof o.minutes === "number")
+        .map((o) => o.minutes as number);
       events.push({
         id: r.externalId,
         summary: r.title,
@@ -128,10 +133,7 @@ export const calendarListEvents: ToolExecutor<
         description: r.description,
         recurrence: (meta.recurrence as string[] | null) ?? null,
         recurringEventId: (meta.recurringEventId as string | null) ?? null,
-        reminders:
-          popup && typeof popup.minutes === "number"
-            ? { minutes: popup.minutes }
-            : null,
+        reminders: popupMinutes.length > 0 ? { minutes: popupMinutes } : null,
       });
       if (events.length >= limit) break;
     }
@@ -140,7 +142,12 @@ export const calendarListEvents: ToolExecutor<
 };
 
 // ---------- calendar_create_event ----------
-const remindersArg = z.object({ minutes: z.number().int().min(0).max(40320) });
+// Google Calendar permits up to 5 popup reminder overrides per event.
+// `minutes` is now an array; pass e.g. [60, 10] for reminders at 1 hour
+// and 10 minutes before. A single reminder is still expressible as [n].
+const remindersArg = z.object({
+  minutes: z.array(z.number().int().min(0).max(40320)).min(1).max(5),
+});
 
 const createArgs = z.object({
   summary: z.string().min(1),
@@ -164,7 +171,7 @@ export const calendarCreateEvent: ToolExecutor<
   schema: {
     name: "calendar_create_event",
     description:
-      "Create a Google Calendar event. `start`/`end` must be RFC3339 timestamps (with timezone) or all-day YYYY-MM-DD strings. `recurrence` is an array of RRULE strings (e.g. ['RRULE:FREQ=WEEKLY;BYDAY=MO,WE']). `reminders.minutes` sets a single popup reminder that many minutes before the event.",
+      "Create a Google Calendar event. `start`/`end` must be RFC3339 timestamps (with timezone) or all-day YYYY-MM-DD strings. `recurrence` is an array of RRULE strings (e.g. ['RRULE:FREQ=WEEKLY;BYDAY=MO,WE']). `reminders.minutes` is an array (up to 5) of minutes before the event to fire popup reminders — pass [60, 10] to get reminders 1 hour and 10 minutes out.",
     mutability: "write",
     parameters: {
       type: "object",
@@ -178,7 +185,14 @@ export const calendarCreateEvent: ToolExecutor<
         recurrence: { type: "array", items: { type: "string" } },
         reminders: {
           type: "object",
-          properties: { minutes: { type: "integer", minimum: 0, maximum: 40320 } },
+          properties: {
+            minutes: {
+              type: "array",
+              items: { type: "integer", minimum: 0, maximum: 40320 },
+              minItems: 1,
+              maxItems: 5,
+            },
+          },
           required: ["minutes"],
           additionalProperties: false,
         },
@@ -204,7 +218,7 @@ export const calendarCreateEvent: ToolExecutor<
       if (args.reminders) {
         body.reminders = {
           useDefault: false,
-          overrides: [{ method: "popup", minutes: args.reminders.minutes }],
+          overrides: args.reminders.minutes.map((m) => ({ method: "popup", minutes: m })),
         };
       }
       const calendarId = args.calendarId ?? "primary";
@@ -271,7 +285,14 @@ export const calendarUpdateEvent: ToolExecutor<
         recurrence: { type: "array", items: { type: "string" } },
         reminders: {
           type: "object",
-          properties: { minutes: { type: "integer", minimum: 0, maximum: 40320 } },
+          properties: {
+            minutes: {
+              type: "array",
+              items: { type: "integer", minimum: 0, maximum: 40320 },
+              minItems: 1,
+              maxItems: 5,
+            },
+          },
           required: ["minutes"],
           additionalProperties: false,
         },
@@ -295,7 +316,7 @@ export const calendarUpdateEvent: ToolExecutor<
     if (args.reminders !== undefined) {
       body.reminders = {
         useDefault: false,
-        overrides: [{ method: "popup", minutes: args.reminders.minutes }],
+        overrides: args.reminders.minutes.map((m) => ({ method: "popup", minutes: m })),
       };
     }
 
