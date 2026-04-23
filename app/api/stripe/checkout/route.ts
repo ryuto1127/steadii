@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import { db } from "@/lib/db/client";
 import { subscriptions, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { isAcademicEmail } from "@/lib/billing/academic-email";
 
 export const runtime = "nodejs";
 
@@ -83,6 +84,31 @@ export async function POST(request: NextRequest) {
     .from(subscriptions)
     .where(eq(subscriptions.userId, userId))
     .limit(1);
+
+  // Student tier gate: primary email must look academic. The alternate-
+  // email + verification-link flow is post-α; for now, users whose Google
+  // OAuth email isn't academic need to either use a different Google
+  // account or pick the regular Pro plan.
+  if (tier === "student") {
+    const [u] = existing
+      ? [null]
+      : await db
+          .select({ email: users.email })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+    const email = u?.email ?? session.user.email;
+    if (!isAcademicEmail(email)) {
+      return NextResponse.json(
+        {
+          error:
+            "Student plan requires an academic email (.edu, .ac.*, or a verified Canadian university domain). Sign in with your university Google account, or choose the Pro plan.",
+          code: "STUDENT_EMAIL_REQUIRED",
+        },
+        { status: 403 }
+      );
+    }
+  }
 
   let customerId = existing?.stripeCustomerId ?? null;
   if (!customerId) {
