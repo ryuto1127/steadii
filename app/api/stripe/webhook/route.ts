@@ -11,7 +11,7 @@ import {
   processedStripeEvents,
   topupBalances,
 } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { syncUsersPlanColumn } from "@/lib/billing/effective-plan";
 
 export const runtime = "nodejs";
@@ -159,6 +159,12 @@ async function upsertSubscription(sub: SubscriptionLike) {
       currentPeriodEnd,
       cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0,
     });
+    // First paid subscription for this user → maybe flag as Founding Member.
+    // Per project_decisions.md: first 100 paid users get a permanent price
+    // lock. User 101+ gets a 12-month lock from now.
+    if (sub.status === "active" || sub.status === "trialing") {
+      await maybeGrantFoundingMembership(userId);
+    }
   }
 
   // Reflect plan_interval on the user row so Settings can show "renews every
@@ -221,6 +227,71 @@ async function recordPaidInvoice(invoice: Stripe.Invoice) {
     result: "success",
     detail: { amount_due: invoice.amount_due, currency: invoice.currency },
   });
+}
+
+// Founding member automation. Fires once per user, the first time they hit
+// an active Stripe subscription. If fewer than 100 users already carry the
+// flag, this user becomes a founding member with a permanent price lock
+// (founding_member = true, grandfather_price_locked_until = null). Otherwise
+// they get a 12-month lock from now instead.
+//
+// Race window: two webhooks processing concurrent first-subscriptions could
+// both read count=99 and both set the flag. At α scale that's not a real
+// risk; at scale use a row-level lock or advisory lock when it matters.
+const FOUNDING_MEMBER_CAP = 100;
+const GRANDFATHER_LOCK_MS = 365 * 24 * 60 * 60 * 1000;
+
+async function maybeGrantFoundingMembership(userId: string): Promise<void> {
+  const [current] = await db
+    .select({
+      foundingMember: users.foundingMember,
+      grandfatherPriceLockedUntil: users.grandfatherPriceLockedUntil,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  // Already processed for this user — don't overwrite.
+  if (
+    current?.foundingMember === true ||
+    current?.grandfatherPriceLockedUntil !== null
+  ) {
+    return;
+  }
+
+  const [{ n } = { n: 0 }] = await db
+    .select({ n: count(users.id) })
+    .from(users)
+    .where(eq(users.foundingMember, true));
+  const existingFounders = Number(n);
+
+  if (existingFounders < FOUNDING_MEMBER_CAP) {
+    await db
+      .update(users)
+      .set({ foundingMember: true })
+      .where(eq(users.id, userId));
+    await db.insert(auditLog).values({
+      userId,
+      action: "billing.founding_member_granted",
+      resourceType: "user",
+      resourceId: userId,
+      result: "success",
+      detail: { cap: FOUNDING_MEMBER_CAP, existingFounders },
+    });
+  } else {
+    const lockUntil = new Date(Date.now() + GRANDFATHER_LOCK_MS);
+    await db
+      .update(users)
+      .set({ grandfatherPriceLockedUntil: lockUntil })
+      .where(eq(users.id, userId));
+    await db.insert(auditLog).values({
+      userId,
+      action: "billing.grandfather_lock_granted",
+      resourceType: "user",
+      resourceId: userId,
+      result: "success",
+      detail: { lockUntil: lockUntil.toISOString() },
+    });
+  }
 }
 
 // Fulfill a one-time purchase (top-up packs or data retention extension)
