@@ -108,9 +108,13 @@ export function classifyEmail(
   const highMatches = collectKeywordMatches(haystack, AUTO_HIGH_KEYWORDS);
   for (const m of highMatches) provenance.push(globalProv(m));
 
-  // Only the "admin" role (supervisor / PI / lab director) escalates to
-  // AUTO_HIGH here. Professors and TAs are AUTO_MEDIUM — checked below.
-  const supervisorRole = senderRole === "admin" ? senderRole : null;
+  // "admin" and "supervisor" both escalate to AUTO_HIGH. Professors and TAs
+  // stay AUTO_MEDIUM (checked below). W2 addition: "supervisor" is a
+  // future-proof alias for PI/lab-director — the UI role picker doesn't
+  // yet write it (Settings → Agent Rules role picker lands in W3), but the
+  // mapping is in place so chat-side rule creation can use it now.
+  const supervisorRole =
+    senderRole === "admin" || senderRole === "supervisor" ? senderRole : null;
   if (supervisorRole) {
     provenance.push({
       ruleId: "USER_AUTO_HIGH_SUPERVISOR",

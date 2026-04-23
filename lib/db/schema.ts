@@ -502,6 +502,9 @@ export type SenderRole =
   | "ta"
   | "classmate"
   | "admin"
+  // W2 addition — alias for supervisor/PI/lab-director. Mapped to AUTO_HIGH
+  // in L1 rules alongside 'admin'. UI picker lands in W3.
+  | "supervisor"
   | "other";
 
 // One entry in the provenance chain. `source` is 'global' for hard-coded
