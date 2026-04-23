@@ -10,9 +10,11 @@ import {
 import {
   BUCKETS,
   RateLimitError,
+  enforceChatLimits,
   enforceRateLimit,
   rateLimitResponse,
 } from "@/lib/utils/rate-limit";
+import { getEffectivePlan } from "@/lib/billing/effective-plan";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,7 +39,11 @@ export async function GET(request: NextRequest) {
   const userId = session.user.id;
 
   try {
+    // Two-layer gate: burst protection + per-plan hourly/daily caps. See
+    // /api/chat/message for the parallel logic; chat uses the same ceiling.
     enforceRateLimit(userId, "chat.stream", BUCKETS.chatStream);
+    const eff = await getEffectivePlan(userId);
+    enforceChatLimits(userId, eff.plan);
   } catch (err) {
     if (err instanceof RateLimitError) return rateLimitResponse(err);
     throw err;

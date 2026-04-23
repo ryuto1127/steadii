@@ -7,9 +7,11 @@ import { z } from "zod";
 import {
   BUCKETS,
   RateLimitError,
+  enforceChatLimits,
   enforceRateLimit,
   rateLimitResponse,
 } from "@/lib/utils/rate-limit";
+import { getEffectivePlan } from "@/lib/billing/effective-plan";
 
 const bodySchema = z.object({
   chatId: z.string().uuid(),
@@ -24,7 +26,12 @@ export async function POST(request: NextRequest) {
   const userId = session.user.id;
 
   try {
+    // Two-layer gate:
+    //   1. Burst protection (anti-abuse within a minute) — same for all users
+    //   2. Per-plan hourly + daily caps — replaces credit metering for chat
     enforceRateLimit(userId, "chat.message", BUCKETS.chatMessage);
+    const eff = await getEffectivePlan(userId);
+    enforceChatLimits(userId, eff.plan);
   } catch (err) {
     if (err instanceof RateLimitError) return rateLimitResponse(err);
     throw err;
