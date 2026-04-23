@@ -1,11 +1,9 @@
 import Link from "next/link";
-import { Calendar, Clock, TrendingUp, GraduationCap, ChevronRight, CheckCircle2 } from "lucide-react";
+import { Calendar, Clock, TrendingUp, ChevronRight, CheckCircle2 } from "lucide-react";
 import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { NewChatInput } from "@/components/chat/new-chat-input";
-import { EmptyState } from "@/components/ui/empty-state";
-import { getNotionClientForUser } from "@/lib/integrations/notion/client";
 import { computeWeekSummary } from "@/lib/agent/tools/summarize-week";
 import {
   getDueSoonAssignments,
@@ -94,25 +92,9 @@ export default async function HomePage() {
   const userId = session.user.id;
   const t = await getTranslations("home");
 
-  const notion = await getNotionClientForUser(userId);
-  const hasAnyClass = Boolean(notion?.connection.classesDbId);
-
-  if (!hasAnyClass) {
-    return (
-      <div className="mx-auto flex h-full max-w-3xl flex-col gap-6 py-6">
-        <EmptyState
-          icon={<GraduationCap size={18} strokeWidth={1.5} />}
-          title={t("welcome_title")}
-          description={<div>{t("welcome_body")}</div>}
-          actions={[{ label: t("add_first_class"), href: "/app/classes" }]}
-        />
-        <div className="mx-auto mt-auto w-full max-w-2xl">
-          <NewChatInput placeholder={t("welcome_input_placeholder")} />
-        </div>
-      </div>
-    );
-  }
-
+  // Phase 6: Notion is optional. The dashboard always renders its three
+  // cards; each card handles its own empty state (Today uses Calendar so
+  // it works without Notion; Due soon and Past week degrade to empty).
   const [events, dueSoon, weekSummary, tzPref] = await Promise.all([
     getTodaysEvents(userId),
     getDueSoonAssignments(userId),

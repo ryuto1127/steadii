@@ -1,10 +1,11 @@
 import "server-only";
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, accounts, sessions, verificationTokens } from "@/lib/db/schema";
 import { EncryptedDrizzleAdapter } from "./encrypted-adapter";
+import { encryptOAuthToken } from "./oauth-tokens";
 
 export const authConfig = {
   adapter: EncryptedDrizzleAdapter(db, {
@@ -35,6 +36,42 @@ export const authConfig = {
     signIn: "/login",
   },
   callbacks: {
+    // Refresh the accounts row on every sign-in so scope/token upgrades
+    // (e.g. adding Gmail scopes mid-life) propagate to existing users.
+    // The stock Drizzle adapter only calls linkAccount on the FIRST link,
+    // which means re-consents with a wider scope silently fail to update
+    // the stored scope string — leaving the app to believe Gmail is still
+    // not connected. We update in-place here; the UPDATE is a no-op on
+    // the first sign-in (row does not exist yet) and linkAccount handles
+    // the initial insert as before.
+    async signIn({ user, account }) {
+      if (!user?.id || !account) return true;
+      if (account.provider !== "google") return true;
+
+      const update: Record<string, unknown> = { updatedAt: new Date() };
+      if (typeof account.scope === "string") update.scope = account.scope;
+      if (typeof account.access_token === "string")
+        update.access_token = encryptOAuthToken(account.access_token);
+      if (typeof account.refresh_token === "string")
+        update.refresh_token = encryptOAuthToken(account.refresh_token);
+      if (typeof account.id_token === "string")
+        update.id_token = encryptOAuthToken(account.id_token);
+      if (typeof account.expires_at === "number")
+        update.expires_at = account.expires_at;
+      if (typeof account.token_type === "string")
+        update.token_type = account.token_type;
+
+      await db
+        .update(accounts)
+        .set(update)
+        .where(
+          and(
+            eq(accounts.provider, "google"),
+            eq(accounts.providerAccountId, account.providerAccountId)
+          )
+        );
+      return true;
+    },
     jwt({ token, user }) {
       // On sign-in `user` is the adapter User row; persist its id into the
       // token so later requests don't need a DB lookup to know who we are.
