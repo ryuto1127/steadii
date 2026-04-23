@@ -5,6 +5,9 @@ import { getStorageTotals } from "@/lib/billing/storage";
 import { prettyBytes } from "@/lib/billing/plan";
 import { getEffectivePlan } from "@/lib/billing/effective-plan";
 import { BillingActions } from "@/components/billing/billing-actions";
+import { db } from "@/lib/db/client";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +24,14 @@ export default async function BillingPage({
   const balance = await getCreditBalance(userId);
   const storage = await getStorageTotals(userId);
   const effective = await getEffectivePlan(userId);
+  const [flagsRow] = await db
+    .select({
+      foundingMember: users.foundingMember,
+      grandfatherPriceLockedUntil: users.grandfatherPriceLockedUntil,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -40,6 +51,24 @@ export default async function BillingPage({
         <div className="mt-6 rounded-lg bg-[hsl(var(--surface-raised))] px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">
           Checkout canceled. No change.
         </div>
+      )}
+
+      {flagsRow?.foundingMember && (
+        <div className="mt-6 flex items-center gap-2 rounded-lg border border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--primary)/0.06)] px-4 py-2.5 text-sm">
+          <span aria-hidden>✦</span>
+          <span>
+            <span className="font-medium text-[hsl(var(--primary))]">
+              Founding member.
+            </span>{" "}
+            Your current price is locked in for life.
+          </span>
+        </div>
+      )}
+      {!flagsRow?.foundingMember && flagsRow?.grandfatherPriceLockedUntil && (
+        <p className="mt-6 text-xs text-[hsl(var(--muted-foreground))]">
+          Price locked until{" "}
+          {flagsRow.grandfatherPriceLockedUntil.toLocaleDateString()}.
+        </p>
       )}
 
       <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
