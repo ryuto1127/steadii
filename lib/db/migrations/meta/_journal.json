@@ -85,6 +85,13 @@
       "when": 1776896576456,
       "tag": "0011_shocking_maestro",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1776908039470,
+      "tag": "0012_noisy_leper_queen",
+      "breakpoints": true
     }
   ]
 }

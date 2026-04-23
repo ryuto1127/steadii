@@ -312,6 +312,37 @@ export const processedStripeEvents = pgTable("processed_stripe_events", {
 
 export type ProcessedStripeEvent = typeof processedStripeEvents.$inferSelect;
 
+// Top-up credit balances — packs purchased outside the monthly pool.
+// Each row is a separate pack with its own expiry (90 days by default).
+// Consumption priority: monthly pool first, then top-up rows by earliest
+// expiry (use-it-or-lose-it). The credit middleware sums `credits_remaining`
+// across non-expired rows to compute a user's top-up balance.
+export const topupBalances = pgTable(
+  "topup_balances",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    stripeInvoiceId: text("stripe_invoice_id").notNull(),
+    creditsPurchased: integer("credits_purchased").notNull(),
+    creditsRemaining: integer("credits_remaining").notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    stripeInvoiceIdx: uniqueIndex("topup_balances_stripe_invoice_idx").on(
+      t.stripeInvoiceId
+    ),
+    userExpiresIdx: index("topup_balances_user_expires_idx").on(
+      t.userId,
+      t.expiresAt
+    ),
+  })
+);
+
+export type TopupBalance = typeof topupBalances.$inferSelect;
+
 export const pendingToolCalls = pgTable("pending_tool_calls", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
