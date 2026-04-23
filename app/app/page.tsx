@@ -125,15 +125,17 @@ export default async function HomePage() {
   const sessionsCount = weekSummary.counts.chats;
 
   return (
-    <div className="relative isolate mx-auto flex min-h-[calc(100vh-8rem)] max-w-6xl flex-col">
-      {/* Chromatic cloud — pink / purple / cyan drifting softly behind
-          the dashboard cards. `isolate` on the parent pins the cloud's
-          stacking context so -z-10 doesn't push it behind the body bg
-          (which caused a flash-then-disappear during hydration). */}
+    <div className="relative isolate mx-auto flex min-h-[calc(100vh-8rem)] max-w-6xl flex-col overflow-hidden">
+      {/* Chromatic cloud — centered behind the dashboard, heavily blurred
+          and low-opacity so it reads as ambient warmth rather than a
+          discrete object. `isolate` on the parent pins its stacking
+          context (so -z-10 doesn't fall behind the body bg and flash on
+          hydration); `overflow-hidden` clips the 820px span to the
+          container so the edges don't bleed outside the dashboard area. */}
       <span
         aria-hidden
         className="steadii-cloud -z-10"
-        style={{ top: "60px", left: "30%" }}
+        style={{ top: "40px", left: "calc(50% - 410px)" }}
       />
       <header className="steadii-greeting-enter relative z-0 mb-10 flex flex-col gap-2">
         <h1 className="font-display text-[36px] font-semibold leading-[1.1] tracking-[-0.02em] text-[hsl(var(--foreground))]">
