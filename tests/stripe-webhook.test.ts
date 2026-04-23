@@ -86,9 +86,10 @@ vi.mock("@/lib/db/schema", () => ({
     stripeCustomerId: "stripeCustomerId",
   },
   auditLog: { __name: "audit_log" },
-  users: { __name: "users", id: "id" },
+  users: { __name: "users", id: "id", dataRetentionExpiresAt: "dataRetentionExpiresAt" },
   invoices: { __name: "invoices" },
   processedStripeEvents: { __name: "processed_stripe_events" },
+  topupBalances: { __name: "topup_balances" },
 }));
 vi.mock("drizzle-orm", () => ({
   eq: () => ({}),
@@ -230,14 +231,107 @@ describe("stripe webhook routeEvent", () => {
     expect(tables).toContain("audit_log.insert");
   });
 
-  it("handles checkout.session.completed: no-op (no DB writes)", async () => {
+  it("checkout.session.completed (subscription mode): no-op — subscription.created carries the data", async () => {
     const event = {
-      id: "evt_co",
+      id: "evt_co_sub",
       type: "checkout.session.completed",
-      data: { object: { id: "cs_test" } },
+      data: { object: { id: "cs_test", mode: "subscription" } },
     } as unknown as Stripe.Event;
     await routeEvent(event);
     expect(hoist.calls.filter((c) => c.op !== "insert" || c.table !== "processed_stripe_events")).toHaveLength(0);
+  });
+
+  it("checkout.session.completed (topup_500): inserts topup_balances row + audit log", async () => {
+    const event = {
+      id: "evt_topup",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_test_topup",
+          mode: "payment",
+          invoice: "in_topup",
+          metadata: {
+            steadii_user_id: "user_123",
+            steadii_action: "topup_500",
+          },
+        },
+      },
+    } as unknown as Stripe.Event;
+    await routeEvent(event);
+    const tables = hoist.calls.map((c) => `${c.table}.${c.op}`);
+    expect(tables).toContain("topup_balances.insert");
+    expect(tables).toContain("audit_log.insert");
+    const topup = hoist.calls.find(
+      (c) => c.table === "topup_balances" && c.op === "insert"
+    );
+    const v = topup?.values as {
+      creditsPurchased: number;
+      creditsRemaining: number;
+      expiresAt: Date;
+    };
+    expect(v.creditsPurchased).toBe(500);
+    expect(v.creditsRemaining).toBe(500);
+    // Expiry ~90 days out
+    const daysUntilExpiry =
+      (v.expiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000);
+    expect(daysUntilExpiry).toBeGreaterThan(89);
+    expect(daysUntilExpiry).toBeLessThan(91);
+  });
+
+  it("checkout.session.completed (topup_2000): 2000 credits inserted", async () => {
+    const event = {
+      id: "evt_topup_2k",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_test_topup_2k",
+          mode: "payment",
+          invoice: "in_topup_2k",
+          metadata: {
+            steadii_user_id: "user_123",
+            steadii_action: "topup_2000",
+          },
+        },
+      },
+    } as unknown as Stripe.Event;
+    await routeEvent(event);
+    const topup = hoist.calls.find(
+      (c) => c.table === "topup_balances" && c.op === "insert"
+    );
+    expect((topup?.values as { creditsPurchased: number }).creditsPurchased).toBe(
+      2000
+    );
+  });
+
+  it("checkout.session.completed (data_retention): updates users.dataRetentionExpiresAt", async () => {
+    const event = {
+      id: "evt_retention",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_test_ret",
+          mode: "payment",
+          metadata: {
+            steadii_user_id: "user_123",
+            steadii_action: "data_retention",
+          },
+        },
+      },
+    } as unknown as Stripe.Event;
+    await routeEvent(event);
+    const tables = hoist.calls.map((c) => `${c.table}.${c.op}`);
+    expect(tables).toContain("users.update");
+    expect(tables).toContain("audit_log.insert");
+    const update = hoist.calls.find(
+      (c) => c.table === "users" && c.op === "update"
+    );
+    const v = update?.values as { dataRetentionExpiresAt: Date };
+    // Should be about 1 year out
+    const daysOut =
+      (v.dataRetentionExpiresAt.getTime() - Date.now()) /
+      (24 * 60 * 60 * 1000);
+    expect(daysOut).toBeGreaterThan(360);
+    expect(daysOut).toBeLessThan(370);
   });
 
   it("ignores unknown event types (returns 200, no DB writes)", async () => {

@@ -9,6 +9,7 @@ import {
   users,
   invoices,
   processedStripeEvents,
+  topupBalances,
 } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { syncUsersPlanColumn } from "@/lib/billing/effective-plan";
@@ -91,8 +92,14 @@ export async function routeEvent(event: Stripe.Event): Promise<void> {
       return;
     }
     case "checkout.session.completed": {
-      // No-op for now — customer.subscription.created fires alongside with
-      // everything we need. Handled explicitly so Stripe doesn't retry.
+      // Subscription Checkouts trigger customer.subscription.created with
+      // everything we need — skip them here. One-time purchases (top-up
+      // packs + Data Retention Extension) arrive in `mode: "payment"` and
+      // get fulfilled via the steadii_action metadata we stashed on create.
+      const s = event.data.object as Stripe.Checkout.Session;
+      if (s.mode === "payment") {
+        await fulfillOneTimePurchase(s);
+      }
       return;
     }
     default:
@@ -214,6 +221,109 @@ async function recordPaidInvoice(invoice: Stripe.Invoice) {
     result: "success",
     detail: { amount_due: invoice.amount_due, currency: invoice.currency },
   });
+}
+
+// Fulfill a one-time purchase (top-up packs or data retention extension)
+// based on the `steadii_action` metadata set at Checkout creation. The
+// session-level metadata is the canonical source — we fall back to the
+// payment_intent's copy if missing.
+async function fulfillOneTimePurchase(s: Stripe.Checkout.Session) {
+  const action =
+    s.metadata?.steadii_action ??
+    (typeof s.payment_intent === "object" && s.payment_intent
+      ? (s.payment_intent as Stripe.PaymentIntent).metadata?.steadii_action
+      : undefined);
+  const userId =
+    s.metadata?.steadii_user_id ??
+    (typeof s.customer === "string" || s.customer === null
+      ? await userIdForStripeCustomer(
+          typeof s.customer === "string" ? s.customer : null
+        )
+      : await userIdForStripeCustomer(s.customer.id));
+
+  if (!userId || !action) {
+    console.warn("checkout.session.completed: no user/action", {
+      action,
+      userId,
+    });
+    return;
+  }
+
+  if (action === "topup_500" || action === "topup_2000") {
+    // 90-day expiry on unused credits. Insert one row per purchase so we
+    // can track expiry per-pack (earliest-expiring consumed first).
+    const credits = action === "topup_500" ? 500 : 2000;
+    const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    const invoiceId =
+      typeof s.invoice === "string"
+        ? s.invoice
+        : s.invoice?.id ?? s.id; // fallback to session id if no invoice
+    try {
+      await db.insert(topupBalances).values({
+        userId,
+        stripeInvoiceId: invoiceId,
+        creditsPurchased: credits,
+        creditsRemaining: credits,
+        expiresAt,
+      });
+    } catch (err) {
+      // Unique violation on stripe_invoice_id = double-fire, safe to ignore.
+      if (!isUniqueViolation(err)) throw err;
+    }
+    await db.insert(auditLog).values({
+      userId,
+      action: `stripe.topup.${action}`,
+      resourceType: "stripe_checkout_session",
+      resourceId: s.id,
+      result: "success",
+      detail: { credits, expiresAt: expiresAt.toISOString() },
+    });
+    return;
+  }
+
+  if (action === "data_retention") {
+    // Extend retention from the default 120-day grace to 12 months from now.
+    // If the user already has an extension active, push it forward by 12
+    // months from either now or the existing expiry, whichever is later.
+    const now = new Date();
+    const oneYearFromNow = new Date(
+      now.getTime() + 365 * 24 * 60 * 60 * 1000
+    );
+    const [row] = await db
+      .select({ expires: users.dataRetentionExpiresAt })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const baseline =
+      row?.expires && row.expires.getTime() > now.getTime()
+        ? row.expires
+        : now;
+    const nextExpiry = new Date(
+      baseline.getTime() + 365 * 24 * 60 * 60 * 1000
+    );
+    await db
+      .update(users)
+      .set({ dataRetentionExpiresAt: nextExpiry })
+      .where(eq(users.id, userId));
+    await db.insert(auditLog).values({
+      userId,
+      action: "stripe.data_retention.extended",
+      resourceType: "stripe_checkout_session",
+      resourceId: s.id,
+      result: "success",
+      detail: {
+        previousExpiry: row?.expires?.toISOString() ?? null,
+        newExpiry: nextExpiry.toISOString(),
+        default_grace_ms: 120 * 24 * 60 * 60 * 1000,
+        // Keep oneYearFromNow around for debugging: tells us if the user
+        // stacked extensions (nextExpiry > oneYearFromNow) or not.
+        one_year_from_now: oneYearFromNow.toISOString(),
+      },
+    });
+    return;
+  }
+
+  console.warn("checkout.session.completed: unknown action", { action });
 }
 
 async function logInvoiceFailure(invoice: Stripe.Invoice) {
