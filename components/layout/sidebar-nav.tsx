@@ -106,7 +106,10 @@ export function SidebarNav({ labels }: { labels: Record<string, string> }) {
             aria-current={active ? "page" : undefined}
             title={`g${NAV_SHORTCUTS[key]} · ${labels[key] ?? key}`}
             className={cn(
-              "group flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[14px] font-medium transition-hover",
+              // Collapsed: 36×36 square centered in the rail. Expanded (on
+              // sidebar hover): grows to full width with icon + label row.
+              "group mx-auto flex h-9 w-9 items-center justify-center rounded-lg text-[14px] font-medium transition-all duration-200",
+              "group-hover/sidebar:mx-0 group-hover/sidebar:w-full group-hover/sidebar:justify-start group-hover/sidebar:gap-2.5 group-hover/sidebar:px-2.5",
               active
                 ? "nav-active text-[hsl(var(--foreground))]"
                 : "text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
