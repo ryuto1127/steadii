@@ -344,26 +344,29 @@
    cyan sitting behind the dashboard. Slowly translates and breathes.
    Restrained, not decorative. Three radial layers so the hues feel
    braided, not stacked. */
-/* Soft, symmetric ambient glow behind the dashboard. Muted opacity,
-   heavy blur, organic drift across four keyframes to feel fluff-like
-   rather than mechanical. */
+/* Soft, symmetric ambient glow spanning the whole dashboard. Four radial
+   stops positioned across the viewport so the wash reaches every edge,
+   heavy blur so no individual gradient reads as a discrete blob, and a
+   four-keyframe drift to feel fluff-like rather than mechanical. */
 @keyframes steadii-cloud-drift {
-  0%, 100% { transform: translate(-12px, 0) scale(1); opacity: 0.7; }
-  25%      { transform: translate(0, -14px) scale(1.03); opacity: 0.78; }
-  50%      { transform: translate(12px, 6px) scale(1.05); opacity: 0.82; }
-  75%      { transform: translate(-4px, 10px) scale(1.02); opacity: 0.74; }
+  0%, 100% { transform: translate(-12px, 0) scale(1); opacity: 0.85; }
+  25%      { transform: translate(0, -14px) scale(1.02); opacity: 0.92; }
+  50%      { transform: translate(12px, 6px) scale(1.03); opacity: 0.95; }
+  75%      { transform: translate(-4px, 10px) scale(1.01); opacity: 0.88; }
 }
 .steadii-cloud {
   position: absolute;
-  width: 820px;
-  height: 820px;
+  /* Bleed the wash 120px beyond the parent on every side so the soft
+     blur edges are off-screen and the visible area reads as continuous. */
+  inset: -120px;
   pointer-events: none;
-  border-radius: 999px;
   background:
-    radial-gradient(circle at 30% 32%, rgba(249, 168, 212, 0.28) 0%, transparent 62%),
-    radial-gradient(circle at 70% 40%, rgba(167, 139, 250, 0.24) 0%, transparent 64%),
-    radial-gradient(circle at 50% 72%, rgba(103, 232, 249, 0.20) 0%, transparent 66%);
-  filter: blur(120px);
+    radial-gradient(ellipse 55% 45% at 20% 25%, rgba(249, 168, 212, 0.32) 0%, transparent 62%),
+    radial-gradient(ellipse 55% 45% at 80% 30%, rgba(167, 139, 250, 0.28) 0%, transparent 62%),
+    radial-gradient(ellipse 60% 45% at 50% 70%, rgba(103, 232, 249, 0.26) 0%, transparent 62%),
+    radial-gradient(ellipse 50% 40% at 15% 85%, rgba(253, 224, 71, 0.16) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 85% 85%, rgba(167, 139, 250, 0.18) 0%, transparent 60%);
+  filter: blur(110px);
   animation: steadii-cloud-drift 38s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
