@@ -1,0 +1,15 @@
+{
+  "id": "m_auto_low_rsvp",
+  "threadId": "t3",
+  "labelIds": ["INBOX"],
+  "snippet": "Please RSVP for Thursday's club meeting.",
+  "internalDate": "1713828600000",
+  "payload": {
+    "headers": [
+      { "name": "From", "value": "events@known.edu" },
+      { "name": "To", "value": "student@example.com" },
+      { "name": "Subject", "value": "RSVP for Thursday's club meeting" },
+      { "name": "Date", "value": "Mon, 22 Apr 2026 12:30:00 -0700" }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "m_ignore_noreply",
+  "threadId": "t4",
+  "labelIds": ["INBOX"],
+  "snippet": "Your weekly product update is here.",
+  "internalDate": "1713828600000",
+  "payload": {
+    "headers": [
+      { "name": "From", "value": "noreply@news.linear.app" },
+      { "name": "To", "value": "student@example.com" },
+      { "name": "Subject", "value": "Linear weekly update" },
+      { "name": "Date", "value": "Mon, 22 Apr 2026 12:30:00 -0700" }
+    ]
+  }
+}
