@@ -121,7 +121,7 @@ export function SidebarNav({ labels }: { labels: Record<string, string> }) {
             >
               <Icon size={16} strokeWidth={1.75} />
             </span>
-            <span className="flex-1 whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
+            <span className="max-w-0 flex-1 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 group-hover/sidebar:max-w-[200px] group-hover/sidebar:opacity-100">
               {labels[key] ?? key}
             </span>
           </Link>
