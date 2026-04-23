@@ -16,10 +16,36 @@ import { reportDetectedTimezone } from "@/lib/utils/report-timezone";
 // Creates a chat and lands on /app/chat/[id]?stream=1 with the first message
 // already posted. The chat-view on the next page reads `stream=1` to auto-
 // trigger the agent response.
+//
+// No-file path: a single POST to /api/chat creates the chat AND persists
+// the first message atomically — one round-trip before we can navigate.
+// File path: we still need /api/chat (no content) → attachments → message
+// so the attachment message lands before the follow-up text.
 async function createChatAndPost(
   content: string,
   file?: File | null
 ): Promise<string | { error: string }> {
+  if (!file) {
+    const createResp = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+    if (!createResp.ok) {
+      let msg = "Couldn't start a new chat.";
+      try {
+        const body = await createResp.json();
+        if (typeof body?.error === "string") msg = body.error;
+      } catch {
+        // ignore
+      }
+      return { error: msg };
+    }
+    const created = (await createResp.json()) as { id?: string };
+    if (!created.id) return { error: "Couldn't start a new chat." };
+    return created.id;
+  }
+
   const createResp = await fetch("/api/chat", { method: "POST" });
   if (!createResp.ok) {
     return { error: "Couldn't start a new chat." };
@@ -30,27 +56,24 @@ async function createChatAndPost(
   }
   const chatId = created.id;
 
-  // If a file is attached, /api/chat/attachments writes its own message
-  // (containing the attachment) onto the chat. The text becomes a follow-
-  // up user message in the same chat.
-  if (file) {
-    const form = new FormData();
-    form.set("file", file);
-    form.set("chatId", chatId);
-    const up = await fetch("/api/chat/attachments", {
-      method: "POST",
-      body: form,
-    });
-    if (!up.ok) {
-      let msg = "Upload failed.";
-      try {
-        const body = await up.json();
-        if (typeof body?.error === "string") msg = body.error;
-      } catch {
-        // ignore
-      }
-      return { error: msg };
+  // Attachment writes its own message containing the file; the text is a
+  // follow-up user message in the same chat.
+  const form = new FormData();
+  form.set("file", file);
+  form.set("chatId", chatId);
+  const up = await fetch("/api/chat/attachments", {
+    method: "POST",
+    body: form,
+  });
+  if (!up.ok) {
+    let msg = "Upload failed.";
+    try {
+      const body = await up.json();
+      if (typeof body?.error === "string") msg = body.error;
+    } catch {
+      // ignore
     }
+    return { error: msg };
   }
 
   const post = await fetch("/api/chat/message", {
