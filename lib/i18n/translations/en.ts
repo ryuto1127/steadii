@@ -37,6 +37,7 @@ type MessagesShape = {
     sign_in: string;
   };
   nav: {
+    inbox: string;
     home: string;
     chats: string;
     classes: string;
@@ -168,6 +169,7 @@ export const en: MessagesShape = {
     sign_in: "Sign in",
   },
   nav: {
+    inbox: "Inbox",
     home: "Home",
     chats: "Chats",
     classes: "Classes",
