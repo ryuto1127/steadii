@@ -653,7 +653,11 @@ export type AgentDraftAction =
   | "archive"
   | "snooze"
   | "no_op"
-  | "ask_clarifying";
+  | "ask_clarifying"
+  // Set when status='paused' so analytics don't conflate genuine
+  // ask_clarifying actions with credit-exhausted pipeline halts. The DB
+  // column is plain text so no migration is needed — only the TS enum.
+  | "paused";
 
 export type AgentDraftStatus =
   | "pending"
