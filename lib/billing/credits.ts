@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db/client";
-import { usageEvents } from "@/lib/db/schema";
+import { usageEvents, users } from "@/lib/db/schema";
 import { and, eq, gte, sum } from "drizzle-orm";
 import { getPlanLimits, type Plan } from "./plan";
 
@@ -22,6 +22,48 @@ export class BillingQuotaExceededError extends Error {
   }
 }
 
+// Monthly credit window anchored to the user's sign-up date-of-month, not
+// the calendar. User created on the 15th → window resets on the 15th of each
+// month. Sign-up on a high day (28–31) clamps to the last day of months that
+// don't have it (Feb especially). See project_decisions.md.
+export function creditWindowForAnchor(
+  createdAt: Date,
+  now: Date = new Date()
+): { start: Date; end: Date } {
+  const anchorDay = createdAt.getUTCDate();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const today = now.getUTCDate();
+
+  // Decide which month the CURRENT window starts in.
+  const startMonth = today >= clampedAnchorDay(anchorDay, year, month)
+    ? month
+    : month - 1;
+
+  const start = anchorMidnight(anchorDay, year, startMonth);
+  const end = anchorMidnight(anchorDay, year, startMonth + 1);
+  return { start, end };
+}
+
+// Last-day-of-month clamp: e.g. anchor day 31 in February → 28/29.
+function clampedAnchorDay(anchorDay: number, year: number, month: number): number {
+  // Day 0 of (month+1) === last day of `month` in JS Date.
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return Math.min(anchorDay, lastDay);
+}
+
+function anchorMidnight(anchorDay: number, year: number, month: number): Date {
+  // Normalize month overflow/underflow; then clamp the day for short months.
+  const normalized = new Date(Date.UTC(year, month, 1));
+  const ny = normalized.getUTCFullYear();
+  const nm = normalized.getUTCMonth();
+  return new Date(Date.UTC(ny, nm, clampedAnchorDay(anchorDay, ny, nm)));
+}
+
+// Legacy name kept as a thin wrapper so older callers / tests don't break;
+// new code should use creditWindowForAnchor directly. Falls back to the
+// calendar month when no anchor is available (e.g. the admin Stats page
+// summing across all users — aggregate view, not per-user).
 export function currentMonthWindow(now: Date = new Date()): {
   start: Date;
   end: Date;
@@ -33,7 +75,14 @@ export function currentMonthWindow(now: Date = new Date()): {
 
 export async function getCreditBalance(userId: string): Promise<CreditBalance> {
   const { plan, monthlyCredits } = await getPlanLimits(userId);
-  const { start, end } = currentMonthWindow();
+
+  const [userRow] = await db
+    .select({ createdAt: users.createdAt })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const createdAt = userRow?.createdAt ?? new Date();
+  const { start, end } = creditWindowForAnchor(createdAt);
 
   const [row] = await db
     .select({ total: sum(usageEvents.creditsUsed) })
