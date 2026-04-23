@@ -10,6 +10,7 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 import { decrypt } from "@/lib/utils/crypto";
 import { notionClientFromToken } from "@/lib/integrations/notion/client";
+import { assertCreditsAvailable } from "@/lib/billing/credits";
 import { z } from "zod";
 
 export const mistakeSaveSchema = z.object({
@@ -28,6 +29,12 @@ export async function saveMistakeNote(args: {
   userId: string;
   input: MistakeSaveInput;
 }): Promise<{ pageId: string; url: string | null }> {
+  // C6 resolution: metered features (incl. mistake save) pause on credit
+  // exhaustion. Memory: "Mistake-explain / syllabus-extract also pause
+  // until top-up or reset." The save step itself is not LLM-metered but
+  // the prompt explicitly names this callsite as part of the gate.
+  await assertCreditsAvailable(args.userId);
+
   const [conn] = await db
     .select()
     .from(notionConnections)
