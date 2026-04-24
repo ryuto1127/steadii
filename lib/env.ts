@@ -41,10 +41,12 @@ const schema = z.object({
   // the key is non-empty before using it and return a clear error if not.
   RESEND_API_KEY: z.string().optional().default(""),
   RESEND_FROM_EMAIL: z.string().optional().default("agent@mysteadii.xyz"),
-  // Shared secret for Vercel cron endpoints — headers["authorization"]
-  // must equal `Bearer ${CRON_SECRET}`. Unset in dev; cron endpoints
-  // return 401 unless the secret matches in production.
-  CRON_SECRET: z.string().optional().default(""),
+  // Upstash QStash signing keys. Cron endpoints (/api/cron/*) verify the
+  // `upstash-signature` header against these. Both empty in dev = endpoints
+  // skip verification; both required in production. See lib/integrations/
+  // qstash/verify.ts for the runtime guard.
+  QSTASH_CURRENT_SIGNING_KEY: z.string().optional().default(""),
+  QSTASH_NEXT_SIGNING_KEY: z.string().optional().default(""),
 });
 
 export type Env = z.infer<typeof schema>;
