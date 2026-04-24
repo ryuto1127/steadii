@@ -3,6 +3,7 @@ import { openai } from "@/lib/integrations/openai/client";
 import { syllabusSchema, type Syllabus } from "./schema";
 import { selectModel } from "@/lib/agent/models";
 import { recordUsage } from "@/lib/agent/usage";
+import { assertCreditsAvailable } from "@/lib/billing/credits";
 import { routeSyllabusInput, type SyllabusInput } from "./router";
 import { load as loadHtml } from "cheerio";
 import { safeFetch } from "@/lib/utils/ssrf-guard";
@@ -66,6 +67,10 @@ export async function extractSyllabus(args: {
   userId: string;
   source: ExtractionSource;
 }): Promise<Syllabus> {
+  // C6 resolution: metered features pause on credit exhaustion. Throws
+  // BillingQuotaExceededError the route handler already knows how to render.
+  await assertCreditsAvailable(args.userId);
+
   const model = selectModel("syllabus_extract");
   const userContent = buildUserContent(args.source);
 

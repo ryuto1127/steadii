@@ -20,6 +20,14 @@ describe("selectModel routing", () => {
     expect(selectModel("chat_title")).toBe("gpt-5.4-nano");
     expect(selectModel("tag_suggest")).toBe("gpt-5.4-nano");
   });
+  it("routes email_classify_risk to mini, deep + draft to full", () => {
+    expect(selectModel("email_classify_risk")).toBe("gpt-5.4-mini");
+    expect(selectModel("email_classify_deep")).toBe("gpt-5.4");
+    expect(selectModel("email_draft")).toBe("gpt-5.4");
+  });
+  it("routes email_embed to text-embedding-3-small", () => {
+    expect(selectModel("email_embed")).toBe("text-embedding-3-small");
+  });
   it("covers every TaskType", () => {
     const tasks: TaskType[] = [
       "chat",
@@ -28,10 +36,19 @@ describe("selectModel routing", () => {
       "syllabus_extract",
       "chat_title",
       "tag_suggest",
+      "email_classify_risk",
+      "email_classify_deep",
+      "email_draft",
+      "email_embed",
     ];
     for (const t of tasks) {
       const model = selectModel(t);
-      expect(["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"]).toContain(model);
+      expect([
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gpt-5.4-nano",
+        "text-embedding-3-small",
+      ]).toContain(model);
     }
   });
 });
@@ -56,9 +73,13 @@ describe("credit accounting", () => {
     expect(halfCached).toBeLessThan(fullUncached);
   });
 
-  it("taskTypeMetersCredits: only mistake_explain + syllabus_extract meter", () => {
+  it("taskTypeMetersCredits: metered set includes agent L2 + embed", () => {
     expect(taskTypeMetersCredits("mistake_explain")).toBe(true);
     expect(taskTypeMetersCredits("syllabus_extract")).toBe(true);
+    expect(taskTypeMetersCredits("email_classify_risk")).toBe(true);
+    expect(taskTypeMetersCredits("email_classify_deep")).toBe(true);
+    expect(taskTypeMetersCredits("email_draft")).toBe(true);
+    expect(taskTypeMetersCredits("email_embed")).toBe(true);
     // Chat is rate-limited by plan tier, not credit-gated.
     expect(taskTypeMetersCredits("chat")).toBe(false);
     expect(taskTypeMetersCredits("tool_call")).toBe(false);
@@ -67,14 +88,14 @@ describe("credit accounting", () => {
     expect(taskTypeMetersCredits("tag_suggest")).toBe(false);
   });
 
-  it("usdToCredits floors at half-cent granularity (1 credit = $0.005)", () => {
-    // $0.019 * 200 = 3.8 → floor = 3
-    expect(usdToCredits(0.019)).toBe(3);
+  it("usdToCredits rounds at half-cent granularity (1 credit = $0.005)", () => {
+    // $0.019 * 200 = 3.8 → round = 4 (was 3 under floor)
+    expect(usdToCredits(0.019)).toBe(4);
     // $0.02 * 200 = 4
     expect(usdToCredits(0.02)).toBe(4);
     // $1.00 * 200 = 200
     expect(usdToCredits(1.0)).toBe(200);
-    // $0.001 * 200 = 0.2 → floor = 0
+    // $0.001 * 200 = 0.2 → round = 0 still
     expect(usdToCredits(0.001)).toBe(0);
     // $0.005 * 200 = 1
     expect(usdToCredits(0.005)).toBe(1);
