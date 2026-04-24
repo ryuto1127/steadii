@@ -1,12 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/digest",
-      "schedule": "*/30 * * * *"
-    },
-    {
-      "path": "/api/cron/send-queue",
-      "schedule": "* * * * *"
-    }
-  ]
-}
+{}
