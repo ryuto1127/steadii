@@ -5,12 +5,14 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { OfflineStrip } from "@/components/layout/offline-strip";
 import { RouteTransition } from "@/components/layout/route-transition";
 import { ReauthBanner } from "@/components/layout/reauth-banner";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import {
   getOnboardingStatus,
   isOnboardingComplete,
 } from "@/lib/onboarding/status";
 import { getCreditBalance } from "@/lib/billing/credits";
 import { getEffectivePlan } from "@/lib/billing/effective-plan";
+import { maybeTriggerAutoIngest } from "@/lib/agent/email/auto-ingest";
 import { db } from "@/lib/db/client";
 import { subscriptions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -46,6 +48,13 @@ export default async function AppLayout({
   // remains as a safety net and a discoverability nudge in case the
   // redirect is bypassed (e.g. re-consent flow in progress).
   const gmailConnected = status.gmailConnected;
+  // Fire-and-forget first-ingest trigger. Runs once per 24h per user; no
+  // blocking on render. Covers the "scope granted via re-auth but never
+  // went through onboarding" path.
+  await maybeTriggerAutoIngest({
+    userId: session.user.id,
+    gmailConnected,
+  });
   // Dunning takes priority over credit near-limit — a failed payment is
   // more urgent than approaching the quota ceiling.
   const pastDue = subRow?.status === "past_due";
@@ -66,6 +75,11 @@ export default async function AppLayout({
       />
       <main className="relative flex-1 overflow-y-auto rounded-xl bg-[hsl(var(--surface))] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.04]">
         <OfflineStrip />
+        {gmailConnected ? (
+          <div className="absolute right-4 top-4 z-10">
+            <NotificationBell userId={session.user.id} />
+          </div>
+        ) : null}
         <div className="px-10 py-8">
           {!gmailConnected && <ReauthBanner />}
           {pastDue && (

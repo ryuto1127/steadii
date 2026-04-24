@@ -44,6 +44,7 @@
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
+    "resend": "^6.12.2",
     "server-only": "^0.0.1",
     "sonner": "^2.0.7",
     "stripe": "^22.0.2",
