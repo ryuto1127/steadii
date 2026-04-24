@@ -10,7 +10,13 @@ export type EmailAuditAction =
   | "email_ingest_failed"
   | "email_item_created"
   | "email_item_skipped"
-  | "email_rule_applied";
+  | "email_rule_applied"
+  // W2 additions — surface embed + L2 failures for observability.
+  | "email_embed_failed"
+  | "email_l2_started"
+  | "email_l2_completed"
+  | "email_l2_paused"
+  | "email_l2_failed";
 
 export async function logEmailAudit(params: {
   userId: string;

@@ -12,6 +12,7 @@ const schema = z.object({
   OPENAI_CHAT_MODEL: z.string().optional().default(""),
   OPENAI_COMPLEX_MODEL: z.string().optional().default(""),
   OPENAI_NANO_MODEL: z.string().optional().default(""),
+  OPENAI_EMBEDDING_MODEL: z.string().optional().default(""),
   STRIPE_SECRET_KEY: z.string().min(1),
   STRIPE_WEBHOOK_SECRET: z.string().optional().default(""),
   // Legacy single-price var, still used by /api/stripe/checkout until the

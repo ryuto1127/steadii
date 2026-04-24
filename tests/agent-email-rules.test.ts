@@ -147,6 +147,34 @@ describe("classifyEmail — AUTO_HIGH bucket", () => {
     );
   });
 
+  it("escalates to AUTO_HIGH when the sender is a learned 'supervisor'", () => {
+    const input: ClassifyInput = {
+      ...baseInput,
+      fromEmail: "pi@lab.known.edu",
+      fromDomain: "lab.known.edu",
+      subject: "Thesis meeting",
+      snippet: "Can we meet Friday?",
+      bodySnippet: "Can we meet Friday?",
+    };
+    const learnedSenders = new Map([
+      [
+        "pi@lab.known.edu",
+        { senderRole: "supervisor" as const, riskTier: null },
+      ],
+    ]);
+    const res = classifyEmail(
+      input,
+      makeCtx({
+        seenDomains: new Set(["lab.known.edu", "known.edu", "example.com"]),
+        learnedSenders,
+      })
+    );
+    expect(res.bucket).toBe("auto_high");
+    expect(res.ruleProvenance.map((p) => p.ruleId)).toContain(
+      "USER_AUTO_HIGH_SUPERVISOR"
+    );
+  });
+
   it("does NOT escalate to AUTO_HIGH when the domain is already known and nothing else matches", () => {
     // Negative: this is a plain message from a known domain with no
     // HIGH keywords. It should NOT land in auto_high.
