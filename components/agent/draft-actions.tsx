@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Pencil, Archive, X } from "lucide-react";
+import { Check, CheckCircle2, Pencil, Archive, X } from "lucide-react";
 import {
   approveAgentDraftAction,
   cancelPendingSendAction,
@@ -36,6 +36,7 @@ export function DraftActions({
   initialTo,
   initialCc,
   undoWindowSeconds,
+  sentAt,
 }: {
   draftId: string;
   status: Status;
@@ -45,6 +46,9 @@ export function DraftActions({
   initialTo: string[];
   initialCc: string[];
   undoWindowSeconds: number;
+  // Populated by the cron when the queued send actually goes out via Gmail.
+  // Drives the "Sent · timestamp" banner; falsy for any non-sent state.
+  sentAt: Date | null;
 }) {
   const router = useRouter();
   const [editMode, setEditMode] = useState(false);
@@ -161,7 +165,9 @@ export function DraftActions({
         </div>
       </section>
 
-      {pendingSend ? (
+      {status === "sent" ? (
+        <SentBanner sentAt={sentAt} />
+      ) : pendingSend ? (
         <UndoBar
           until={pendingSend.until}
           onUndo={onUndo}
@@ -273,6 +279,40 @@ function UndoBar({
       >
         Undo
       </button>
+    </div>
+  );
+}
+
+// Steady-state banner shown after the cron drains the send_queue and flips
+// agent_drafts.status to 'sent'. Replaces the action button row entirely
+// so the user sees a clean "this is done" affordance instead of stale
+// Send/Edit/Dismiss buttons. Timestamp uses the user's local locale via
+// toLocaleString — no need to pre-format on the server.
+function SentBanner({ sentAt }: { sentAt: Date | null }) {
+  const label = sentAt
+    ? new Date(sentAt).toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : null;
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-[hsl(142_76%_36%/0.3)] bg-[hsl(142_76%_36%/0.06)] px-4 py-2.5 text-small">
+      <CheckCircle2
+        size={16}
+        strokeWidth={1.75}
+        className="shrink-0 text-[hsl(142_76%_36%)]"
+      />
+      <span className="text-[hsl(var(--foreground))]">
+        Sent
+        {label ? (
+          <>
+            {" · "}
+            <span className="text-[hsl(var(--muted-foreground))]">{label}</span>
+          </>
+        ) : null}
+      </span>
     </div>
   );
 }
