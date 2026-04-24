@@ -22,32 +22,59 @@ function shortTime(d: Date): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-function bucketLabel(bucket: string): string {
+// The visible "tier" is the post-L2 risk_tier if populated, otherwise the
+// L1 bucket (pre-L2 heuristic). L2 writes risk_tier back to inbox_items in
+// both the success and paused paths, so after the pipeline runs the UI
+// stops showing the stale "Classifying" label.
+function tierFor(
+  bucket: string,
+  riskTier: "low" | "medium" | "high" | null
+): "high" | "medium" | "low" | "classifying" | "ignore" | "unknown" {
+  if (riskTier === "high") return "high";
+  if (riskTier === "medium") return "medium";
+  if (riskTier === "low") return "low";
   switch (bucket) {
     case "auto_high":
-      return "High";
+      return "high";
     case "auto_medium":
-      return "Medium";
+      return "medium";
     case "auto_low":
-      return "Low";
+      return "low";
     case "l2_pending":
+      return "classifying";
+    case "ignore":
+      return "ignore";
+    default:
+      return "unknown";
+  }
+}
+
+function tierLabel(tier: ReturnType<typeof tierFor>): string {
+  switch (tier) {
+    case "high":
+      return "High";
+    case "medium":
+      return "Medium";
+    case "low":
+      return "Low";
+    case "classifying":
       return "Classifying";
     case "ignore":
       return "Ignore";
     default:
-      return bucket;
+      return "";
   }
 }
 
-function bucketTone(bucket: string): string {
-  switch (bucket) {
-    case "auto_high":
+function tierTone(tier: ReturnType<typeof tierFor>): string {
+  switch (tier) {
+    case "high":
       return "text-[hsl(var(--destructive))] bg-[hsl(var(--destructive)/0.08)]";
-    case "auto_medium":
+    case "medium":
       return "text-[hsl(38_92%_40%)] bg-[hsl(38_92%_50%/0.12)]";
-    case "auto_low":
+    case "low":
       return "text-[hsl(var(--muted-foreground))] bg-[hsl(var(--surface-raised))]";
-    case "l2_pending":
+    case "classifying":
       return "text-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.08)]";
     default:
       return "text-[hsl(var(--muted-foreground))] bg-[hsl(var(--surface-raised))]";
@@ -80,6 +107,7 @@ export default async function InboxPage() {
           snippet: inboxItems.snippet,
           receivedAt: inboxItems.receivedAt,
           bucket: inboxItems.bucket,
+          riskTier: inboxItems.riskTier,
           firstTimeSender: inboxItems.firstTimeSender,
         })
         .from(inboxItems)
@@ -123,16 +151,18 @@ export default async function InboxPage() {
         />
       ) : (
         <ul className="divide-y divide-[hsl(var(--border))] overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
-          {items.map((item) => (
+          {items.map((item) => {
+            const tier = tierFor(item.bucket, item.riskTier);
+            return (
             <li key={item.id}>
               <Link
                 href="/app/inbox"
                 className="flex items-start gap-3 px-4 py-3 transition-hover hover:bg-[hsl(var(--surface-raised))]"
               >
                 <span
-                  className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ${bucketTone(item.bucket)}`}
+                  className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ${tierTone(tier)}`}
                 >
-                  {bucketLabel(item.bucket)}
+                  {tierLabel(tier)}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
@@ -159,7 +189,8 @@ export default async function InboxPage() {
                 </div>
               </Link>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </div>
