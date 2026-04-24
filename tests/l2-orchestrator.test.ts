@@ -338,6 +338,66 @@ describe("processL2 orchestrator", () => {
     expect(inboxUpdates[0]?.riskTier).toBe("high");
   });
 
+  it("forceTier:'medium' skips risk + deep, runs draft with synthesized L1 reasoning", async () => {
+    addInbox({
+      ruleProvenance: [
+        {
+          ruleId: "GLOBAL_AUTO_MEDIUM_DEADLINE",
+          source: "global",
+          why: "Deadline / reschedule / office-hour language.",
+        },
+      ],
+    });
+    draftMock.mockResolvedValue({
+      subject: "Re: s",
+      body: "yes Thursday works",
+      to: ["prof@y.edu"],
+      cc: [],
+      inReplyTo: null,
+      usageId: "draft-uid",
+    });
+
+    const { processL2 } = await import("@/lib/agent/email/l2");
+    const out = await processL2("ibx", { forceTier: "medium" });
+
+    expect(riskMock).not.toHaveBeenCalled();
+    expect(deepMock).not.toHaveBeenCalled();
+    expect(draftMock).toHaveBeenCalled();
+    expect(out.status).toBe("pending");
+    expect(out.riskTier).toBe("medium");
+    expect(out.action).toBe("draft_reply");
+
+    const row = draftInserts[0];
+    expect(row.riskTier).toBe("medium");
+    expect(row.riskPassUsageId).toBeNull();
+    expect(row.deepPassUsageId).toBeNull();
+    expect(row.draftUsageId).toBe("draft-uid");
+    expect(row.action).toBe("draft_reply");
+    expect(row.draftBody).toBe("yes Thursday works");
+    expect(row.reasoning).toContain("GLOBAL_AUTO_MEDIUM_DEADLINE");
+    expect(inboxUpdates[0]?.riskTier).toBe("medium");
+  });
+
+  it("forceTier:'medium' with empty provenance falls back to generic reasoning", async () => {
+    addInbox({ ruleProvenance: [] });
+    draftMock.mockResolvedValue({
+      subject: "Re: s",
+      body: "ack",
+      to: ["x@y.edu"],
+      cc: [],
+      inReplyTo: null,
+      usageId: "draft-uid",
+    });
+
+    const { processL2 } = await import("@/lib/agent/email/l2");
+    const out = await processL2("ibx", { forceTier: "medium" });
+
+    expect(riskMock).not.toHaveBeenCalled();
+    expect(out.riskTier).toBe("medium");
+    expect(out.action).toBe("draft_reply");
+    expect(draftInserts[0].reasoning).toContain("AUTO_MEDIUM");
+  });
+
   it("forceTier:'high' with empty provenance falls back to generic reasoning", async () => {
     addInbox({ ruleProvenance: [] });
     deepMock.mockResolvedValue({
