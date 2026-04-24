@@ -13,7 +13,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx lib/db/migrate.ts",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:embed-backfill": "tsx --require ./scripts/_register.cjs scripts/embed-backfill.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.7.4",
