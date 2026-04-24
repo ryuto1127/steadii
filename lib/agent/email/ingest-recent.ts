@@ -105,23 +105,29 @@ export async function ingestLast24h(
       if (row) {
         created++;
         // Synchronously run the L2 pipeline for ambiguous (l2_pending) and
-        // high-risk (auto_high) messages. auto_high items skip the risk
-        // pass — the L1 rule is strict per memory, so we pass
-        // forceTier:"high" and go straight to deep+draft. Without this
-        // the Inbox UI can't deep-link auto_high rows (no agent_draft
-        // exists to link to).
+        // strict-tier (auto_high / auto_medium) messages. auto_high and
+        // auto_medium items skip the risk pass — the L1 rule is strict per
+        // memory, so we pass the corresponding forceTier and go straight to
+        // the tier-appropriate downstream step (deep+draft for high, direct
+        // draft for medium). Without this the Inbox UI can't deep-link
+        // those rows (no agent_draft exists to link to).
         //
         // α volume is ≤20 such items per user per 24h — queue is post-α.
         // Failures are isolated per item so one bad message doesn't
         // poison the ingest.
         if (
           result.bucket === "l2_pending" ||
-          result.bucket === "auto_high"
+          result.bucket === "auto_high" ||
+          result.bucket === "auto_medium"
         ) {
           try {
             await processL2(
               row.id,
-              result.bucket === "auto_high" ? { forceTier: "high" } : {}
+              result.bucket === "auto_high"
+                ? { forceTier: "high" }
+                : result.bucket === "auto_medium"
+                ? { forceTier: "medium" }
+                : {}
             );
           } catch (err) {
             Sentry.captureException(err, {

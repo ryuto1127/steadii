@@ -41,13 +41,15 @@ export type L2Outcome = {
 
 // Options for invoking the pipeline.
 //
-// `forceTier: "high"` is used by the L1 auto_high path: the rule engine
-// already decided this is high-risk (internship offer, academic integrity,
-// etc.) and that decision is strict — risk pass must not downgrade it.
-// We skip runRiskPass entirely, synthesize a RiskPassResult from the L1
-// rule provenance, and go straight to the deep pass.
+// `forceTier` is used by L1 auto_high / auto_medium paths: the rule engine
+// already decided the tier (internship offer, academic integrity,
+// office-hour / deadline keyword, etc.) and that decision is strict — risk
+// pass must not downgrade or upgrade it. We skip runRiskPass entirely,
+// synthesize a RiskPassResult from the L1 rule provenance, and hand off to
+// the tier-appropriate downstream step (deep pass for high, direct draft
+// for medium).
 export type ProcessL2Options = {
-  forceTier?: "high";
+  forceTier?: "high" | "medium";
 };
 
 // Run the L2 pipeline for one inbox item.
@@ -109,14 +111,18 @@ async function runPipeline(
 
   // ---- Step 1: risk pass (Mini, always runs — unless forceTier) ----
   //
-  // forceTier="high" means L1 already fired an AUTO_HIGH rule. Per memory
-  // "AUTO_HIGH — strict, L2 cannot downgrade", we must not let the risk
-  // pass re-classify this item as medium/low. Skip runRiskPass entirely
-  // and synthesize a RiskPassResult from the stored rule_provenance so the
-  // deep pass + Why-this-draft panel still see *why* this is high.
+  // forceTier means L1 already fired a strict auto_high / auto_medium rule.
+  // Per memory "AUTO_HIGH — strict, L2 cannot downgrade" (and the symmetric
+  // auto_medium intent: office-hour / deadline keyword hits are reply-worthy
+  // by rule), we must not let the risk pass re-classify. Skip runRiskPass
+  // entirely and synthesize a RiskPassResult from the stored rule_provenance
+  // so the downstream steps + the Why-this-draft panel still see *which*
+  // rule fired.
   let risk: RiskPassResult;
   if (options.forceTier === "high") {
     risk = synthesizeForcedHighRisk(item.ruleProvenance ?? []);
+  } else if (options.forceTier === "medium") {
+    risk = synthesizeForcedMediumRisk(item.ruleProvenance ?? []);
   } else {
     try {
       risk = await runRiskPass({
@@ -420,6 +426,28 @@ function synthesizeForcedHighRisk(
     riskTier: "high",
     confidence: 1.0,
     reasoning: `L1 auto_high rule: ${ruleId} — ${why}`,
+    usageId: null,
+  };
+}
+
+// Symmetric synthesizer for the AUTO_MEDIUM-forced path. Prefers global
+// AUTO_MEDIUM_* keyword rules or the learned professor/TA rule so the draft
+// step + Why-this-draft UI can cite the firing rule. No deep pass is run
+// for medium tier — the reasoning here becomes the draft's provenance.
+function synthesizeForcedMediumRisk(
+  provenance: RuleProvenance[]
+): RiskPassResult {
+  const fired = provenance.find(
+    (p) =>
+      p.ruleId.startsWith("GLOBAL_AUTO_MEDIUM_") ||
+      p.ruleId === "USER_AUTO_MEDIUM_PROFESSOR_TA"
+  );
+  const ruleId = fired?.ruleId ?? "AUTO_MEDIUM";
+  const why = fired?.why ?? "L1 rules placed this message in the AUTO_MEDIUM bucket.";
+  return {
+    riskTier: "medium",
+    confidence: 1.0,
+    reasoning: `L1 auto_medium rule: ${ruleId} — ${why}`,
     usageId: null,
   };
 }
