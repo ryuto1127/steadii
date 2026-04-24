@@ -11,7 +11,7 @@ import {
 } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { getUserConfirmationMode, getUserTimezone } from "@/lib/agent/preferences";
-import { setConfirmationModeAction } from "./actions";
+import { setConfirmationModeAction, refreshGmailInboxAction } from "./actions";
 import { getCreditBalance } from "@/lib/billing/credits";
 import { getStorageTotals } from "@/lib/billing/storage";
 import { prettyBytes } from "@/lib/billing/plan";
@@ -80,6 +80,7 @@ export default async function SettingsPage() {
   ]);
 
   const calendarConnected = googleAcct?.scope?.includes("calendar") ?? false;
+  const gmailConnected = googleAcct?.scope?.includes("gmail") ?? false;
 
   async function signOutAction() {
     "use server";
@@ -156,6 +157,37 @@ export default async function SettingsPage() {
               </button>
             </form>
           ) : null}
+        </div>
+        <div className="mt-3 flex items-center justify-between border-t border-[hsl(var(--border))] pt-3">
+          <div>
+            <p className="text-body">Gmail</p>
+            <p className="text-small text-[hsl(var(--muted-foreground))]">
+              {gmailConnected
+                ? "Gmail scope granted. The agent can triage and draft replies."
+                : "Gmail scope missing — sign out and sign back in to grant it."}
+            </p>
+          </div>
+          {gmailConnected ? (
+            <form action={refreshGmailInboxAction}>
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
+                title="Re-ingest the last 24 hours of Gmail"
+              >
+                <RefreshCw size={14} strokeWidth={1.75} />
+                Refresh inbox
+              </button>
+            </form>
+          ) : (
+            <form action={signOutAction}>
+              <button
+                type="submit"
+                className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+              >
+                Sign out to re-auth
+              </button>
+            </form>
+          )}
         </div>
       </Section>
 
