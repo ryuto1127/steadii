@@ -3,30 +3,30 @@ import { NextResponse } from "next/server";
 import { and, eq, lte } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { agentDrafts, sendQueue } from "@/lib/db/schema";
-import { env } from "@/lib/env";
 import { sendAndAudit } from "@/lib/agent/tools/gmail";
+import { verifyQStashSignature } from "@/lib/integrations/qstash/verify";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// Dispatcher for the 20s undo window. Runs every minute via vercel.json.
-// Picks rows where send_at <= now() AND status='pending', calls Gmail's
-// drafts.send, flips the agent_draft to 'sent', and the queue row to
-// 'sent'. Failures bump attempt_count and surface via Sentry.
-export async function GET(req: Request) {
+// Dispatcher for the 20s undo window. Triggered by Upstash QStash on a
+// cron schedule (configured in the QStash console — see DEPLOY.md).
+// Recommended cadence: every 5 minutes. The 20s undo window is enforced
+// client-side via send_at; this cron only drains rows whose window has
+// already closed, so cadence affects time-from-send-click to Gmail API
+// call but not the undo guarantee. Picks rows where send_at <= now()
+// AND status='pending', calls Gmail's drafts.send, flips the agent_draft
+// to 'sent', and the queue row to 'sent'. Failures bump attempt_count
+// and surface via Sentry.
+export async function POST(req: Request) {
   return Sentry.startSpan(
     {
       name: "cron.send_queue.tick",
       op: "cron",
     },
     async () => {
-      const e = env();
-      const authz = req.headers.get("authorization") ?? "";
-      const ok =
-        e.CRON_SECRET && authz === `Bearer ${e.CRON_SECRET}`
-          ? true
-          : e.NODE_ENV !== "production";
-      if (!ok) {
+      const rawBody = await req.text();
+      if (!(await verifyQStashSignature(req, rawBody))) {
         return NextResponse.json({ error: "unauthorized" }, { status: 401 });
       }
 

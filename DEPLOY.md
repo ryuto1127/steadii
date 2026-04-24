@@ -185,3 +185,44 @@ paste output into Vercel env)
 - [ ] Known-issue note: Stripe is test-mode; UI shows real flow but no
       charges post
 - [ ] Ryuto's admin flag confirmed on in production DB
+
+
+---
+
+## 11. Cron schedules (Upstash QStash)
+
+Vercel Hobby tier limits crons to daily, so scheduled work runs through
+Upstash QStash instead. Free tier (500 req/day) covers α at ~300 req/day.
+
+### One-time setup
+
+1. Sign in to https://console.upstash.com/qstash with GitHub.
+2. Copy `QSTASH_CURRENT_SIGNING_KEY` and `QSTASH_NEXT_SIGNING_KEY` from
+   the **Request** tab.
+3. Add both to Vercel project env vars (Production scope).
+4. Trigger a redeploy of `main` so the runtime picks up the keys.
+
+### Schedules to create
+
+In the QStash console → **Schedules** → **Create**:
+
+| Endpoint | Schedule | Method | Notes |
+|---|---|---|---|
+| `https://mysteadii.xyz/api/cron/digest` | `0 * * * *` | POST | Hourly. NA timezones are all whole-hour offsets, so hourly is enough; switch to `*/30` only if onboarding India / Newfoundland users. |
+| `https://mysteadii.xyz/api/cron/send-queue` | `*/5 * * * *` | POST | Every 5 minutes. The 20s undo window is enforced client-side; this cadence only affects time-from-send-click to Gmail API call. |
+
+Body: leave empty. The signing key in headers handles auth.
+
+### Verifying
+
+- After both schedules are created, wait one tick and check Sentry for
+  `cron.digest.tick` / `cron.send_queue.tick` spans with `op=cron`.
+- Or hit the QStash console → Schedule → **Logs** for per-tick HTTP
+  status (expect 200).
+- Manual trigger: QStash console → Schedule → **Publish now**.
+
+### Local dev
+
+`pnpm dev` skips signature verification when both `QSTASH_*` keys are
+empty, so you can `curl -X POST http://localhost:3000/api/cron/digest`
+without QStash. Production has both keys set, so the bypass is closed.

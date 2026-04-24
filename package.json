@@ -23,6 +23,7 @@
     "@notionhq/client": "^5.19.0",
     "@radix-ui/react-slot": "^1.1.1",
     "@sentry/nextjs": "^10.49.0",
+    "@upstash/qstash": "^2.10.1",
     "@vercel/blob": "^2.3.3",
     "cheerio": "^1.2.0",
     "class-variance-authority": "^0.7.1",

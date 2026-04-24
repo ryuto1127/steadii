@@ -1,6 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
-import { env } from "@/lib/env";
 import { buildDigestPayload } from "@/lib/digest/build";
 import { pickEligibleUsersForTick, markDigestSent } from "@/lib/digest/picker";
 import {
@@ -9,27 +8,29 @@ import {
   ResendNotConfiguredError,
 } from "@/lib/integrations/resend/client";
 import { logEmailAudit } from "@/lib/agent/email/audit";
+import { verifyQStashSignature } from "@/lib/integrations/qstash/verify";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// Fires every 30 minutes via vercel.json. For each eligible user at the
-// current tick, build a digest payload and dispatch via Resend.
-// Failures are captured per-user — one bad user doesn't block the rest.
-export async function GET(req: Request) {
+// Triggered by Upstash QStash on a cron schedule (configured in the QStash
+// console — see DEPLOY.md). Recommended cadence: hourly, since α targets
+// NA timezones (all whole-hour offsets) and pickEligibleUsersForTick scans
+// users whose local 7am crossed into the current tick. POST + signature
+// verify is QStash's contract.
+//
+// For each eligible user at the current tick, build a digest payload and
+// dispatch via Resend. Failures are captured per-user — one bad user
+// doesn't block the rest.
+export async function POST(req: Request) {
   return Sentry.startSpan(
     {
       name: "cron.digest.tick",
       op: "cron",
     },
     async () => {
-      const e = env();
-      const authz = req.headers.get("authorization") ?? "";
-      const ok =
-        e.CRON_SECRET && authz === `Bearer ${e.CRON_SECRET}`
-          ? true
-          : e.NODE_ENV !== "production";
-      if (!ok) {
+      const rawBody = await req.text();
+      if (!(await verifyQStashSignature(req, rawBody))) {
         return NextResponse.json({ error: "unauthorized" }, { status: 401 });
       }
 
