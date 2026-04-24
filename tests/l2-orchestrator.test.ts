@@ -15,6 +15,7 @@ type InboxItem = {
   subject: string | null;
   snippet: string | null;
   firstTimeSender: boolean;
+  ruleProvenance: Array<{ ruleId: string; source: string; why: string }> | null;
 };
 
 const inboxItems: InboxItem[] = [];
@@ -154,6 +155,7 @@ function addInbox(overrides: Partial<InboxItem> = {}) {
     subject: "s",
     snippet: "sn",
     firstTimeSender: false,
+    ruleProvenance: null,
     ...overrides,
   };
   inboxItems.length = 0;
@@ -277,6 +279,84 @@ describe("processL2 orchestrator", () => {
     expect(out.status).toBe("pending");
     expect(draftInserts[0].draftBody).toBeNull();
     expect(draftInserts[0].action).toBe("no_op");
+  });
+
+  it("forceTier:'high' skips risk pass, runs deep+draft with synthesized L1 reasoning", async () => {
+    addInbox({
+      ruleProvenance: [
+        {
+          ruleId: "GLOBAL_AUTO_HIGH_INTERNSHIP",
+          source: "global",
+          why: "Internship / interview / offer.",
+        },
+      ],
+    });
+    deepMock.mockResolvedValue({
+      action: "draft_reply",
+      reasoning: "deep said reply",
+      retrievalProvenance: {
+        sources: [],
+        total_candidates: 0,
+        returned: 0,
+      },
+      usageId: "deep-uid",
+    });
+    draftMock.mockResolvedValue({
+      subject: "Re: s",
+      body: "body",
+      to: ["recruiter@corp.com"],
+      cc: [],
+      inReplyTo: null,
+      usageId: "draft-uid",
+    });
+
+    const { processL2 } = await import("@/lib/agent/email/l2");
+    const out = await processL2("ibx", { forceTier: "high" });
+
+    expect(riskMock).not.toHaveBeenCalled();
+    expect(deepMock).toHaveBeenCalled();
+    // Deep pass must see the synthesized L1 reasoning so it can cite it.
+    const deepArgs = deepMock.mock.calls[0]?.[0] as {
+      riskPass: { riskTier: string; reasoning: string; usageId: string | null };
+    };
+    expect(deepArgs.riskPass.riskTier).toBe("high");
+    expect(deepArgs.riskPass.usageId).toBeNull();
+    expect(deepArgs.riskPass.reasoning).toContain("GLOBAL_AUTO_HIGH_INTERNSHIP");
+
+    expect(out.status).toBe("pending");
+    expect(out.riskTier).toBe("high");
+    expect(out.action).toBe("draft_reply");
+
+    const row = draftInserts[0];
+    expect(row.riskTier).toBe("high");
+    // No risk-pass usage to record.
+    expect(row.riskPassUsageId).toBeNull();
+    expect(row.deepPassUsageId).toBe("deep-uid");
+    expect(row.draftUsageId).toBe("draft-uid");
+    expect(row.action).toBe("draft_reply");
+    expect(row.draftBody).toBe("body");
+    expect(inboxUpdates[0]?.riskTier).toBe("high");
+  });
+
+  it("forceTier:'high' with empty provenance falls back to generic reasoning", async () => {
+    addInbox({ ruleProvenance: [] });
+    deepMock.mockResolvedValue({
+      action: "archive",
+      reasoning: "receipt only",
+      retrievalProvenance: { sources: [], total_candidates: 0, returned: 0 },
+      usageId: "deep-uid",
+    });
+
+    const { processL2 } = await import("@/lib/agent/email/l2");
+    const out = await processL2("ibx", { forceTier: "high" });
+
+    expect(riskMock).not.toHaveBeenCalled();
+    const deepArgs = deepMock.mock.calls[0]?.[0] as {
+      riskPass: { reasoning: string };
+    };
+    expect(deepArgs.riskPass.reasoning).toContain("AUTO_HIGH");
+    expect(out.riskTier).toBe("high");
+    expect(out.action).toBe("archive");
   });
 
   it("uses deep-pass action (e.g. archive) even on high risk", async () => {

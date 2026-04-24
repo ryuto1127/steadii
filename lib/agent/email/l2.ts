@@ -9,6 +9,7 @@ import {
   type AgentDraftStatus,
   type AgentDraftAction,
   type NewAgentDraft,
+  type RuleProvenance,
 } from "@/lib/db/schema";
 import {
   assertCreditsAvailable,
@@ -38,6 +39,17 @@ export type L2Outcome = {
   riskTier: "low" | "medium" | "high" | null;
 };
 
+// Options for invoking the pipeline.
+//
+// `forceTier: "high"` is used by the L1 auto_high path: the rule engine
+// already decided this is high-risk (internship offer, academic integrity,
+// etc.) and that decision is strict — risk pass must not downgrade it.
+// We skip runRiskPass entirely, synthesize a RiskPassResult from the L1
+// rule provenance, and go straight to the deep pass.
+export type ProcessL2Options = {
+  forceTier?: "high";
+};
+
 // Run the L2 pipeline for one inbox item.
 //
 // Memory (2026-04-23 C6): "Risk pass continues even when balance.exceeded
@@ -46,18 +58,27 @@ export type L2Outcome = {
 // rounds to 0 credits per call so gating would block a free operation and
 // rob exhausted users of their classification/reasoning visibility (which
 // the glass-box UI depends on). The gate lives before deep and draft.
-export async function processL2(inboxItemId: string): Promise<L2Outcome> {
+export async function processL2(
+  inboxItemId: string,
+  options: ProcessL2Options = {}
+): Promise<L2Outcome> {
   return Sentry.startSpan(
     {
       name: "email.l2.pipeline",
       op: "gen_ai.pipeline",
-      attributes: { "steadii.inbox_item_id": inboxItemId },
+      attributes: {
+        "steadii.inbox_item_id": inboxItemId,
+        "steadii.force_tier": options.forceTier ?? "none",
+      },
     },
-    async () => runPipeline(inboxItemId)
+    async () => runPipeline(inboxItemId, options)
   );
 }
 
-async function runPipeline(inboxItemId: string): Promise<L2Outcome> {
+async function runPipeline(
+  inboxItemId: string,
+  options: ProcessL2Options
+): Promise<L2Outcome> {
   const [item] = await db
     .select()
     .from(inboxItems)
@@ -86,35 +107,45 @@ async function runPipeline(inboxItemId: string): Promise<L2Outcome> {
     resourceId: item.id,
   });
 
-  // ---- Step 1: risk pass (Mini, always runs) ----
+  // ---- Step 1: risk pass (Mini, always runs — unless forceTier) ----
+  //
+  // forceTier="high" means L1 already fired an AUTO_HIGH rule. Per memory
+  // "AUTO_HIGH — strict, L2 cannot downgrade", we must not let the risk
+  // pass re-classify this item as medium/low. Skip runRiskPass entirely
+  // and synthesize a RiskPassResult from the stored rule_provenance so the
+  // deep pass + Why-this-draft panel still see *why* this is high.
   let risk: RiskPassResult;
-  try {
-    risk = await runRiskPass({
-      userId: item.userId,
-      senderEmail: item.senderEmail,
-      senderDomain: item.senderDomain,
-      senderRole: item.senderRole,
-      subject: item.subject,
-      snippet: item.snippet,
-      firstTimeSender: item.firstTimeSender,
-    });
-  } catch (err) {
-    Sentry.captureException(err, {
-      tags: { feature: "email_l2", step: "risk" },
-      user: { id: item.userId },
-      extra: { inboxItemId: item.id },
-    });
-    await logEmailAudit({
-      userId: item.userId,
-      action: "email_l2_failed",
-      result: "failure",
-      resourceId: item.id,
-      detail: {
-        step: "risk",
-        message: err instanceof Error ? err.message : String(err),
-      },
-    });
-    throw err;
+  if (options.forceTier === "high") {
+    risk = synthesizeForcedHighRisk(item.ruleProvenance ?? []);
+  } else {
+    try {
+      risk = await runRiskPass({
+        userId: item.userId,
+        senderEmail: item.senderEmail,
+        senderDomain: item.senderDomain,
+        senderRole: item.senderRole,
+        subject: item.subject,
+        snippet: item.snippet,
+        firstTimeSender: item.firstTimeSender,
+      });
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { feature: "email_l2", step: "risk" },
+        user: { id: item.userId },
+        extra: { inboxItemId: item.id },
+      });
+      await logEmailAudit({
+        userId: item.userId,
+        action: "email_l2_failed",
+        result: "failure",
+        resourceId: item.id,
+        detail: {
+          step: "risk",
+          message: err instanceof Error ? err.message : String(err),
+        },
+      });
+      throw err;
+    }
   }
 
   const riskTier = risk.riskTier;
@@ -363,5 +394,32 @@ async function persistPaused(args: {
     action: "paused",
     pausedAtStep: args.step,
     riskTier: args.riskTier,
+  };
+}
+
+// Build a RiskPassResult for the AUTO_HIGH-forced path without calling the
+// Mini risk-classifier. Pulls the firing L1 rule out of rule_provenance
+// (prefer global AUTO_HIGH_* or the learned supervisor rule) so the deep
+// pass and the "Why this draft" UI can cite *which* rule triggered.
+// usageId is null because no token spend occurred.
+function synthesizeForcedHighRisk(
+  provenance: RuleProvenance[]
+): RiskPassResult {
+  const autoHighRule = provenance.find(
+    (p) =>
+      p.ruleId.startsWith("GLOBAL_AUTO_HIGH_") ||
+      p.ruleId === "USER_AUTO_HIGH_SUPERVISOR"
+  );
+  const firstTimeRule = provenance.find(
+    (p) => p.ruleId === "GLOBAL_AUTO_HIGH_FIRST_TIME_DOMAIN"
+  );
+  const fired = autoHighRule ?? firstTimeRule;
+  const ruleId = fired?.ruleId ?? "AUTO_HIGH";
+  const why = fired?.why ?? "L1 rules placed this message in the AUTO_HIGH bucket.";
+  return {
+    riskTier: "high",
+    confidence: 1.0,
+    reasoning: `L1 auto_high rule: ${ruleId} — ${why}`,
+    usageId: null,
   };
 }
