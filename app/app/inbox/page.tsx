@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
-import { inboxItems, accounts } from "@/lib/db/schema";
+import { inboxItems, accounts, agentDrafts } from "@/lib/db/schema";
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -97,7 +97,7 @@ export default async function InboxPage() {
     .limit(1);
   const gmailConnected = acct?.scope?.includes("gmail") ?? false;
 
-  const items = gmailConnected
+  const rawItems = gmailConnected
     ? await db
         .select({
           id: inboxItems.id,
@@ -109,8 +109,15 @@ export default async function InboxPage() {
           bucket: inboxItems.bucket,
           riskTier: inboxItems.riskTier,
           firstTimeSender: inboxItems.firstTimeSender,
+          // Latest agent_draft for this inbox_item (NULL if not yet
+          // processed). The inbox list deep-links into /app/inbox/[draftId]
+          // — the review page's canonical URL — so the digest, bell, and
+          // list all funnel through the same route.
+          agentDraftId: agentDrafts.id,
+          agentDraftCreatedAt: agentDrafts.createdAt,
         })
         .from(inboxItems)
+        .leftJoin(agentDrafts, eq(agentDrafts.inboxItemId, inboxItems.id))
         .where(
           and(
             eq(inboxItems.userId, userId),
@@ -122,8 +129,25 @@ export default async function InboxPage() {
           )
         )
         .orderBy(desc(inboxItems.receivedAt))
-        .limit(50)
+        .limit(100)
     : [];
+
+  // Dedupe inbox_items: if one has multiple drafts (future regen), keep
+  // the newest. We picked the leftJoin over a subquery for Drizzle clarity.
+  const seen = new Map<string, (typeof rawItems)[number]>();
+  for (const r of rawItems) {
+    const prev = seen.get(r.id);
+    if (!prev) {
+      seen.set(r.id, r);
+      continue;
+    }
+    const prevTs = prev.agentDraftCreatedAt?.getTime() ?? 0;
+    const curTs = r.agentDraftCreatedAt?.getTime() ?? 0;
+    if (curTs > prevTs) seen.set(r.id, r);
+  }
+  const items = Array.from(seen.values())
+    .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime())
+    .slice(0, 50);
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -156,7 +180,7 @@ export default async function InboxPage() {
             return (
             <li key={item.id}>
               <Link
-                href="/app/inbox"
+                href={item.agentDraftId ? `/app/inbox/${item.agentDraftId}` : "/app/inbox"}
                 className="flex items-start gap-3 px-4 py-3 transition-hover hover:bg-[hsl(var(--surface-raised))]"
               >
                 <span
