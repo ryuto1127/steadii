@@ -3,14 +3,19 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Pencil, Archive, Clock3, X } from "lucide-react";
+import { Check, Pencil, Archive, X } from "lucide-react";
 import {
   approveAgentDraftAction,
   cancelPendingSendAction,
   dismissAgentDraftAction,
-  snoozeAgentDraftAction,
   saveDraftEditsAction,
 } from "@/lib/agent/email/draft-actions";
+// `snoozeAgentDraftAction` server action + the LLM's `snooze` action proposal
+// are intentionally kept in the backend. The Snooze BUTTON is removed from
+// the UI for α because we don't yet have auto-resurface (no cron re-opens
+// snoozed items at their resolvedAt). Without auto-resurface, Snooze was
+// just an extended Dismiss with a broken UX promise. W4 can reintroduce the
+// button once auto-resurface ships.
 
 type Status =
   | "pending"
@@ -91,19 +96,6 @@ export function DraftActions({
         router.push("/app/inbox");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Dismiss failed");
-      }
-    });
-  };
-
-  const onSnooze = (hours: number) => {
-    startTransition(async () => {
-      const until = new Date(Date.now() + hours * 60 * 60 * 1000);
-      try {
-        await snoozeAgentDraftAction(draftId, until.toISOString());
-        toast.success(`Snoozed ${hours}h`);
-        router.push("/app/inbox");
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Snooze failed");
       }
     });
   };
@@ -226,7 +218,6 @@ export function DraftActions({
                   Edit
                 </button>
               ) : null}
-              <SnoozeMenu onSnooze={onSnooze} disabled={isPending} />
               <button
                 type="button"
                 onClick={onDismiss}
@@ -282,53 +273,6 @@ function UndoBar({
       >
         Undo
       </button>
-    </div>
-  );
-}
-
-function SnoozeMenu({
-  onSnooze,
-  disabled,
-}: {
-  onSnooze: (hours: number) => void;
-  disabled: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border))] px-3 py-1.5 text-small transition-hover hover:bg-[hsl(var(--surface-raised))] disabled:opacity-50"
-      >
-        <Clock3 size={14} strokeWidth={1.75} />
-        Snooze
-      </button>
-      {open ? (
-        <div
-          className="absolute left-0 z-10 mt-1 min-w-[140px] rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] shadow-md"
-          onMouseLeave={() => setOpen(false)}
-        >
-          {[
-            { label: "1 hour", h: 1 },
-            { label: "Tomorrow", h: 24 },
-            { label: "Next week", h: 24 * 7 },
-          ].map((opt) => (
-            <button
-              key={opt.h}
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onSnooze(opt.h);
-              }}
-              className="flex w-full items-center px-3 py-2 text-left text-small transition-hover hover:bg-[hsl(var(--surface-raised))]"
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
