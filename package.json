@@ -14,7 +14,8 @@
     "db:migrate": "tsx lib/db/migrate.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:embed-backfill": "tsx --require ./scripts/_register.cjs scripts/embed-backfill.ts"
+    "db:embed-backfill": "tsx --require ./scripts/_register.cjs scripts/embed-backfill.ts",
+    "db:dogfood-stats": "tsx --require ./scripts/_register.cjs scripts/dogfood-stats.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.7.4",
