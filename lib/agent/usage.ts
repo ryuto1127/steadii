@@ -30,16 +30,19 @@ export async function recordUsage(r: UsageRecord) {
   // that meter — chat/tool_call/meta tasks are tracked at 0 credits here
   // and gated instead by the per-plan chat rate limiter.
   const credits = taskTypeMetersCredits(r.taskType) ? usdToCredits(usd) : 0;
-  await db.insert(usageEvents).values({
-    userId: r.userId,
-    chatId: r.chatId ?? null,
-    messageId: r.messageId ?? null,
-    model: r.model,
-    taskType: r.taskType,
-    inputTokens: r.inputTokens,
-    outputTokens: r.outputTokens,
-    cachedTokens: r.cachedTokens,
-    creditsUsed: credits,
-  });
-  return { usd, credits };
+  const [inserted] = await db
+    .insert(usageEvents)
+    .values({
+      userId: r.userId,
+      chatId: r.chatId ?? null,
+      messageId: r.messageId ?? null,
+      model: r.model,
+      taskType: r.taskType,
+      inputTokens: r.inputTokens,
+      outputTokens: r.outputTokens,
+      cachedTokens: r.cachedTokens,
+      creditsUsed: credits,
+    })
+    .returning({ id: usageEvents.id });
+  return { usd, credits, usageId: inserted?.id ?? null };
 }
