@@ -18,7 +18,9 @@
  *   --limit=N    Process at most N items this run.
  *   --user=UUID  Restrict to one user.
  */
-import "dotenv/config";
+// Env loading happens in scripts/_register.cjs before any import resolves
+// — ESM hoists imports above this module's top-level code, so inline
+// dotenv here would run too late.
 import { db } from "@/lib/db/client";
 import { inboxItems, emailEmbeddings } from "@/lib/db/schema";
 import { eq, isNull, and } from "drizzle-orm";
