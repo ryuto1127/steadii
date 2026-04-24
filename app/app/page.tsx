@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Calendar, Clock, TrendingUp, ChevronRight, CheckCircle2 } from "lucide-react";
+import { Calendar, Clock, TrendingUp, ChevronRight, CheckCircle2, Inbox as InboxIcon } from "lucide-react";
 import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
@@ -14,6 +14,7 @@ import {
 } from "@/lib/dashboard/today";
 import { getUserTimezone } from "@/lib/agent/preferences";
 import { FALLBACK_TZ } from "@/lib/calendar/tz-utils";
+import { countPendingDrafts } from "@/lib/agent/email/pending-queries";
 import { cn } from "@/lib/utils/cn";
 
 export const dynamic = "force-dynamic";
@@ -95,11 +96,12 @@ export default async function HomePage() {
   // Phase 6: Notion is optional. The dashboard always renders its three
   // cards; each card handles its own empty state (Today uses Calendar so
   // it works without Notion; Due soon and Past week degrade to empty).
-  const [events, dueSoon, weekSummary, tzPref] = await Promise.all([
+  const [events, dueSoon, weekSummary, tzPref, pendingCount] = await Promise.all([
     getTodaysEvents(userId),
     getDueSoonAssignments(userId),
     computeWeekSummary(userId),
     getUserTimezone(userId),
+    countPendingDrafts(userId),
   ]);
   const tz = tzPref ?? FALLBACK_TZ;
 
@@ -146,7 +148,8 @@ export default async function HomePage() {
         </p>
       </header>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+        <PendingCard count={pendingCount} />
         <TodayCard
           events={events}
           tz={tz}
@@ -231,6 +234,45 @@ function BentoCard({
       </span>
       <div className="flex flex-1 flex-col">{children}</div>
     </section>
+  );
+}
+
+function PendingCard({ count }: { count: number }) {
+  // Agent queue summary. Links through to /app/inbox so the user can
+  // review everything that needs a human tap. Empty state is deliberately
+  // terse — "You're clear." matches the redesign memo's tone.
+  return (
+    <BentoCard
+      icon={<InboxIcon size={18} strokeWidth={1.75} />}
+      iconTint="amber"
+      label="Pending"
+    >
+      {count === 0 ? (
+        <p className="fade-in text-[13px] text-[hsl(var(--muted-foreground))]">
+          You&apos;re clear.
+        </p>
+      ) : (
+        <div className="flex items-baseline gap-2">
+          <span className="font-mono text-[38px] font-bold leading-none tracking-tight tabular-nums text-[hsl(var(--foreground))]">
+            {count}
+          </span>
+          <span className="text-[12px] font-medium lowercase text-[hsl(var(--muted-foreground))]">
+            {count === 1 ? "item" : "items"}
+          </span>
+        </div>
+      )}
+      <Link
+        href="/app/inbox"
+        className="group/btn mt-auto inline-flex items-center gap-1 pt-4 text-[12px] font-medium text-[hsl(var(--foreground))] transition-hover hover:opacity-70"
+      >
+        Open inbox
+        <ChevronRight
+          size={14}
+          strokeWidth={1.75}
+          className="transition-transform group-hover/btn:translate-x-0.5"
+        />
+      </Link>
+    </BentoCard>
   );
 }
 

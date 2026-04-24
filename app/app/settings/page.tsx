@@ -8,8 +8,11 @@ import {
   notionConnections,
   accounts,
   registeredResources,
+  users,
 } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
+import { AgentRulesSection } from "@/components/settings/agent-rules";
+import { NotificationSettings } from "@/components/settings/notifications";
 import { getUserConfirmationMode, getUserTimezone } from "@/lib/agent/preferences";
 import { setConfirmationModeAction, refreshGmailInboxAction } from "./actions";
 import { getCreditBalance } from "@/lib/billing/credits";
@@ -49,6 +52,7 @@ export default async function SettingsPage() {
     resources,
     theme,
     timezone,
+    userPrefs,
   ] = await Promise.all([
     getUserConfirmationMode(userId),
     getCreditBalance(userId),
@@ -77,6 +81,17 @@ export default async function SettingsPage() {
       ),
     getUserThemePreference(userId),
     getUserTimezone(userId),
+    db
+      .select({
+        digestEnabled: users.digestEnabled,
+        digestHourLocal: users.digestHourLocal,
+        undoWindowSeconds: users.undoWindowSeconds,
+        highRiskNotifyImmediate: users.highRiskNotifyImmediate,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
   ]);
 
   const calendarConnected = googleAcct?.scope?.includes("calendar") ?? false;
@@ -245,6 +260,27 @@ export default async function SettingsPage() {
             Refresh from Notion
           </button>
         </form>
+      </Section>
+
+      <Section title="Agent Rules">
+        <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
+          Transparency is the promise. Every rule the agent uses to triage
+          your inbox — global keyword lists, learned contacts, manual
+          overrides — is listed below.
+        </p>
+        <AgentRulesSection userId={userId} />
+      </Section>
+
+      <Section title="Notifications">
+        <NotificationSettings
+          initial={{
+            digestEnabled: userPrefs?.digestEnabled ?? true,
+            digestHourLocal: userPrefs?.digestHourLocal ?? 7,
+            undoWindowSeconds: userPrefs?.undoWindowSeconds ?? 20,
+            highRiskNotifyImmediate:
+              userPrefs?.highRiskNotifyImmediate ?? true,
+          }}
+        />
       </Section>
 
       <Section title={t("sections.agent")}>

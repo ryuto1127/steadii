@@ -36,6 +36,15 @@ const schema = z.object({
   BLOB_READ_WRITE_TOKEN: z.string().optional().default(""),
   APP_URL: z.string().url().default("http://localhost:3000"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  // Phase 6 W3 — Resend for the morning digest. Optional during dev so local
+  // starts without secrets. Routes that send through Resend must validate
+  // the key is non-empty before using it and return a clear error if not.
+  RESEND_API_KEY: z.string().optional().default(""),
+  RESEND_FROM_EMAIL: z.string().optional().default("agent@mysteadii.xyz"),
+  // Shared secret for Vercel cron endpoints — headers["authorization"]
+  // must equal `Bearer ${CRON_SECRET}`. Unset in dev; cron endpoints
+  // return 401 unless the secret matches in production.
+  CRON_SECRET: z.string().optional().default(""),
 });
 
 export type Env = z.infer<typeof schema>;

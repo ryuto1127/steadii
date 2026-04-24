@@ -78,6 +78,22 @@ export const users = pgTable("users", {
   // 7am digest.
   digestHourLocal: smallint("digest_hour_local").notNull().default(7),
   digestEnabled: boolean("digest_enabled").notNull().default(true),
+  // W3 additions — configurable undo window for gmail_send (10-60s slider
+  // lives in Settings → Notifications), high-risk immediate push toggle
+  // (no-op until web push ships post-α), and timestamps that gate
+  // auto-ingest / digest cron from firing more often than necessary.
+  undoWindowSeconds: smallint("undo_window_seconds").notNull().default(20),
+  highRiskNotifyImmediate: boolean("high_risk_notify_immediate")
+    .notNull()
+    .default(true),
+  lastGmailIngestAt: timestamp("last_gmail_ingest_at", {
+    mode: "date",
+    withTimezone: true,
+  }),
+  lastDigestSentAt: timestamp("last_digest_sent_at", {
+    mode: "date",
+    withTimezone: true,
+  }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { mode: "date" }),
@@ -668,7 +684,12 @@ export type AgentDraftStatus =
   | "expired"
   // W2 addition — status set when credit gate denies deep/draft mid-pipeline.
   // `paused_at_step` records which step hit the gate so W3 UI can explain.
-  | "paused";
+  | "paused"
+  // W3 addition — in-flight between Send click and the 20s undo worker
+  // dispatch. A send_queue row with status='pending' exists for this draft.
+  // Cancellation flips back to 'approved'; successful worker dispatch flips
+  // to 'sent'. Exists only in TS; DB column is plain text.
+  | "sent_pending";
 
 // Retrieval provenance blob. Populated by L2 deep pass; surfaces in W3 UI.
 // Schema is frozen per phase6-w2.md "§Concrete decisions handed over #15".
@@ -788,3 +809,65 @@ export const emailEmbeddings = pgTable(
 
 export type EmailEmbedding = typeof emailEmbeddings.$inferSelect;
 export type NewEmailEmbedding = typeof emailEmbeddings.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Phase 6 W3 — Send queue (20s undo window dispatcher)
+// ---------------------------------------------------------------------------
+
+export type SendQueueStatus =
+  | "pending"
+  | "sent"
+  | "cancelled"
+  | "failed";
+
+// One row per approved agent_draft that's waiting out the undo window.
+// The cron worker at /api/cron/send-queue picks rows with status='pending'
+// AND send_at <= now() and promotes them via Gmail users.drafts.send.
+// `gmail_draft_id` is returned from an initial users.drafts.create call so
+// the user can also see the pending draft in Gmail's own UI during the
+// window — and so cancellation is a clean drafts.delete.
+export const sendQueue = pgTable(
+  "send_queue",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    agentDraftId: uuid("agent_draft_id")
+      .notNull()
+      .references(() => agentDrafts.id, { onDelete: "cascade" }),
+    gmailDraftId: text("gmail_draft_id").notNull(),
+    sendAt: timestamp("send_at", { mode: "date", withTimezone: true })
+      .notNull(),
+    status: text("status")
+      .$type<SendQueueStatus>()
+      .notNull()
+      .default("pending"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    attemptedAt: timestamp("attempted_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    lastError: text("last_error"),
+    sentGmailMessageId: text("sent_gmail_message_id"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    statusSendAtIdx: index("send_queue_status_send_at_idx").on(
+      t.status,
+      t.sendAt
+    ),
+    userStatusIdx: index("send_queue_user_status_idx").on(t.userId, t.status),
+    agentDraftUnique: uniqueIndex("send_queue_agent_draft_unique").on(
+      t.agentDraftId
+    ),
+  })
+);
+
+export type SendQueueRow = typeof sendQueue.$inferSelect;
+export type NewSendQueueRow = typeof sendQueue.$inferInsert;
