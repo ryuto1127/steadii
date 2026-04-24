@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Narrow hotfix test: ingestLast24h must route `auto_high` items through
-// processL2 with `forceTier: "high"` so an agent_draft gets created. Prior
-// to this fix, only `l2_pending` items invoked processL2 and auto_high
-// inbox rows ended up without drafts — unreachable from the Inbox UI.
+// Narrow hotfix test: ingestLast24h must route `auto_high` and `auto_medium`
+// items through processL2 with the matching forceTier so an agent_draft
+// gets created. Prior to the hotfixes, only `l2_pending` items invoked
+// processL2 and strict-tier auto_* rows ended up without drafts —
+// unreachable from the Inbox UI.
 
+type ForceTier = "high" | "medium";
 const processL2Mock = vi.fn<
-  (id: string, opts?: { forceTier?: "high" }) => Promise<unknown>
+  (id: string, opts?: { forceTier?: ForceTier }) => Promise<unknown>
 >(async () => ({
   agentDraftId: "d1",
   status: "pending",
@@ -15,7 +17,7 @@ const processL2Mock = vi.fn<
   riskTier: "high",
 }));
 vi.mock("@/lib/agent/email/l2", () => ({
-  processL2: (id: string, opts?: { forceTier?: "high" }) =>
+  processL2: (id: string, opts?: { forceTier?: ForceTier }) =>
     processL2Mock(id, opts),
 }));
 
@@ -113,13 +115,28 @@ describe("ingestLast24h → processL2 routing", () => {
     expect(processL2Mock).toHaveBeenCalledWith("inbox-2", {});
   });
 
-  it("auto_medium and auto_low buckets do NOT invoke processL2", async () => {
+  it("auto_medium bucket invokes processL2 with forceTier='medium'", async () => {
+    triageMock.mockResolvedValueOnce(triageFor("auto_medium"));
+    applyMock.mockResolvedValueOnce({ id: "inbox-3m" });
+    triageMock.mockResolvedValueOnce(triageFor("ignore"));
+    applyMock.mockResolvedValueOnce(null);
+
+    const ingest = await loadIngest();
+    await ingest("user-1");
+
+    expect(processL2Mock).toHaveBeenCalledTimes(1);
+    expect(processL2Mock).toHaveBeenCalledWith("inbox-3m", {
+      forceTier: "medium",
+    });
+  });
+
+  it("auto_low and ignore buckets do NOT invoke processL2", async () => {
     triageMock
-      .mockResolvedValueOnce(triageFor("auto_medium"))
-      .mockResolvedValueOnce(triageFor("auto_low"));
+      .mockResolvedValueOnce(triageFor("auto_low"))
+      .mockResolvedValueOnce(triageFor("ignore"));
     applyMock
-      .mockResolvedValueOnce({ id: "inbox-3" })
-      .mockResolvedValueOnce({ id: "inbox-4" });
+      .mockResolvedValueOnce({ id: "inbox-4" })
+      .mockResolvedValueOnce(null);
 
     const ingest = await loadIngest();
     await ingest("user-1");
