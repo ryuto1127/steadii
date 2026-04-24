@@ -104,13 +104,25 @@ export async function ingestLast24h(
       );
       if (row) {
         created++;
-        // Synchronously run the L2 pipeline for ambiguous messages. α
-        // volume is ≤20 l2_pending items per user per 24h — queue is
-        // post-α. Failures are isolated per item so one bad message
-        // doesn't poison the ingest.
-        if (result.bucket === "l2_pending") {
+        // Synchronously run the L2 pipeline for ambiguous (l2_pending) and
+        // high-risk (auto_high) messages. auto_high items skip the risk
+        // pass — the L1 rule is strict per memory, so we pass
+        // forceTier:"high" and go straight to deep+draft. Without this
+        // the Inbox UI can't deep-link auto_high rows (no agent_draft
+        // exists to link to).
+        //
+        // α volume is ≤20 such items per user per 24h — queue is post-α.
+        // Failures are isolated per item so one bad message doesn't
+        // poison the ingest.
+        if (
+          result.bucket === "l2_pending" ||
+          result.bucket === "auto_high"
+        ) {
           try {
-            await processL2(row.id);
+            await processL2(
+              row.id,
+              result.bucket === "auto_high" ? { forceTier: "high" } : {}
+            );
           } catch (err) {
             Sentry.captureException(err, {
               tags: { feature: "email_l2", phase: "ingest" },
