@@ -4,6 +4,7 @@ import { openai } from "@/lib/integrations/openai/client";
 import { selectModel } from "@/lib/agent/models";
 import { recordUsage } from "@/lib/agent/usage";
 import type { SimilarEmail } from "./retrieval";
+import type { DraftCalendarEvent } from "@/lib/integrations/google/calendar";
 
 export type DraftInput = {
   userId: string;
@@ -18,6 +19,11 @@ export type DraftInput = {
   // High-risk items get full retrieved-similar context; medium risk passes
   // an empty array.
   similarEmails: SimilarEmail[];
+  // Upcoming Google Calendar events in the user's schedule, used to ground
+  // availability-related replies in real data instead of asking back. Empty
+  // if calendar isn't connected — the prompt then falls through to
+  // "ask before committing" behavior.
+  calendarEvents: DraftCalendarEvent[];
   // Optional — if null, the model picks from the sender's To/From.
   userName: string | null;
   userEmail: string | null;
@@ -58,9 +64,15 @@ Choose 'kind':
 
 Pick "clarify" when ANY of these hold:
 - Subject and body conflict (e.g. subject says "Monday" but body says "Thursday").
-- A critical detail (date, time, location, who, what assignment, which class) is missing or ambiguous AND the student can't reasonably infer it from context.
-- The sender is asking the student a yes/no decision that depends on the student's preferences/availability you don't actually know.
+- A critical detail (date, time, location, who, what assignment, which class) is missing or ambiguous AND the student can't reasonably infer it from context (including the calendar block below).
+- The sender is asking the student a yes/no decision that depends on preferences only the student knows (NOT availability — see calendar rule below).
 - The sender's request implies multiple possible interpretations and choosing wrong has a non-trivial cost (missed meeting, wrong file sent, etc.).
+
+Calendar grounding (when the "Calendar" block is non-empty below):
+- If the sender proposes a specific time AND that time has no conflicting event, draft an acceptance — don't ask back. Cite the slot's freeness in 'reasoning'.
+- If the proposed time DOES conflict with an event, draft a polite reply that names the conflict and proposes a nearby free slot (or asks the sender to pick from 1-2 alternative free times you can see). Don't reveal the title of the conflicting event (it may be private) — just say "I have something already at that time."
+- "Free this week?" / open-ended availability questions: kind="draft" suggesting one or two specific free slots from the calendar, not "let me check and get back."
+- If calendar is empty (user hasn't connected it OR genuinely has nothing), fall back to clarify on availability questions as before.
 
 Default to "draft" when there is one obviously-correct interpretation. Don't ask back for routine acknowledgments or single-fact replies.
 
@@ -228,6 +240,22 @@ function buildUserContent(input: DraftInput): string {
           e.subject ?? "(no subject)"
         } — ${(e.snippet ?? "").slice(0, 180)}`
       );
+    });
+  }
+
+  // Calendar block: present even when empty so the model knows whether to
+  // fall back to clarify-on-availability (no events = unconnected) vs
+  // confidently commit (events listed).
+  parts.push("\n=== Calendar (next 7 days) ===");
+  if (input.calendarEvents.length === 0) {
+    parts.push(
+      "(empty — calendar not connected or genuinely no events. Treat availability questions as "+
+      "unknown.)"
+    );
+  } else {
+    input.calendarEvents.forEach((e, i) => {
+      const where = e.location ? ` @ ${e.location}` : "";
+      parts.push(`${i + 1}. ${e.start} → ${e.end} :: ${e.title}${where}`);
     });
   }
 
