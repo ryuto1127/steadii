@@ -22,11 +22,11 @@ export default function TermsPage() {
         />
         <Section
           heading="Your content"
-          body={`You retain ownership of everything you put into Steadii — Notion pages, attachments, syllabi, chat messages. You grant us a limited license to process this content solely to operate the service for you.`}
+          body={`You retain ownership of everything you put into Steadii — your classes, mistake notes, syllabi, attachments, chat messages, and any optional Notion pages you connect. You grant us a limited license to process this content solely to operate the service for you.`}
         />
         <Section
           heading="External services"
-          body={`Steadii connects to Notion, Google Calendar, OpenAI, Vercel Blob, and Stripe. By using Steadii you also accept those services' terms. If any of them become unavailable, parts of Steadii will degrade gracefully.`}
+          body={`Steadii connects to Google (Calendar + Gmail), OpenAI, Vercel Blob, and Stripe. Notion is an optional integration. By using Steadii you also accept those services' terms. If any of them become unavailable, parts of Steadii will degrade gracefully.`}
         />
         <Section
           heading="Plan limits"

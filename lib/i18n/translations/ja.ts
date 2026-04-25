@@ -27,7 +27,7 @@ export const ja: Messages = {
       },
       yours: {
         title: "データはあなたのもの",
-        body: "間違いノート・シラバス・課題はあなた自身のNotionに残ります。原文PDFも保持。整理はしますが、囲い込みません。",
+        body: "間違いノート・シラバス・課題はそのまま保管。読む・検索する・書き出す——いつでも自由、囲い込みません。",
       },
     },
     mock: {
@@ -118,7 +118,7 @@ export const ja: Messages = {
     actions: {
       add_to_mistakes: "+ 間違いノートに追加",
       generate_similar: "類題を生成",
-      save_to_notion: "Notionに保存",
+      save_mistake: "間違いノートを保存",
     },
     dismiss: "閉じる",
     remove_attachment: "削除",

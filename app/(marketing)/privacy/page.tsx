@@ -14,11 +14,11 @@ export default function PrivacyPage() {
       <div className="mt-10 space-y-6 text-sm leading-relaxed">
         <Section
           heading="What we collect"
-          body={`Steadii stores your Google profile (name, email, avatar), OAuth tokens for Notion and Google Calendar (AES-256-GCM encrypted at the application layer), your chat history, and the files you upload (syllabi and chat attachments). We do not collect device fingerprints or tracking cookies.`}
+          body={`Steadii stores your Google profile (name, email, avatar), OAuth tokens for Google (Calendar + Gmail) and — only if you connect it — Notion, all AES-256-GCM encrypted at the application layer. We also store your classes, mistake notes, syllabi, and assignments in our Postgres database (Neon), your chat history, and the files you upload. We do not collect device fingerprints or tracking cookies.`}
         />
         <Section
           heading="How we use it"
-          body={`Your data is used to (1) operate the product — answer chat messages, read and write Notion, read Google Calendar, (2) enforce the plan limits (credits, storage), and (3) log errors for debugging. OpenAI requests include only the minimum context needed to answer the question.`}
+          body={`Your data is used to (1) operate the product — answer chat messages, triage Gmail, read Google Calendar, store and retrieve your academic notes, (2) enforce the plan limits (credits, storage), and (3) log errors for debugging. OpenAI requests include only the minimum context needed to answer the question.`}
         />
         <Section
           heading="Model training"
@@ -26,7 +26,7 @@ export default function PrivacyPage() {
         />
         <Section
           heading="Third parties"
-          body={`Vercel (hosting, edge cache, blob storage), Neon (Postgres), OpenAI (inference), Notion (your workspace), Google (auth + calendar), Stripe (billing, test mode during α), Sentry (error tracking, with PII scrubbing on).`}
+          body={`Vercel (hosting, edge cache, blob storage), Neon (Postgres — primary store for your academic data), OpenAI (inference), Google (auth + calendar + gmail), Notion (optional one-way import surface), Stripe (billing, test mode during α), Sentry (error tracking, with PII scrubbing on).`}
         />
         <Section
           heading="Data location"

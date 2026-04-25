@@ -6,7 +6,6 @@ import {
   notionConnections,
   registeredResources,
   auditLog,
-  users,
 } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { parseNotionId } from "@/lib/integrations/notion/id";
@@ -15,7 +14,6 @@ import {
   clearDiscoveryCache,
 } from "@/lib/integrations/notion/discovery";
 import { ensureNotionSetup } from "@/lib/integrations/notion/ensure-setup";
-import { ingestLast24h } from "@/lib/agent/email/ingest-recent";
 import { redirect } from "next/navigation";
 
 export async function runSetupAction() {
@@ -31,7 +29,7 @@ export async function runSetupAction() {
     console.error("Initial discovery failed", err);
   }
 
-  redirect("/onboarding?step=resources");
+  redirect("/app/settings/connections");
 }
 
 export async function repairSetupAction() {
@@ -101,46 +99,12 @@ export async function addResourceAction(formData: FormData) {
   redirect("/app/settings");
 }
 
-// Records that the user explicitly skipped the optional Notion step. We
-// use the `onboarding_step` column as the forward-only persistence for
-// this: advancing it past 2 tells `stepFromStatus` not to land the user
-// back on the Notion screen on the next visit.
-export async function skipNotionAction() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthenticated");
-  const userId = session.user.id;
-
-  const [row] = await db
-    .select({ current: users.onboardingStep })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-  const current = row?.current ?? 0;
-  if (current < 4) {
-    await db
-      .update(users)
-      .set({ onboardingStep: 4, updatedAt: new Date() })
-      .where(eq(users.id, userId));
-  }
-  // Kick off the first-24h ingest — fire-and-forget, so /app doesn't block.
-  // ingestLast24h self-logs failures to audit_log; we catch here only to
-  // make sure a thrown promise doesn't surface as an unhandled rejection.
-  ingestLast24h(userId).catch((err) => {
-    console.error("[onboarding] first-24h ingest failed (skip path)", err);
-  });
-  redirect("/app");
-}
-
-// Finish onboarding without skipping; used by the resources step.
-export async function finishOnboardingAction() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthenticated");
-  const userId = session.user.id;
-  ingestLast24h(userId).catch((err) => {
-    console.error("[onboarding] first-24h ingest failed (finish path)", err);
-  });
-  redirect("/app");
-}
+// Phase 7 Pre-W1 cutover: the previous Notion-skip and Notion-finish
+// actions have been removed. Onboarding is now a single Google-grant
+// step; the first-24h Gmail ingest hook fires from
+// `maybeTriggerAutoIngest` in /app/layout.tsx the moment the user lands
+// on the app shell with the Gmail scope detected — so no onboarding
+// action needs to schedule it explicitly anymore.
 
 export async function removeResourceAction(formData: FormData) {
   const session = await auth();
