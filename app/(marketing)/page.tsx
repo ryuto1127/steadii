@@ -68,18 +68,22 @@ export default async function LandingPage() {
           />
         </section>
 
-        <section className="mb-24 grid gap-10 md:grid-cols-3">
+        <section className="mb-24 grid gap-10 md:grid-cols-2">
           <ValueProp
-            title={t("landing.value_props.conversation.title")}
-            body={t("landing.value_props.conversation.body")}
+            title={t("landing.value_props.triage.title")}
+            body={t("landing.value_props.triage.body")}
           />
           <ValueProp
-            title={t("landing.value_props.notion.title")}
-            body={t("landing.value_props.notion.body")}
+            title={t("landing.value_props.glassbox.title")}
+            body={t("landing.value_props.glassbox.body")}
           />
           <ValueProp
-            title={t("landing.value_props.verbatim.title")}
-            body={t("landing.value_props.verbatim.body")}
+            title={t("landing.value_props.confirm.title")}
+            body={t("landing.value_props.confirm.body")}
+          />
+          <ValueProp
+            title={t("landing.value_props.yours.title")}
+            body={t("landing.value_props.yours.body")}
           />
         </section>
 
