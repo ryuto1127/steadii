@@ -1,6 +1,11 @@
 import "server-only";
-import { getNotionClientForUser } from "@/lib/integrations/notion/client";
-import { resolveDataSourceId } from "@/lib/integrations/notion/data-source";
+import { db } from "@/lib/db/client";
+import {
+  assignments as assignmentsTable,
+  classes as classesTable,
+  mistakeNotes,
+} from "@/lib/db/schema";
+import { and, count, desc, eq, gte, isNull, lte, ne, sql } from "drizzle-orm";
 import type { ClassColor } from "@/components/ui/class-color";
 import {
   getCalendarForUser,
@@ -22,163 +27,111 @@ export type ClassRow = {
 };
 
 export async function loadClasses(userId: string): Promise<ClassRow[]> {
-  const notion = await getNotionClientForUser(userId);
-  const classesDbId = notion?.connection.classesDbId;
-  if (!notion || !classesDbId) return [];
-  const { client, connection } = notion;
+  const classRows = await db
+    .select()
+    .from(classesTable)
+    .where(
+      and(eq(classesTable.userId, userId), isNull(classesTable.deletedAt))
+    )
+    .orderBy(desc(classesTable.createdAt));
 
-  // Fire all three Notion queries in parallel. Classes is critical; the
-  // other two enrich row counts and are optional — on failure we silently
-  // keep counts at 0 rather than dropping the whole page.
+  if (classRows.length === 0) return [];
+
   const now = new Date();
   const dueHorizon = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
   const mistakeSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  const classesP = (async () => {
-    const dsId = await resolveDataSourceId(client, classesDbId);
-    return client.dataSources.query({ data_source_id: dsId, page_size: 100 });
-  })();
+  const [dueCounts, mistakeCounts] = await Promise.all([
+    db
+      .select({
+        classId: assignmentsTable.classId,
+        n: count(assignmentsTable.id),
+      })
+      .from(assignmentsTable)
+      .where(
+        and(
+          eq(assignmentsTable.userId, userId),
+          isNull(assignmentsTable.deletedAt),
+          ne(assignmentsTable.status, "done"),
+          gte(assignmentsTable.dueAt, now),
+          lte(assignmentsTable.dueAt, dueHorizon)
+        )
+      )
+      .groupBy(assignmentsTable.classId),
+    db
+      .select({
+        classId: mistakeNotes.classId,
+        n: count(mistakeNotes.id),
+      })
+      .from(mistakeNotes)
+      .where(
+        and(
+          eq(mistakeNotes.userId, userId),
+          isNull(mistakeNotes.deletedAt),
+          gte(mistakeNotes.createdAt, mistakeSince)
+        )
+      )
+      .groupBy(mistakeNotes.classId),
+  ]);
 
-  const assignmentsP = connection.assignmentsDbId
-    ? (async () => {
-        const aDs = await resolveDataSourceId(
-          client,
-          connection.assignmentsDbId!
-        );
-        return client.dataSources.query({
-          data_source_id: aDs,
-          page_size: 100,
-          filter: {
-            and: [
-              { property: "Due", date: { on_or_after: now.toISOString() } },
-              { property: "Due", date: { on_or_before: dueHorizon.toISOString() } },
-            ],
-          },
-        });
-      })().catch(() => null)
-    : Promise.resolve(null);
-
-  const mistakesP = connection.mistakesDbId
-    ? (async () => {
-        const mDs = await resolveDataSourceId(
-          client,
-          connection.mistakesDbId!
-        );
-        return client.dataSources.query({
-          data_source_id: mDs,
-          page_size: 100,
-          filter: {
-            timestamp: "created_time",
-            created_time: { on_or_after: mistakeSince.toISOString() },
-          },
-        });
-      })().catch(() => null)
-    : Promise.resolve(null);
-
-  let classesResp: Awaited<typeof classesP>;
-  let aResp: Awaited<typeof assignmentsP>;
-  let mResp: Awaited<typeof mistakesP>;
-  try {
-    [classesResp, aResp, mResp] = await Promise.all([
-      classesP,
-      assignmentsP,
-      mistakesP,
-    ]);
-  } catch {
-    return [];
+  const dueByClass = new Map<string, number>();
+  for (const r of dueCounts) {
+    if (r.classId) dueByClass.set(r.classId, Number(r.n));
+  }
+  const mistakeByClass = new Map<string, number>();
+  for (const r of mistakeCounts) {
+    if (r.classId) mistakeByClass.set(r.classId, Number(r.n));
   }
 
-  const rows: ClassRow[] = [];
-  for (const raw of classesResp.results as Array<Record<string, unknown>>) {
-    const page = raw as { id: string; properties?: Record<string, unknown> };
-    const props = page.properties ?? {};
-    const name = extractTitle(props);
-    if (!name) continue;
-    const status = getSelectName(props, "Status") === "archived" ? "archived" : "active";
-    rows.push({
-      id: page.id,
-      name,
-      code: getRichText(props, "Code"),
-      professor: getRichText(props, "Professor"),
-      term: getSelectName(props, "Term"),
-      color: getSelectName(props, "Color") as ClassColor | null,
-      status,
-      dueCount: 0,
-      mistakesCount: 0,
-      nextSessionLabel: null,
-    });
-  }
-
-  const classIdToRow = new Map(rows.map((r) => [r.id, r] as const));
-  if (aResp) {
-    for (const row of aResp.results as Array<Record<string, unknown>>) {
-      const p = (row as { properties?: Record<string, unknown> }).properties ?? {};
-      if (getSelectName(p, "Status") === "Done") continue;
-      for (const id of getRelationIds(p, "Class")) {
-        const target = classIdToRow.get(id);
-        if (target) target.dueCount += 1;
-      }
-    }
-  }
-  if (mResp) {
-    for (const row of mResp.results as Array<Record<string, unknown>>) {
-      const p = (row as { properties?: Record<string, unknown> }).properties ?? {};
-      for (const id of getRelationIds(p, "Class")) {
-        const target = classIdToRow.get(id);
-        if (target) target.mistakesCount += 1;
-      }
-    }
-  }
-
-  return rows;
+  return classRows.map((c) => ({
+    id: c.id,
+    name: c.name,
+    code: c.code,
+    professor: c.professor,
+    term: c.term,
+    color: (c.color as ClassColor | null) ?? null,
+    status: c.status,
+    dueCount: dueByClass.get(c.id) ?? 0,
+    mistakesCount: mistakeByClass.get(c.id) ?? 0,
+    nextSessionLabel: null,
+  }));
 }
 
 export async function loadClass(
   userId: string,
   classId: string
 ): Promise<ClassRow | null> {
-  const all = await loadClasses(userId);
-  return all.find((c) => c.id === classId) ?? null;
+  const [row] = await db
+    .select()
+    .from(classesTable)
+    .where(
+      and(
+        eq(classesTable.id, classId),
+        eq(classesTable.userId, userId),
+        isNull(classesTable.deletedAt)
+      )
+    )
+    .limit(1);
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    code: row.code,
+    professor: row.professor,
+    term: row.term,
+    color: (row.color as ClassColor | null) ?? null,
+    status: row.status,
+    dueCount: 0,
+    mistakesCount: 0,
+    nextSessionLabel: null,
+  };
 }
 
-// Fetch a single class page directly — used by /app/classes/[id] which
-// only needs one row's header info, not the full class list + due/mistake
-// enrichment. Cuts detail-page Notion round-trips from 4 (three queries
-// in loadClasses + the tab's own query) to just 1 for the class metadata.
-// Counts aren't populated since the detail page doesn't render them.
 export async function loadClassById(
   userId: string,
   classId: string
 ): Promise<ClassRow | null> {
-  const notion = await getNotionClientForUser(userId);
-  if (!notion) return null;
-  const { client } = notion;
-
-  try {
-    const page = (await client.pages.retrieve({ page_id: classId })) as {
-      id: string;
-      properties?: Record<string, unknown>;
-    };
-    const props = page.properties ?? {};
-    const name = extractTitle(props);
-    if (!name) return null;
-    const status =
-      getSelectName(props, "Status") === "archived" ? "archived" : "active";
-    return {
-      id: page.id,
-      name,
-      code: getRichText(props, "Code"),
-      professor: getRichText(props, "Professor"),
-      term: getSelectName(props, "Term"),
-      color: getSelectName(props, "Color") as ClassColor | null,
-      status,
-      dueCount: 0,
-      mistakesCount: 0,
-      nextSessionLabel: null,
-    };
-  } catch {
-    return null;
-  }
+  return loadClass(userId, classId);
 }
 
 export type ClassSession = TimelineEvent;
@@ -188,11 +141,7 @@ export async function loadTimelineForToday(
 ): Promise<TimelineDay[]> {
   try {
     const cal = await getCalendarForUser(userId);
-    const makeDay = (offset: number): TimelineDay["events"] => [];
-    const events: Record<0 | 1, TimelineEvent[]> = {
-      0: makeDay(0),
-      1: makeDay(1),
-    };
+    const events: Record<0 | 1, TimelineEvent[]> = { 0: [], 1: [] };
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -233,32 +182,6 @@ export async function loadTimelineForToday(
   }
 }
 
-function extractTitle(props: Record<string, unknown>): string | null {
-  for (const value of Object.values(props)) {
-    const v = value as { type?: string; title?: Array<{ plain_text?: string }> };
-    if (v?.type === "title" && Array.isArray(v.title) && v.title.length) {
-      return v.title.map((t) => t.plain_text ?? "").join("").trim() || null;
-    }
-  }
-  return null;
-}
-
-function getRichText(props: Record<string, unknown>, key: string): string | null {
-  const v = props[key] as { rich_text?: Array<{ plain_text?: string }> } | undefined;
-  if (!v?.rich_text?.length) return null;
-  return v.rich_text.map((t) => t.plain_text ?? "").join("").trim() || null;
-}
-
-function getSelectName(props: Record<string, unknown>, key: string): string | null {
-  const v = props[key] as { select?: { name?: string } | null } | undefined;
-  return v?.select?.name ?? null;
-}
-
-function getRelationIds(props: Record<string, unknown>, key: string): string[] {
-  const v = props[key] as { relation?: Array<{ id?: string }> } | undefined;
-  return v?.relation?.map((r) => r.id).filter((id): id is string => Boolean(id)) ?? [];
-}
-
 function sameDay(a: Date, b: Date): boolean {
   return (
     a.getFullYear() === b.getFullYear() &&
@@ -272,3 +195,5 @@ function addDays(d: Date, n: number): Date {
   r.setDate(r.getDate() + n);
   return r;
 }
+
+void sql;

@@ -1,50 +1,62 @@
 import "server-only";
 import { db } from "@/lib/db/client";
 import {
-  notionConnections,
-  registeredResources,
   auditLog,
+  mistakeNotes,
+  mistakeNoteImages,
   messages as messagesTable,
   messageAttachments,
 } from "@/lib/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
-import { decrypt } from "@/lib/utils/crypto";
-import { notionClientFromToken } from "@/lib/integrations/notion/client";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { assertCreditsAvailable } from "@/lib/billing/credits";
+import { refreshMistakeEmbeddings } from "@/lib/embeddings/entity-embed";
 import { z } from "zod";
 
 export const mistakeSaveSchema = z.object({
   chatId: z.string().uuid(),
   assistantMessageId: z.string().uuid(),
   title: z.string().min(1),
-  classNotionPageId: z.string().optional().nullable(),
-  unit: z.string().optional().nullable(),
+  // The chat dialog still hands us a class id — historically this was a
+  // Notion page id; post-cutover it is a Postgres `classes.id` UUID.
+  // Keeping the camel-case `classNotionPageId` field name for
+  // wire-compatibility with the existing client.
+  classNotionPageId: z.string().nullish(),
+  unit: z.string().nullish(),
   difficulty: z.enum(["easy", "medium", "hard"]).optional(),
   tags: z.array(z.string()).optional(),
 });
 
 export type MistakeSaveInput = z.infer<typeof mistakeSaveSchema>;
 
+// Build the markdown body that mirrors the structured Notion page we used
+// to ship: image bookmarks, the user's verbatim question, then the
+// step-by-step explanation. Verbatim preservation is non-negotiable.
+export function buildMistakeMarkdownBody(args: {
+  userQuestion: string;
+  assistantExplanation: string;
+  imageUrls: string[];
+}): string {
+  const parts: string[] = [];
+  for (const url of args.imageUrls) {
+    parts.push(`![](${url})`);
+  }
+  if (args.userQuestion.trim()) {
+    parts.push("## The problem");
+    parts.push(args.userQuestion);
+  }
+  if (args.assistantExplanation.trim()) {
+    parts.push("## Step-by-step explanation");
+    parts.push(args.assistantExplanation);
+  }
+  return parts.join("\n\n");
+}
+
 export async function saveMistakeNote(args: {
   userId: string;
   input: MistakeSaveInput;
-}): Promise<{ pageId: string; url: string | null }> {
-  // C6 resolution: metered features (incl. mistake save) pause on credit
-  // exhaustion. Memory: "Mistake-explain / syllabus-extract also pause
-  // until top-up or reset." The save step itself is not LLM-metered but
-  // the prompt explicitly names this callsite as part of the gate.
+}): Promise<{ id: string }> {
   await assertCreditsAvailable(args.userId);
 
-  const [conn] = await db
-    .select()
-    .from(notionConnections)
-    .where(eq(notionConnections.userId, args.userId))
-    .limit(1);
-  if (!conn || !conn.mistakesDbId) {
-    throw new Error("Mistake Notes database not set up for this user.");
-  }
-
-  // Fetch the assistant message + the prior user message (+ its attachments)
   const [assistantRow] = await db
     .select()
     .from(messagesTable)
@@ -77,142 +89,169 @@ export async function saveMistakeNote(args: {
         .from(messageAttachments)
         .where(inArray(messageAttachments.messageId, userMessageIds))
     : [];
-  const imageUrls = attachments.filter((a) => a.kind === "image").map((a) => a.url);
+  const imageAttachments = attachments.filter((a) => a.kind === "image");
+  const imageUrls = imageAttachments.map((a) => a.url);
 
-  const client = notionClientFromToken(decrypt(conn.accessTokenEncrypted));
-  const { input } = args;
-
-  const properties: Record<string, unknown> = {
-    Title: { title: [{ type: "text", text: { content: input.title } }] },
-    Date: { date: { start: new Date().toISOString().slice(0, 10) } },
-    Unit: input.unit
-      ? { rich_text: [{ type: "text", text: { content: input.unit } }] }
-      : undefined,
-    Difficulty: input.difficulty
-      ? { select: { name: input.difficulty } }
-      : undefined,
-    Tags:
-      input.tags && input.tags.length
-        ? { multi_select: input.tags.map((t) => ({ name: t })) }
-        : undefined,
-    Class: input.classNotionPageId
-      ? { relation: [{ id: input.classNotionPageId }] }
-      : undefined,
-    Image:
-      imageUrls.length > 0
-        ? {
-            files: imageUrls.map((url, i) => ({
-              name: `image-${i + 1}`,
-              type: "external",
-              external: { url },
-            })),
-          }
-        : undefined,
-  };
-  for (const k of Object.keys(properties)) {
-    if (properties[k] === undefined) delete properties[k];
-  }
-
-  const children = buildMistakeBody({
-    userQuestion: user?.content ?? "",
-    assistantExplanation: assistantRow.content ?? "",
+  const userQuestion = user?.content ?? "";
+  const assistantExplanation = assistantRow.content ?? "";
+  const bodyMarkdown = buildMistakeMarkdownBody({
+    userQuestion,
+    assistantExplanation,
     imageUrls,
   });
 
-  const page = await client.pages.create({
-    parent: { type: "database_id", database_id: conn.mistakesDbId },
-    properties: properties as Parameters<typeof client.pages.create>[0]["properties"],
-    children,
-  });
-  const urlHolder = page as unknown as { url?: string };
+  const classId =
+    args.input.classNotionPageId &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      args.input.classNotionPageId
+    )
+      ? args.input.classNotionPageId
+      : null;
 
-  await db.insert(registeredResources).values({
-    userId: args.userId,
-    connectionId: conn.id,
-    resourceType: "page",
-    notionId: page.id,
-    title: input.title,
-    parentNotionId: conn.mistakesDbId,
-    autoRegistered: 1,
-  });
+  const [row] = await db
+    .insert(mistakeNotes)
+    .values({
+      userId: args.userId,
+      classId,
+      title: args.input.title,
+      unit: args.input.unit ?? null,
+      difficulty: args.input.difficulty ?? null,
+      tags: args.input.tags ?? [],
+      bodyFormat: "markdown",
+      bodyMarkdown,
+      sourceChatId: args.input.chatId,
+      sourceAssistantMsgId: args.input.assistantMessageId,
+      sourceUserQuestion: userQuestion,
+      sourceExplanation: assistantExplanation,
+    })
+    .returning({ id: mistakeNotes.id });
+
+  if (imageAttachments.length) {
+    await db.insert(mistakeNoteImages).values(
+      imageAttachments.map((att, i) => ({
+        mistakeId: row.id,
+        blobAssetId: att.blobAssetId ?? null,
+        url: att.url,
+        position: i,
+        altText: att.filename ?? null,
+      }))
+    );
+  }
+
+  // Inline embedding population per scoping doc §6.4 — short content is
+  // sub-second and α volume doesn't justify a sweep job. Failure here
+  // shouldn't kill the save (the row is the source of truth; chunks are
+  // an advisory retrieval cache that can be rebuilt).
+  try {
+    await refreshMistakeEmbeddings({
+      userId: args.userId,
+      mistakeId: row.id,
+      text: bodyMarkdown,
+    });
+  } catch (err) {
+    console.error("[mistake.save] embedding population failed", err);
+  }
 
   await db.insert(auditLog).values({
     userId: args.userId,
     action: "mistake.save",
-    toolName: null,
-    resourceType: "notion_page",
-    resourceId: page.id,
+    resourceType: "mistake_note",
+    resourceId: row.id,
     result: "success",
-    detail: { title: input.title, class: input.classNotionPageId ?? null },
+    detail: {
+      title: args.input.title,
+      classId,
+      tags: args.input.tags ?? [],
+    },
   });
 
-  return { pageId: page.id, url: urlHolder.url ?? null };
+  return { id: row.id };
 }
 
-export function buildMistakeBody(args: {
-  userQuestion: string;
-  assistantExplanation: string;
-  imageUrls: string[];
-}) {
-  const blocks: Array<Record<string, unknown>> = [];
-
-  for (const url of args.imageUrls) {
-    blocks.push({
-      object: "block",
-      type: "image",
-      image: { type: "external", external: { url } },
-    });
+export async function updateMistakeNote(args: {
+  userId: string;
+  mistakeId: string;
+  input: {
+    title?: string;
+    classId?: string | null;
+    unit?: string | null;
+    difficulty?: "easy" | "medium" | "hard" | null;
+    tags?: string[];
+    bodyMarkdown?: string;
+  };
+}): Promise<{ id: string } | null> {
+  const set: Record<string, unknown> = { updatedAt: new Date() };
+  if (args.input.title !== undefined) set.title = args.input.title;
+  if (args.input.classId !== undefined) set.classId = args.input.classId;
+  if (args.input.unit !== undefined) set.unit = args.input.unit;
+  if (args.input.difficulty !== undefined) set.difficulty = args.input.difficulty;
+  if (args.input.tags !== undefined) set.tags = args.input.tags;
+  if (args.input.bodyMarkdown !== undefined) {
+    set.bodyMarkdown = args.input.bodyMarkdown;
+    set.bodyFormat = "markdown";
   }
 
-  if (args.userQuestion.trim()) {
-    blocks.push(h2("The problem"));
-    blocks.push(paragraph(args.userQuestion));
-  }
+  const [row] = await db
+    .update(mistakeNotes)
+    .set(set)
+    .where(
+      and(
+        eq(mistakeNotes.id, args.mistakeId),
+        eq(mistakeNotes.userId, args.userId),
+        isNull(mistakeNotes.deletedAt)
+      )
+    )
+    .returning({ id: mistakeNotes.id });
 
-  if (args.assistantExplanation.trim()) {
-    blocks.push(h2("Step-by-step explanation"));
-    for (const chunk of splitIntoParagraphs(args.assistantExplanation)) {
-      blocks.push(paragraph(chunk));
+  if (!row) return null;
+
+  if (args.input.bodyMarkdown !== undefined) {
+    try {
+      await refreshMistakeEmbeddings({
+        userId: args.userId,
+        mistakeId: row.id,
+        text: args.input.bodyMarkdown,
+      });
+    } catch (err) {
+      console.error("[mistake.update] embedding refresh failed", err);
     }
   }
 
-  return blocks as Parameters<
-    ReturnType<typeof notionClientFromToken>["pages"]["create"]
-  >[0]["children"];
+  await db.insert(auditLog).values({
+    userId: args.userId,
+    action: "mistake.update",
+    resourceType: "mistake_note",
+    resourceId: row.id,
+    result: "success",
+    detail: { fields: Object.keys(set).filter((k) => k !== "updatedAt") },
+  });
+
+  return row;
 }
 
-function h2(text: string): Record<string, unknown> {
-  return {
-    object: "block",
-    type: "heading_2",
-    heading_2: { rich_text: [{ type: "text", text: { content: text } }] },
-  };
-}
+export async function softDeleteMistakeNote(args: {
+  userId: string;
+  mistakeId: string;
+}): Promise<{ id: string } | null> {
+  const [row] = await db
+    .update(mistakeNotes)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(
+        eq(mistakeNotes.id, args.mistakeId),
+        eq(mistakeNotes.userId, args.userId),
+        isNull(mistakeNotes.deletedAt)
+      )
+    )
+    .returning({ id: mistakeNotes.id });
+  if (!row) return null;
 
-function paragraph(text: string): Record<string, unknown> {
-  return {
-    object: "block",
-    type: "paragraph",
-    paragraph: {
-      rich_text: chunkForNotion(text).map((c) => ({
-        type: "text",
-        text: { content: c },
-      })),
-    },
-  };
-}
-
-function splitIntoParagraphs(text: string): string[] {
-  return text.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean);
-}
-
-function chunkForNotion(text: string): string[] {
-  // Notion's per-rich-text content cap is 2000 chars
-  const MAX = 1900;
-  if (text.length <= MAX) return [text];
-  const out: string[] = [];
-  for (let i = 0; i < text.length; i += MAX) {
-    out.push(text.slice(i, i + MAX));
-  }
-  return out;
+  await db.insert(auditLog).values({
+    userId: args.userId,
+    action: "mistake.delete",
+    resourceType: "mistake_note",
+    resourceId: row.id,
+    result: "success",
+  });
+  return row;
 }

@@ -12,42 +12,56 @@ vi.mock("@/lib/env", () => ({
 // Captured DB rows — mutated by individual tests.
 const state: {
   chatRows: Array<{ id: string; userId: string; updatedAt: Date; deletedAt: Date | null }>;
-  mistakePages: Array<Record<string, unknown>>;
-  syllabusPages: Array<Record<string, unknown>>;
-  notionConnected: boolean;
+  mistakeRows: Array<{ title: string; classId: string | null }>;
+  syllabusRows: Array<{ id: string }>;
   openAIResponse: string;
   openAIThrows: boolean;
 } = {
   chatRows: [],
-  mistakePages: [],
-  syllabusPages: [],
-  notionConnected: true,
+  mistakeRows: [],
+  syllabusRows: [],
   openAIResponse: "自由落下で3回詰まりました",
   openAIThrows: false,
 };
 
-// Minimal drizzle chainable. Each call returns a fluent object that also
-// resolves as a promise — matching `await db.select()...` patterns.
-// When the select shape includes a `count` field, we resolve to an
-// aggregate row instead of the raw chat rows — that matches how the
-// tool-call-filtered study-session count query is shaped.
-vi.mock("@/lib/db/client", () => {
+// Drizzle chainable that branches on which table .from() targets. The
+// summarize-week tool runs three select-from-X queries: a chat-count
+// (count() shape), a mistake_notes scan, and a syllabi scan. Track the
+// last `.from()` target so each branch resolves with the right shape.
+vi.mock("@/lib/db/client", async () => {
+  const { mistakeNotes, syllabi } = await import("@/lib/db/schema");
   const chainable = (shape?: Record<string, unknown>) => {
+    let target: object | null = null;
     const isCountQuery =
       shape !== undefined && Object.prototype.hasOwnProperty.call(shape, "count");
-    const resolved = Promise.resolve(
-      isCountQuery ? [{ count: state.chatRows.length }] : state.chatRows
-    );
-    const chain = {
-      from: () => chain,
+    const make = () => ({
+      from(t: object) {
+        target = t;
+        return chain;
+      },
       innerJoin: () => chain,
       where: () => chain,
       orderBy: () => chain,
+      groupBy: () => chain,
       limit: () => chain,
-      then: resolved.then.bind(resolved),
-      catch: resolved.catch.bind(resolved),
-      finally: resolved.finally.bind(resolved),
-    };
+      then(...a: Parameters<Promise<unknown>["then"]>) {
+        const value = isCountQuery
+          ? [{ count: state.chatRows.length }]
+          : target === mistakeNotes
+            ? state.mistakeRows
+            : target === syllabi
+              ? state.syllabusRows
+              : state.chatRows;
+        return Promise.resolve(value).then(...a);
+      },
+      catch(...a: Parameters<Promise<unknown>["catch"]>) {
+        return Promise.resolve([]).catch(...a);
+      },
+      finally(...a: Parameters<Promise<unknown>["finally"]>) {
+        return Promise.resolve([]).finally(...a);
+      },
+    });
+    const chain: ReturnType<typeof make> = make();
     return chain;
   };
   return {
@@ -57,32 +71,6 @@ vi.mock("@/lib/db/client", () => {
     },
   };
 });
-
-vi.mock("@/lib/integrations/notion/data-source", () => ({
-  resolveDataSourceId: async (_c: unknown, id: string) => id,
-}));
-
-vi.mock("@/lib/integrations/notion/client", () => ({
-  getNotionClientForUser: async () => {
-    if (!state.notionConnected) return null;
-    return {
-      connection: {
-        mistakesDbId: "mistakes-db",
-        syllabiDbId: "syllabi-db",
-      },
-      client: {
-        dataSources: {
-          query: async ({ data_source_id }: { data_source_id: string }) => {
-            if (data_source_id === "mistakes-db") {
-              return { results: state.mistakePages, has_more: false };
-            }
-            return { results: state.syllabusPages, has_more: false };
-          },
-        },
-      },
-    };
-  },
-}));
 
 vi.mock("@/lib/integrations/openai/client", () => ({
   openai: () => ({
@@ -101,27 +89,12 @@ import {
   summarizeWeekTool,
 } from "@/lib/agent/tools/summarize-week";
 
-function mistake(title: string, classId?: string) {
-  return {
-    properties: {
-      Title: {
-        type: "title",
-        title: [{ plain_text: title }],
-      },
-      ...(classId
-        ? { Class: { type: "relation", relation: [{ id: classId }] } }
-        : {}),
-    },
-  };
-}
-
 describe("summarize_week tool", () => {
   beforeEach(() => {
     clearSummarizeWeekCache();
     state.chatRows = [];
-    state.mistakePages = [];
-    state.syllabusPages = [];
-    state.notionConnected = true;
+    state.mistakeRows = [];
+    state.syllabusRows = [];
     state.openAIResponse = "自由落下で3回詰まりました";
     state.openAIThrows = false;
   });
@@ -153,13 +126,13 @@ describe("summarize_week tool", () => {
       updatedAt: new Date(),
       deletedAt: null,
     }));
-    state.mistakePages = [
-      mistake("自由落下", "class-a"),
-      mistake("運動方程式", "class-a"),
-      mistake("積分", "class-b"),
-      mistake("SQL join", "class-c"),
+    state.mistakeRows = [
+      { title: "自由落下", classId: "class-a" },
+      { title: "運動方程式", classId: "class-a" },
+      { title: "積分", classId: "class-b" },
+      { title: "SQL join", classId: "class-c" },
     ];
-    state.syllabusPages = [mistake("CSC108 syllabus")];
+    state.syllabusRows = [{ id: "syl-1" }];
 
     const r = await computeWeekSummary("u1");
     expect(r.counts.chats).toBe(4);
@@ -178,12 +151,14 @@ describe("summarize_week tool", () => {
       updatedAt: new Date(),
       deletedAt: null,
     }));
-    state.mistakePages = [mistake("a"), mistake("b")];
+    state.mistakeRows = [
+      { title: "a", classId: null },
+      { title: "b", classId: null },
+    ];
     const first = await computeWeekSummary("u1");
 
-    // Mutate state — a cache hit must not re-read.
     state.chatRows = [];
-    state.mistakePages = [];
+    state.mistakeRows = [];
     const second = await computeWeekSummary("u1");
     expect(second).toEqual(first);
 
@@ -198,13 +173,11 @@ describe("summarize_week tool", () => {
     const start = new Date(r.window.start);
     const end = new Date(r.window.end);
     const delta = end.getTime() - start.getTime();
-    // 7 ± 1 day tolerance for timezone rounding.
     expect(delta).toBeGreaterThan(6 * 24 * 60 * 60 * 1000);
     expect(delta).toBeLessThan(8 * 24 * 60 * 60 * 1000);
   });
 
-  it("gracefully degrades when Notion is not connected", async () => {
-    state.notionConnected = false;
+  it("zero academic rows is fine — chat-only week", async () => {
     state.chatRows = Array.from({ length: 4 }, (_, i) => ({
       id: `c${i}`,
       userId: "u1",
@@ -224,7 +197,7 @@ describe("summarize_week tool", () => {
       updatedAt: new Date(),
       deletedAt: null,
     }));
-    state.mistakePages = [mistake("fall")];
+    state.mistakeRows = [{ title: "fall", classId: null }];
     state.openAIThrows = true;
     const r = await computeWeekSummary("u1");
     expect(r.pattern).toBe("");

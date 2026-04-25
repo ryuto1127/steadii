@@ -1,19 +1,22 @@
 import { auth } from "@/lib/auth/config";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { ExternalLink, GraduationCap, FileText, NotebookPen, MessagesSquare } from "lucide-react";
-import { loadClassById } from "@/lib/classes/loader";
 import {
-  listFromDatabase,
-  getTitle,
-  getRichText,
-  getSelect,
-  getDate,
-  getRelationIds,
-} from "@/lib/views/notion-list";
+  GraduationCap,
+  FileText,
+  NotebookPen,
+  MessagesSquare,
+} from "lucide-react";
+import { loadClassById } from "@/lib/classes/loader";
 import { db } from "@/lib/db/client";
-import { chats, messages as messagesTable } from "@/lib/db/schema";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import {
+  assignments as assignmentsTable,
+  chats,
+  messages as messagesTable,
+  mistakeNotes,
+  syllabi,
+} from "@/lib/db/schema";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { ClassDot } from "@/components/ui/class-dot";
 import { DenseList } from "@/components/ui/dense-list";
 import { DenseRowLink } from "@/components/ui/dense-row-link";
@@ -115,13 +118,25 @@ async function SyllabusTab({
   classId: string;
   classCode: string;
 }) {
-  const rows = await listFromDatabase({
-    userId,
-    databaseSelector: "syllabiDbId",
-    limit: 50,
-  });
-  const scoped = rows.filter((r) => getRelationIds(r, "Class").includes(classId));
-  if (scoped.length === 0) {
+  const rows = await db
+    .select({
+      id: syllabi.id,
+      title: syllabi.title,
+      term: syllabi.term,
+      blobUrl: syllabi.blobUrl,
+      sourceUrl: syllabi.sourceUrl,
+    })
+    .from(syllabi)
+    .where(
+      and(
+        eq(syllabi.userId, userId),
+        eq(syllabi.classId, classId),
+        isNull(syllabi.deletedAt)
+      )
+    )
+    .orderBy(desc(syllabi.createdAt))
+    .limit(50);
+  if (rows.length === 0) {
     return (
       <EmptyState
         icon={<FileText size={18} strokeWidth={1.5} />}
@@ -136,36 +151,56 @@ async function SyllabusTab({
   }
   return (
     <div className="flex flex-col gap-3">
-      {scoped.map((r) => (
-        <a
+      {rows.map((r) => (
+        <div
           key={r.id}
-          href={r.url}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-start gap-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4 transition-hover hover:bg-[hsl(var(--surface-raised))]"
+          className="flex items-start gap-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4"
         >
           <FileText size={16} strokeWidth={1.5} className="mt-0.5 text-[hsl(var(--muted-foreground))]" />
           <div className="flex-1">
-            <div className="text-body font-medium">{getTitle(r)}</div>
+            <div className="text-body font-medium">{r.title}</div>
             <div className="text-small text-[hsl(var(--muted-foreground))]">
-              {[getRichText(r, "Term")].filter(Boolean).join(" · ") || "(no term)"}
+              {[r.term].filter(Boolean).join(" · ") || "(no term)"}
             </div>
           </div>
-          <ExternalLink size={14} strokeWidth={1.5} className="text-[hsl(var(--muted-foreground))]" />
-        </a>
+          {r.blobUrl ? (
+            <a
+              href={r.blobUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-small underline-offset-4 hover:underline"
+            >
+              Open original
+            </a>
+          ) : r.sourceUrl ? (
+            <a
+              href={r.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-small underline-offset-4 hover:underline"
+            >
+              Source
+            </a>
+          ) : null}
+        </div>
       ))}
     </div>
   );
 }
 
 async function AssignmentsTab({ userId, classId }: { userId: string; classId: string }) {
-  const rows = await listFromDatabase({
-    userId,
-    databaseSelector: "assignmentsDbId",
-    limit: 100,
-  });
-  const scoped = rows.filter((r) => getRelationIds(r, "Class").includes(classId));
-  if (scoped.length === 0) {
+  const rows = await db
+    .select()
+    .from(assignmentsTable)
+    .where(
+      and(
+        eq(assignmentsTable.userId, userId),
+        eq(assignmentsTable.classId, classId),
+        isNull(assignmentsTable.deletedAt)
+      )
+    )
+    .orderBy(asc(assignmentsTable.dueAt));
+  if (rows.length === 0) {
     return (
       <EmptyState
         icon={<GraduationCap size={18} strokeWidth={1.5} />}
@@ -174,26 +209,20 @@ async function AssignmentsTab({ userId, classId }: { userId: string; classId: st
       />
     );
   }
-  const sorted = scoped.sort((a, b) => {
-    const ad = getDate(a, "Due") ?? "";
-    const bd = getDate(b, "Due") ?? "";
-    return ad.localeCompare(bd);
-  });
   return (
     <DenseList ariaLabel="Assignments">
-      {sorted.map((r) => {
-        const due = getDate(r, "Due");
-        const status = getSelect(r, "Status") ?? "Not started";
-        const priority = getSelect(r, "Priority");
+      {rows.map((r) => {
+        const due = r.dueAt ? r.dueAt.toISOString() : null;
+        const status = r.status;
         return (
           <DenseRowLink
             key={r.id}
-            href={r.url}
-            title={getTitle(r)}
-            secondary={status !== "Not started" ? status : undefined}
+            href={`/app/classes/${classId}?tab=assignments`}
+            title={r.title}
+            secondary={status !== "not_started" ? status.replace("_", " ") : undefined}
             metadata={[
               due ? formatDueShort(due) : "No due",
-              priority ? `priority: ${priority}` : "",
+              r.priority ? `priority: ${r.priority}` : "",
             ].filter(Boolean)}
           />
         );
@@ -211,13 +240,25 @@ async function MistakesTab({
   classId: string;
   classCode: string;
 }) {
-  const rows = await listFromDatabase({
-    userId,
-    databaseSelector: "mistakesDbId",
-    limit: 100,
-  });
-  const scoped = rows.filter((r) => getRelationIds(r, "Class").includes(classId));
-  if (scoped.length === 0) {
+  const rows = await db
+    .select({
+      id: mistakeNotes.id,
+      title: mistakeNotes.title,
+      unit: mistakeNotes.unit,
+      difficulty: mistakeNotes.difficulty,
+      createdAt: mistakeNotes.createdAt,
+    })
+    .from(mistakeNotes)
+    .where(
+      and(
+        eq(mistakeNotes.userId, userId),
+        eq(mistakeNotes.classId, classId),
+        isNull(mistakeNotes.deletedAt)
+      )
+    )
+    .orderBy(desc(mistakeNotes.createdAt))
+    .limit(100);
+  if (rows.length === 0) {
     return (
       <EmptyState
         icon={<NotebookPen size={18} strokeWidth={1.5} />}
@@ -229,12 +270,10 @@ async function MistakesTab({
   }
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {scoped.map((r) => (
-        <a
+      {rows.map((r) => (
+        <Link
           key={r.id}
-          href={r.url}
-          target="_blank"
-          rel="noreferrer"
+          href={`/app/mistakes/${r.id}`}
           className="group flex flex-col gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4 transition-hover hover:bg-[hsl(var(--surface-raised))]"
         >
           <div className="flex items-start gap-2">
@@ -243,20 +282,16 @@ async function MistakesTab({
               strokeWidth={1.5}
               className="mt-0.5 shrink-0 text-[hsl(var(--muted-foreground))]"
             />
-            <span className="line-clamp-2 text-body font-medium">{getTitle(r)}</span>
+            <span className="line-clamp-2 text-body font-medium">{r.title}</span>
           </div>
           <div className="flex flex-wrap gap-1 text-small text-[hsl(var(--muted-foreground))]">
-            {[
-              getSelect(r, "Difficulty"),
-              getRichText(r, "Unit"),
-              getDate(r, "Date"),
-            ]
+            {[r.difficulty, r.unit, r.createdAt.toISOString().slice(0, 10)]
               .filter(Boolean)
               .map((s, i) => (
                 <span key={i}>{s}</span>
               ))}
           </div>
-        </a>
+        </Link>
       ))}
     </div>
   );
@@ -304,6 +339,7 @@ async function ChatsTab({ userId, classId }: { userId: string; classId: string }
       />
     );
   }
+  void classId;
   return (
     <DenseList ariaLabel="Chats for this class">
       {matching.slice(0, 20).map((c) => (
