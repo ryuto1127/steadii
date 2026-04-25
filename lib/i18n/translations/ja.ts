@@ -77,7 +77,7 @@ export const ja: Messages = {
     not_enough_history: "履歴がまだ足りません。来週また見てみてください。",
     counts: "チャット {chats} · 間違い {mistakes} · シラバス {syllabi}",
     review_action: "復習する",
-    generate_practice_action: "練習問題を生成",
+    generate_practice_action: "練習",
     welcome_title: "Steadiiへようこそ",
     welcome_body:
       "最初の授業を登録すると、今日の予定・締切の近い課題・最近の活動が表示されます。",
