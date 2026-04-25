@@ -25,8 +25,11 @@ type ProductSpec = {
   name: string;
   description: string;
   price: {
-    unitAmount: number; // cents
-    currency: "usd";
+    // For USD prices `unitAmount` is cents. For JPY (zero-decimal currency)
+    // it's whole yen — Stripe expects unit_amount in the smallest currency
+    // subunit and JPY's smallest unit is the yen itself.
+    unitAmount: number;
+    currency: "usd" | "jpy";
     recurring?: { interval: "day" | "week" | "month" | "year"; intervalCount?: number };
   };
 };
@@ -94,6 +97,72 @@ const PRODUCTS: ProductSpec[] = [
     description:
       "One-time $10 — extends post-cancel data retention from 120 days to 12 months.",
     price: { unitAmount: 1000, currency: "usd" },
+  },
+
+  // --- JPY catalog (Phase 7 / JP α). Anchors set in
+  // memory/project_decisions.md (Market scope, 2026-04-25):
+  //   Pro monthly        ¥3,000  (vs ChatGPT Plus ¥3,000)
+  //   Pro yearly         ¥28,800 (20% off monthly)
+  //   Student 4-month    ¥6,000  (effective ¥1,500/mo)
+  //   Top-up +500        ¥1,500
+  //   Top-up +2000       ¥4,500
+  //   Data retention     ¥1,500
+  // JPY is zero-decimal — unit_amount is whole yen, not subunits.
+  {
+    key: "pro_monthly_jpy",
+    envVar: "STRIPE_PRICE_PRO_MONTHLY_JPY",
+    name: "Steadii Pro (monthly, JPY)",
+    description: "Pro — ¥3,000/月、月1,000クレジット。",
+    price: {
+      unitAmount: 3000,
+      currency: "jpy",
+      recurring: { interval: "month" },
+    },
+  },
+  {
+    key: "pro_yearly_jpy",
+    envVar: "STRIPE_PRICE_PRO_YEARLY_JPY",
+    name: "Steadii Pro (yearly, JPY)",
+    description: "Pro — ¥28,800/年（月額より20%オフ）、月1,000クレジット。",
+    price: {
+      unitAmount: 28800,
+      currency: "jpy",
+      recurring: { interval: "year" },
+    },
+  },
+  {
+    key: "student_4mo_jpy",
+    envVar: "STRIPE_PRICE_STUDENT_4MO_JPY",
+    name: "Steadii Student (4-month, JPY)",
+    description:
+      "Student — 4ヶ月¥6,000（実質¥1,500/月）、月1,000クレジット。.ac.jp 等の認証が必要。",
+    price: {
+      unitAmount: 6000,
+      currency: "jpy",
+      recurring: { interval: "month", intervalCount: 4 },
+    },
+  },
+  {
+    key: "topup_500_jpy",
+    envVar: "STRIPE_PRICE_TOPUP_500_JPY",
+    name: "Steadii Top-up (+500 credits, JPY)",
+    description: "+500クレジット（一括）。購入から90日で失効。",
+    price: { unitAmount: 1500, currency: "jpy" },
+  },
+  {
+    key: "topup_2000_jpy",
+    envVar: "STRIPE_PRICE_TOPUP_2000_JPY",
+    name: "Steadii Top-up (+2000 credits, JPY)",
+    description: "+2000クレジット（一括）。購入から90日で失効。",
+    price: { unitAmount: 4500, currency: "jpy" },
+  },
+  {
+    key: "data_retention_jpy",
+    envVar: "STRIPE_PRICE_DATA_RETENTION_JPY",
+    name: "Steadii Extended Data Retention (JPY)",
+    description:
+      "¥1,500（一括）— 解約後のデータ保持期間を120日から12ヶ月へ延長。",
+    price: { unitAmount: 1500, currency: "jpy" },
   },
 ];
 
