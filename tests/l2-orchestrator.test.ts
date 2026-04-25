@@ -130,6 +130,23 @@ vi.mock("@/lib/agent/email/audit", () => ({
   logEmailAudit: vi.fn(async () => {}),
 }));
 
+type CalendarEvt = {
+  title: string;
+  start: string;
+  end: string;
+  location: string | null;
+};
+const calendarMock = vi.fn<
+  (userId: string, opts?: unknown) => Promise<CalendarEvt[]>
+>(async () => []);
+vi.mock("@/lib/integrations/google/calendar", () => ({
+  fetchUpcomingEvents: (userId: string, opts: unknown) =>
+    calendarMock(userId, opts),
+  CalendarNotConnectedError: class extends Error {
+    code = "CALENDAR_NOT_CONNECTED" as const;
+  },
+}));
+
 vi.mock("@/lib/agent/models", () => ({
   selectModel: (t: string) =>
     t === "email_classify_deep" || t === "email_draft"
@@ -170,6 +187,8 @@ beforeEach(() => {
   deepMock.mockReset();
   draftMock.mockReset();
   searchMock.mockClear();
+  calendarMock.mockReset();
+  calendarMock.mockResolvedValue([]);
 });
 
 describe("processL2 orchestrator", () => {
@@ -487,6 +506,76 @@ describe("processL2 orchestrator", () => {
     expect(draftInserts[0].reasoning).toContain("Subject");
     // Body is preserved as the clarifying question text.
     expect(draftInserts[0].draftBody).toContain("Monday or Thursday");
+  });
+
+  it("calendar fetch failure does not block the draft step", async () => {
+    addInbox();
+    riskMock.mockResolvedValue({
+      riskTier: "medium",
+      confidence: 0.7,
+      reasoning: "med",
+      usageId: "risk-uid",
+    });
+    calendarMock.mockRejectedValue(new Error("calendar API 500"));
+    draftMock.mockResolvedValue({
+      kind: "draft" as const,
+      subject: "Re: s",
+      body: "ack",
+      to: ["x@y.edu"],
+      cc: [],
+      inReplyTo: null,
+      reasoning: "test draft reasoning",
+      usageId: "draft-uid",
+    });
+
+    const { processL2 } = await import("@/lib/agent/email/l2");
+    const out = await processL2("ibx");
+
+    expect(draftMock).toHaveBeenCalled();
+    // Draft was generated despite calendar throwing — calendarEvents falls
+    // through to []. Output unchanged in shape.
+    expect(out.action).toBe("draft_reply");
+    const draftArgs = draftMock.mock.calls[0]?.[0] as {
+      calendarEvents: unknown[];
+    };
+    expect(draftArgs.calendarEvents).toEqual([]);
+  });
+
+  it("calendar events are forwarded to runDraft when fetch succeeds", async () => {
+    addInbox();
+    riskMock.mockResolvedValue({
+      riskTier: "medium",
+      confidence: 0.7,
+      reasoning: "med",
+      usageId: "risk-uid",
+    });
+    calendarMock.mockResolvedValue([
+      {
+        title: "CSC108 lecture",
+        start: "2026-04-25T16:00:00Z",
+        end: "2026-04-25T17:30:00Z",
+        location: "Bahen 1230",
+      },
+    ]);
+    draftMock.mockResolvedValue({
+      kind: "draft" as const,
+      subject: "Re: s",
+      body: "Thursday 3pm conflicts with my CSC108 lecture",
+      to: ["prof@y.edu"],
+      cc: [],
+      inReplyTo: null,
+      reasoning: "Calendar shows lecture at that slot.",
+      usageId: "draft-uid",
+    });
+
+    const { processL2 } = await import("@/lib/agent/email/l2");
+    await processL2("ibx");
+
+    const draftArgs = draftMock.mock.calls[0]?.[0] as {
+      calendarEvents: Array<{ title: string }>;
+    };
+    expect(draftArgs.calendarEvents).toHaveLength(1);
+    expect(draftArgs.calendarEvents[0]?.title).toBe("CSC108 lecture");
   });
 
   it("high risk + deep.action='draft_reply' + draft.kind='clarify' still routes to ask_clarifying", async () => {
