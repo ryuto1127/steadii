@@ -1,7 +1,15 @@
 import "server-only";
 import { db } from "@/lib/db/client";
-import { notionConnections, registeredResources, accounts } from "@/lib/db/schema";
-import { and, eq, isNull } from "drizzle-orm";
+import {
+  accounts,
+  assignments as assignmentsTable,
+  classes as classesTable,
+  mistakeNotes,
+  notionConnections,
+  registeredResources,
+  syllabi,
+} from "@/lib/db/schema";
+import { and, count, eq, isNull } from "drizzle-orm";
 import { getCalendarForUser } from "@/lib/integrations/google/calendar";
 import { getUserTimezone } from "./preferences";
 export {
@@ -29,9 +37,20 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
         )
     : [];
 
-  const [timezone, calendarEventsThisWeek] = await Promise.all([
+  const [
+    timezone,
+    calendarEventsThisWeek,
+    classCount,
+    activeAssignmentCount,
+    mistakeCount,
+    syllabusCount,
+  ] = await Promise.all([
     getUserTimezone(userId),
     safelyFetchWeekEvents(userId),
+    countRows(classesTable, userId, true),
+    countRows(assignmentsTable, userId, true, "active"),
+    countRows(mistakeNotes, userId, true),
+    countRows(syllabi, userId, true),
   ]);
 
   return {
@@ -49,8 +68,42 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
       notionId: r.notionId,
       title: r.title,
     })),
+    academicCounts: {
+      classes: classCount,
+      assignmentsActive: activeAssignmentCount,
+      mistakeNotes: mistakeCount,
+      syllabi: syllabusCount,
+    },
     calendarEventsThisWeek,
   };
+}
+
+type CountableTable = typeof classesTable
+  | typeof assignmentsTable
+  | typeof mistakeNotes
+  | typeof syllabi;
+
+async function countRows(
+  table: CountableTable,
+  userId: string,
+  excludeDeleted: boolean,
+  flavor?: "active"
+): Promise<number> {
+  // Drizzle infers the userId/deletedAt columns by exact column reference;
+  // every academic entity follows the same shape (userId + deletedAt).
+  const conditions = [eq(table.userId, userId)];
+  if (excludeDeleted) conditions.push(isNull(table.deletedAt));
+  if (flavor === "active" && "status" in table) {
+    // Count assignments not done. Cast keeps Drizzle happy across the
+    // tagged union of tables.
+    const t = table as typeof assignmentsTable;
+    conditions.push(eq(t.status, "not_started"));
+  }
+  const [row] = await db
+    .select({ n: count() })
+    .from(table)
+    .where(and(...conditions));
+  return Number(row?.n ?? 0);
 }
 
 async function safelyFetchWeekEvents(userId: string) {

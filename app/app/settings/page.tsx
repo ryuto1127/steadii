@@ -213,9 +213,17 @@ export default async function SettingsPage() {
 
       <Section title={t("sections.resources")}>
         <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
-          Notion pages the agent can read. Pages under the Steadii parent
-          auto-register. Add extra pages with a URL.
+          Optional Notion pages the agent can read. Pages under the Steadii
+          parent auto-register; add extra ones with a URL. Steadii&rsquo;s
+          academic data lives in Postgres — this section only matters if you
+          also want the agent to quote from your existing Notion workspace.
         </p>
+        {!notionConn ? (
+          <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
+            Notion is not connected. Connect it under <strong>Connections</strong> above to
+            register Notion resources.
+          </p>
+        ) : null}
         <form action={addResourceAction} className="mb-3 flex gap-2">
           <input
             name="notion_url"

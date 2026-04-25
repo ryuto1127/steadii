@@ -16,6 +16,12 @@ export type UserContextPayload = {
     notionId: string;
     title: string | null;
   }>;
+  academicCounts?: {
+    classes: number;
+    assignmentsActive: number;
+    mistakeNotes: number;
+    syllabi: number;
+  };
   calendarEventsThisWeek?: Array<{
     summary: string | null | undefined;
     start: string | null | undefined;
@@ -89,7 +95,14 @@ export function serializeContextForPrompt(ctx: UserContextPayload): string {
   lines.push("");
 
   lines.push(`# User context (Steadii runtime state)`);
-  lines.push(`Notion connected: ${ctx.notion.connected ? "yes" : "no"}`);
+  if (ctx.academicCounts) {
+    lines.push(
+      `Academic store (Postgres): ${ctx.academicCounts.classes} classes, ${ctx.academicCounts.assignmentsActive} active assignments, ${ctx.academicCounts.mistakeNotes} mistake notes, ${ctx.academicCounts.syllabi} syllabi.`
+    );
+  }
+  lines.push(
+    `Notion connected: ${ctx.notion.connected ? "yes (optional one-way import surface; Postgres is canonical)" : "no"}`
+  );
   if (ctx.notion.connected) {
     lines.push(`Steadii parent page: ${ctx.notion.parentPageId ?? "(not set up)"}`);
     lines.push(`Classes DB: ${ctx.notion.classesDbId ?? "(not set up)"}`);

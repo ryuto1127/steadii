@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
-import { notionConnections } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { decrypt } from "@/lib/utils/crypto";
-import { notionClientFromToken } from "@/lib/integrations/notion/client";
-import { resolveDataSourceId } from "@/lib/integrations/notion/data-source";
+import { classes as classesTable } from "@/lib/db/schema";
+import { and, eq, isNull, desc } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -14,40 +11,17 @@ export async function GET() {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
-  const [conn] = await db
-    .select()
-    .from(notionConnections)
-    .where(eq(notionConnections.userId, session.user.id))
-    .limit(1);
-  if (!conn || !conn.classesDbId) {
-    return NextResponse.json({ classes: [] });
-  }
-
-  try {
-    const client = notionClientFromToken(decrypt(conn.accessTokenEncrypted));
-    const dsId = await resolveDataSourceId(client, conn.classesDbId);
-    const resp = await client.dataSources.query({
-      data_source_id: dsId,
-      page_size: 100,
-    });
-    const classes = resp.results.flatMap((r: unknown) => {
-      const obj = r as {
-        id: string;
-        properties?: {
-          Name?: { title?: Array<{ plain_text?: string }> };
-          Status?: { select?: { name?: string } | null };
-        };
-      };
-      const name = obj.properties?.Name?.title?.[0]?.plain_text;
-      const status = obj.properties?.Status?.select?.name ?? "active";
-      if (!name) return [];
-      return [{ id: obj.id, name, status }];
-    });
-    return NextResponse.json({ classes });
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "fetch_failed", classes: [] },
-      { status: 500 }
-    );
-  }
+  const rows = await db
+    .select({
+      id: classesTable.id,
+      name: classesTable.name,
+      status: classesTable.status,
+    })
+    .from(classesTable)
+    .where(
+      and(eq(classesTable.userId, session.user.id), isNull(classesTable.deletedAt))
+    )
+    .orderBy(desc(classesTable.createdAt))
+    .limit(200);
+  return NextResponse.json({ classes: rows });
 }

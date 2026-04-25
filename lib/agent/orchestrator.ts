@@ -7,7 +7,6 @@ import { buildUserContext, serializeContextForPrompt } from "./context";
 import { getUserConfirmationMode } from "./preferences";
 import { requiresConfirmation } from "./confirmation";
 import { getToolByName, openAIToolDefs } from "./tool-registry";
-import { discoverResources } from "@/lib/integrations/notion/discovery";
 import { db } from "@/lib/db/client";
 import {
   messages as messagesTable,
@@ -65,11 +64,11 @@ export async function* streamChatResponse(
   // metered LLMs (mistake_explain, syllabus_extract, future agent L2 draft)
   // are responsible for their own credit checks.
 
-  try {
-    await discoverResources(req.userId);
-  } catch (err) {
-    console.error("pre-chat discovery failed (non-fatal)", err);
-  }
+  // Notion resource discovery used to run here on every send (60s cache).
+  // After Phase 7 Pre-W1 cutover, Postgres is canonical for academic
+  // entities and discovery is only relevant for the Settings → "Re-import
+  // from Notion" affordance. Removed from the chat hot path.
+
   const ctx = await buildUserContext(req.userId);
   const contextPrompt = serializeContextForPrompt(ctx);
   const confirmationMode = await getUserConfirmationMode(req.userId);
