@@ -115,8 +115,15 @@ export const AUTO_LOW_KEYWORDS: Array<{
   why: string;
 }> = [
   {
+    // "meeting" was previously in this list under the assumption it
+    // signaled casual club gatherings. In practice it short-circuited
+    // legitimate professor / advisor / interview meeting requests into
+    // auto_low → no L2 → no draft. Removed; let L2 classify on full
+    // context (sender role + body) instead. Verified by smoke test:
+    // "Quick meeting Friday at 10am?" from a prof was being silently
+    // dropped pre-fix.
     ruleId: "GLOBAL_AUTO_LOW_RSVP",
-    words: ["rsvp", "meeting", "club", "お知らせ"],
+    words: ["rsvp", "club", "お知らせ"],
     why: "RSVP / club / announcement language.",
   },
 ];
