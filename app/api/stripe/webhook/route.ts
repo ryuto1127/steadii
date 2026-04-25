@@ -13,6 +13,7 @@ import {
 } from "@/lib/db/schema";
 import { count, eq } from "drizzle-orm";
 import { syncUsersPlanColumn } from "@/lib/billing/effective-plan";
+import { currencyFromStripePriceId } from "@/lib/billing/currency";
 
 export const runtime = "nodejs";
 
@@ -167,11 +168,15 @@ async function upsertSubscription(sub: SubscriptionLike) {
     }
   }
 
-  // Reflect plan_interval on the user row so Settings can show "renews every
-  // 4 months" vs "monthly" without re-querying Stripe.
+  // Reflect plan_interval and preferred currency on the user row so Settings
+  // can show "renews every 4 months" vs "monthly" without re-querying Stripe,
+  // and so subsequent top-ups stay in the same currency.
   await db
     .update(users)
-    .set({ planInterval: planIntervalFromPriceId(priceId) })
+    .set({
+      planInterval: planIntervalFromPriceId(priceId),
+      preferredCurrency: currencyFromStripePriceId(priceId),
+    })
     .where(eq(users.id, userId));
 
   await db.insert(auditLog).values({
@@ -422,6 +427,9 @@ function planIntervalFromPriceId(
   if (priceId === e.STRIPE_PRICE_PRO_MONTHLY) return "monthly";
   if (priceId === e.STRIPE_PRICE_PRO_YEARLY) return "yearly";
   if (priceId === e.STRIPE_PRICE_STUDENT_4MO) return "four_month";
+  if (priceId === e.STRIPE_PRICE_PRO_MONTHLY_JPY) return "monthly";
+  if (priceId === e.STRIPE_PRICE_PRO_YEARLY_JPY) return "yearly";
+  if (priceId === e.STRIPE_PRICE_STUDENT_4MO_JPY) return "four_month";
   // Legacy STRIPE_PRICE_ID_PRO and any unknown prices default to monthly.
   // planFromStripePriceId in effective-plan.ts handles the tier dimension.
   return "monthly";

@@ -6,6 +6,7 @@ import { db } from "@/lib/db/client";
 import { subscriptions, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { isAcademicEmail } from "@/lib/billing/academic-email";
+import { resolveCheckoutCurrency, priceIdForPlan } from "@/lib/billing/currency";
 
 export const runtime = "nodejs";
 
@@ -15,45 +16,16 @@ export const runtime = "nodejs";
 // promo_code, when present, is the human-readable Stripe Promotion Code
 // string (e.g. one issued against FRIEND_3MO). The route resolves it to the
 // internal promo_xxx id before passing to Checkout.
+//
+// `currency` overrides the locale-derived default (e.g. user on /ja UI but
+// wants to pay in USD). Stripe Subscriptions are mono-currency, so once a
+// paying user picks one this preference is pinned via the webhook.
 type CheckoutRequest = {
   plan_tier?: "pro" | "student";
   plan_interval?: "monthly" | "yearly" | "four_month";
   promo_code?: string;
+  currency?: "usd" | "jpy";
 };
-
-function priceIdFor(
-  tier: "pro" | "student",
-  interval: "monthly" | "yearly" | "four_month"
-): { priceId: string | null; reason?: string } {
-  const e = env();
-  if (tier === "student") {
-    if (interval !== "four_month") {
-      return { priceId: null, reason: "Student plan only supports four_month interval" };
-    }
-    if (!e.STRIPE_PRICE_STUDENT_4MO) {
-      return { priceId: null, reason: "STRIPE_PRICE_STUDENT_4MO not configured" };
-    }
-    return { priceId: e.STRIPE_PRICE_STUDENT_4MO };
-  }
-  // Pro tier
-  if (interval === "monthly") {
-    // Prefer the new env; fall back to legacy STRIPE_PRICE_ID_PRO so existing
-    // setups don't break before stripe-setup.ts has been run.
-    const id = e.STRIPE_PRICE_PRO_MONTHLY || e.STRIPE_PRICE_ID_PRO;
-    if (!id) return { priceId: null, reason: "No Pro Monthly price configured" };
-    return { priceId: id };
-  }
-  if (interval === "yearly") {
-    if (!e.STRIPE_PRICE_PRO_YEARLY) {
-      return { priceId: null, reason: "STRIPE_PRICE_PRO_YEARLY not configured" };
-    }
-    return { priceId: e.STRIPE_PRICE_PRO_YEARLY };
-  }
-  return {
-    priceId: null,
-    reason: `Pro tier does not support ${interval} interval`,
-  };
-}
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -75,7 +47,25 @@ export async function POST(request: NextRequest) {
   const interval =
     body.plan_interval ?? (tier === "student" ? "four_month" : "monthly");
 
-  const picked = priceIdFor(tier, interval);
+  // Currency precedence: explicit body override > user's preferredCurrency
+  // (set on first checkout) > locale-derived default. Resolved before the
+  // price lookup so JPY/USD pick the right env var.
+  const [userRow] = await db
+    .select({
+      preferredCurrency: users.preferredCurrency,
+      email: users.email,
+      name: users.name,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const currency = await resolveCheckoutCurrency({
+    explicit: body.currency,
+    persisted: userRow?.preferredCurrency ?? null,
+    request,
+  });
+
+  const picked = priceIdForPlan({ tier, interval, currency });
   if (!picked.priceId) {
     return NextResponse.json(
       { error: picked.reason ?? "invalid plan selection" },
@@ -94,14 +84,7 @@ export async function POST(request: NextRequest) {
   // OAuth email isn't academic need to either use a different Google
   // account or pick the regular Pro plan.
   if (tier === "student") {
-    const [u] = existing
-      ? [null]
-      : await db
-          .select({ email: users.email })
-          .from(users)
-          .where(eq(users.id, userId))
-          .limit(1);
-    const email = u?.email ?? session.user.email;
+    const email = userRow?.email ?? session.user.email;
     if (!isAcademicEmail(email)) {
       return NextResponse.json(
         {
@@ -116,17 +99,23 @@ export async function POST(request: NextRequest) {
 
   let customerId = existing?.stripeCustomerId ?? null;
   if (!customerId) {
-    const [u] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
     const customer = await stripe().customers.create({
-      email: u?.email ?? session.user.email ?? undefined,
-      name: u?.name ?? session.user.name ?? undefined,
+      email: userRow?.email ?? session.user.email ?? undefined,
+      name: userRow?.name ?? session.user.name ?? undefined,
       metadata: { steadii_user_id: userId },
     });
     customerId = customer.id;
+  }
+
+  // Persist the resolved currency on the user row (idempotent — only writes
+  // when it would change). Done before Checkout creation so subsequent
+  // top-ups/data-retention pick the same currency even if Checkout is
+  // abandoned mid-flow.
+  if ((userRow?.preferredCurrency ?? "usd") !== currency) {
+    await db
+      .update(users)
+      .set({ preferredCurrency: currency })
+      .where(eq(users.id, userId));
   }
 
   // Resolve promo_code → Stripe promotion_code id if provided. Falls back

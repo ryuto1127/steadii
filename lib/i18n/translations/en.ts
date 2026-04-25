@@ -111,6 +111,44 @@ type MessagesShape = {
     timezone_saved: string;
     timezone_invalid: string;
   };
+  billing: {
+    page_title: string;
+    page_subtitle: string;
+    checkout_completed: string;
+    checkout_canceled: string;
+    founding_member_label: string;
+    founding_member_body: string;
+    price_locked_until: string;
+    current_plan: string;
+    plan_admin: string;
+    plan_student: string;
+    plan_student_renews: string;
+    plan_pro_trial: string;
+    plan_pro: string;
+    plan_pro_renews: string;
+    plan_free: string;
+    credits_this_cycle: string;
+    credits_unlimited: string;
+    admin_quota_unenforced: string;
+    credits_remaining: string;
+    topup_remaining: string;
+    storage: string;
+    cancel_subscription: string;
+    actions: {
+      admin_bypass: string;
+      upgrade_pro: string;
+      upgrade_student: string;
+      opening: string;
+      manage_sub: string;
+      add_credits: string;
+      topup_500: string;
+      topup_2000: string;
+      topup_expiry: string;
+      stepping_away: string;
+      extend_retention: string;
+      extend_retention_help: string;
+    };
+  };
   legal: { privacy_title: string; terms_title: string; placeholder: string };
   seed_prompts: {
     review_recent_mistakes: string;
@@ -266,6 +304,49 @@ export const en: MessagesShape = {
     timezone_detected: "Detected",
     timezone_saved: "Saved.",
     timezone_invalid: "Unknown time zone.",
+  },
+  billing: {
+    page_title: "Billing",
+    page_subtitle:
+      "Stripe is in test mode for α. Charges won't post; subscription state still round-trips.",
+    checkout_completed:
+      "Checkout session completed. Your plan will update within a few seconds (via the Stripe webhook).",
+    checkout_canceled: "Checkout canceled. No change.",
+    founding_member_label: "Founding member.",
+    founding_member_body: "Your current price is locked in for life.",
+    price_locked_until: "Price locked until {date}.",
+    current_plan: "Current plan",
+    plan_admin: "Admin (flag) · unlimited",
+    plan_student: "Student",
+    plan_student_renews: "Student · renews {date}",
+    plan_pro_trial: "Pro (14-day trial) · ends {date}",
+    plan_pro: "Pro",
+    plan_pro_renews: "Pro · renews {date}",
+    plan_free: "Free",
+    credits_this_cycle: "Credits this cycle",
+    credits_unlimited: "(unlimited)",
+    admin_quota_unenforced: "Admin bypass — quota not enforced.",
+    credits_remaining: "{remaining} credits remaining · resets {date}",
+    topup_remaining:
+      "+ {remaining} top-up credits (expire 90 days after purchase)",
+    storage: "Storage",
+    cancel_subscription: "Cancel subscription",
+    actions: {
+      admin_bypass:
+        "You're on an admin bypass — no Stripe subscription needed.",
+      upgrade_pro: "Upgrade to Pro · {price}",
+      upgrade_student: "Student · {price} (academic email required)",
+      opening: "Opening…",
+      manage_sub: "Manage subscription",
+      add_credits: "Add credits",
+      topup_500: "+500 credits · {price}",
+      topup_2000: "+2000 credits · {price} (save 25%)",
+      topup_expiry: "Top-up credits expire 90 days after purchase.",
+      stepping_away: "Stepping away?",
+      extend_retention: "Extend data retention · {price} (12 months)",
+      extend_retention_help:
+        "Default: 120-day grace after cancel. This extends to 12 months.",
+    },
   },
   legal: {
     privacy_title: "Privacy Policy",
