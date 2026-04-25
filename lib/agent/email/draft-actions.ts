@@ -8,16 +8,13 @@ import {
   agentDrafts,
   inboxItems,
   sendQueue,
-  users,
   agentRules,
   type SenderRole,
 } from "@/lib/db/schema";
 import { auth } from "@/lib/auth/config";
 import { logEmailAudit } from "./audit";
-import {
-  createGmailDraft,
-  deleteGmailDraft,
-} from "@/lib/agent/tools/gmail";
+import { deleteGmailDraft } from "@/lib/agent/tools/gmail";
+import { enqueueSendForDraft } from "./send-enqueue";
 
 async function getUserId(): Promise<string> {
   const session = await auth();
@@ -41,95 +38,21 @@ async function loadDraftAndInbox(userId: string, draftId: string) {
   return row;
 }
 
-// Approve → create Gmail draft + enqueue a send_queue row with send_at
-// = now + user.undo_window_seconds. Draft transitions to 'sent_pending'.
-// Returns the undo-window deadline so the UI can render the countdown.
+// Approve → user clicked Send. Delegates to the shared enqueue helper
+// with isAutomatic=false; revalidates the route paths so the UndoBar
+// renders immediately.
 export async function approveAgentDraftAction(
   draftId: string
 ): Promise<{ sendAt: Date; undoWindowSeconds: number }> {
   const userId = await getUserId();
-  const { draft, inbox } = await loadDraftAndInbox(userId, draftId);
-
-  if (draft.status !== "pending" && draft.status !== "edited") {
-    throw new Error(`Draft is already ${draft.status}`);
-  }
-  if (draft.action !== "draft_reply") {
-    throw new Error("Only draft_reply actions can be sent");
-  }
-  if (!draft.draftBody || !draft.draftSubject || draft.draftTo.length === 0) {
-    throw new Error("Draft is incomplete — missing to / subject / body");
-  }
-
-  const [userRow] = await db
-    .select({ undoWindowSeconds: users.undoWindowSeconds })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-  const undoWindowSeconds = userRow?.undoWindowSeconds ?? 20;
-
-  const { gmailDraftId } = await createGmailDraft(userId, {
-    to: draft.draftTo,
-    cc: draft.draftCc,
-    subject: draft.draftSubject,
-    body: draft.draftBody,
-    inReplyTo: draft.draftInReplyTo ?? null,
-    threadId: inbox.threadExternalId ?? null,
-  });
-
-  const now = new Date();
-  const sendAt = new Date(now.getTime() + undoWindowSeconds * 1000);
-
-  // Upsert pattern: UNIQUE on agent_draft_id means if a prior send_queue
-  // row exists (e.g. stale from a prior approve that didn't complete), we
-  // overwrite. That shouldn't happen because 'approved' doesn't allow
-  // re-approval, but defense-in-depth.
-  await db
-    .insert(sendQueue)
-    .values({
-      userId,
-      agentDraftId: draft.id,
-      gmailDraftId,
-      sendAt,
-      status: "pending",
-    })
-    .onConflictDoUpdate({
-      target: sendQueue.agentDraftId,
-      set: {
-        gmailDraftId,
-        sendAt,
-        status: "pending",
-        attemptCount: 0,
-        attemptedAt: null,
-        lastError: null,
-        sentGmailMessageId: null,
-        updatedAt: now,
-      },
-    });
-
-  await db
-    .update(agentDrafts)
-    .set({
-      status: "sent_pending",
-      approvedAt: now,
-      updatedAt: now,
-    })
-    .where(eq(agentDrafts.id, draft.id));
-
-  await logEmailAudit({
+  const result = await enqueueSendForDraft({
     userId,
-    action: "email_l2_completed",
-    result: "success",
-    resourceId: draft.id,
-    detail: {
-      subAction: "approve",
-      undoWindowSeconds,
-      gmailDraftId,
-    },
+    draftId,
+    isAutomatic: false,
   });
-
   revalidatePath("/app/inbox");
-  revalidatePath(`/app/inbox/${draft.id}`);
-  return { sendAt, undoWindowSeconds };
+  revalidatePath(`/app/inbox/${draftId}`);
+  return result;
 }
 
 // Cancel the pending send. Deletes the send_queue row + Gmail draft,
