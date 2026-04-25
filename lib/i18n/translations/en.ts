@@ -7,9 +7,10 @@ type MessagesShape = {
     alpha: string;
     invite_hint: string;
     value_props: {
-      conversation: { title: string; body: string };
-      notion: { title: string; body: string };
-      verbatim: { title: string; body: string };
+      triage: { title: string; body: string };
+      glassbox: { title: string; body: string };
+      confirm: { title: string; body: string };
+      yours: { title: string; body: string };
     };
     mock: {
       today_schedule: string;
@@ -125,22 +126,26 @@ export const en: MessagesShape = {
   landing: {
     headline: "Steady through the semester.",
     subhead:
-      "Your classes, assignments, and mistakes — in one conversation.",
+      "Steadii triages your university inbox and prepares replies before you open the app. You see every reason, edit anything, and approve every send.",
     cta: "Continue with Google",
     alpha: "α version — invite only",
     invite_hint: "Invite-only during α.",
     value_props: {
-      conversation: {
-        title: "One conversation",
-        body: "Ask Steadii anything about your classes. It reads Notion and your calendar, then answers.",
+      triage: {
+        title: "Drafts ready before you ask",
+        body: "Steadii reads every inbound email, classifies risk, and prepares a reply in your voice. You arrive to a queue, not an inbox.",
       },
-      notion: {
-        title: "Notion-native",
-        body: "Your mistakes, syllabi, and assignments live in your own Notion. Steadii organizes, never locks in.",
+      glassbox: {
+        title: "Glass-box by design",
+        body: "Every draft shows what fired the agent, which past emails it cited, and what it considered. Nothing happens secretly.",
       },
-      verbatim: {
-        title: "Verbatim by default",
-        body: "Original PDFs and full source text are kept with every syllabus — no lossy summaries.",
+      confirm: {
+        title: "You confirm. Always.",
+        body: "Send needs one-click approval and rides a 20-second undo. Nothing leaves your account without you.",
+      },
+      yours: {
+        title: "Your data stays yours",
+        body: "Mistakes, syllabi, and assignments live in your own Notion. Original PDFs are preserved verbatim. We organize — never lock in.",
       },
     },
     mock: {
