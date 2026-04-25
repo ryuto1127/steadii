@@ -27,14 +27,16 @@ export type RiskPassResult = {
 
 // System prompt — stable string (safe to cache). User content is the email
 // envelope, kept short to minimize cost; deep-pass retrieval is where richer
-// context lands. Reasoning is surfaced in-language to preserve transparency
-// per the glass-box brand commitment.
+// context lands. Reasoning is always English so the glass-box panel stays
+// consistent across drafts that came from differently-languaged emails
+// (a JP email + an EN email side-by-side shouldn't produce JP and EN
+// debug text in the same UI).
 const SYSTEM_PROMPT = `You are Steadii's email risk classifier. You evaluate inbound emails for a university student and assign a risk tier.
 
 Output strictly the JSON schema you're given:
 - risk_tier: 'low' | 'medium' | 'high'
 - confidence: number in [0, 1]
-- reasoning: one or two short sentences explaining the decision, in the input email's language
+- reasoning: one or two short sentences explaining the decision. ALWAYS write reasoning in English regardless of the email's language — it's an internal transparency string, not user-facing prose.
 
 Guidelines:
 - HIGH risk: grades, transcripts, scholarships, academic integrity, recommendation letters, graduate school, internship offers/interviews, supervisors, first-time senders to an unknown domain.
