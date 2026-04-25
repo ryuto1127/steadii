@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/lib/auth/config";
 import { syllabusSchema } from "@/lib/syllabus/schema";
-import { saveSyllabusToNotion } from "@/lib/syllabus/save";
+import { saveSyllabusToPostgres } from "@/lib/syllabus/save";
 import { z } from "zod";
 
 const verbatimSchema = z.object({
@@ -20,7 +20,9 @@ const verbatimSchema = z.object({
 
 const bodySchema = z.object({
   syllabus: syllabusSchema,
-  classNotionPageId: z.string().optional().nullable(),
+  // Field name kept for client-side wire compatibility; post-cutover it
+  // carries a Postgres classes.id UUID, not a Notion page id.
+  classNotionPageId: z.string().nullish(),
   verbatim: verbatimSchema,
 });
 
@@ -34,13 +36,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   }
   try {
-    const result = await saveSyllabusToNotion({
+    const result = await saveSyllabusToPostgres({
       userId: session.user.id,
-      classNotionPageId: parsed.data.classNotionPageId ?? null,
+      classId: parsed.data.classNotionPageId ?? null,
       syllabus: parsed.data.syllabus,
       verbatim: parsed.data.verbatim,
     });
-    return NextResponse.json(result);
+    return NextResponse.json({ id: result.id, pageId: result.id, url: null });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "save_failed" },

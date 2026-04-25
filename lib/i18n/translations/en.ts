@@ -81,7 +81,7 @@ type MessagesShape = {
     actions: {
       add_to_mistakes: string;
       generate_similar: string;
-      save_to_notion: string;
+      save_mistake: string;
     };
     dismiss: string;
     remove_attachment: string;
@@ -145,7 +145,7 @@ export const en: MessagesShape = {
       },
       yours: {
         title: "Your data stays yours",
-        body: "Mistakes, syllabi, and assignments live in your own Notion. Original PDFs are preserved verbatim. We organize — never lock in.",
+        body: "Verbatim mistakes, syllabi, and assignments. Yours to read, search, and export — never locked in.",
       },
     },
     mock: {
@@ -235,7 +235,7 @@ export const en: MessagesShape = {
     actions: {
       add_to_mistakes: "+ Add to mistakes",
       generate_similar: "Generate similar",
-      save_to_notion: "Save to Notion",
+      save_mistake: "Save mistake note",
     },
     dismiss: "Dismiss",
     remove_attachment: "Remove",

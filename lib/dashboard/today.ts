@@ -3,8 +3,12 @@ import {
   getCalendarForUser,
   CalendarNotConnectedError,
 } from "@/lib/integrations/google/calendar";
-import { getNotionClientForUser } from "@/lib/integrations/notion/client";
-import { resolveDataSourceId } from "@/lib/integrations/notion/data-source";
+import { db } from "@/lib/db/client";
+import {
+  assignments as assignmentsTable,
+  classes as classesTable,
+} from "@/lib/db/schema";
+import { and, asc, eq, gte, isNull, lte, ne } from "drizzle-orm";
 import type { ClassColor } from "@/components/ui/class-color";
 import { getUserTimezone } from "@/lib/agent/preferences";
 import {
@@ -83,96 +87,39 @@ export async function getDueSoonAssignments(
   userId: string,
   horizonHours = 72
 ): Promise<DueSoonAssignment[]> {
-  const notion = await getNotionClientForUser(userId);
-  if (!notion || !notion.connection.assignmentsDbId) return [];
-  try {
-    const { client, connection } = notion;
-    const dsId = await resolveDataSourceId(client, connection.assignmentsDbId!);
-    const now = new Date();
-    const horizon = new Date(now.getTime() + horizonHours * 60 * 60 * 1000);
-    const resp = await client.dataSources.query({
-      data_source_id: dsId,
-      page_size: 25,
-      filter: {
-        and: [
-          {
-            property: "Due",
-            date: { on_or_after: now.toISOString() },
-          },
-          {
-            property: "Due",
-            date: { on_or_before: horizon.toISOString() },
-          },
-        ],
-      },
-      sorts: [{ property: "Due", direction: "ascending" }],
-    });
+  const now = new Date();
+  const horizon = new Date(now.getTime() + horizonHours * 60 * 60 * 1000);
 
-    // Resolve class relations → colors + titles.
-    const classCache = new Map<string, { title: string; color: ClassColor }>();
-    const results: DueSoonAssignment[] = [];
+  const rows = await db
+    .select({
+      id: assignmentsTable.id,
+      title: assignmentsTable.title,
+      dueAt: assignmentsTable.dueAt,
+      classId: assignmentsTable.classId,
+      classTitle: classesTable.name,
+      classColor: classesTable.color,
+    })
+    .from(assignmentsTable)
+    .leftJoin(classesTable, eq(classesTable.id, assignmentsTable.classId))
+    .where(
+      and(
+        eq(assignmentsTable.userId, userId),
+        isNull(assignmentsTable.deletedAt),
+        ne(assignmentsTable.status, "done"),
+        gte(assignmentsTable.dueAt, now),
+        lte(assignmentsTable.dueAt, horizon)
+      )
+    )
+    .orderBy(asc(assignmentsTable.dueAt))
+    .limit(25);
 
-    for (const page of resp.results as Array<Record<string, unknown>>) {
-      const props = (page as { properties?: Record<string, unknown> }).properties ?? {};
-      const status = (props["Status"] as { select?: { name?: string } } | undefined)?.select?.name;
-      if (status === "Done") continue;
-
-      const title = extractTitle(props);
-      const due = (props["Due"] as { date?: { start?: string } } | undefined)?.date?.start ?? "";
-      const classRel = (
-        props["Class"] as { relation?: Array<{ id?: string }> } | undefined
-      )?.relation?.[0]?.id;
-
-      let classColor: ClassColor | null = null;
-      let classTitle: string | null = null;
-      if (classRel) {
-        const cached = classCache.get(classRel);
-        if (cached) {
-          classColor = cached.color;
-          classTitle = cached.title;
-        } else {
-          try {
-            const cp = (await client.pages.retrieve({ page_id: classRel })) as {
-              properties?: Record<string, unknown>;
-            };
-            const cprops = cp.properties ?? {};
-            const cn = extractTitle(cprops) ?? null;
-            const color =
-              ((cprops["Color"] as { select?: { name?: string } } | undefined)?.select
-                ?.name as ClassColor | undefined) ?? null;
-            if (cn && color) classCache.set(classRel, { title: cn, color });
-            classTitle = cn;
-            classColor = color ?? null;
-          } catch {
-            // ignore
-          }
-        }
-      }
-
-      if (!title) continue;
-      results.push({
-        id: (page as { id?: string }).id ?? crypto.randomUUID(),
-        title,
-        due,
-        classColor,
-        classTitle,
-      });
-    }
-
-    return results;
-  } catch {
-    return [];
-  }
-}
-
-function extractTitle(props: Record<string, unknown>): string | null {
-  for (const value of Object.values(props)) {
-    const v = value as { type?: string; title?: Array<{ plain_text?: string }> };
-    if (v?.type === "title" && Array.isArray(v.title) && v.title.length) {
-      return v.title.map((t) => t.plain_text ?? "").join("").trim() || null;
-    }
-  }
-  return null;
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    due: r.dueAt ? r.dueAt.toISOString() : "",
+    classColor: (r.classColor as ClassColor | null) ?? null,
+    classTitle: r.classTitle ?? null,
+  }));
 }
 
 export function formatTimeRange(
