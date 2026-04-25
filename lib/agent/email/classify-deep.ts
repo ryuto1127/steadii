@@ -50,7 +50,7 @@ Decide the action the agent should take:
 
 Default to draft_reply when the sender is asking for something and enough context exists. Default to ask_clarifying when the needed decision is the user's to make. Never choose archive for high-risk items that reference grades, transcripts, supervisors, or admissions unless the email is strictly a receipt.
 
-Reasoning must cite at least one retrieved similar email by subject when applicable — glass-box transparency is a hard product requirement.`;
+Reasoning must cite at least one retrieved similar email by subject when applicable — glass-box transparency is a hard product requirement. Reasoning is ALWAYS in English regardless of the email's language; it's an internal transparency string surfaced in a debug panel, not user-facing prose.`;
 
 const DEEP_PASS_JSON_SCHEMA = {
   type: "object",
