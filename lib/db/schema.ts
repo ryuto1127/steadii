@@ -892,3 +892,341 @@ export const sendQueue = pgTable(
 
 export type SendQueueRow = typeof sendQueue.$inferSelect;
 export type NewSendQueueRow = typeof sendQueue.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Phase 7 Pre-W1 — Postgres-canonical academic entities
+//
+// Replaces the prior Notion-canonical model for Classes / Mistake Notes /
+// Assignments / Syllabi. Notion stays as an optional one-way import surface
+// during α (notion_connections + registered_resources stay live for
+// rollback safety). `notion_page_id` columns make the import idempotent via
+// ON CONFLICT (user_id, notion_page_id) DO UPDATE.
+// ---------------------------------------------------------------------------
+
+export type ClassStatus = "active" | "archived";
+export type ClassColorEnum =
+  | "blue"
+  | "green"
+  | "orange"
+  | "purple"
+  | "red"
+  | "gray"
+  | "brown"
+  | "pink";
+
+export const classes = pgTable(
+  "classes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    code: text("code"),
+    term: text("term"),
+    professor: text("professor"),
+    color: text("color").$type<ClassColorEnum>(),
+    status: text("status").$type<ClassStatus>().notNull().default("active"),
+    notionPageId: text("notion_page_id"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { mode: "date", withTimezone: true }),
+  },
+  (t) => ({
+    userStatusIdx: index("classes_user_status_idx")
+      .on(t.userId, t.status)
+      .where(sql`deleted_at IS NULL`),
+    userNotionPageIdx: uniqueIndex("classes_user_notion_page_idx")
+      .on(t.userId, t.notionPageId)
+      .where(sql`notion_page_id IS NOT NULL`),
+  })
+);
+
+export type ClassRow = typeof classes.$inferSelect;
+export type NewClassRow = typeof classes.$inferInsert;
+
+export type MistakeBodyFormat = "markdown" | "tiptap_json";
+export type MistakeDifficulty = "easy" | "medium" | "hard";
+
+// Mistake Notes — α v1 ships markdown only. The body_format discriminator +
+// dual columns exist so a future flip to TipTap JSON is a forward-only
+// column-populate migration (not a rewrite).
+export const mistakeNotes = pgTable(
+  "mistake_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    classId: uuid("class_id").references(() => classes.id, {
+      onDelete: "set null",
+    }),
+
+    title: text("title").notNull(),
+    unit: text("unit"),
+    difficulty: text("difficulty").$type<MistakeDifficulty>(),
+    tags: text("tags")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+
+    bodyFormat: text("body_format")
+      .$type<MistakeBodyFormat>()
+      .notNull()
+      .default("markdown"),
+    bodyMarkdown: text("body_markdown"),
+    bodyDoc: jsonb("body_doc"),
+
+    sourceChatId: uuid("source_chat_id").references(() => chats.id, {
+      onDelete: "set null",
+    }),
+    sourceAssistantMsgId: uuid("source_assistant_msg_id").references(
+      () => messages.id,
+      { onDelete: "set null" }
+    ),
+    sourceUserQuestion: text("source_user_question"),
+    sourceExplanation: text("source_explanation"),
+
+    notionPageId: text("notion_page_id"),
+
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { mode: "date", withTimezone: true }),
+  },
+  (t) => ({
+    userClassIdx: index("mistake_notes_user_class_idx")
+      .on(t.userId, t.classId)
+      .where(sql`deleted_at IS NULL`),
+    userCreatedIdx: index("mistake_notes_user_created_idx")
+      .on(t.userId, t.createdAt)
+      .where(sql`deleted_at IS NULL`),
+    userTagsIdx: index("mistake_notes_user_tags_idx").using("gin", t.tags),
+    userNotionPageIdx: uniqueIndex("mistake_notes_user_notion_page_idx")
+      .on(t.userId, t.notionPageId)
+      .where(sql`notion_page_id IS NOT NULL`),
+  })
+);
+
+export type MistakeNoteRow = typeof mistakeNotes.$inferSelect;
+export type NewMistakeNoteRow = typeof mistakeNotes.$inferInsert;
+
+// Per-image attachment row. Multi-row beats a TEXT[] of urls because
+// ON DELETE CASCADE through blob_assets makes storage cleanup automatic
+// and per-image position/alt-text fields stay normalized.
+export const mistakeNoteImages = pgTable(
+  "mistake_note_images",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    mistakeId: uuid("mistake_id")
+      .notNull()
+      .references(() => mistakeNotes.id, { onDelete: "cascade" }),
+    blobAssetId: uuid("blob_asset_id").references(() => blobAssets.id, {
+      onDelete: "set null",
+    }),
+    url: text("url").notNull(),
+    position: integer("position").notNull().default(0),
+    altText: text("alt_text"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    mistakePositionIdx: index("mistake_note_images_mistake_idx").on(
+      t.mistakeId,
+      t.position
+    ),
+  })
+);
+
+export type MistakeNoteImageRow = typeof mistakeNoteImages.$inferSelect;
+export type NewMistakeNoteImageRow = typeof mistakeNoteImages.$inferInsert;
+
+export type AssignmentStatus = "not_started" | "in_progress" | "done";
+export type AssignmentPriority = "low" | "medium" | "high";
+export type AssignmentSource = "manual" | "classroom" | "chat";
+
+export const assignments = pgTable(
+  "assignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    classId: uuid("class_id").references(() => classes.id, {
+      onDelete: "set null",
+    }),
+
+    title: text("title").notNull(),
+    dueAt: timestamp("due_at", { mode: "date", withTimezone: true }),
+    status: text("status")
+      .$type<AssignmentStatus>()
+      .notNull()
+      .default("not_started"),
+    priority: text("priority").$type<AssignmentPriority>(),
+    notes: text("notes"),
+
+    source: text("source")
+      .$type<AssignmentSource>()
+      .notNull()
+      .default("manual"),
+    externalId: text("external_id"),
+
+    notionPageId: text("notion_page_id"),
+
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { mode: "date", withTimezone: true }),
+  },
+  (t) => ({
+    userDueIdx: index("assignments_user_due_idx")
+      .on(t.userId, t.dueAt)
+      .where(sql`deleted_at IS NULL AND status != 'done'`),
+    userClassIdx: index("assignments_user_class_idx")
+      .on(t.userId, t.classId)
+      .where(sql`deleted_at IS NULL`),
+    userExternalIdx: uniqueIndex("assignments_user_external_idx")
+      .on(t.userId, t.source, t.externalId)
+      .where(sql`external_id IS NOT NULL`),
+    userNotionPageIdx: uniqueIndex("assignments_user_notion_page_idx")
+      .on(t.userId, t.notionPageId)
+      .where(sql`notion_page_id IS NOT NULL`),
+  })
+);
+
+export type AssignmentRow = typeof assignments.$inferSelect;
+export type NewAssignmentRow = typeof assignments.$inferInsert;
+
+export type SyllabusSourceKind = "pdf" | "image" | "url";
+export type SyllabusScheduleItem = { date: string | null; topic: string | null };
+
+export const syllabi = pgTable(
+  "syllabi",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    classId: uuid("class_id").references(() => classes.id, {
+      onDelete: "set null",
+    }),
+
+    title: text("title").notNull(),
+    term: text("term"),
+    grading: text("grading"),
+    attendance: text("attendance"),
+    textbooks: text("textbooks"),
+    officeHours: text("office_hours"),
+    sourceUrl: text("source_url"),
+    sourceKind: text("source_kind").$type<SyllabusSourceKind>(),
+
+    fullText: text("full_text"),
+    schedule: jsonb("schedule").$type<SyllabusScheduleItem[]>(),
+
+    blobAssetId: uuid("blob_asset_id").references(() => blobAssets.id, {
+      onDelete: "set null",
+    }),
+    blobUrl: text("blob_url"),
+    blobFilename: text("blob_filename"),
+    blobMimeType: text("blob_mime_type"),
+    blobSizeBytes: integer("blob_size_bytes"),
+
+    notionPageId: text("notion_page_id"),
+
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { mode: "date", withTimezone: true }),
+  },
+  (t) => ({
+    userClassIdx: index("syllabi_user_class_idx")
+      .on(t.userId, t.classId)
+      .where(sql`deleted_at IS NULL`),
+    userNotionPageIdx: uniqueIndex("syllabi_user_notion_page_idx")
+      .on(t.userId, t.notionPageId)
+      .where(sql`notion_page_id IS NOT NULL`),
+  })
+);
+
+export type SyllabusRow = typeof syllabi.$inferSelect;
+export type NewSyllabusRow = typeof syllabi.$inferInsert;
+
+// Per-entity chunk tables for Phase 7 W1 fanout retrieval. Same shape as
+// email_embeddings (1536-dim text-embedding-3-small). pgvector index
+// (IVFFlat / HNSW) is deferred until α volume justifies it — sequential
+// scans are fine at single-user dogfood scale.
+export const mistakeNoteChunks = pgTable(
+  "mistake_note_chunks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    mistakeId: uuid("mistake_id")
+      .notNull()
+      .references(() => mistakeNotes.id, { onDelete: "cascade" }),
+    chunkIndex: integer("chunk_index").notNull(),
+    chunkText: text("chunk_text").notNull(),
+    embedding: vector("embedding", 1536).notNull(),
+    model: text("model").notNull().default("text-embedding-3-small"),
+    tokenCount: integer("token_count").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("mistake_note_chunks_user_idx").on(t.userId),
+    mistakeChunkIdx: uniqueIndex("mistake_note_chunks_mistake_chunk_idx").on(
+      t.mistakeId,
+      t.chunkIndex
+    ),
+  })
+);
+
+export type MistakeNoteChunk = typeof mistakeNoteChunks.$inferSelect;
+export type NewMistakeNoteChunk = typeof mistakeNoteChunks.$inferInsert;
+
+export const syllabusChunks = pgTable(
+  "syllabus_chunks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    syllabusId: uuid("syllabus_id")
+      .notNull()
+      .references(() => syllabi.id, { onDelete: "cascade" }),
+    chunkIndex: integer("chunk_index").notNull(),
+    chunkText: text("chunk_text").notNull(),
+    embedding: vector("embedding", 1536).notNull(),
+    model: text("model").notNull().default("text-embedding-3-small"),
+    tokenCount: integer("token_count").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("syllabus_chunks_user_idx").on(t.userId),
+    syllabusChunkIdx: uniqueIndex("syllabus_chunks_syllabus_chunk_idx").on(
+      t.syllabusId,
+      t.chunkIndex
+    ),
+  })
+);
+
+export type SyllabusChunk = typeof syllabusChunks.$inferSelect;
+export type NewSyllabusChunk = typeof syllabusChunks.$inferInsert;
