@@ -194,7 +194,7 @@ export const en: MessagesShape = {
     not_enough_history: "Not enough history yet. Come back next week.",
     counts: "{chats} chats · {mistakes} mistakes · {syllabi} syllabi",
     review_action: "Review",
-    generate_practice_action: "Generate practice",
+    generate_practice_action: "Practice",
     welcome_title: "Welcome to Steadii",
     welcome_body:
       "Connect your first class to start seeing today's schedule, due assignments, and recent activity.",
