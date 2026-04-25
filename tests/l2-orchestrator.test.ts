@@ -198,6 +198,8 @@ describe("processL2 orchestrator", () => {
       cc: [],
       inReplyTo: null,
       usageId: "draft-uid",
+      kind: "draft" as const,
+      reasoning: "test draft reasoning",
     });
     searchMock.mockResolvedValue({
       results: [
@@ -249,6 +251,8 @@ describe("processL2 orchestrator", () => {
       cc: [],
       inReplyTo: null,
       usageId: "draft-uid",
+      kind: "draft" as const,
+      reasoning: "test draft reasoning",
     });
 
     const { processL2 } = await import("@/lib/agent/email/l2");
@@ -308,6 +312,8 @@ describe("processL2 orchestrator", () => {
       cc: [],
       inReplyTo: null,
       usageId: "draft-uid",
+      kind: "draft" as const,
+      reasoning: "test draft reasoning",
     });
 
     const { processL2 } = await import("@/lib/agent/email/l2");
@@ -355,6 +361,8 @@ describe("processL2 orchestrator", () => {
       cc: [],
       inReplyTo: null,
       usageId: "draft-uid",
+      kind: "draft" as const,
+      reasoning: "test draft reasoning",
     });
 
     const { processL2 } = await import("@/lib/agent/email/l2");
@@ -387,6 +395,8 @@ describe("processL2 orchestrator", () => {
       cc: [],
       inReplyTo: null,
       usageId: "draft-uid",
+      kind: "draft" as const,
+      reasoning: "test draft reasoning",
     });
 
     const { processL2 } = await import("@/lib/agent/email/l2");
@@ -444,5 +454,71 @@ describe("processL2 orchestrator", () => {
     expect(draftMock).not.toHaveBeenCalled();
     expect(out.action).toBe("archive");
     expect(draftInserts[0].reasoning).toBe("receipt only");
+  });
+
+  it("medium risk + draft.kind='clarify' overrides decidedAction to ask_clarifying", async () => {
+    addInbox();
+    riskMock.mockResolvedValue({
+      riskTier: "medium",
+      confidence: 0.7,
+      reasoning: "med routine",
+      usageId: "risk-uid",
+    });
+    // Draft step detects ambiguity (e.g. subject says Monday, body says
+    // Thursday) and elects to ask back instead of guessing.
+    draftMock.mockResolvedValue({
+      kind: "clarify",
+      subject: "Re: Office hour?",
+      body: "Hi Prof, did you mean Monday or Thursday? The subject and body seem to disagree.",
+      to: ["prof@y.edu"],
+      cc: [],
+      inReplyTo: null,
+      reasoning: "Subject says 'next monday' but body proposes 'Thursday at 3pm' — asking which the sender intended.",
+      usageId: "draft-uid",
+    });
+
+    const { processL2 } = await import("@/lib/agent/email/l2");
+    const out = await processL2("ibx");
+
+    expect(out.action).toBe("ask_clarifying");
+    expect(draftInserts[0].action).toBe("ask_clarifying");
+    // The clarify reasoning takes precedence over risk.reasoning so the
+    // "Why this draft" panel explains why we asked instead of answered.
+    expect(draftInserts[0].reasoning).toContain("Subject");
+    // Body is preserved as the clarifying question text.
+    expect(draftInserts[0].draftBody).toContain("Monday or Thursday");
+  });
+
+  it("high risk + deep.action='draft_reply' + draft.kind='clarify' still routes to ask_clarifying", async () => {
+    addInbox();
+    riskMock.mockResolvedValue({
+      riskTier: "high",
+      confidence: 0.9,
+      reasoning: "hi",
+      usageId: "risk-uid",
+    });
+    deepMock.mockResolvedValue({
+      action: "draft_reply",
+      reasoning: "deep said reply",
+      retrievalProvenance: { sources: [], total_candidates: 0, returned: 0 },
+      usageId: "deep-uid",
+    });
+    draftMock.mockResolvedValue({
+      kind: "clarify",
+      subject: "Re: ?",
+      body: "Quick clarification — which file did you mean?",
+      to: ["prof@y.edu"],
+      cc: [],
+      inReplyTo: null,
+      reasoning: "Two attachments referenced in body, neither named.",
+      usageId: "draft-uid",
+    });
+
+    const { processL2 } = await import("@/lib/agent/email/l2");
+    const out = await processL2("ibx");
+
+    // Even though deep said draft_reply, the draft step's clarify wins.
+    expect(out.action).toBe("ask_clarifying");
+    expect(draftInserts[0].action).toBe("ask_clarifying");
   });
 });
