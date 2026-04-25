@@ -1,3 +1,13 @@
+/**
+ * @deprecated Phase 7 Pre-W1 cutover (2026-04-25). Postgres is canonical
+ * for academic entities; the four Notion DBs are no longer required for
+ * the live request path. `ensureNotionSetup` only runs from Settings →
+ * "Re-run setup" now (rollback safety + an escape hatch if a user wants
+ * a fresh Notion side for the optional one-way export ship later).
+ *
+ * Do not call from any new code path. Targeted for removal in a post-α
+ * cleanup PR.
+ */
 import "server-only";
 import { db } from "@/lib/db/client";
 import {

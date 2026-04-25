@@ -1,3 +1,13 @@
+/**
+ * @deprecated Phase 7 Pre-W1 cutover (2026-04-25). `runNotionSetup`
+ * created the four `dual_property` Notion databases that backed the
+ * pre-cutover Notion-canonical model. Post-cutover Postgres is canonical
+ * and these DBs are no longer required for the live request path.
+ *
+ * Kept for rollback safety and because the eventual post-α "export to
+ * Notion" ship will need a refactored variant of this code. Do not call
+ * from any new code path. Targeted for removal in a post-α cleanup PR.
+ */
 import "server-only";
 import type { Client } from "@notionhq/client";
 import { primeDataSourceCache, resolveDataSourceId } from "./data-source";
