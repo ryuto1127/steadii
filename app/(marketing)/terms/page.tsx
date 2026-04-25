@@ -1,49 +1,41 @@
-export const dynamic = "force-static";
+import { getTranslations } from "next-intl/server";
 
-export default function TermsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function TermsPage() {
+  const t = await getTranslations("legal");
+  const sections = [
+    "alpha_status",
+    "acceptable_use",
+    "your_content",
+    "external_services",
+    "plan_limits",
+    "founding_member",
+    "termination",
+    "liability",
+    "contact",
+  ] as const;
+
   return (
     <main className="mx-auto max-w-2xl px-6 py-20">
       <p className="font-mono text-[11px] uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
-        α — subject to change
+        {t("alpha_caveat")}
       </p>
-      <h1 className="mt-4 font-display text-[hsl(var(--foreground))]">Terms of Service</h1>
+      <h1 className="mt-4 font-display text-[hsl(var(--foreground))]">
+        {t("terms_title")}
+      </h1>
       <p className="mt-3 text-small text-[hsl(var(--muted-foreground))]">
-        Last updated: 2026-04-20
+        {t("last_updated")}: {t("last_updated_date")}
       </p>
 
       <div className="mt-10 space-y-6 text-sm leading-relaxed">
-        <Section
-          heading="Alpha status"
-          body={`Steadii is in invite-only α. The product is provided as-is, may be changed or withdrawn at any time, and is not warranted fit for any particular purpose. Billing runs in Stripe test mode during α — no real charges post.`}
-        />
-        <Section
-          heading="Acceptable use"
-          body={`Don't use Steadii to commit academic fraud. The agent is a study aid — it reasons, explains, and organizes. Submitting machine output as your own work on a graded assignment is your responsibility and may violate your institution's policies.`}
-        />
-        <Section
-          heading="Your content"
-          body={`You retain ownership of everything you put into Steadii — your classes, mistake notes, syllabi, attachments, chat messages, and any optional Notion pages you connect. You grant us a limited license to process this content solely to operate the service for you.`}
-        />
-        <Section
-          heading="External services"
-          body={`Steadii connects to Google (Calendar + Gmail), OpenAI, Vercel Blob, and Stripe. Notion is an optional integration. By using Steadii you also accept those services' terms. If any of them become unavailable, parts of Steadii will degrade gracefully.`}
-        />
-        <Section
-          heading="Plan limits"
-          body={`Free plan: 250 credits/month, 5 MB per file, 200 MB total storage. Pro: 1,000 credits/month, 50 MB per file, 2 GB total storage. A credit is approximately $0.01 worth of model usage. Limits are subject to change with notice.`}
-        />
-        <Section
-          heading="Termination"
-          body={`You can stop using Steadii at any time. We can revoke access if you violate these terms. On termination, your data is deleted per the Privacy Policy.`}
-        />
-        <Section
-          heading="Liability"
-          body={`To the maximum extent permitted by law, Steadii is not liable for indirect, consequential, or incidental damages arising from use of the service, including missed deadlines or incorrect answers.`}
-        />
-        <Section
-          heading="Contact"
-          body={`Questions or deletion requests: email the administrator at the address shown in your onboarding email.`}
-        />
+        {sections.map((key) => (
+          <Section
+            key={key}
+            heading={t(`terms.${key}.heading`)}
+            body={t(`terms.${key}.body`)}
+          />
+        ))}
       </div>
     </main>
   );
