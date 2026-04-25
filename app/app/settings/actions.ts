@@ -4,6 +4,10 @@ import { auth } from "@/lib/auth/config";
 import { setUserConfirmationMode } from "@/lib/agent/preferences";
 import type { ConfirmationMode } from "@/lib/agent/confirmation";
 import { ingestLast24h } from "@/lib/agent/email/ingest-recent";
+import { db } from "@/lib/db/client";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 export async function setConfirmationModeAction(formData: FormData) {
@@ -31,4 +35,18 @@ export async function refreshGmailInboxAction() {
     console.error("[settings] manual Gmail ingest failed", err);
   }
   redirect("/app/inbox");
+}
+
+// W4.3 — flip the autonomy_send_enabled toggle. Pure persistence; the
+// L2 orchestrator reads this on every triage tick so the next ingest
+// cycle picks up the new value with no further wiring.
+export async function setAutonomySendEnabledAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  const enabled = formData.get("enabled") === "true";
+  await db
+    .update(users)
+    .set({ autonomySendEnabled: enabled, updatedAt: new Date() })
+    .where(eq(users.id, session.user.id));
+  revalidatePath("/app/settings");
 }
