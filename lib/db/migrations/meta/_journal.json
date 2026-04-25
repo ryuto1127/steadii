@@ -120,6 +120,13 @@
       "when": 1776995553673,
       "tag": "0016_send_queue_and_user_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1777140722115,
+      "tag": "0017_slim_venom",
+      "breakpoints": true
     }
   ]
 }

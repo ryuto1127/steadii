@@ -94,6 +94,21 @@ export const users = pgTable("users", {
     mode: "date",
     withTimezone: true,
   }),
+  // W4.3 — staged autonomy opt-in. When true, eligible draft_reply
+  // drafts are routed straight into send_queue (with the standard 20s
+  // undo) instead of waiting for explicit Send. False by default; the
+  // glass-box brand promise requires opt-in.
+  //
+  // Eligibility is enforced server-side and currently restricted to
+  // `risk_tier='medium'` items (the pipeline's "lowest-stakes drafted
+  // class"; low-tier never produces draft_reply today). Memory uses
+  // "low-risk fire-and-report" — semantically the lowest-stakes drafted
+  // tier — which lines up with our medium classification. If the
+  // pipeline ever starts drafting for low tier (e.g. quick acks), that
+  // policy can be extended here without a schema change.
+  autonomySendEnabled: boolean("autonomy_send_enabled")
+    .notNull()
+    .default(false),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { mode: "date" }),
@@ -757,6 +772,12 @@ export const agentDrafts = pgTable(
     approvedAt: timestamp("approved_at", { mode: "date", withTimezone: true }),
     sentAt: timestamp("sent_at", { mode: "date", withTimezone: true }),
     gmailSentMessageId: text("gmail_sent_message_id"),
+    // W4.3 — true when the orchestrator enqueued the send without a
+    // human Send click (per `users.autonomy_low_risk_enabled`). The UI
+    // labels these distinctly so users immediately see "the agent did
+    // this on its own" — protects the glass-box promise even when the
+    // human was out of the loop.
+    autoSent: boolean("auto_sent").notNull().default(false),
 
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
       .notNull()
