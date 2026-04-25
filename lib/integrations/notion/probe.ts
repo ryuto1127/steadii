@@ -1,3 +1,10 @@
+/**
+ * @deprecated Phase 7 Pre-W1 cutover (2026-04-25). The "is this Notion DB
+ * still alive?" health probe was used to gate the syllabus wizard with a
+ * `DeadDbBanner`. Post-cutover the wizard saves to Postgres, so the
+ * dead-DB failure mode no longer exists in the live path. Kept for
+ * rollback safety; targeted for removal in a post-α cleanup PR.
+ */
 import "server-only";
 import type { Client } from "@notionhq/client";
 
