@@ -23,6 +23,10 @@ import { searchSimilarEmails, DEEP_PASS_TOP_K, type SimilarEmail } from "./retri
 import { buildEmbedInput } from "./embeddings";
 import { fetchRecentThreadMessages } from "./thread";
 import { logEmailAudit } from "./audit";
+import {
+  fetchUpcomingEvents,
+  type DraftCalendarEvent,
+} from "@/lib/integrations/google/calendar";
 
 // Hand-tuned K for the shallower medium-risk draft retrieval. Smaller than
 // DEEP_PASS_TOP_K because medium items don't get the deep reasoning pass,
@@ -268,6 +272,20 @@ async function runPipeline(
       }
     }
 
+    // Calendar context — fetch best-effort. Calendar-not-connected, scope
+    // missing, transient API blip: all swallowed to an empty list so the
+    // draft step still runs (it falls back to ask-on-availability
+    // behavior, the same as before W3.6 added this).
+    let calendarEvents: DraftCalendarEvent[] = [];
+    try {
+      calendarEvents = await fetchUpcomingEvents(item.userId, { days: 7 });
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { feature: "email_l2", step: "calendar_fetch" },
+        user: { id: item.userId },
+      });
+    }
+
     draft = await runDraft({
       userId: item.userId,
       senderEmail: item.senderEmail,
@@ -279,6 +297,7 @@ async function runPipeline(
       inReplyTo: null,
       threadRecentMessages: threadMessages,
       similarEmails: similarForDraft,
+      calendarEvents,
       userName: userRow?.name ?? null,
       userEmail: userRow?.email ?? null,
     });
