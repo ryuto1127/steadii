@@ -284,6 +284,22 @@ async function runPipeline(
     });
   }
 
+  // The draft step can escalate from "I'll answer" to "I need to ask
+  // back" when it spots ambiguity (subject/body conflict, missing date,
+  // etc.). Honour that by overriding the action to ask_clarifying — same
+  // body, same to/cc/subject, just framed as a question rather than an
+  // answer. The Inbox UI already renders ask_clarifying differently.
+  const finalAction: DeepAction =
+    draft?.kind === "clarify" ? "ask_clarifying" : decidedAction;
+
+  // When the draft chose to clarify, its reasoning is the user-relevant
+  // one (it explains *why we asked instead of answered*). Otherwise keep
+  // the existing deep > risk fallback chain.
+  const finalReasoning =
+    draft?.kind === "clarify"
+      ? draft.reasoning
+      : (deep?.reasoning ?? risk.reasoning);
+
   const row: NewAgentDraft = {
     userId: item.userId,
     inboxItemId: item.id,
@@ -295,8 +311,8 @@ async function runPipeline(
     deepPassUsageId: deep?.usageId ?? null,
     draftUsageId: draft?.usageId ?? null,
     riskTier,
-    action: decidedAction,
-    reasoning: deep?.reasoning ?? risk.reasoning,
+    action: finalAction,
+    reasoning: finalReasoning,
     retrievalProvenance: deep?.retrievalProvenance ?? null,
     draftSubject: draft?.subject ?? null,
     draftBody: draft?.body ?? null,
@@ -324,7 +340,9 @@ async function runPipeline(
     resourceId: item.id,
     detail: {
       riskTier,
-      action: decidedAction,
+      action: finalAction,
+      decidedAction,
+      draftKind: draft?.kind ?? null,
       deepPassCalled: !!deep,
       draftGenerated: !!draft,
       retrieval: deep?.retrievalProvenance
@@ -339,7 +357,7 @@ async function runPipeline(
   return {
     agentDraftId: persisted?.id ?? null,
     status: "pending",
-    action: decidedAction,
+    action: finalAction,
     pausedAtStep: null,
     riskTier,
   };
