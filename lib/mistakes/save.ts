@@ -10,7 +10,10 @@ import {
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { assertCreditsAvailable } from "@/lib/billing/credits";
 import { refreshMistakeEmbeddings } from "@/lib/embeddings/entity-embed";
+import { buildMistakeMarkdownBody } from "./build-body";
 import { z } from "zod";
+
+export { buildMistakeMarkdownBody };
 
 export const mistakeSaveSchema = z.object({
   chatId: z.string().uuid(),
@@ -27,29 +30,6 @@ export const mistakeSaveSchema = z.object({
 });
 
 export type MistakeSaveInput = z.infer<typeof mistakeSaveSchema>;
-
-// Build the markdown body that mirrors the structured Notion page we used
-// to ship: image bookmarks, the user's verbatim question, then the
-// step-by-step explanation. Verbatim preservation is non-negotiable.
-export function buildMistakeMarkdownBody(args: {
-  userQuestion: string;
-  assistantExplanation: string;
-  imageUrls: string[];
-}): string {
-  const parts: string[] = [];
-  for (const url of args.imageUrls) {
-    parts.push(`![](${url})`);
-  }
-  if (args.userQuestion.trim()) {
-    parts.push("## The problem");
-    parts.push(args.userQuestion);
-  }
-  if (args.assistantExplanation.trim()) {
-    parts.push("## Step-by-step explanation");
-    parts.push(args.assistantExplanation);
-  }
-  return parts.join("\n\n");
-}
 
 export async function saveMistakeNote(args: {
   userId: string;
