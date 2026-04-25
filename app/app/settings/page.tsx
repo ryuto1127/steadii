@@ -14,7 +14,11 @@ import { and, eq, isNull } from "drizzle-orm";
 import { AgentRulesSection } from "@/components/settings/agent-rules";
 import { NotificationSettings } from "@/components/settings/notifications";
 import { getUserConfirmationMode, getUserTimezone } from "@/lib/agent/preferences";
-import { setConfirmationModeAction, refreshGmailInboxAction } from "./actions";
+import {
+  setConfirmationModeAction,
+  refreshGmailInboxAction,
+  setAutonomySendEnabledAction,
+} from "./actions";
 import { getCreditBalance } from "@/lib/billing/credits";
 import { getStorageTotals } from "@/lib/billing/storage";
 import { prettyBytes } from "@/lib/billing/plan";
@@ -87,6 +91,7 @@ export default async function SettingsPage() {
         digestHourLocal: users.digestHourLocal,
         undoWindowSeconds: users.undoWindowSeconds,
         highRiskNotifyImmediate: users.highRiskNotifyImmediate,
+        autonomySendEnabled: users.autonomySendEnabled,
       })
       .from(users)
       .where(eq(users.id, userId))
@@ -281,6 +286,42 @@ export default async function SettingsPage() {
               userPrefs?.highRiskNotifyImmediate ?? true,
           }}
         />
+      </Section>
+
+      <Section title="Staged autonomy">
+        <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
+          When on, Steadii sends low-stakes drafts (currently medium-tier
+          replies — office hours, deadlines, scheduling acknowledgments)
+          on its own. The 20-second undo still applies, and the inbox
+          item is labeled <em>Sent automatically</em> with the full
+          glass-box reasoning visible. Off by default — you stay in
+          the loop on every send.
+        </p>
+        <form
+          action={setAutonomySendEnabledAction}
+          className="flex items-center justify-between rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2.5"
+        >
+          <span className="text-body">
+            Auto-send eligible drafts (with 20s undo)
+          </span>
+          <input
+            type="hidden"
+            name="enabled"
+            value={
+              userPrefs?.autonomySendEnabled ? "false" : "true"
+            }
+          />
+          <button
+            type="submit"
+            className={`inline-flex items-center rounded-md px-3 py-1.5 text-small font-medium transition-hover ${
+              userPrefs?.autonomySendEnabled
+                ? "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:opacity-90"
+                : "border border-[hsl(var(--border))] hover:bg-[hsl(var(--surface-raised))]"
+            }`}
+          >
+            {userPrefs?.autonomySendEnabled ? "On — turn off" : "Off — turn on"}
+          </button>
+        </form>
       </Section>
 
       <Section title={t("sections.agent")}>
