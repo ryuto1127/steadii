@@ -1,11 +1,15 @@
 import "server-only";
 import { z } from "zod";
-import { getNotionClientForUser } from "@/lib/integrations/notion/client";
-import { resolveDataSourceId } from "@/lib/integrations/notion/data-source";
 import { openai } from "@/lib/integrations/openai/client";
 import { selectModel } from "@/lib/agent/models";
 import { db } from "@/lib/db/client";
-import { chats, messages, usageEvents } from "@/lib/db/schema";
+import {
+  chats,
+  messages,
+  mistakeNotes,
+  syllabi,
+  usageEvents,
+} from "@/lib/db/schema";
 import { and, eq, gte, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { ToolExecutor } from "./types";
 
@@ -34,10 +38,8 @@ export async function computeWeekSummary(userId: string): Promise<WeekSummary> {
   if (hit && hit.expiresAt > now.getTime()) return hit.value;
 
   const chatCount = await countChatsThisWeek(userId, weekAgo);
-  const { mistakeTitles, mistakeClasses, syllabusCount } = await countNotion(
-    userId,
-    weekAgo
-  );
+  const { mistakeTitles, mistakeClasses, syllabusCount } =
+    await countAcademicEntities(userId, weekAgo);
 
   const focus = topClasses(mistakeClasses, 2);
   const mistakesN = mistakeTitles.length;
@@ -85,80 +87,52 @@ async function countChatsThisWeek(userId: string, since: Date): Promise<number> 
   return Number(row?.count ?? 0);
 }
 
-async function countNotion(
+async function countAcademicEntities(
   userId: string,
   since: Date
-): Promise<{ mistakeTitles: string[]; mistakeClasses: string[]; syllabusCount: number }> {
-  const notion = await getNotionClientForUser(userId);
-  if (!notion) {
-    return { mistakeTitles: [], mistakeClasses: [], syllabusCount: 0 };
-  }
-  const { client, connection } = notion;
-  const mistakeTitles: string[] = [];
-  const mistakeClasses: string[] = [];
-  let syllabusCount = 0;
+): Promise<{
+  mistakeTitles: string[];
+  mistakeClasses: string[];
+  syllabusCount: number;
+}> {
+  const [mistakeRows, syllabusRows] = await Promise.all([
+    db
+      .select({
+        title: mistakeNotes.title,
+        classId: mistakeNotes.classId,
+      })
+      .from(mistakeNotes)
+      .where(
+        and(
+          eq(mistakeNotes.userId, userId),
+          isNull(mistakeNotes.deletedAt),
+          gte(mistakeNotes.createdAt, since)
+        )
+      )
+      .limit(50),
+    db
+      .select({ id: syllabi.id })
+      .from(syllabi)
+      .where(
+        and(
+          eq(syllabi.userId, userId),
+          isNull(syllabi.deletedAt),
+          gte(syllabi.createdAt, since)
+        )
+      )
+      .limit(50),
+  ]);
 
-  if (connection.mistakesDbId) {
-    try {
-      const dsId = await resolveDataSourceId(client, connection.mistakesDbId);
-      const resp = await client.dataSources.query({
-        data_source_id: dsId,
-        page_size: 50,
-        filter: {
-          timestamp: "created_time",
-          created_time: { on_or_after: since.toISOString() },
-        },
-      });
-      for (const page of resp.results as Array<Record<string, unknown>>) {
-        const props = (page as { properties?: Record<string, unknown> }).properties ?? {};
-        const title = extractTitle(props);
-        if (title) mistakeTitles.push(title);
-        const cls = extractClassRelation(props);
-        if (cls) mistakeClasses.push(cls);
-      }
-    } catch {
-      // Swallow — partial data is fine for this advisory summary.
-    }
-  }
+  const mistakeTitles = mistakeRows.map((r) => r.title);
+  const mistakeClasses = mistakeRows
+    .map((r) => r.classId)
+    .filter((id): id is string => Boolean(id));
 
-  if (connection.syllabiDbId) {
-    try {
-      const dsId = await resolveDataSourceId(client, connection.syllabiDbId);
-      const resp = await client.dataSources.query({
-        data_source_id: dsId,
-        page_size: 50,
-        filter: {
-          timestamp: "created_time",
-          created_time: { on_or_after: since.toISOString() },
-        },
-      });
-      syllabusCount = resp.results.length;
-    } catch {
-      // ignore
-    }
-  }
-
-  return { mistakeTitles, mistakeClasses, syllabusCount };
-}
-
-function extractTitle(props: Record<string, unknown>): string | null {
-  for (const value of Object.values(props)) {
-    const v = value as { type?: string; title?: Array<{ plain_text?: string }> };
-    if (v?.type === "title" && Array.isArray(v.title) && v.title.length) {
-      return v.title.map((t) => t.plain_text ?? "").join("").trim() || null;
-    }
-  }
-  return null;
-}
-
-function extractClassRelation(props: Record<string, unknown>): string | null {
-  const maybe = props["Class"] as
-    | { type?: string; relation?: Array<{ id?: string }> }
-    | undefined;
-  if (maybe?.type === "relation" && Array.isArray(maybe.relation) && maybe.relation[0]?.id) {
-    return maybe.relation[0].id;
-  }
-  return null;
+  return {
+    mistakeTitles,
+    mistakeClasses,
+    syllabusCount: syllabusRows.length,
+  };
 }
 
 function topClasses(classIds: string[], limit: number): string[] {

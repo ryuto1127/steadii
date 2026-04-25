@@ -151,7 +151,7 @@ export function MistakeNoteDialog({
             disabled={saving}
             className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))] disabled:opacity-40"
           >
-            {saving ? "Saving…" : "Save to Notion"}
+            {saving ? "Saving…" : "Save mistake note"}
           </button>
         </div>
       </div>
