@@ -58,3 +58,52 @@ export async function getCalendarForUser(
 
   return google.calendar({ version: "v3", auth: oauth2 });
 }
+
+// Lightweight event row used by the draft pass to ground availability
+// answers in the user's actual schedule. Day-events surface as
+// `start === end === "YYYY-MM-DDT00:00:00Z"` — drafts treat those as
+// "blocking the whole day" hints rather than a specific clash.
+export type DraftCalendarEvent = {
+  title: string;
+  start: string; // ISO
+  end: string; // ISO
+  location: string | null;
+};
+
+// Fetch upcoming events in a fixed window around the email's "now". We
+// don't try to parse the email for specific dates — the LLM has the body
+// and the events list, it can correlate. The 7-day default covers the
+// common "free this week?" / "Thursday at 3pm?" requests; longer windows
+// inflate the prompt without much marginal value at α scale.
+export async function fetchUpcomingEvents(
+  userId: string,
+  options: { days?: number; max?: number } = {}
+): Promise<DraftCalendarEvent[]> {
+  const days = options.days ?? 7;
+  const max = options.max ?? 25;
+  let cal: calendar_v3.Calendar;
+  try {
+    cal = await getCalendarForUser(userId);
+  } catch (e) {
+    if (e instanceof CalendarNotConnectedError) return [];
+    throw e;
+  }
+  const now = new Date();
+  const end = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+  const resp = await cal.events.list({
+    calendarId: "primary",
+    timeMin: now.toISOString(),
+    timeMax: end.toISOString(),
+    singleEvents: true,
+    orderBy: "startTime",
+    maxResults: max,
+  });
+  return (resp.data.items ?? [])
+    .filter((e) => e.start?.dateTime || e.start?.date)
+    .map((e) => ({
+      title: e.summary ?? "(untitled)",
+      start: e.start?.dateTime ?? `${e.start?.date}T00:00:00Z`,
+      end: e.end?.dateTime ?? `${e.end?.date}T00:00:00Z`,
+      location: e.location ?? null,
+    }));
+}
