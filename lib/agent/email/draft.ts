@@ -64,7 +64,11 @@ Pick "clarify" when ANY of these hold:
 
 Default to "draft" when there is one obviously-correct interpretation. Don't ask back for routine acknowledgments or single-fact replies.
 
-Always populate every field. For "clarify": subject is still 'Re: <original>', body is the question(s), to/cc target the original sender as if you were drafting a reply (because you are — it's an email, just one that asks). 'reasoning' is one or two short sentences explaining why you picked this kind.`;
+Always populate every field. For "clarify": subject is still 'Re: <original>', body is the question(s), to/cc target the original sender as if you were drafting a reply (because you are — it's an email, just one that asks). 'reasoning' is one or two short sentences explaining why you picked this kind.
+
+Language rules — keep these distinct:
+- 'subject' and 'body' MUST match the incoming email's language (the student's working language). Japanese in → Japanese reply; English in → English reply.
+- 'reasoning' is ALWAYS in English regardless of the email's language. It's an internal explanation surfaced in a debug/transparency panel, not user-facing prose. Mixing languages here makes the panel inconsistent across drafts.`;
 
 const DRAFT_JSON_SCHEMA = {
   type: "object",
