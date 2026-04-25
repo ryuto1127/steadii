@@ -1,3 +1,14 @@
+/**
+ * @deprecated Phase 7 Pre-W1 cutover (2026-04-25). Postgres is now
+ * canonical for the four academic entities. This module ran on every
+ * chat send (60s in-memory cache) to walk the user's Notion parent
+ * page; that call has been removed from the orchestrator hot path.
+ *
+ * Kept for rollback safety during α and as the engine behind the
+ * Settings → "Import from Notion" affordance (which now goes through
+ * `lib/integrations/notion/import-to-postgres.ts`). Do not call from
+ * any new code path. Targeted for removal in a post-α cleanup PR.
+ */
 import "server-only";
 import { db } from "@/lib/db/client";
 import { notionConnections, registeredResources, auditLog } from "@/lib/db/schema";

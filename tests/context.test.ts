@@ -18,6 +18,30 @@ describe("serializeContextForPrompt", () => {
     expect(out).toMatch(/Notion connected: no/);
   });
 
+  it("renders academicCounts when present", () => {
+    const out = serializeContextForPrompt({
+      timezone: "America/Vancouver",
+      notion: {
+        connected: false,
+        parentPageId: null,
+        classesDbId: null,
+        mistakesDbId: null,
+        assignmentsDbId: null,
+        syllabiDbId: null,
+      },
+      registeredResources: [],
+      academicCounts: {
+        classes: 5,
+        assignmentsActive: 3,
+        mistakeNotes: 12,
+        syllabi: 4,
+      },
+    });
+    expect(out).toMatch(
+      /Academic store \(Postgres\): 5 classes, 3 active assignments, 12 mistake notes, 4 syllabi\./
+    );
+  });
+
   it("renders all 4 DB ids and registered resources", () => {
     const out = serializeContextForPrompt({
       timezone: "America/Vancouver",

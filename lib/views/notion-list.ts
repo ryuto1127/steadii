@@ -1,3 +1,9 @@
+/**
+ * @deprecated Phase 7 Pre-W1 cutover (2026-04-25). The class-detail tabs
+ * used `listFromDatabase` to render Syllabus / Assignments / Mistakes rows
+ * directly out of Notion. Post-cutover those tabs read from Postgres.
+ * No live consumers remain. Kept for rollback safety.
+ */
 import "server-only";
 import { db } from "@/lib/db/client";
 import { notionConnections } from "@/lib/db/schema";

@@ -1,3 +1,9 @@
+/**
+ * @deprecated Phase 7 Pre-W1 cutover (2026-04-25). `checkDatabaseHealth`
+ * gated the syllabus wizard with a "your Notion DB was deleted" banner.
+ * Post-cutover the wizard saves to Postgres and the failure mode no
+ * longer exists. No live consumers; kept for rollback safety only.
+ */
 import "server-only";
 import { db } from "@/lib/db/client";
 import { notionConnections } from "@/lib/db/schema";
