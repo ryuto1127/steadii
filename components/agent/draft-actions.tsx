@@ -37,6 +37,7 @@ export function DraftActions({
   initialCc,
   undoWindowSeconds,
   sentAt,
+  autoSent,
 }: {
   draftId: string;
   status: Status;
@@ -49,6 +50,11 @@ export function DraftActions({
   // Populated by the cron when the queued send actually goes out via Gmail.
   // Drives the "Sent · timestamp" banner; falsy for any non-sent state.
   sentAt: Date | null;
+  // True when the L2 orchestrator enqueued the send without a human Send
+  // click (W4.3 staged autonomy). The Sent banner labels these distinctly
+  // so the glass-box promise stays intact even when the human was
+  // out of the loop.
+  autoSent: boolean;
 }) {
   const router = useRouter();
   const [editMode, setEditMode] = useState(false);
@@ -166,7 +172,7 @@ export function DraftActions({
       </section>
 
       {status === "sent" ? (
-        <SentBanner sentAt={sentAt} />
+        <SentBanner sentAt={sentAt} autoSent={autoSent} />
       ) : pendingSend ? (
         <UndoBar
           until={pendingSend.until}
@@ -288,7 +294,13 @@ function UndoBar({
 // so the user sees a clean "this is done" affordance instead of stale
 // Send/Edit/Dismiss buttons. Timestamp uses the user's local locale via
 // toLocaleString — no need to pre-format on the server.
-function SentBanner({ sentAt }: { sentAt: Date | null }) {
+function SentBanner({
+  sentAt,
+  autoSent,
+}: {
+  sentAt: Date | null;
+  autoSent: boolean;
+}) {
   const label = sentAt
     ? new Date(sentAt).toLocaleString(undefined, {
         month: "short",
@@ -297,6 +309,11 @@ function SentBanner({ sentAt }: { sentAt: Date | null }) {
         minute: "2-digit",
       })
     : null;
+  // Auto-sent drafts get an explicit "Sent automatically" framing — the
+  // glass-box promise requires the user immediately know which sends
+  // went out without their Send click. Same green palette so it still
+  // reads as success, just with the autonomy callout.
+  const headline = autoSent ? "Sent automatically" : "Sent";
   return (
     <div className="flex items-center gap-2 rounded-md border border-[hsl(142_76%_36%/0.3)] bg-[hsl(142_76%_36%/0.06)] px-4 py-2.5 text-small">
       <CheckCircle2
@@ -305,7 +322,7 @@ function SentBanner({ sentAt }: { sentAt: Date | null }) {
         className="shrink-0 text-[hsl(142_76%_36%)]"
       />
       <span className="text-[hsl(var(--foreground))]">
-        Sent
+        {headline}
         {label ? (
           <>
             {" · "}

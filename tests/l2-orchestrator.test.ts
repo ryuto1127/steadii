@@ -16,6 +16,12 @@ type InboxItem = {
   snippet: string | null;
   firstTimeSender: boolean;
   ruleProvenance: Array<{ ruleId: string; source: string; why: string }> | null;
+  // The user-row mock returns the same array as the inbox-row mock (see
+  // db.select() below), so user-row fields piggyback on the InboxItem
+  // fixture. autonomySendEnabled here drives the W4.3 auto-send branch.
+  email?: string;
+  name?: string | null;
+  autonomySendEnabled?: boolean;
 };
 
 const inboxItems: InboxItem[] = [];
@@ -28,8 +34,9 @@ vi.mock("@/lib/db/client", () => ({
       from: (_table: unknown) => ({
         where: () => ({
           limit: async () => {
-            // Return the inbox item or the user row based on which mock is
-            // being hit; the test sets only one at a time.
+            // Mock returns inboxItems for both the inbox and user row
+            // queries — fixture fields (email/name/autonomySendEnabled)
+            // double-up. See InboxItem note above.
             if (inboxItems.length > 0) return inboxItems;
             return [{ email: "u@example.com", name: "U" }];
           },
@@ -147,6 +154,21 @@ vi.mock("@/lib/integrations/google/calendar", () => ({
   },
 }));
 
+type EnqueueArgs = {
+  userId: string;
+  draftId: string;
+  isAutomatic: boolean;
+};
+const enqueueSendMock = vi.fn<
+  (args: EnqueueArgs) => Promise<{ sendAt: Date; undoWindowSeconds: number }>
+>(async () => ({
+  sendAt: new Date(),
+  undoWindowSeconds: 20,
+}));
+vi.mock("@/lib/agent/email/send-enqueue", () => ({
+  enqueueSendForDraft: (args: EnqueueArgs) => enqueueSendMock(args),
+}));
+
 vi.mock("@/lib/agent/models", () => ({
   selectModel: (t: string) =>
     t === "email_classify_deep" || t === "email_draft"
@@ -189,6 +211,11 @@ beforeEach(() => {
   searchMock.mockClear();
   calendarMock.mockReset();
   calendarMock.mockResolvedValue([]);
+  enqueueSendMock.mockReset();
+  enqueueSendMock.mockResolvedValue({
+    sendAt: new Date(),
+    undoWindowSeconds: 20,
+  });
 });
 
 describe("processL2 orchestrator", () => {
@@ -576,6 +603,113 @@ describe("processL2 orchestrator", () => {
     };
     expect(draftArgs.calendarEvents).toHaveLength(1);
     expect(draftArgs.calendarEvents[0]?.title).toBe("CSC108 lecture");
+  });
+
+  it("medium + draft_reply + autonomySendEnabled=true → enqueueSendForDraft called", async () => {
+    addInbox({ autonomySendEnabled: true });
+    riskMock.mockResolvedValue({
+      riskTier: "medium",
+      confidence: 0.7,
+      reasoning: "med",
+      usageId: "risk-uid",
+    });
+    draftMock.mockResolvedValue({
+      kind: "draft" as const,
+      subject: "Re: s",
+      body: "Yes that works",
+      to: ["prof@y.edu"],
+      cc: [],
+      inReplyTo: null,
+      reasoning: "test",
+      usageId: "draft-uid",
+    });
+
+    const { processL2 } = await import("@/lib/agent/email/l2");
+    await processL2("ibx");
+
+    expect(enqueueSendMock).toHaveBeenCalledTimes(1);
+    expect(enqueueSendMock.mock.calls[0]?.[0]?.isAutomatic).toBe(true);
+  });
+
+  it("medium + draft_reply + autonomySendEnabled=false → enqueueSendForDraft NOT called", async () => {
+    addInbox({ autonomySendEnabled: false });
+    riskMock.mockResolvedValue({
+      riskTier: "medium",
+      confidence: 0.7,
+      reasoning: "med",
+      usageId: "risk-uid",
+    });
+    draftMock.mockResolvedValue({
+      kind: "draft" as const,
+      subject: "Re: s",
+      body: "Yes that works",
+      to: ["prof@y.edu"],
+      cc: [],
+      inReplyTo: null,
+      reasoning: "test",
+      usageId: "draft-uid",
+    });
+
+    const { processL2 } = await import("@/lib/agent/email/l2");
+    await processL2("ibx");
+
+    expect(enqueueSendMock).not.toHaveBeenCalled();
+  });
+
+  it("high tier + autonomySendEnabled=true does NOT auto-send (medium-only policy)", async () => {
+    addInbox({ autonomySendEnabled: true });
+    riskMock.mockResolvedValue({
+      riskTier: "high",
+      confidence: 0.95,
+      reasoning: "high",
+      usageId: "risk-uid",
+    });
+    deepMock.mockResolvedValue({
+      action: "draft_reply",
+      reasoning: "deep",
+      retrievalProvenance: { sources: [], total_candidates: 0, returned: 0 },
+      usageId: "deep-uid",
+    });
+    draftMock.mockResolvedValue({
+      kind: "draft" as const,
+      subject: "Re: s",
+      body: "ack",
+      to: ["x@y.edu"],
+      cc: [],
+      inReplyTo: null,
+      reasoning: "test",
+      usageId: "draft-uid",
+    });
+
+    const { processL2 } = await import("@/lib/agent/email/l2");
+    await processL2("ibx");
+
+    expect(enqueueSendMock).not.toHaveBeenCalled();
+  });
+
+  it("clarify drafts never auto-send even when autonomySendEnabled=true", async () => {
+    addInbox({ autonomySendEnabled: true });
+    riskMock.mockResolvedValue({
+      riskTier: "medium",
+      confidence: 0.7,
+      reasoning: "med",
+      usageId: "risk-uid",
+    });
+    draftMock.mockResolvedValue({
+      kind: "clarify" as const,
+      subject: "Re: ?",
+      body: "Did you mean Mon or Thu?",
+      to: ["prof@y.edu"],
+      cc: [],
+      inReplyTo: null,
+      reasoning: "ambiguity",
+      usageId: "draft-uid",
+    });
+
+    const { processL2 } = await import("@/lib/agent/email/l2");
+    await processL2("ibx");
+
+    expect(enqueueSendMock).not.toHaveBeenCalled();
   });
 
   it("high risk + deep.action='draft_reply' + draft.kind='clarify' still routes to ask_clarifying", async () => {

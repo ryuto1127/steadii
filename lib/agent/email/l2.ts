@@ -27,6 +27,7 @@ import {
   fetchUpcomingEvents,
   type DraftCalendarEvent,
 } from "@/lib/integrations/google/calendar";
+import { enqueueSendForDraft } from "./send-enqueue";
 
 // Hand-tuned K for the shallower medium-risk draft retrieval. Smaller than
 // DEEP_PASS_TOP_K because medium items don't get the deep reasoning pass,
@@ -101,7 +102,11 @@ async function runPipeline(
   }
 
   const [userRow] = await db
-    .select({ email: users.email, name: users.name })
+    .select({
+      email: users.email,
+      name: users.name,
+      autonomySendEnabled: users.autonomySendEnabled,
+    })
     .from(users)
     .where(eq(users.id, item.userId))
     .limit(1);
@@ -345,6 +350,38 @@ async function runPipeline(
   const [persisted] = await db.insert(agentDrafts).values(row).returning({
     id: agentDrafts.id,
   });
+
+  // W4.3 staged-autonomy auto-send. When the user has opted in AND the
+  // draft is eligible, enqueue it directly into send_queue with the
+  // standard 20s undo. Eligibility today: medium tier + draft_reply +
+  // a complete draft (to/subject/body present). Failures are swallowed
+  // — auto-send is a nicety; the draft is already persisted in pending
+  // state so the worst case is the user sees a normal review queue
+  // entry instead of an auto-sent one.
+  const autoSendEligible =
+    persisted &&
+    !!userRow?.autonomySendEnabled &&
+    riskTier === "medium" &&
+    finalAction === "draft_reply" &&
+    draft?.kind === "draft" &&
+    !!draft.body &&
+    !!draft.subject &&
+    draft.to.length > 0;
+  if (autoSendEligible) {
+    try {
+      await enqueueSendForDraft({
+        userId: item.userId,
+        draftId: persisted.id,
+        isAutomatic: true,
+      });
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { feature: "email_l2", step: "auto_send" },
+        user: { id: item.userId },
+        extra: { draftId: persisted.id },
+      });
+    }
+  }
 
   // Update the inbox item's risk_tier — L2 has a final say.
   await db
