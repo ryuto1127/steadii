@@ -23,12 +23,20 @@ export type DraftInput = {
   userEmail: string | null;
 };
 
+// `kind` lets the LLM escalate from "I can answer this" to "I need to ask
+// back first" inside a single call, instead of forcing the orchestrator to
+// guess. When kind="clarify", `body` IS the clarifying question to send
+// back to the original sender — we still send an email, just one that
+// asks instead of answers. `reasoning` explains the choice for the
+// glass-box "Why this draft" panel.
 export type DraftResult = {
+  kind: "draft" | "clarify";
   subject: string;
   body: string;
   to: string[];
   cc: string[];
   inReplyTo: string | null;
+  reasoning: string;
   usageId: string | null;
 };
 
@@ -44,19 +52,41 @@ Do NOT:
 - fabricate quotes from past emails;
 - sign off with the student's name — leave the signature blank; the student will add it.
 
-Output JSON with: subject (usually 'Re: <original subject>'), body, to (list), cc (list; usually empty), in_reply_to (string or null; echo the incoming In-Reply-To header).`;
+Choose 'kind':
+- "draft" — the request is unambiguous and you can answer it on the student's behalf without guessing.
+- "clarify" — there is a real ambiguity that a thoughtful human would ask back about before answering. In this case 'body' is the clarifying question(s) you'd send to the original sender, polite and specific.
+
+Pick "clarify" when ANY of these hold:
+- Subject and body conflict (e.g. subject says "Monday" but body says "Thursday").
+- A critical detail (date, time, location, who, what assignment, which class) is missing or ambiguous AND the student can't reasonably infer it from context.
+- The sender is asking the student a yes/no decision that depends on the student's preferences/availability you don't actually know.
+- The sender's request implies multiple possible interpretations and choosing wrong has a non-trivial cost (missed meeting, wrong file sent, etc.).
+
+Default to "draft" when there is one obviously-correct interpretation. Don't ask back for routine acknowledgments or single-fact replies.
+
+Always populate every field. For "clarify": subject is still 'Re: <original>', body is the question(s), to/cc target the original sender as if you were drafting a reply (because you are — it's an email, just one that asks). 'reasoning' is one or two short sentences explaining why you picked this kind.`;
 
 const DRAFT_JSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
+    kind: { type: "string", enum: ["draft", "clarify"] },
     subject: { type: "string", minLength: 1, maxLength: 200 },
     body: { type: "string", minLength: 1, maxLength: 5000 },
     to: { type: "array", items: { type: "string" } },
     cc: { type: "array", items: { type: "string" } },
     in_reply_to: { type: ["string", "null"] },
+    reasoning: { type: "string", minLength: 1, maxLength: 600 },
   },
-  required: ["subject", "body", "to", "cc", "in_reply_to"],
+  required: [
+    "kind",
+    "subject",
+    "body",
+    "to",
+    "cc",
+    "in_reply_to",
+    "reasoning",
+  ],
 } as const;
 
 export async function runDraft(input: DraftInput): Promise<DraftResult> {
@@ -106,11 +136,13 @@ export async function runDraft(input: DraftInput): Promise<DraftResult> {
       );
 
       return {
+        kind: parsed.kind,
         subject: parsed.subject,
         body: parsed.body,
         to: parsed.to,
         cc: parsed.cc,
         inReplyTo: parsed.inReplyTo ?? input.inReplyTo,
+        reasoning: parsed.reasoning,
         usageId: rec.usageId,
       };
     }
@@ -118,11 +150,13 @@ export async function runDraft(input: DraftInput): Promise<DraftResult> {
 }
 
 export function parseDraftOutput(raw: string): {
+  kind: "draft" | "clarify";
   subject: string;
   body: string;
   to: string[];
   cc: string[];
   inReplyTo: string | null;
+  reasoning: string;
 } {
   let j: unknown;
   try {
@@ -131,6 +165,11 @@ export function parseDraftOutput(raw: string): {
     j = {};
   }
   const o = (j ?? {}) as Record<string, unknown>;
+  // Default to "draft" on any unparseable kind so we don't accidentally
+  // dispatch a clarify when the model fell over — surfacing a draft for
+  // user review is the safer side of the failure mode.
+  const kind: "draft" | "clarify" =
+    o.kind === "clarify" ? "clarify" : "draft";
   const subject =
     typeof o.subject === "string" && o.subject.trim().length > 0
       ? o.subject
@@ -147,7 +186,11 @@ export function parseDraftOutput(raw: string): {
     : [];
   const inReplyTo =
     typeof o.in_reply_to === "string" ? o.in_reply_to : null;
-  return { subject, body, to, cc, inReplyTo };
+  const reasoning =
+    typeof o.reasoning === "string" && o.reasoning.trim().length > 0
+      ? o.reasoning
+      : "Draft generated without explicit reasoning.";
+  return { kind, subject, body, to, cc, inReplyTo, reasoning };
 }
 
 function buildUserContent(input: DraftInput): string {
