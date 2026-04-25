@@ -112,6 +112,7 @@ export default async function InboxItemPage({
 
   const { draft, inbox } = row;
   const paused = draft.status === "paused";
+  const sent = draft.status === "sent";
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 py-2">
@@ -186,7 +187,7 @@ export default async function InboxItemPage({
             </Link>
           </div>
         </div>
-      ) : (
+      ) : sent ? null : (
         <div className="flex items-center gap-2 text-small text-[hsl(var(--muted-foreground))]">
           <AlertTriangle size={14} strokeWidth={1.75} />
           <span>{actionLabel(draft.action)}</span>
@@ -205,6 +206,7 @@ export default async function InboxItemPage({
           initialTo={draft.draftTo}
           initialCc={draft.draftCc}
           undoWindowSeconds={undoWindowSeconds}
+          sentAt={draft.sentAt ?? null}
         />
       ) : draft.action === "ask_clarifying" && !paused ? (
         <DraftActions
@@ -216,6 +218,7 @@ export default async function InboxItemPage({
           initialTo={[]}
           initialCc={[]}
           undoWindowSeconds={undoWindowSeconds}
+          sentAt={draft.sentAt ?? null}
         />
       ) : null}
 
