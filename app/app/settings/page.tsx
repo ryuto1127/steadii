@@ -92,12 +92,18 @@ export default async function SettingsPage() {
         undoWindowSeconds: users.undoWindowSeconds,
         highRiskNotifyImmediate: users.highRiskNotifyImmediate,
         autonomySendEnabled: users.autonomySendEnabled,
+        preferredCurrency: users.preferredCurrency,
       })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1)
       .then((rows) => rows[0] ?? null),
   ]);
+  const tBilling = await getTranslations("billing");
+  const fmt = (template: string, vars: Record<string, string | number>) =>
+    template.replace(/\{(\w+)\}/g, (_, k) =>
+      k in vars ? String(vars[k]) : `{${k}}`
+    );
 
   const calendarConnected = googleAcct?.scope?.includes("calendar") ?? false;
   const gmailConnected = googleAcct?.scope?.includes("gmail") ?? false;
@@ -405,7 +411,29 @@ export default async function SettingsPage() {
           />
         </div>
         <div className="mt-4">
-          <BillingActions effectivePlan={effective.plan} />
+          <BillingActions
+            effectivePlan={effective.plan}
+            currency={userPrefs?.preferredCurrency ?? "usd"}
+            copy={{
+              adminBypass: tBilling("actions.admin_bypass"),
+              upgradePro: (price) =>
+                fmt(tBilling("actions.upgrade_pro"), { price }),
+              upgradeStudent: (price) =>
+                fmt(tBilling("actions.upgrade_student"), { price }),
+              opening: tBilling("actions.opening"),
+              manageSub: tBilling("actions.manage_sub"),
+              addCredits: tBilling("actions.add_credits"),
+              topup500: (price) =>
+                fmt(tBilling("actions.topup_500"), { price }),
+              topup2000: (price) =>
+                fmt(tBilling("actions.topup_2000"), { price }),
+              topupExpiry: tBilling("actions.topup_expiry"),
+              steppingAway: tBilling("actions.stepping_away"),
+              extendRetention: (price) =>
+                fmt(tBilling("actions.extend_retention"), { price }),
+              extendRetentionHelp: tBilling("actions.extend_retention_help"),
+            }}
+          />
         </div>
       </Section>
 

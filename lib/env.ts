@@ -30,6 +30,15 @@ const schema = z.object({
   STRIPE_PRICE_TOPUP_500: z.string().optional().default(""),
   STRIPE_PRICE_TOPUP_2000: z.string().optional().default(""),
   STRIPE_PRICE_DATA_RETENTION: z.string().optional().default(""),
+  // JPY mirror of the above. Populated alongside the USD vars by
+  // `scripts/stripe-setup.ts`. Routes select between USD and JPY at request
+  // time based on the user's preferred currency (locale on first checkout).
+  STRIPE_PRICE_PRO_MONTHLY_JPY: z.string().optional().default(""),
+  STRIPE_PRICE_PRO_YEARLY_JPY: z.string().optional().default(""),
+  STRIPE_PRICE_STUDENT_4MO_JPY: z.string().optional().default(""),
+  STRIPE_PRICE_TOPUP_500_JPY: z.string().optional().default(""),
+  STRIPE_PRICE_TOPUP_2000_JPY: z.string().optional().default(""),
+  STRIPE_PRICE_DATA_RETENTION_JPY: z.string().optional().default(""),
   STRIPE_COUPON_ADMIN: z.string().optional().default(""),
   STRIPE_COUPON_FRIEND_3MO: z.string().optional().default(""),
   ENCRYPTION_KEY: z.string().min(1),

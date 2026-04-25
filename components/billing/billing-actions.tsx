@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import {
+  priceLabelsFor,
+  type SupportedCurrency,
+} from "@/lib/billing/format-price";
 
 type BusyKey =
   | "checkout"
@@ -11,9 +15,27 @@ type BusyKey =
 
 export function BillingActions({
   effectivePlan,
+  currency,
+  copy,
 }: {
   effectivePlan: "free" | "student" | "pro" | "admin";
+  currency: SupportedCurrency;
+  copy: {
+    adminBypass: string;
+    upgradePro: (price: string) => string;
+    upgradeStudent: (price: string) => string;
+    opening: string;
+    manageSub: string;
+    addCredits: string;
+    topup500: (price: string) => string;
+    topup2000: (price: string) => string;
+    topupExpiry: string;
+    steppingAway: string;
+    extendRetention: (price: string) => string;
+    extendRetentionHelp: string;
+  };
 }) {
+  const labels = priceLabelsFor(currency);
   const [busy, setBusy] = useState<BusyKey | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,7 +72,7 @@ export function BillingActions({
     <div>
       {effectivePlan === "admin" && (
         <p className="mb-2 text-small text-[hsl(var(--muted-foreground))]">
-          You&apos;re on an admin bypass — no Stripe subscription needed.
+          {copy.adminBypass}
         </p>
       )}
       <div className="flex flex-wrap gap-2">
@@ -62,12 +84,15 @@ export function BillingActions({
                 go("/api/stripe/checkout", "checkout", {
                   plan_tier: "pro",
                   plan_interval: "monthly",
+                  currency,
                 })
               }
               disabled={busy !== null}
               className="inline-flex items-center rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-40"
             >
-              {busy === "checkout" ? "Opening…" : "Upgrade to Pro · $20/mo"}
+              {busy === "checkout"
+                ? copy.opening
+                : copy.upgradePro(labels.pro_monthly)}
             </button>
             <button
               type="button"
@@ -75,14 +100,15 @@ export function BillingActions({
                 go("/api/stripe/checkout", "checkout", {
                   plan_tier: "student",
                   plan_interval: "four_month",
+                  currency,
                 })
               }
               disabled={busy !== null}
               className="inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))] disabled:opacity-40"
             >
               {busy === "checkout"
-                ? "Opening…"
-                : "Student · $40 / 4 months (.edu required)"}
+                ? copy.opening
+                : copy.upgradeStudent(labels.student_4mo)}
             </button>
           </>
         )}
@@ -98,7 +124,7 @@ export function BillingActions({
             disabled={busy !== null}
             className="inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))] disabled:opacity-40"
           >
-            {busy === "portal" ? "Opening…" : "Manage subscription"}
+            {busy === "portal" ? copy.opening : copy.manageSub}
           </button>
         )}
       </div>
@@ -112,58 +138,67 @@ export function BillingActions({
       {(effectivePlan === "pro" || effectivePlan === "student") && (
         <div className="mt-4">
           <p className="mb-2 text-small text-[hsl(var(--muted-foreground))]">
-            Add credits
+            {copy.addCredits}
           </p>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() =>
-                go("/api/stripe/topup", "topup_500", { pack: "topup_500" })
+                go("/api/stripe/topup", "topup_500", {
+                  pack: "topup_500",
+                  currency,
+                })
               }
               disabled={busy !== null}
               className="inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))] disabled:opacity-40"
             >
-              {busy === "topup_500" ? "Opening…" : "+500 credits · $10"}
+              {busy === "topup_500"
+                ? copy.opening
+                : copy.topup500(labels.topup_500)}
             </button>
             <button
               type="button"
               onClick={() =>
-                go("/api/stripe/topup", "topup_2000", { pack: "topup_2000" })
+                go("/api/stripe/topup", "topup_2000", {
+                  pack: "topup_2000",
+                  currency,
+                })
               }
               disabled={busy !== null}
               className="inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))] disabled:opacity-40"
             >
               {busy === "topup_2000"
-                ? "Opening…"
-                : "+2000 credits · $30 (save 25%)"}
+                ? copy.opening
+                : copy.topup2000(labels.topup_2000)}
             </button>
           </div>
           <p className="mt-2 text-[11px] text-[hsl(var(--muted-foreground))]">
-            Top-up credits expire 90 days after purchase.
+            {copy.topupExpiry}
           </p>
         </div>
       )}
 
       <div className="mt-4">
         <p className="mb-2 text-small text-[hsl(var(--muted-foreground))]">
-          Stepping away?
+          {copy.steppingAway}
         </p>
         <button
           type="button"
           onClick={() =>
             go("/api/stripe/topup", "data_retention", {
               pack: "data_retention",
+              currency,
             })
           }
           disabled={busy !== null}
           className="inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))] disabled:opacity-40"
         >
           {busy === "data_retention"
-            ? "Opening…"
-            : "Extend data retention · $10 (12 months)"}
+            ? copy.opening
+            : copy.extendRetention(labels.data_retention)}
         </button>
         <p className="mt-2 text-[11px] text-[hsl(var(--muted-foreground))]">
-          Default: 120-day grace after cancel. This extends to 12 months.
+          {copy.extendRetentionHelp}
         </p>
       </div>
 

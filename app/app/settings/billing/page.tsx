@@ -8,8 +8,15 @@ import { BillingActions } from "@/components/billing/billing-actions";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { getTranslations, getLocale } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
+
+function fmt(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k) =>
+    k in vars ? String(vars[k]) : `{${k}}`
+  );
+}
 
 export default async function BillingPage({
   searchParams,
@@ -28,28 +35,56 @@ export default async function BillingPage({
     .select({
       foundingMember: users.foundingMember,
       grandfatherPriceLockedUntil: users.grandfatherPriceLockedUntil,
+      preferredCurrency: users.preferredCurrency,
     })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
 
+  const t = await getTranslations("billing");
+  const locale = await getLocale();
+  const dateLocale = locale === "ja" ? "ja-JP" : undefined;
+  const currency = flagsRow?.preferredCurrency ?? "usd";
+
+  const planLabel = (() => {
+    if (effective.plan === "admin") return t("plan_admin");
+    if (effective.plan === "student") {
+      return effective.until
+        ? fmt(t("plan_student_renews"), {
+            date: effective.until.toLocaleDateString(dateLocale),
+          })
+        : t("plan_student");
+    }
+    if (effective.plan === "pro" && effective.source === "trial") {
+      return fmt(t("plan_pro_trial"), {
+        date: effective.until.toLocaleDateString(dateLocale),
+      });
+    }
+    if (effective.plan === "pro") {
+      return effective.until
+        ? fmt(t("plan_pro_renews"), {
+            date: effective.until.toLocaleDateString(dateLocale),
+          })
+        : t("plan_pro");
+    }
+    return t("plan_free");
+  })();
+
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-h1">Billing</h1>
+      <h1 className="text-h1">{t("page_title")}</h1>
       <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-        Stripe is in test mode for α. Charges won&apos;t post; subscription
-        state still round-trips.
+        {t("page_subtitle")}
       </p>
 
       {session_id && (
         <div className="mt-6 rounded-lg bg-[hsl(var(--primary)/0.1)] px-4 py-3 text-sm">
-          Checkout session completed. Your plan will update within a few
-          seconds (via the Stripe webhook).
+          {t("checkout_completed")}
         </div>
       )}
       {canceled && (
         <div className="mt-6 rounded-lg bg-[hsl(var(--surface-raised))] px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">
-          Checkout canceled. No change.
+          {t("checkout_canceled")}
         </div>
       )}
 
@@ -58,50 +93,37 @@ export default async function BillingPage({
           <span aria-hidden>✦</span>
           <span>
             <span className="font-medium text-[hsl(var(--primary))]">
-              Founding member.
+              {t("founding_member_label")}
             </span>{" "}
-            Your current price is locked in for life.
+            {t("founding_member_body")}
           </span>
         </div>
       )}
       {!flagsRow?.foundingMember && flagsRow?.grandfatherPriceLockedUntil && (
         <p className="mt-6 text-xs text-[hsl(var(--muted-foreground))]">
-          Price locked until{" "}
-          {flagsRow.grandfatherPriceLockedUntil.toLocaleDateString()}.
+          {fmt(t("price_locked_until"), {
+            date: flagsRow.grandfatherPriceLockedUntil.toLocaleDateString(
+              dateLocale
+            ),
+          })}
         </p>
       )}
 
       <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
-        <h2 className="text-lg font-medium">Current plan</h2>
+        <h2 className="text-lg font-medium">{t("current_plan")}</h2>
         <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
-          {effective.plan === "admin"
-            ? "Admin (flag) · unlimited"
-            : effective.plan === "student"
-            ? `Student${
-                effective.until
-                  ? ` · renews ${effective.until.toLocaleDateString()}`
-                  : ""
-              }`
-            : effective.plan === "pro" && effective.source === "trial"
-            ? `Pro (14-day trial) · ends ${effective.until.toLocaleDateString()}`
-            : effective.plan === "pro"
-            ? `Pro${
-                effective.until
-                  ? ` · renews ${effective.until.toLocaleDateString()}`
-                  : ""
-              }`
-            : "Free"}
+          {planLabel}
         </p>
 
         <div className="mt-5">
           <div className="flex items-baseline justify-between text-sm">
-            <span>Credits this cycle</span>
+            <span>{t("credits_this_cycle")}</span>
             <span className="font-mono text-xs">
-              {balance.used.toLocaleString()} /{" "}
-              {balance.limit.toLocaleString()}
+              {balance.used.toLocaleString(dateLocale)} /{" "}
+              {balance.limit.toLocaleString(dateLocale)}
               {effective.plan === "admin" && (
                 <span className="ml-1 text-[hsl(var(--muted-foreground))]">
-                  (unlimited)
+                  {t("credits_unlimited")}
                 </span>
               )}
             </span>
@@ -120,23 +142,27 @@ export default async function BillingPage({
           />
           <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
             {effective.plan === "admin"
-              ? "Admin bypass — quota not enforced."
-              : `${balance.remaining.toLocaleString()} credits remaining · resets ${balance.windowEnd.toLocaleDateString(
-                  undefined,
-                  { month: "short", day: "numeric" }
-                )}`}
+              ? t("admin_quota_unenforced")
+              : fmt(t("credits_remaining"), {
+                  remaining: balance.remaining.toLocaleString(dateLocale),
+                  date: balance.windowEnd.toLocaleDateString(dateLocale, {
+                    month: "short",
+                    day: "numeric",
+                  }),
+                })}
           </p>
           {balance.topupRemaining > 0 && (
             <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
-              + {balance.topupRemaining.toLocaleString()} top-up credits (expire
-              90 days after purchase)
+              {fmt(t("topup_remaining"), {
+                remaining: balance.topupRemaining.toLocaleString(dateLocale),
+              })}
             </p>
           )}
         </div>
 
         <div className="mt-5">
           <div className="flex items-baseline justify-between text-sm">
-            <span>Storage</span>
+            <span>{t("storage")}</span>
             <span className="font-mono text-xs">
               {prettyBytes(storage.usedBytes)} /{" "}
               {prettyBytes(storage.maxTotalBytes)}
@@ -158,7 +184,26 @@ export default async function BillingPage({
         </div>
       </section>
 
-      <BillingActions effectivePlan={effective.plan} />
+      <BillingActions
+        effectivePlan={effective.plan}
+        currency={currency}
+        copy={{
+          adminBypass: t("actions.admin_bypass"),
+          upgradePro: (price) => fmt(t("actions.upgrade_pro"), { price }),
+          upgradeStudent: (price) =>
+            fmt(t("actions.upgrade_student"), { price }),
+          opening: t("actions.opening"),
+          manageSub: t("actions.manage_sub"),
+          addCredits: t("actions.add_credits"),
+          topup500: (price) => fmt(t("actions.topup_500"), { price }),
+          topup2000: (price) => fmt(t("actions.topup_2000"), { price }),
+          topupExpiry: t("actions.topup_expiry"),
+          steppingAway: t("actions.stepping_away"),
+          extendRetention: (price) =>
+            fmt(t("actions.extend_retention"), { price }),
+          extendRetentionHelp: t("actions.extend_retention_help"),
+        }}
+      />
 
       {(effective.plan === "pro" || effective.plan === "student") && (
         <section className="mt-10 border-t border-[hsl(var(--border))] pt-6">
@@ -166,7 +211,7 @@ export default async function BillingPage({
             href="/app/settings/billing/cancel"
             className="text-xs text-[hsl(var(--muted-foreground))] underline-offset-2 hover:text-[hsl(var(--foreground))] hover:underline"
           >
-            Cancel subscription
+            {t("cancel_subscription")}
           </a>
         </section>
       )}

@@ -6,6 +6,10 @@ import { db } from "@/lib/db/client";
 import { subscriptions, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import {
+  priceIdForPack as priceIdForPackByCurrency,
+  resolveCheckoutCurrency,
+} from "@/lib/billing/currency";
 
 export const runtime = "nodejs";
 
@@ -16,32 +20,8 @@ export const runtime = "nodejs";
 
 const bodySchema = z.object({
   pack: z.enum(["topup_500", "topup_2000", "data_retention"]),
+  currency: z.enum(["usd", "jpy"]).optional(),
 });
-
-type Pack = z.infer<typeof bodySchema>["pack"];
-
-function priceIdForPack(
-  pack: Pack
-): { priceId: string | null; reason?: string } {
-  const e = env();
-  switch (pack) {
-    case "topup_500":
-      if (!e.STRIPE_PRICE_TOPUP_500)
-        return { priceId: null, reason: "STRIPE_PRICE_TOPUP_500 not configured" };
-      return { priceId: e.STRIPE_PRICE_TOPUP_500 };
-    case "topup_2000":
-      if (!e.STRIPE_PRICE_TOPUP_2000)
-        return { priceId: null, reason: "STRIPE_PRICE_TOPUP_2000 not configured" };
-      return { priceId: e.STRIPE_PRICE_TOPUP_2000 };
-    case "data_retention":
-      if (!e.STRIPE_PRICE_DATA_RETENTION)
-        return {
-          priceId: null,
-          reason: "STRIPE_PRICE_DATA_RETENTION not configured",
-        };
-      return { priceId: e.STRIPE_PRICE_DATA_RETENTION };
-  }
-}
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -56,7 +36,22 @@ export async function POST(request: NextRequest) {
   }
   const pack = parsed.data.pack;
 
-  const picked = priceIdForPack(pack);
+  const [userRow] = await db
+    .select({
+      preferredCurrency: users.preferredCurrency,
+      email: users.email,
+      name: users.name,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const currency = await resolveCheckoutCurrency({
+    explicit: parsed.data.currency,
+    persisted: userRow?.preferredCurrency ?? null,
+    request,
+  });
+
+  const picked = priceIdForPackByCurrency({ pack, currency });
   if (!picked.priceId) {
     return NextResponse.json(
       { error: picked.reason ?? "invalid pack" },
@@ -74,17 +69,19 @@ export async function POST(request: NextRequest) {
 
   let customerId = existing?.stripeCustomerId ?? null;
   if (!customerId) {
-    const [u] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
     const customer = await stripe().customers.create({
-      email: u?.email ?? session.user.email ?? undefined,
-      name: u?.name ?? session.user.name ?? undefined,
+      email: userRow?.email ?? session.user.email ?? undefined,
+      name: userRow?.name ?? session.user.name ?? undefined,
       metadata: { steadii_user_id: userId },
     });
     customerId = customer.id;
+  }
+
+  if ((userRow?.preferredCurrency ?? "usd") !== currency) {
+    await db
+      .update(users)
+      .set({ preferredCurrency: currency })
+      .where(eq(users.id, userId));
   }
 
   const checkout = await stripe().checkout.sessions.create({
