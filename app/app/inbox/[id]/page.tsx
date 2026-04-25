@@ -207,6 +207,7 @@ export default async function InboxItemPage({
           initialCc={draft.draftCc}
           undoWindowSeconds={undoWindowSeconds}
           sentAt={draft.sentAt ?? null}
+          autoSent={draft.autoSent ?? false}
         />
       ) : draft.action === "ask_clarifying" && !paused ? (
         <DraftActions
@@ -219,6 +220,7 @@ export default async function InboxItemPage({
           initialCc={[]}
           undoWindowSeconds={undoWindowSeconds}
           sentAt={draft.sentAt ?? null}
+          autoSent={draft.autoSent ?? false}
         />
       ) : null}
 
