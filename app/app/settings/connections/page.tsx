@@ -8,16 +8,17 @@ import {
   disconnectNotionAction,
   repairSetupAction,
 } from "@/app/(auth)/onboarding/actions";
+import { importNotionAction } from "./actions";
 
 export default async function ConnectionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ repaired?: string }>;
+  searchParams: Promise<{ repaired?: string; imported?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
-  const { repaired } = await searchParams;
+  const { repaired, imported } = await searchParams;
 
   const [notionConn] = await db
     .select()
@@ -42,6 +43,11 @@ export default async function ConnectionsPage({
           Setup re-run successfully. Your Steadii workspace has been re-created in Notion.
         </div>
       )}
+      {imported && (
+        <div className="mt-6 rounded-lg bg-[hsl(var(--primary)/0.1)] px-4 py-3 text-sm text-[hsl(var(--foreground))]">
+          Imported {imported} rows from Notion into Steadii.
+        </div>
+      )}
 
       <section className="mt-10 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
         <h2 className="text-lg font-medium">Notion</h2>
@@ -52,6 +58,14 @@ export default async function ConnectionsPage({
               {notionConn.setupCompletedAt ? " — setup complete." : " — setup pending."}
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
+              <form action={importNotionAction}>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))] transition hover:opacity-90"
+                >
+                  Import from Notion
+                </button>
+              </form>
               <form action={repairSetupAction}>
                 <button
                   type="submit"
@@ -76,6 +90,8 @@ export default async function ConnectionsPage({
               </form>
             </div>
             <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
+              Import copies your Notion classes, mistakes, syllabi, and assignments
+              into Steadii&rsquo;s Postgres store (idempotent — safe to re-run).
               Re-run setup if the Steadii page has been deleted from Notion or the
               four databases are out of sync.
             </p>
