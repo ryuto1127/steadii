@@ -210,13 +210,15 @@ In the QStash console → **Schedules** → **Create**:
 |---|---|---|---|
 | `https://mysteadii.xyz/api/cron/digest` | `0 * * * *` | POST | Hourly. NA timezones are all whole-hour offsets, so hourly is enough; switch to `*/30` only if onboarding India / Newfoundland users. |
 | `https://mysteadii.xyz/api/cron/send-queue` | `*/5 * * * *` | POST | Every 5 minutes. The 20s undo window is enforced client-side; this cadence only affects time-from-send-click to Gmail API call. |
+| `https://mysteadii.xyz/api/cron/ingest-sweep` | `*/15 * * * *` | POST | Every 15 minutes. Fans out `ingestLast24h` across all gmail-scoped users, bypassing the page-render auto-ingest 24h cooldown. Without this, new emails only surface when the user manually refreshes Settings. |
 
 Body: leave empty. The signing key in headers handles auth.
 
 ### Verifying
 
-- After both schedules are created, wait one tick and check Sentry for
-  `cron.digest.tick` / `cron.send_queue.tick` spans with `op=cron`.
+- After all three schedules are created, wait one tick and check Sentry for
+  `cron.digest.tick` / `cron.send_queue.tick` / `cron.ingest_sweep.tick`
+  spans with `op=cron`.
 - Or hit the QStash console → Schedule → **Logs** for per-tick HTTP
   status (expect 200).
 - Manual trigger: QStash console → Schedule → **Publish now**.
