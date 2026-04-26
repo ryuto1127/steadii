@@ -10,8 +10,33 @@ import {
   syllabi,
   usageEvents,
 } from "@/lib/db/schema";
-import { and, eq, gte, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import type { ToolExecutor } from "./types";
+
+// A chat counts as a "study session" only when the agent did work
+// in an academic surface. Utility tool calls (Gmail triage, calendar
+// CRUD, Google Tasks) inflate the metric without representing study
+// activity, so they're excluded. Grow this list when new academic
+// tools land — keep it explicit rather than blanket-including
+// everything-but-utility, so a new utility tool added in the future
+// doesn't silently start counting.
+export const ACADEMIC_TOOL_NAMES = [
+  "summarize_week",
+  "read_syllabus_full_text",
+  "classroom_list_courses",
+  "classroom_list_coursework",
+  "classroom_list_announcements",
+  // Notion is the canonical knowledge-management surface, treat any
+  // notion_* invocation as academic activity for v1
+  "notion_search_pages",
+  "notion_get_page",
+  "notion_create_page",
+  "notion_update_page",
+  "notion_delete_page",
+  "notion_query_database",
+  "notion_create_row",
+  "notion_update_row",
+] as const;
 
 export type WeekSummary = {
   window: { start: string; end: string };
@@ -65,12 +90,14 @@ export async function computeWeekSummary(userId: string): Promise<WeekSummary> {
   return value;
 }
 
-// A chat counts as a "study session" only when the agent actually did some
-// academic work inside it — i.e. at least one message carries a tool call
-// (assistant role with `tool_calls` populated, or a `tool` role reply). A
-// chatroom full of casual "hi"s never invokes tools, so it's correctly
-// excluded. One qualifying chat = one session for the week, regardless of
-// how many tool calls it contains.
+// A chat counts as a "study session" only when the agent invoked an
+// academic tool inside it (see ACADEMIC_TOOL_NAMES). Utility tool calls
+// (Gmail triage, calendar CRUD, Google Tasks) are excluded so chats about
+// email or scheduling don't inflate the dashboard "Study sessions" count.
+// One qualifying chat = one session for the week, regardless of how many
+// academic tool calls it contains. We check `messages.tool_calls` on the
+// originating assistant rows (the canonical record of what the agent did)
+// rather than the `role: "tool"` reply rows.
 async function countChatsThisWeek(userId: string, since: Date): Promise<number> {
   const [row] = await db
     .select({ count: sql<number>`count(distinct ${chats.id})` })
@@ -81,7 +108,12 @@ async function countChatsThisWeek(userId: string, since: Date): Promise<number> 
         eq(chats.userId, userId),
         isNull(chats.deletedAt),
         gte(messages.createdAt, since),
-        or(isNotNull(messages.toolCalls), eq(messages.role, "tool"))
+        sql`EXISTS (
+          SELECT 1 FROM jsonb_array_elements(${messages.toolCalls}) AS tc
+          WHERE tc->'function'->>'name' = ANY(${sql.raw(
+            `ARRAY[${ACADEMIC_TOOL_NAMES.map((n) => `'${n}'`).join(",")}]::text[]`
+          )})
+        )`
       )
     );
   return Number(row?.count ?? 0);
