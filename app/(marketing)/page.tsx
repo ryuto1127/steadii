@@ -31,14 +31,17 @@ export default async function LandingPage() {
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-4">
             <Link
-              href="/login"
+              href="/request-access"
               className="inline-flex items-center rounded-md bg-[hsl(var(--primary))] px-4 py-2 text-body font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
             >
-              {t("landing.cta")}
+              {t("landing.cta_request_access")}
             </Link>
-            <span className="text-small text-[hsl(var(--muted-foreground))]">
-              {t("landing.invite_hint")}
-            </span>
+            <Link
+              href="/login"
+              className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+            >
+              {t("landing.cta_already_approved")}
+            </Link>
           </div>
         </header>
 
