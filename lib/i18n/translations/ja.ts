@@ -10,6 +10,8 @@ export const ja: Messages = {
     subhead:
       "Steadiiが大学のメールをトリアージし、アプリを開く前に返信案を用意します。すべての理由が見え、いつでも編集でき、送信は必ずあなたが承認します。",
     cta: "Googleで続ける",
+    cta_request_access: "α アクセスをリクエスト",
+    cta_already_approved: "既に承認済の方: サインイン",
     alpha: "α版 — 招待制",
     invite_hint: "α期間中は招待制です。",
     value_props: {
@@ -96,6 +98,43 @@ export const ja: Messages = {
     title: "おかえりなさい",
     subtitle: "大学のGoogleアカウントでサインインしてください。",
     button: "Googleで続ける",
+  },
+  request_access: {
+    title: "α アクセスをリクエスト",
+    subtitle:
+      "Steadii は α 期間中、招待制です。簡単な情報をご記入ください。承認次第メールでお知らせします（通常 24 時間以内）。",
+    email_label: "メールアドレス",
+    name_label: "名前（任意）",
+    university_label: "大学（任意）",
+    reason_label: "Steadii で何を解決したいですか？（任意）",
+    reason_placeholder: "例: CS のメールが多すぎてトリアージを手伝ってほしい。",
+    submit: "リクエストを送信",
+    error_invalid_email: "正しいメールアドレスを入力してください。",
+    error_rate_limited:
+      "短時間に多くのリクエストが届きました。1 時間後にお試しください。",
+    back_to_landing: "← トップへ戻る",
+  },
+  access_pending: {
+    title_ja: "ありがとうございます。",
+    title_en: "Thanks — request received.",
+    body_ja:
+      "承認されたら ご記入の email にお知らせします。通常 24 時間以内に確認します。",
+    body_en:
+      "We'll notify you by email when approved (usually within 24h).",
+    already_submitted_hint:
+      "既にリクエストを受け付けています。承認次第メールでお知らせします。",
+    back_to_landing: "← トップへ戻る",
+  },
+  access_denied: {
+    title_ja: "α は招待制です。",
+    title_en: "α is invite-only.",
+    body_ja:
+      "ご利用希望の方は下のメールアドレスまでご連絡ください。",
+    body_en: "Contact the address below for access.",
+    contact_label_ja: "お問い合わせ:",
+    contact_label_en: "Contact:",
+    contact_email: "hello@mysteadii.xyz",
+    request_access_cta: "α アクセスをリクエスト →",
   },
   app: {
     welcome: "{name}さん、ようこそ。",

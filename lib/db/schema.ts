@@ -1485,3 +1485,47 @@ export type IntegrationSuggestionImpression =
   typeof integrationSuggestionImpressions.$inferSelect;
 export type IntegrationSuggestionDismissal =
   typeof integrationSuggestionDismissals.$inferSelect;
+
+// Phase 7 W-Waitlist — α access control. Public form writes one row per
+// request; admin gates approval; signIn callback checks status before
+// letting Google OAuth complete in production. Email is canonicalised
+// to lower-case on write so the lookup in the signIn callback is a
+// single equality check.
+export const waitlistRequests = pgTable(
+  "waitlist_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    name: text("name"),
+    university: text("university"),
+    reason: text("reason"),
+    status: text("status")
+      .$type<"pending" | "approved" | "denied">()
+      .notNull()
+      .default("pending"),
+    requestedAt: timestamp("requested_at", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+    approvedAt: timestamp("approved_at", { mode: "date" }),
+    emailSentAt: timestamp("email_sent_at", { mode: "date" }),
+    googleTestUserAddedAt: timestamp("google_test_user_added_at", {
+      mode: "date",
+    }),
+    signedInAt: timestamp("signed_in_at", { mode: "date" }),
+    approvedBy: uuid("approved_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    notes: text("notes"),
+    stripePromotionCode: text("stripe_promotion_code"),
+    inviteUrl: text("invite_url"),
+  },
+  (t) => ({
+    emailUniqueIdx: uniqueIndex("waitlist_requests_email_unique_idx").on(
+      t.email
+    ),
+    statusIdx: index("waitlist_requests_status_idx").on(t.status),
+  })
+);
+
+export type WaitlistRequest = typeof waitlistRequests.$inferSelect;
+export type NewWaitlistRequest = typeof waitlistRequests.$inferInsert;

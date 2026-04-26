@@ -4,9 +4,16 @@ import Google from "next-auth/providers/google";
 import MicrosoftEntraId from "next-auth/providers/microsoft-entra-id";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { users, accounts, sessions, verificationTokens } from "@/lib/db/schema";
+import {
+  users,
+  accounts,
+  sessions,
+  verificationTokens,
+  waitlistRequests,
+} from "@/lib/db/schema";
 import { EncryptedDrizzleAdapter } from "./encrypted-adapter";
 import { encryptOAuthToken } from "./oauth-tokens";
+import { env } from "@/lib/env";
 
 // Providers whose accounts row we re-sync on every sign-in so scope/token
 // upgrades (re-consent with a wider scope) propagate to existing users.
@@ -73,31 +80,71 @@ export const authConfig = {
     // the first sign-in (row does not exist yet) and linkAccount handles
     // the initial insert as before.
     async signIn({ user, account }) {
-      if (!user?.id || !account) return true;
-      if (!REFRESHABLE_PROVIDERS.has(account.provider)) return true;
+      // Existing scope/token refresh — runs unconditionally so re-consents
+      // mid-life propagate to the accounts row even on production with
+      // waitlist gating active.
+      if (user?.id && account && REFRESHABLE_PROVIDERS.has(account.provider)) {
+        const update: Record<string, unknown> = { updatedAt: new Date() };
+        if (typeof account.scope === "string") update.scope = account.scope;
+        if (typeof account.access_token === "string")
+          update.access_token = encryptOAuthToken(account.access_token);
+        if (typeof account.refresh_token === "string")
+          update.refresh_token = encryptOAuthToken(account.refresh_token);
+        if (typeof account.id_token === "string")
+          update.id_token = encryptOAuthToken(account.id_token);
+        if (typeof account.expires_at === "number")
+          update.expires_at = account.expires_at;
+        if (typeof account.token_type === "string")
+          update.token_type = account.token_type;
 
-      const update: Record<string, unknown> = { updatedAt: new Date() };
-      if (typeof account.scope === "string") update.scope = account.scope;
-      if (typeof account.access_token === "string")
-        update.access_token = encryptOAuthToken(account.access_token);
-      if (typeof account.refresh_token === "string")
-        update.refresh_token = encryptOAuthToken(account.refresh_token);
-      if (typeof account.id_token === "string")
-        update.id_token = encryptOAuthToken(account.id_token);
-      if (typeof account.expires_at === "number")
-        update.expires_at = account.expires_at;
-      if (typeof account.token_type === "string")
-        update.token_type = account.token_type;
+        await db
+          .update(accounts)
+          .set(update)
+          .where(
+            and(
+              eq(accounts.provider, account.provider),
+              eq(accounts.providerAccountId, account.providerAccountId)
+            )
+          );
+      }
 
+      // α access waitlist gate. Only enforced on production Google sign-in;
+      // dev/preview accept any account so the engineer can test without
+      // seeding waitlist rows. Microsoft sign-in is connection-only (the
+      // primary identity provider is still Google) so it bypasses too.
+      if (account?.provider !== "google") return true;
+      if (env().NODE_ENV !== "production") return true;
+
+      const email = user?.email?.toLowerCase();
+      if (!email) return false;
+
+      // is_admin bypass — Ryuto's account has is_admin=true so an empty
+      // waitlist table never locks the founder out of his own app.
+      const [adminCheck] = await db
+        .select({ isAdmin: users.isAdmin })
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+      if (adminCheck?.isAdmin) return true;
+
+      const [request] = await db
+        .select({ status: waitlistRequests.status })
+        .from(waitlistRequests)
+        .where(eq(waitlistRequests.email, email))
+        .limit(1);
+
+      if (!request) return "/access-denied?reason=not-requested";
+      if (request.status === "pending")
+        return "/access-pending?already-submitted";
+      if (request.status === "denied") return "/access-denied?reason=denied";
+
+      // Approved — record the first sign-in timestamp so the admin page
+      // can tell which approved users have actually onboarded.
       await db
-        .update(accounts)
-        .set(update)
-        .where(
-          and(
-            eq(accounts.provider, account.provider),
-            eq(accounts.providerAccountId, account.providerAccountId)
-          )
-        );
+        .update(waitlistRequests)
+        .set({ signedInAt: new Date() })
+        .where(eq(waitlistRequests.email, email));
+
       return true;
     },
     jwt({ token, user }) {

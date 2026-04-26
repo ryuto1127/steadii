@@ -72,6 +72,10 @@ export const BUCKETS = {
   syllabusExtract: { capacity: 10, refillPerSec: 10 / 300 },
   notesExtract: { capacity: 10, refillPerSec: 10 / 300 },
   chatAttachment: { capacity: 30, refillPerSec: 30 / 60 },
+  // Public /request-access POST. Per-IP, 10 / hour. Burst-friendly (the
+  // capacity is the full hour's quota) so legit retries don't trip on the
+  // first refill tick.
+  waitlistRequest: { capacity: 10, refillPerSec: 10 / 3600 },
 } as const satisfies Record<string, BucketConfig>;
 
 // Per-plan chat caps from project_decisions.md. Hourly + daily enforced
