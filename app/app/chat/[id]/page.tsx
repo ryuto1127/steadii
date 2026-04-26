@@ -45,19 +45,69 @@ export default async function SingleChatPage({
     byMessage.get(a.messageId)!.push(a);
   }
 
+  // Tool-result messages are stored as their own rows (role: "tool",
+  // content: serialized JSON) so the orchestrator can rebuild the
+  // OpenAI conversation on resume. Index them by toolCallId so we can
+  // re-attach them to the assistant turn that invoked them, instead of
+  // rendering raw JSON in the message list.
+  const toolResultByCallId = new Map<string, string>();
+  for (const m of msgs) {
+    if (m.role === "tool" && m.toolCallId && !m.deletedAt) {
+      toolResultByCallId.set(m.toolCallId, m.content);
+    }
+  }
+
+  type StoredToolCall = {
+    id: string;
+    type: "function";
+    function: { name: string; arguments: string };
+  };
+
+  const safeJsonParse = (s: string | null | undefined): unknown => {
+    if (s == null || s === "") return undefined;
+    try {
+      return JSON.parse(s);
+    } catch {
+      return s;
+    }
+  };
+
   const visible = msgs
-    .filter((m) => !m.deletedAt)
-    .map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      attachments: (byMessage.get(m.id) ?? []).map((a) => ({
-        id: a.id,
-        kind: a.kind,
-        url: a.url,
-        filename: a.filename,
-      })),
-    }));
+    .filter((m) => !m.deletedAt && m.role !== "tool")
+    .map((m) => {
+      const storedCalls = Array.isArray(m.toolCalls)
+        ? (m.toolCalls as StoredToolCall[])
+        : [];
+      const items =
+        m.role === "assistant" && storedCalls.length > 0
+          ? storedCalls.map((c) => {
+              const rawResult = toolResultByCallId.get(c.id);
+              return {
+                kind: "tool" as const,
+                event: {
+                  id: c.id,
+                  toolName: c.function.name,
+                  status:
+                    rawResult === undefined ? ("running" as const) : ("done" as const),
+                  args: safeJsonParse(c.function.arguments),
+                  result: rawResult !== undefined ? safeJsonParse(rawResult) : undefined,
+                },
+              };
+            })
+          : undefined;
+      return {
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        items,
+        attachments: (byMessage.get(m.id) ?? []).map((a) => ({
+          id: a.id,
+          kind: a.kind,
+          url: a.url,
+          filename: a.filename,
+        })),
+      };
+    });
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col">

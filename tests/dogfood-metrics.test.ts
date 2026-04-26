@@ -7,38 +7,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Row = Record<string, unknown>;
 
-// Each call to db.select(...).from(...).where(...).groupBy(...) returns
-// the next prepared payload from this queue. Order matters and matches
-// the order in computeAgentMetrics.
+// Each call to db.select(...).from(...).where(...) returns the next
+// prepared payload from this queue. Order matters and matches the
+// order in computeAgentMetrics. computeAgentMetrics has two query
+// shapes: `.where().groupBy()` (group queries) and `.where()` (count
+// queries that await directly), so the mock returns a thenable with
+// `.groupBy` attached — both terminals resolve to the same row.
 const responses: Row[][] = [];
 
-vi.mock("@/lib/db/client", () => ({
-  db: {
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          groupBy: async () => responses.shift() ?? [],
-          // For the reviewable count queries — no groupBy after where.
-          then: undefined,
-        }),
-      }),
-    }),
-  },
-}));
-
-// computeAgentMetrics sometimes calls .where(...) and awaits directly
-// without groupBy (the count queries). The chain we mocked above has
-// `where` returning an object that's both groupBy-able AND awaitable.
-// vitest's vi.mock + drizzle's chain shape together force a manual proxy
-// to support both patterns. Override below.
-vi.mock("@/lib/db/client", async () => {
+vi.mock("@/lib/db/client", () => {
   const mock = {
     select: () => ({
       from: () => ({
         where: () => {
           const next = responses.shift() ?? [];
-          // Return a thenable so `await db.select().from().where()`
-          // works AND a groupBy method that yields the same payload.
           const thenable = Promise.resolve(next);
           (thenable as unknown as { groupBy: () => Promise<Row[]> }).groupBy =
             () => Promise.resolve(next);
