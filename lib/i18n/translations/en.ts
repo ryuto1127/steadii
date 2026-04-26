@@ -45,6 +45,16 @@ type MessagesShape = {
     calendar: string;
     settings: string;
   };
+  classes: {
+    tabs: {
+      syllabus: string;
+      assignments: string;
+      mistakes: string;
+      chats: string;
+    };
+    no_assignments_title: string;
+    no_assignments_desc: string;
+  };
   login: { title: string; subtitle: string; button: string };
   app: { welcome: string; empty_state: string };
   home: {
@@ -216,7 +226,7 @@ export const en: MessagesShape = {
       },
       yours: {
         title: "Your data stays yours",
-        body: "Verbatim mistakes, syllabi, and assignments. Yours to read, search, and export — never locked in.",
+        body: "Verbatim mistakes, syllabi, and tasks. Yours to read, search, and export — never locked in.",
       },
     },
     mock: {
@@ -252,6 +262,19 @@ export const en: MessagesShape = {
     calendar: "Calendar",
     settings: "Settings",
   },
+  classes: {
+    tabs: {
+      syllabus: "Syllabus",
+      // "Tasks" is the user-facing label; the URL key, schema table, and
+      // route handler all stay `assignments` to avoid a migration.
+      assignments: "Tasks",
+      mistakes: "Mistakes",
+      chats: "Chats",
+    },
+    no_assignments_title: "No tasks yet.",
+    no_assignments_desc:
+      "Ask Steadii to add one from chat, e.g. '物理の課題を追加して'.",
+  },
   login: {
     title: "Welcome back",
     subtitle: "Sign in with your university Google account.",
@@ -273,7 +296,7 @@ export const en: MessagesShape = {
     generate_practice_action: "Practice",
     welcome_title: "Welcome to Steadii",
     welcome_body:
-      "Connect your first class to start seeing today's schedule, due assignments, and recent activity.",
+      "Connect your first class to start seeing today's schedule, due tasks, and recent activity.",
     add_first_class: "+ Add your first class",
     welcome_input_placeholder:
       "or paste a syllabus, image, or ask anything…",
@@ -283,7 +306,7 @@ export const en: MessagesShape = {
     greeting_night: "Still up, {name}?",
     summary_ready: "Your academic summary for the week is ready.",
     full_calendar: "Full calendar",
-    assignments_remaining: "{count} assignments remaining today",
+    assignments_remaining: "{count} tasks remaining today",
     study_sessions: "study sessions",
     focus_summary: "You focused for {hours} hours this week. Great momentum!",
     focus_summary_empty: "Not enough sessions yet — a few more and we’ll have a trend.",
@@ -294,7 +317,7 @@ export const en: MessagesShape = {
     example_prompts: [
       "What's due this week?",
       "Explain this physics problem",
-      "Add a chemistry assignment for Friday",
+      "Add a chemistry task for Friday",
       "What's my next class?",
       "Summarize my CSC108 syllabus",
       "Generate similar practice problems",

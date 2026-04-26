@@ -64,6 +64,17 @@ export const ja: Messages = {
     calendar: "カレンダー",
     settings: "設定",
   },
+  classes: {
+    tabs: {
+      syllabus: "シラバス",
+      assignments: "タスク",
+      mistakes: "間違いノート",
+      chats: "チャット",
+    },
+    no_assignments_title: "タスクはまだありません。",
+    no_assignments_desc:
+      "チャットからSteadiiに追加を頼めます。例：「物理の課題を追加して」。",
+  },
   login: {
     title: "おかえりなさい",
     subtitle: "大学のGoogleアカウントでサインインしてください。",

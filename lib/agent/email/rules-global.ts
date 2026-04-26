@@ -42,8 +42,22 @@ export const AUTO_HIGH_KEYWORDS: Array<{
       "成績",
       "単位",
       "評定",
+      // JP α additions: status-of-enrollment / degree-loss language is the
+      // same severity as a grade appeal — surfacing late risks the student
+      // missing the action window.
+      "退学",
+      "停学",
+      "学位",
     ],
-    why: "Grade/transcript terms — always high-risk.",
+    why: "Grade/transcript/enrollment terms — always high-risk.",
+  },
+  {
+    ruleId: "GLOBAL_AUTO_HIGH_REGISTRATION",
+    // JP-specific fallback for course-registration disputes that arrive
+    // mid-cycle. 履修登録 is the JP-cycle's equivalent of "add/drop period"
+    // — late-fix windows are short and admin-mediated, so always high-risk.
+    words: ["履修登録の不備", "履修取消"],
+    why: "Course-registration dispute (JP cycle) — always high-risk.",
   },
   {
     ruleId: "GLOBAL_AUTO_HIGH_SCHOLARSHIP",
@@ -103,8 +117,20 @@ export const AUTO_MEDIUM_KEYWORDS: Array<{
       "締切",
       "延長",
       "オフィスアワー",
+      // JP α additions: routine-but-actionable academic vocabulary that
+      // shows up in professor / TA / lab emails on the JP cycle.
+      "履修",
+      "課題",
+      "レポート",
+      "ゼミ",
+      "研究室",
+      "期末試験",
+      "中間試験",
+      "出席",
+      "課題提出",
+      "試験",
     ],
-    why: "Deadline / reschedule / office-hour language.",
+    why: "Deadline / reschedule / office-hour / coursework language.",
   },
 ];
 
@@ -123,7 +149,17 @@ export const AUTO_LOW_KEYWORDS: Array<{
     // "Quick meeting Friday at 10am?" from a prof was being silently
     // dropped pre-fix.
     ruleId: "GLOBAL_AUTO_LOW_RSVP",
-    words: ["rsvp", "club", "お知らせ"],
+    words: [
+      "rsvp",
+      "club",
+      "お知らせ",
+      // JP α additions: extracurricular and informational events that
+      // shouldn't escalate into AUTO_MEDIUM.
+      "サークル",
+      "部活",
+      "説明会",
+      "懇親会",
+    ],
     why: "RSVP / club / announcement language.",
   },
 ];

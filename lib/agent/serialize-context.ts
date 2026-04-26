@@ -97,7 +97,7 @@ export function serializeContextForPrompt(ctx: UserContextPayload): string {
   lines.push(`# User context (Steadii runtime state)`);
   if (ctx.academicCounts) {
     lines.push(
-      `Academic store (Postgres): ${ctx.academicCounts.classes} classes, ${ctx.academicCounts.assignmentsActive} active assignments, ${ctx.academicCounts.mistakeNotes} mistake notes, ${ctx.academicCounts.syllabi} syllabi.`
+      `Academic store (Postgres): ${ctx.academicCounts.classes} classes, ${ctx.academicCounts.assignmentsActive} active tasks, ${ctx.academicCounts.mistakeNotes} mistake notes, ${ctx.academicCounts.syllabi} syllabi.`
     );
   }
   lines.push(
