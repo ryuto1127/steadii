@@ -281,6 +281,22 @@ export default async function SettingsPage() {
         </form>
       </Section>
 
+      <Section title="How your agent thinks">
+        <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
+          A read-only retrospective view of the agent's last decisions:
+          what it surfaced, why, and which mistakes / syllabus chunks /
+          calendar items / past emails grounded each draft. Glass-box
+          transparency, end to end.
+        </p>
+        <Link
+          href="/app/settings/how-your-agent-thinks"
+          className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
+        >
+          Open
+          <ExternalLink size={12} strokeWidth={1.5} />
+        </Link>
+      </Section>
+
       <Section title="Agent Rules">
         <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
           Transparency is the promise. Every rule the agent uses to triage

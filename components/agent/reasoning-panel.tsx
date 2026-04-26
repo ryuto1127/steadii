@@ -1,19 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
-// Splits the reasoning string into bullet lines when the model used bullet
-// markers (`-`, `•`, or numbered list). Otherwise renders as a paragraph.
-// Collapses when over 400 chars.
+// Phase 7 W1 — splits the reasoning string into bullet lines (when the
+// model emitted bullet markers), and within each line/paragraph turns
+// per-source citation tags (mistake-N, syllabus-N, calendar-N, email-N)
+// into clickable footnote markers. The same tags are emitted by the
+// fanout-prompt builder; the model is required by the system prompt to
+// cite at least one when fanout context exists.
+//
+// Collapse threshold bumped from 400 → 800 chars (per scoping §12.11)
+// since W1 reasoning routinely cites multiple sources. Bullet rendering
+// has no collapse — a list is already legible at any length.
+const COLLAPSE_AT = 800;
+
+const CITATION_RE = /\((mistake|syllabus|calendar|email)-(\d+)\)/g;
+
 export function ReasoningPanel({ reasoning }: { reasoning: string | null }) {
   const [expanded, setExpanded] = useState(false);
   if (!reasoning || reasoning.trim().length === 0) return null;
 
   const trimmed = reasoning.trim();
   const bullets = extractBullets(trimmed);
-  const long = trimmed.length > 400;
-  const shown = long && !expanded ? trimmed.slice(0, 400) + "…" : trimmed;
+  const long = trimmed.length > COLLAPSE_AT;
+  const shown = long && !expanded ? trimmed.slice(0, COLLAPSE_AT) + "…" : trimmed;
 
   return (
     <section className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
@@ -23,12 +34,12 @@ export function ReasoningPanel({ reasoning }: { reasoning: string | null }) {
       {bullets.length > 0 ? (
         <ul className="flex list-disc flex-col gap-1 pl-5 text-small text-[hsl(var(--foreground))]">
           {bullets.map((b, i) => (
-            <li key={i}>{b}</li>
+            <li key={i}>{renderWithCitations(b)}</li>
           ))}
         </ul>
       ) : (
         <p className="text-small leading-relaxed text-[hsl(var(--foreground))]">
-          {shown}
+          {renderWithCitations(shown)}
         </p>
       )}
       {long && bullets.length === 0 ? (
@@ -52,6 +63,35 @@ export function ReasoningPanel({ reasoning }: { reasoning: string | null }) {
       ) : null}
     </section>
   );
+}
+
+// Replace each `(mistake-1)` / `(syllabus-2)` / `(calendar-3)` / `(email-4)`
+// substring with a styled superscript marker. We use data-source-ref so a
+// future wire-up can scroll to the matching pill in ThinkingBar.
+function renderWithCitations(text: string): ReactNode {
+  const parts: ReactNode[] = [];
+  let last = 0;
+  let idx = 0;
+  for (const m of text.matchAll(CITATION_RE)) {
+    const start = m.index ?? 0;
+    const end = start + m[0].length;
+    if (start > last) parts.push(text.slice(last, start));
+    const kind = m[1];
+    const n = m[2];
+    parts.push(
+      <sup
+        key={`cite-${idx++}-${kind}-${n}`}
+        data-source-ref={`${kind}-${n}`}
+        className="ml-0.5 inline-block rounded-sm bg-[hsl(var(--surface-raised))] px-1 font-mono text-[10px] text-[hsl(var(--primary))]"
+      >
+        {kind}-{n}
+      </sup>
+    );
+    last = end;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  if (parts.length === 0) return text;
+  return parts;
 }
 
 function extractBullets(text: string): string[] {
