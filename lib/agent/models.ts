@@ -19,7 +19,11 @@ export type TaskType =
   | "email_classify_risk"
   | "email_classify_deep"
   | "email_draft"
-  | "email_embed";
+  | "email_embed"
+  // Phase 7 W-Notes: vision OCR for handwritten / scanned notes.
+  // Routes to GPT-5.4 complex tier — same shape and pricing as
+  // syllabus_extract. Always meters credits.
+  | "notes_extract";
 
 // Canonical model defaults. These are the target IDs; the operator can
 // override them at runtime with OPENAI_CHAT_MODEL / OPENAI_COMPLEX_MODEL /
@@ -85,6 +89,7 @@ export function selectModel(
       return env.OPENAI_CHAT_MODEL?.trim() || DEFAULTS.chat;
     case "mistake_explain":
     case "syllabus_extract":
+    case "notes_extract":
     case "email_classify_deep":
     case "email_draft":
       return env.OPENAI_COMPLEX_MODEL?.trim() || DEFAULTS.complex;
@@ -145,6 +150,7 @@ export function taskTypeMetersCredits(t: TaskType): boolean {
   switch (t) {
     case "mistake_explain":
     case "syllabus_extract":
+    case "notes_extract":
     case "email_classify_risk":
     case "email_classify_deep":
     case "email_draft":

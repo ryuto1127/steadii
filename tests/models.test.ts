@@ -16,6 +16,9 @@ describe("selectModel routing", () => {
     expect(selectModel("mistake_explain")).toBe("gpt-5.4");
     expect(selectModel("syllabus_extract")).toBe("gpt-5.4");
   });
+  it("routes notes_extract to full (vision OCR runs on the complex tier)", () => {
+    expect(selectModel("notes_extract")).toBe("gpt-5.4");
+  });
   it("routes chat_title and tag_suggest to nano", () => {
     expect(selectModel("chat_title")).toBe("gpt-5.4-nano");
     expect(selectModel("tag_suggest")).toBe("gpt-5.4-nano");
@@ -34,6 +37,7 @@ describe("selectModel routing", () => {
       "tool_call",
       "mistake_explain",
       "syllabus_extract",
+      "notes_extract",
       "chat_title",
       "tag_suggest",
       "email_classify_risk",
@@ -76,6 +80,7 @@ describe("credit accounting", () => {
   it("taskTypeMetersCredits: metered set includes agent L2 + embed", () => {
     expect(taskTypeMetersCredits("mistake_explain")).toBe(true);
     expect(taskTypeMetersCredits("syllabus_extract")).toBe(true);
+    expect(taskTypeMetersCredits("notes_extract")).toBe(true);
     expect(taskTypeMetersCredits("email_classify_risk")).toBe(true);
     expect(taskTypeMetersCredits("email_classify_deep")).toBe(true);
     expect(taskTypeMetersCredits("email_draft")).toBe(true);
