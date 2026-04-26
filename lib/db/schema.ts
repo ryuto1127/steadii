@@ -746,17 +746,86 @@ export type AgentDraftStatus =
   // to 'sent'. Exists only in TS; DB column is plain text.
   | "sent_pending";
 
-// Retrieval provenance blob. Populated by L2 deep pass; surfaces in W3 UI.
-// Schema is frozen per phase6-w2.md "§Concrete decisions handed over #15".
+// Retrieval provenance blob. Populated by L2 deep pass + (Phase 7 W1)
+// the multi-source fanout retriever. Surfaces in the inbox-detail
+// "Thinking · complete" pill row and the per-decision Settings →
+// "How your agent thinks" surface.
+//
+// Schema widening (Phase 7 W1): the prior email-only shape stays
+// readable because the discriminator (`type: "email"`) is preserved on
+// existing rows. New rows emit additional source variants as the L2
+// pipeline grows beyond similar-email retrieval.
+export type RetrievalProvenanceSource =
+  | {
+      type: "email";
+      id: string; // inbox_items.id
+      similarity: number; // 0..1
+      snippet: string; // <=200 chars
+    }
+  | {
+      type: "mistake";
+      id: string; // mistake_notes.id
+      classId: string | null;
+      similarity?: number; // optional — recency-ranked, no similarity score
+      snippet: string; // <=400 chars
+    }
+  | {
+      type: "syllabus";
+      id: string; // chunk id (syllabus_chunks.id)
+      syllabusId: string;
+      classId: string | null;
+      similarity: number;
+      snippet: string;
+    }
+  | {
+      type: "calendar";
+      id: string;
+      kind: "event" | "task" | "assignment";
+      title: string;
+      start: string;
+      end: string | null;
+    };
+
+export type ClassBindingProvenance = {
+  classId: string | null;
+  className: string | null;
+  classCode: string | null;
+  method:
+    | "subject_code"
+    | "subject_name"
+    | "sender_professor"
+    | "vector_chunks"
+    | "calendar_proximity"
+    | "ja_sensei_pattern"
+    | "none";
+  confidence: number;
+};
+
 export type RetrievalProvenance = {
-  sources: Array<{
-    type: "email";
-    id: string; // inbox_items.id
-    similarity: number; // 0..1
-    snippet: string; // <=200 chars
-  }>;
+  sources: RetrievalProvenanceSource[];
   total_candidates: number;
   returned: number;
+  // Phase 7 W1 — class binding payload, separate so the UI can render it
+  // distinct from the per-source pills. Optional for backwards-compat
+  // with deep-pass-only rows persisted before W1.
+  classBinding?: ClassBindingProvenance | null;
+  // Per-phase counts for admin dashboards. Optional for the same
+  // backwards-compat reason. mistakes/syllabus reflect chunk counts;
+  // calendar = events + tasks + steadii assignments combined.
+  fanoutCounts?: {
+    mistakes: number;
+    syllabus: number;
+    emails: number;
+    calendar: number;
+  } | null;
+  // Per-source timing in ms — surfaced in admin metrics. Optional.
+  fanoutTimings?: {
+    mistakes: number;
+    syllabus: number;
+    emails: number;
+    calendar: number;
+    total: number;
+  } | null;
 };
 
 // W1 writes no rows; W2 starts populating. The W2-added columns
