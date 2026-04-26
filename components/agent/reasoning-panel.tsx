@@ -68,30 +68,41 @@ export function ReasoningPanel({ reasoning }: { reasoning: string | null }) {
 // Replace each `(mistake-1)` / `(syllabus-2)` / `(calendar-3)` / `(email-4)`
 // substring with a styled superscript marker. We use data-source-ref so a
 // future wire-up can scroll to the matching pill in ThinkingBar.
+//
+// Pre-W1 reasoning rows have no citation tags at all — matchAll returns
+// an empty iterator and we fall through to plain text. The try/catch is
+// belt-and-braces against any future regex regression (a stray callsite
+// passing a non-string here would crash the page); we'd rather render
+// the raw text than the route-level error boundary.
 function renderWithCitations(text: string): ReactNode {
-  const parts: ReactNode[] = [];
-  let last = 0;
-  let idx = 0;
-  for (const m of text.matchAll(CITATION_RE)) {
-    const start = m.index ?? 0;
-    const end = start + m[0].length;
-    if (start > last) parts.push(text.slice(last, start));
-    const kind = m[1];
-    const n = m[2];
-    parts.push(
-      <sup
-        key={`cite-${idx++}-${kind}-${n}`}
-        data-source-ref={`${kind}-${n}`}
-        className="ml-0.5 inline-block rounded-sm bg-[hsl(var(--surface-raised))] px-1 font-mono text-[10px] text-[hsl(var(--primary))]"
-      >
-        {kind}-{n}
-      </sup>
-    );
-    last = end;
+  if (typeof text !== "string") return text ?? null;
+  try {
+    const parts: ReactNode[] = [];
+    let last = 0;
+    let idx = 0;
+    for (const m of text.matchAll(CITATION_RE)) {
+      const start = m.index ?? 0;
+      const end = start + m[0].length;
+      if (start > last) parts.push(text.slice(last, start));
+      const kind = m[1];
+      const n = m[2];
+      parts.push(
+        <sup
+          key={`cite-${idx++}-${kind}-${n}`}
+          data-source-ref={`${kind}-${n}`}
+          className="ml-0.5 inline-block rounded-sm bg-[hsl(var(--surface-raised))] px-1 font-mono text-[10px] text-[hsl(var(--primary))]"
+        >
+          {kind}-{n}
+        </sup>
+      );
+      last = end;
+    }
+    if (last < text.length) parts.push(text.slice(last));
+    if (parts.length === 0) return text;
+    return parts;
+  } catch {
+    return text;
   }
-  if (last < text.length) parts.push(text.slice(last));
-  if (parts.length === 0) return text;
-  return parts;
 }
 
 function extractBullets(text: string): string[] {

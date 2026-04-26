@@ -19,7 +19,27 @@ import type {
 //
 // Per-source pills use distinct colours/icons to make the source legible
 // at a glance — this is the visible half of the glass-box brand promise.
+//
+// Pre-W1 rows persisted only the email-only union variant. We normalize
+// the shape on read so a row written before any of the W1 widening
+// (mistake/syllabus/calendar pills, fanout counts) renders as a plain
+// email-pill row instead of throwing on an unknown discriminator.
 const MAX_VISIBLE_PILLS = 6;
+
+const KNOWN_SOURCE_TYPES = new Set(["email", "mistake", "syllabus", "calendar"]);
+
+function normalizeSources(
+  raw: RetrievalProvenance["sources"] | undefined
+): RetrievalProvenanceSource[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (s): s is RetrievalProvenanceSource =>
+      !!s &&
+      typeof s === "object" &&
+      typeof (s as { type?: unknown }).type === "string" &&
+      KNOWN_SOURCE_TYPES.has((s as { type: string }).type)
+  );
+}
 
 export function ThinkingBar({
   provenance,
@@ -28,7 +48,7 @@ export function ThinkingBar({
   provenance: RetrievalProvenance | null;
   riskTier: "low" | "medium" | "high" | null;
 }) {
-  const sources = provenance?.sources ?? [];
+  const sources = normalizeSources(provenance?.sources);
   const counts = provenance?.fanoutCounts ?? null;
   const binding = provenance?.classBinding ?? null;
 
@@ -72,9 +92,9 @@ export function ThinkingBar({
           <span className="text-[hsl(var(--muted-foreground))]">Bound to</span>
           <span
             className="font-medium text-[hsl(var(--foreground))]"
-            title={`${binding.method} (confidence ${binding.confidence.toFixed(2)})`}
+            title={formatBindingTitle(binding)}
           >
-            {binding.className}
+            {binding.className ?? "this class"}
             {binding.classCode ? ` (${binding.classCode})` : ""}
           </span>
         </div>
@@ -121,7 +141,7 @@ function SourcePill({
             email-{index}
           </span>
           <span className="font-mono tabular-nums">
-            {(source.similarity * 100).toFixed(0)}%
+            {formatSimilarityPct(source.similarity)}
           </span>
           <span className="max-w-[180px] truncate">
             {source.snippet || "email"}
@@ -154,7 +174,7 @@ function SourcePill({
             syllabus-{index}
           </span>
           <span className="font-mono tabular-nums">
-            {(source.similarity * 100).toFixed(0)}%
+            {formatSimilarityPct(source.similarity)}
           </span>
           <span className="max-w-[180px] truncate">
             {source.snippet || "syllabus chunk"}
@@ -179,6 +199,24 @@ function SourcePill({
 
 function pillKey(source: RetrievalProvenanceSource, index: number): string {
   return `${source.type}:${source.id}:${index}`;
+}
+
+// Render-safe wrapper: pre-W1 email rows always carried similarity, but
+// JSONB drift or partial backfills can land us with a non-number here —
+// we'd rather drop the percent than crash the row.
+function formatSimilarityPct(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+  return `${(value * 100).toFixed(0)}%`;
+}
+
+function formatBindingTitle(
+  binding: NonNullable<RetrievalProvenance["classBinding"]>
+): string {
+  const method = binding.method ?? "binding";
+  const c = binding.confidence;
+  const conf =
+    typeof c === "number" && Number.isFinite(c) ? c.toFixed(2) : "n/a";
+  return `${method} (confidence ${conf})`;
 }
 
 function buildFanoutHeadline(counts: NonNullable<RetrievalProvenance["fanoutCounts"]>): string {
