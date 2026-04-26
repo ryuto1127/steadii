@@ -23,6 +23,7 @@ import { searchSimilarEmails, DEEP_PASS_TOP_K, type SimilarEmail } from "./retri
 import { buildEmbedInput } from "./embeddings";
 import { fetchRecentThreadMessages } from "./thread";
 import { logEmailAudit } from "./audit";
+import { fanoutForInbox, type FanoutResult } from "./fanout";
 import {
   fetchUpcomingEvents,
   type DraftCalendarEvent,
@@ -127,6 +128,28 @@ async function runPipeline(
   // entirely and synthesize a RiskPassResult from the stored rule_provenance
   // so the downstream steps + the Why-this-draft panel still see *which*
   // rule fired.
+  // Phase 7 W1 — multi-source fanout. Runs once at the start of the L2
+  // pipeline so the same context is reused across risk, deep, and draft.
+  // Fail-soft: errors degrade to a null fanout (the prompts then render
+  // exactly the pre-W1 shape so the pipeline never blocks on retrieval).
+  let fanoutForRisk: FanoutResult | null = null;
+  if (!options.forceTier) {
+    try {
+      fanoutForRisk = await fanoutForInbox({
+        userId: item.userId,
+        inboxItemId: item.id,
+        phase: "classify",
+        subject: item.subject,
+        snippet: item.snippet,
+      });
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { feature: "email_l2", step: "fanout_classify" },
+        user: { id: item.userId },
+      });
+    }
+  }
+
   let risk: RiskPassResult;
   if (options.forceTier === "high") {
     risk = synthesizeForcedHighRisk(item.ruleProvenance ?? []);
@@ -142,6 +165,7 @@ async function runPipeline(
         subject: item.subject,
         snippet: item.snippet,
         firstTimeSender: item.firstTimeSender,
+        fanout: fanoutForRisk,
       });
     } catch (err) {
       Sentry.captureException(err, {
@@ -178,6 +202,7 @@ async function runPipeline(
 
   // ---- Step 2: deep pass (Full, high-risk only) ----
   let deep: DeepPassResult | null = null;
+  let fanoutForDeep: FanoutResult | null = null;
   if (riskTier === "high") {
     try {
       await assertCreditsAvailable(item.userId);
@@ -195,15 +220,42 @@ async function runPipeline(
       throw err;
     }
 
-    const similarQuery = buildEmbedInput(item.subject, item.snippet);
-    const { results: similar, totalCandidates } = similarQuery
-      ? await searchSimilarEmails({
+    // Re-fetch fanout for the deep phase so the email source bumps to
+    // K=20 and the calendar window widens from 3 to 7 days. Mistakes /
+    // syllabus rows are stable between phases — re-fetching keeps the
+    // pipeline stateless and the per-phase audit log clean.
+    try {
+      fanoutForDeep = await fanoutForInbox({
+        userId: item.userId,
+        inboxItemId: item.id,
+        phase: "deep",
+        subject: item.subject,
+        snippet: item.snippet,
+      });
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { feature: "email_l2", step: "fanout_deep" },
+        user: { id: item.userId },
+      });
+    }
+
+    // Reuse fanout's email source as the deep-pass similar slate. Falls
+    // back to the legacy direct call when fanout failed entirely.
+    let similar: SimilarEmail[] = fanoutForDeep?.similarEmails ?? [];
+    let totalCandidates = fanoutForDeep?.totalSimilarCandidates ?? 0;
+    if (!fanoutForDeep) {
+      const similarQuery = buildEmbedInput(item.subject, item.snippet);
+      if (similarQuery) {
+        const r = await searchSimilarEmails({
           userId: item.userId,
           queryText: similarQuery,
           topK: DEEP_PASS_TOP_K,
           excludeInboxItemId: item.id,
-        })
-      : { results: [], totalCandidates: 0 };
+        });
+        similar = r.results;
+        totalCandidates = r.totalCandidates;
+      }
+    }
 
     deep = await runDeepPass({
       userId: item.userId,
@@ -217,6 +269,7 @@ async function runPipeline(
       similarEmails: similar,
       totalCandidates,
       threadRecentMessages: threadMessages,
+      fanout: fanoutForDeep,
     });
   }
 
@@ -251,20 +304,34 @@ async function runPipeline(
       throw err;
     }
 
-    // High-risk drafts reuse the deep pass's retrieval (already paid for).
-    // Medium-risk drafts pull a smaller top-K slate of similar emails to
-    // anchor tone/style — shallower than deep pass, but not empty.
+    // Phase 7 W1 — fanout for the draft phase. High-risk drafts can reuse
+    // fanoutForDeep when it's already populated (same shape, same caps);
+    // medium-risk drafts run a fresh fanout with classify-sized email K
+    // bumped to draft window.
+    let fanoutForDraft: FanoutResult | null = fanoutForDeep;
+    if (!fanoutForDraft) {
+      try {
+        fanoutForDraft = await fanoutForInbox({
+          userId: item.userId,
+          inboxItemId: item.id,
+          phase: "draft",
+          subject: item.subject,
+          snippet: item.snippet,
+        });
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: { feature: "email_l2", step: "fanout_draft" },
+          user: { id: item.userId },
+        });
+      }
+    }
+
     let similarForDraft: SimilarEmail[] = [];
-    if (riskTier === "high" && deep) {
-      similarForDraft = deep.retrievalProvenance.sources.map((s) => ({
-        inboxItemId: s.id,
-        similarity: s.similarity,
-        subject: null,
-        snippet: s.snippet,
-        receivedAt: new Date(0),
-        senderEmail: "",
-      }));
+    if (fanoutForDraft) {
+      similarForDraft = fanoutForDraft.similarEmails;
     } else if (riskTier === "medium") {
+      // Fanout failed — fall back to the legacy direct similar-email pull
+      // so the prompt still gets a tone/style anchor.
       const similarQuery = buildEmbedInput(item.subject, item.snippet);
       if (similarQuery) {
         const { results } = await searchSimilarEmails({
@@ -277,18 +344,20 @@ async function runPipeline(
       }
     }
 
-    // Calendar context — fetch best-effort. Calendar-not-connected, scope
-    // missing, transient API blip: all swallowed to an empty list so the
-    // draft step still runs (it falls back to ask-on-availability
-    // behavior, the same as before W3.6 added this).
+    // Legacy calendar slot — only populated when fanout failed entirely.
+    // Fanout's own calendar block (events + Google Tasks) is the primary
+    // path. We still fetch live calendar events here as a fallback so a
+    // fanout failure doesn't strip the agent of availability grounding.
     let calendarEvents: DraftCalendarEvent[] = [];
-    try {
-      calendarEvents = await fetchUpcomingEvents(item.userId, { days: 7 });
-    } catch (err) {
-      Sentry.captureException(err, {
-        tags: { feature: "email_l2", step: "calendar_fetch" },
-        user: { id: item.userId },
-      });
+    if (!fanoutForDraft) {
+      try {
+        calendarEvents = await fetchUpcomingEvents(item.userId, { days: 7 });
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: { feature: "email_l2", step: "calendar_fetch" },
+          user: { id: item.userId },
+        });
+      }
     }
 
     draft = await runDraft({
@@ -303,6 +372,7 @@ async function runPipeline(
       threadRecentMessages: threadMessages,
       similarEmails: similarForDraft,
       calendarEvents,
+      fanout: fanoutForDraft,
       userName: userRow?.name ?? null,
       userEmail: userRow?.email ?? null,
     });
