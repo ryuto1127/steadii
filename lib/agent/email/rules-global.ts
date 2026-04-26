@@ -203,6 +203,55 @@ export function isNoreplySender(senderEmail: string): boolean {
   return false;
 }
 
+// Phase 7 W1 — JA-formatted course-code patterns used by the class-binding
+// module to recognize a course identifier in the email subject. Operator-
+// curated; grow over time per false-negative rescue rate. The plain Latin-
+// script pattern (\b[A-Z]{2,4}-\d{2,4}\b) is hard-coded into class-binding
+// itself since it covers EN-cycle universities (UTORONTO CSC108 etc.).
+//
+// Each regex is matched case-insensitively against the email subject. A
+// hit is then cross-referenced against the user's classes.code values to
+// avoid binding to an arbitrary 8-digit string that happens to look like
+// a UTAS course code.
+export const COURSE_CODE_PATTERNS_JA: RegExp[] = [
+  // UTAS-style 8-digit numeric course codes (e.g., "21130200").
+  /\b\d{8}\b/g,
+  // Mixed-style codes used by some JP universities (e.g., "EE-204",
+  // "INFO-101"). The Latin-only \b[A-Z]{2,4}-?\d{2,4}\b pattern is also
+  // used by the class-binding module's generic SUBJECT_CODE_RE; this
+  // duplicate is here so the JA-curated list stays self-contained.
+  /\b[A-Z]{2,4}-\d{2,4}\b/g,
+];
+
+// Phase 7 W1 — kanji course-name fallback. When the subject contains one
+// of these names AND that name appears in the user's classes.code or
+// classes.name, the class-binding module promotes the row to subject_name
+// match. Operator-maintained; pick the ~20 most commonly named JP
+// undergraduate subjects so coverage stays useful without ballooning false
+// positives.
+export const KANJI_COURSE_NAMES_JA: string[] = [
+  "線形代数",
+  "微分積分",
+  "情報科学",
+  "熱力学",
+  "量子力学",
+  "経済学",
+  "統計学",
+  "心理学",
+  "言語学",
+  "哲学",
+  "物理学",
+  "化学",
+  "生物学",
+  "地学",
+  "社会学",
+  "歴史学",
+  "政治学",
+  "法学",
+  "経営学",
+  "会計学",
+];
+
 // Lightweight "does this subject/body contain an action verb" probe used
 // by the noreply IGNORE rule. If a noreply email asks the user to do
 // something ("confirm your email", "reset your password"), don't ignore.
