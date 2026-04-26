@@ -4,6 +4,8 @@ type MessagesShape = {
     headline: string;
     subhead: string;
     cta: string;
+    cta_request_access: string;
+    cta_already_approved: string;
     alpha: string;
     invite_hint: string;
     value_props: {
@@ -71,6 +73,37 @@ type MessagesShape = {
     photo_save_failed: string;
   };
   login: { title: string; subtitle: string; button: string };
+  request_access: {
+    title: string;
+    subtitle: string;
+    email_label: string;
+    name_label: string;
+    university_label: string;
+    reason_label: string;
+    reason_placeholder: string;
+    submit: string;
+    error_invalid_email: string;
+    error_rate_limited: string;
+    back_to_landing: string;
+  };
+  access_pending: {
+    title_ja: string;
+    title_en: string;
+    body_ja: string;
+    body_en: string;
+    already_submitted_hint: string;
+    back_to_landing: string;
+  };
+  access_denied: {
+    title_ja: string;
+    title_en: string;
+    body_ja: string;
+    body_en: string;
+    contact_label_ja: string;
+    contact_label_en: string;
+    contact_email: string;
+    request_access_cta: string;
+  };
   app: { welcome: string; empty_state: string };
   home: {
     today_schedule: string;
@@ -224,6 +257,8 @@ export const en: MessagesShape = {
     subhead:
       "Steadii triages your university inbox and prepares replies before you open the app. You see every reason, edit anything, and approve every send.",
     cta: "Continue with Google",
+    cta_request_access: "Request α access",
+    cta_already_approved: "Already approved? Sign in",
     alpha: "α version — invite only",
     invite_hint: "Invite-only during α.",
     value_props: {
@@ -310,6 +345,44 @@ export const en: MessagesShape = {
     title: "Welcome back",
     subtitle: "Sign in with your university Google account.",
     button: "Continue with Google",
+  },
+  request_access: {
+    title: "Request α access",
+    subtitle:
+      "Steadii is invite-only during α. Tell us a little about yourself and we'll email you when you're approved (usually within 24h).",
+    email_label: "Email",
+    name_label: "Name (optional)",
+    university_label: "University (optional)",
+    reason_label: "What would you use Steadii for? (optional)",
+    reason_placeholder:
+      "e.g. I'm drowning in CS courseload emails, want help triaging.",
+    submit: "Request access",
+    error_invalid_email: "Please enter a valid email address.",
+    error_rate_limited:
+      "Too many requests from this network. Please try again in an hour.",
+    back_to_landing: "← Back to home",
+  },
+  access_pending: {
+    title_ja: "ありがとうございます。",
+    title_en: "Thanks — request received.",
+    body_ja:
+      "承認されたら ご記入の email にお知らせします。通常 24 時間以内に確認します。",
+    body_en:
+      "We'll notify you by email when approved (usually within 24h).",
+    already_submitted_hint:
+      "It looks like you already requested access — we'll email you as soon as you're approved.",
+    back_to_landing: "← Back to home",
+  },
+  access_denied: {
+    title_ja: "α は招待制です。",
+    title_en: "α is invite-only.",
+    body_ja:
+      "ご利用希望の方は下のメールアドレスまでご連絡ください。",
+    body_en: "Contact the address below for access.",
+    contact_label_ja: "お問い合わせ:",
+    contact_label_en: "Contact:",
+    contact_email: "hello@mysteadii.xyz",
+    request_access_cta: "Request α access →",
   },
   app: {
     welcome: "Welcome, {name}.",
