@@ -1,49 +1,48 @@
-export const dynamic = "force-static";
+import { getTranslations } from "next-intl/server";
 
-export default function PrivacyPage() {
+// Switched off `force-static` so the locale cookie / Accept-Language header
+// can drive whether the JA or EN copy is rendered. The page is still
+// effectively cacheable per (locale, build) by next-intl.
+export const dynamic = "force-dynamic";
+
+export default async function PrivacyPage() {
+  const t = await getTranslations("legal");
+  const sections = [
+    "what_we_collect",
+    "how_we_use_it",
+    "model_training",
+    "third_parties",
+    "data_location",
+    "retention_deletion",
+    "your_rights",
+    "appi_purpose",
+    "appi_third_party",
+    "appi_cross_border",
+    "appi_contact",
+    "appi_request_procedure",
+    "alpha_caveat",
+  ] as const;
+
   return (
     <main className="mx-auto max-w-2xl px-6 py-20">
       <p className="font-mono text-[11px] uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
-        α — subject to change
+        {t("alpha_caveat")}
       </p>
-      <h1 className="mt-4 font-display text-[hsl(var(--foreground))]">Privacy Policy</h1>
+      <h1 className="mt-4 font-display text-[hsl(var(--foreground))]">
+        {t("privacy_title")}
+      </h1>
       <p className="mt-3 text-small text-[hsl(var(--muted-foreground))]">
-        Last updated: 2026-04-20
+        {t("last_updated")}: {t("last_updated_date")}
       </p>
 
       <div className="mt-10 space-y-6 text-sm leading-relaxed">
-        <Section
-          heading="What we collect"
-          body={`Steadii stores your Google profile (name, email, avatar), OAuth tokens for Google (Calendar + Gmail) and — only if you connect it — Notion, all AES-256-GCM encrypted at the application layer. We also store your classes, mistake notes, syllabi, and assignments in our Postgres database (Neon), your chat history, and the files you upload. We do not collect device fingerprints or tracking cookies.`}
-        />
-        <Section
-          heading="How we use it"
-          body={`Your data is used to (1) operate the product — answer chat messages, triage Gmail, read Google Calendar, store and retrieve your academic notes, (2) enforce the plan limits (credits, storage), and (3) log errors for debugging. OpenAI requests include only the minimum context needed to answer the question.`}
-        />
-        <Section
-          heading="Model training"
-          body={`OpenAI's API does not train on your data by default, and Steadii does not enable training. Anthropic/third-party model providers are not used.`}
-        />
-        <Section
-          heading="Third parties"
-          body={`Vercel (hosting, edge cache, blob storage), Neon (Postgres — primary store for your academic data), OpenAI (inference), Google (auth + calendar + gmail), Notion (optional one-way import surface), Stripe (billing, test mode during α), Sentry (error tracking, with PII scrubbing on).`}
-        />
-        <Section
-          heading="Data location"
-          body={`Vercel and Neon both operate primarily in US regions during α. If you need EU-resident data storage, email the administrator before signing up.`}
-        />
-        <Section
-          heading="Retention and deletion"
-          body={`You can delete your account at any time by emailing the administrator. On deletion, we remove rows from users, accounts, notion_connections, chats, messages, message_attachments, blob_assets (including the underlying Vercel Blob objects), registered_resources, audit_log, and usage_events within 30 days.`}
-        />
-        <Section
-          heading="Your rights"
-          body={`You can request a copy of your data, corrections, or deletion at any time. Contact the administrator via the email you used to sign up.`}
-        />
-        <Section
-          heading="α caveat"
-          body={`This is the α version, running in invite-only mode with Stripe in test mode. Legal language here is a working draft and will be replaced before a β or public launch. We will notify you of material changes via the email you signed up with.`}
-        />
+        {sections.map((key) => (
+          <Section
+            key={key}
+            heading={t(`privacy.${key}.heading`)}
+            body={t(`privacy.${key}.body`)}
+          />
+        ))}
       </div>
     </main>
   );

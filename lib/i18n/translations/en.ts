@@ -149,7 +149,40 @@ type MessagesShape = {
       extend_retention_help: string;
     };
   };
-  legal: { privacy_title: string; terms_title: string; placeholder: string };
+  legal: {
+    privacy_title: string;
+    terms_title: string;
+    placeholder: string;
+    alpha_caveat: string;
+    last_updated: string;
+    last_updated_date: string;
+    privacy: {
+      what_we_collect: { heading: string; body: string };
+      how_we_use_it: { heading: string; body: string };
+      model_training: { heading: string; body: string };
+      third_parties: { heading: string; body: string };
+      data_location: { heading: string; body: string };
+      retention_deletion: { heading: string; body: string };
+      your_rights: { heading: string; body: string };
+      alpha_caveat: { heading: string; body: string };
+      appi_purpose: { heading: string; body: string };
+      appi_third_party: { heading: string; body: string };
+      appi_cross_border: { heading: string; body: string };
+      appi_contact: { heading: string; body: string };
+      appi_request_procedure: { heading: string; body: string };
+    };
+    terms: {
+      alpha_status: { heading: string; body: string };
+      acceptable_use: { heading: string; body: string };
+      your_content: { heading: string; body: string };
+      external_services: { heading: string; body: string };
+      plan_limits: { heading: string; body: string };
+      founding_member: { heading: string; body: string };
+      termination: { heading: string; body: string };
+      liability: { heading: string; body: string };
+      contact: { heading: string; body: string };
+    };
+  };
   seed_prompts: {
     review_recent_mistakes: string;
     generate_similar_problems: string;
@@ -353,6 +386,123 @@ export const en: MessagesShape = {
     terms_title: "Terms of Service",
     placeholder:
       "This document is a placeholder for the α version. It will be replaced before general release.",
+    alpha_caveat: "α — subject to change",
+    last_updated: "Last updated",
+    last_updated_date: "2026-04-25",
+    privacy: {
+      what_we_collect: {
+        heading: "What we collect",
+        body:
+          "Steadii stores your Google profile (name, email, avatar), OAuth tokens for Google (Calendar + Gmail) and — only if you connect it — Notion, all AES-256-GCM encrypted at the application layer. We also store your classes, mistake notes, syllabi, and assignments in our Postgres database (Neon), your chat history, and the files you upload. We do not collect device fingerprints or tracking cookies.",
+      },
+      how_we_use_it: {
+        heading: "How we use it",
+        body:
+          "Your data is used to (1) operate the product — answer chat messages, triage Gmail, read Google Calendar and Classroom feeds, store and retrieve your academic notes, (2) enforce plan limits (credits, storage), and (3) log errors for debugging. OpenAI requests include only the minimum context needed to answer the question.",
+      },
+      model_training: {
+        heading: "Model training",
+        body:
+          "OpenAI's API does not train on your data by default, and Steadii does not enable training. No other model providers are used.",
+      },
+      third_parties: {
+        heading: "Third parties",
+        body:
+          "Vercel (hosting, edge cache, blob storage), Neon (Postgres — primary store for your academic data), OpenAI (inference), Google (auth, Calendar, Classroom, Gmail), Notion (optional one-way import surface), Stripe (billing, test mode during α), Sentry (error tracking, with PII scrubbing on).",
+      },
+      data_location: {
+        heading: "Data location",
+        body:
+          "Vercel and Neon both operate primarily in US regions during α. If you need EU- or JP-resident data storage, email the administrator before signing up.",
+      },
+      retention_deletion: {
+        heading: "Retention and deletion",
+        body:
+          "You can delete your account at any time by emailing the administrator. On deletion, we remove rows from users, accounts, notion_connections, chats, messages, message_attachments, blob_assets (including the underlying Vercel Blob objects), registered_resources, audit_log, and usage_events within 30 days.",
+      },
+      your_rights: {
+        heading: "Your rights",
+        body:
+          "You can request a copy of your data, corrections, or deletion at any time. Contact the administrator via the email you used to sign up.",
+      },
+      alpha_caveat: {
+        heading: "α caveat",
+        body:
+          "This is the α version, running in invite-only mode with Stripe in test mode. Legal language here is a working draft and will be replaced before a β or public launch. We will notify you of material changes via the email you signed up with.",
+      },
+      appi_purpose: {
+        heading: "Purpose of processing personal information",
+        body:
+          "We process personal information to operate the service, enforce plan limits, debug via error logs, and communicate with you about your account. We do not sell personal information and do not process it for advertising.",
+      },
+      appi_third_party: {
+        heading: "Third-party processors and entrustment",
+        body:
+          "We entrust the following processors to operate the service: OpenAI (inference), Google (authentication, Calendar, Classroom, Gmail), Stripe (payments), Vercel (hosting, blob storage), Neon (Postgres database), and Sentry (error tracking). Each processor handles personal information only as instructed by Steadii and only to the extent necessary to provide its function.",
+      },
+      appi_cross_border: {
+        heading: "Cross-border transfer of personal information",
+        body:
+          "OpenAI, Vercel, Neon, Stripe, and Sentry process personal information on servers operated primarily in the United States. Google services may process information across multiple regions. We have entered into appropriate contractual safeguards with each processor and confirmed each one operates a personal-information-protection program substantively equivalent to the standards required under Japan's Act on the Protection of Personal Information (APPI).",
+      },
+      appi_contact: {
+        heading: "Personal-information-handler contact",
+        body:
+          "Personal-information handler: Steadii (sole proprietor, contact via the email you used to sign up). For inquiries from Japanese-resident users specifically, write to hello@mysteadii.xyz with the subject line \"APPI request\".",
+      },
+      appi_request_procedure: {
+        heading: "How to request disclosure, correction, or suspension of use",
+        body:
+          "You may request disclosure of your retained personal information, correction of inaccuracies, suspension of use, or deletion. Send an email to hello@mysteadii.xyz from the address registered on your account, stating which records you wish to access or change. We respond within 14 days. There is no fee.",
+      },
+    },
+    terms: {
+      alpha_status: {
+        heading: "Alpha status",
+        body:
+          "Steadii is in invite-only α. The product is provided as-is, may be changed or withdrawn at any time, and is not warranted fit for any particular purpose. Billing runs in Stripe test mode during α — no real charges post.",
+      },
+      acceptable_use: {
+        heading: "Acceptable use",
+        body:
+          "Don't use Steadii to commit academic fraud. The agent is a study aid — it reasons, explains, and organizes. Submitting machine output as your own work on a graded assignment is your responsibility and may violate your institution's policies.",
+      },
+      your_content: {
+        heading: "Your content",
+        body:
+          "You retain ownership of everything you put into Steadii — your classes, mistake notes, syllabi, attachments, chat messages, and any optional Notion pages you connect. You grant us a limited license to process this content solely to operate the service for you.",
+      },
+      external_services: {
+        heading: "External services",
+        body:
+          "Steadii connects to Google services (Calendar, Classroom, Gmail), OpenAI, Vercel Blob, and Stripe. Notion is an optional integration. By using Steadii you also accept those services' terms. If any of them become unavailable, parts of Steadii will degrade gracefully.",
+      },
+      plan_limits: {
+        heading: "Plan limits",
+        body:
+          "Free plan: 300 credits/month, 5 MB per file, 200 MB total storage. Pro and Student: 1,000 credits/month, 50 MB per file, 2 GB total storage. A credit is approximately $0.005 worth of model usage. Limits are subject to change with notice.",
+      },
+      founding_member: {
+        heading: "Founding member price lock",
+        body:
+          "The first 100 paid Pro/Student users and all α invitees are designated Founding Members. Founding Members keep their signup price for as long as they maintain an active subscription, even if list prices change later. User 101 onward receives a 12-month price lock from their first paid period.",
+      },
+      termination: {
+        heading: "Termination",
+        body:
+          "You can stop using Steadii at any time. We can revoke access if you violate these terms. On termination, your data is deleted per the Privacy Policy.",
+      },
+      liability: {
+        heading: "Liability",
+        body:
+          "To the maximum extent permitted by law, Steadii is not liable for indirect, consequential, or incidental damages arising from use of the service, including missed deadlines or incorrect answers.",
+      },
+      contact: {
+        heading: "Contact",
+        body:
+          "Questions or deletion requests: email hello@mysteadii.xyz, or reply to your onboarding email.",
+      },
+    },
   },
   seed_prompts: {
     review_recent_mistakes:
