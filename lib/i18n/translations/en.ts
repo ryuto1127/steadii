@@ -43,6 +43,7 @@ type MessagesShape = {
     chats: string;
     classes: string;
     calendar: string;
+    tasks: string;
     settings: string;
   };
   classes: {
@@ -260,6 +261,7 @@ export const en: MessagesShape = {
     chats: "Chats",
     classes: "Classes",
     calendar: "Calendar",
+    tasks: "Tasks",
     settings: "Settings",
   },
   classes: {

@@ -35,7 +35,47 @@ export type CalendarTask = {
   url?: string | null;
 };
 
-export type CalendarItem = CalendarEvent | CalendarTask;
+// Phase 7 W1 — Steadii's own assignments rendered on the calendar
+// alongside Google sources. Distinct kind so callers that want to
+// differentiate Steadii-side rows (for editing, status, class chips)
+// can. The visual render path collapses assignments into the task track
+// via `assignmentAsTask` so we don't fork every UI component.
+export type CalendarAssignment = {
+  kind: "assignment";
+  id: string;
+  title: string;
+  due: string; // YYYY-MM-DD, local-date-only
+  notes: string | null;
+  classId: string | null;
+  className: string | null;
+  status: "not_started" | "in_progress" | "done";
+  priority: "low" | "medium" | "high" | null;
+};
+
+export type CalendarItem = CalendarEvent | CalendarTask | CalendarAssignment;
+
+// Pragmatic projection — the existing UI components render CalendarTask
+// for any "due-on-a-date" item. Project a Steadii assignment into that
+// shape so we don't have to fork every render path. Callers that need
+// the assignment-flavored fields can still find them in the original
+// items array via `kind === "assignment"`.
+export function assignmentAsTask(a: CalendarAssignment): CalendarTask {
+  return {
+    kind: "task",
+    id: `steadii-assignment:${a.id}`,
+    title: a.className ? `${a.title} · ${a.className}` : a.title,
+    due: a.due,
+    notes: a.notes,
+    completed: a.status === "done",
+    taskListId: "__steadii__",
+    parentId: null,
+    // Reuse the read-only "google_classroom" origin for visual styling —
+    // both Steadii assignments and Classroom assignments are due-by-date
+    // items the user can't reschedule from the calendar UI itself.
+    origin: "google_classroom",
+    url: null,
+  };
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
