@@ -96,8 +96,13 @@ describe("runDeepPass", () => {
     expect(out.retrievalProvenance.sources).toHaveLength(2);
     expect(out.retrievalProvenance.total_candidates).toBe(24);
     expect(out.retrievalProvenance.returned).toBe(2);
-    expect(out.retrievalProvenance.sources[0].id).toBe("prior-1");
-    expect(out.retrievalProvenance.sources[0].similarity).toBeCloseTo(0.87);
+    expect(out.retrievalProvenance.sources[0]?.id).toBe("prior-1");
+    const first = out.retrievalProvenance.sources[0];
+    if (first?.type === "email") {
+      expect(first.similarity).toBeCloseTo(0.87);
+    } else {
+      throw new Error("expected first source to be type=email");
+    }
     expect(out.usageId).toBe("usage-deep-1");
   });
 
@@ -165,6 +170,11 @@ describe("runDeepPass", () => {
       ],
       totalCandidates: 1,
     });
-    expect(prov.sources[0].snippet.length).toBe(200);
+    const first = prov.sources[0];
+    if (first?.type === "email") {
+      expect(first.snippet.length).toBe(200);
+    } else {
+      throw new Error("expected first source to be type=email");
+    }
   });
 });
