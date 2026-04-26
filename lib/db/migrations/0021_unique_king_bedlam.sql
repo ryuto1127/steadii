@@ -1,0 +1,3 @@
+ALTER TABLE "mistake_notes" ADD COLUMN "source" text DEFAULT 'user_typed' NOT NULL;--> statement-breakpoint
+ALTER TABLE "mistake_notes" ADD COLUMN "source_blob_asset_id" uuid;--> statement-breakpoint
+ALTER TABLE "mistake_notes" ADD CONSTRAINT "mistake_notes_source_blob_asset_id_blob_assets_id_fk" FOREIGN KEY ("source_blob_asset_id") REFERENCES "public"."blob_assets"("id") ON DELETE set null ON UPDATE no action;
