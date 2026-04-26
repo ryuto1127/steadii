@@ -5,6 +5,10 @@ import { selectModel } from "@/lib/agent/models";
 import { recordUsage } from "@/lib/agent/usage";
 import type { SimilarEmail } from "./retrieval";
 import type { DraftCalendarEvent } from "@/lib/integrations/google/calendar";
+import {
+  buildFanoutContextBlocks,
+  type FanoutResult,
+} from "./fanout-prompt";
 
 export type DraftInput = {
   userId: string;
@@ -23,7 +27,15 @@ export type DraftInput = {
   // availability-related replies in real data instead of asking back. Empty
   // if calendar isn't connected — the prompt then falls through to
   // "ask before committing" behavior.
+  //
+  // Phase 7 W1: when `fanout` is provided, the prompt prefers its
+  // `calendar` block (which includes Google Tasks). `calendarEvents` stays
+  // for backwards-compat with callers that haven't moved to fanout yet.
   calendarEvents: DraftCalendarEvent[];
+  // Phase 7 W1 — multi-source fanout context. When set, replaces the
+  // legacy calendar-only block and adds class binding + mistakes +
+  // syllabus blocks.
+  fanout?: FanoutResult | null;
   // Optional — if null, the model picks from the sender's To/From.
   userName: string | null;
   userEmail: string | null;
@@ -77,6 +89,10 @@ Calendar grounding (when the "Calendar" block is non-empty below):
 Default to "draft" when there is one obviously-correct interpretation. Don't ask back for routine acknowledgments or single-fact replies.
 
 Always populate every field. For "clarify": subject is still 'Re: <original>', body is the question(s), to/cc target the original sender as if you were drafting a reply (because you are — it's an email, just one that asks). 'reasoning' is one or two short sentences explaining why you picked this kind.
+
+Fanout grounding (when "Class binding" / "Relevant past mistakes" / "Relevant syllabus sections" / "Calendar" / "Reference: similar past emails" blocks are present):
+- Use the per-source tags (mistake-N, syllabus-N, calendar-N, email-N) to ground tone, content, and any factual claim. If the syllabus says late submissions lose 10%, cite syllabus-N. If a past mistake shows you've already covered this exact topic with this prof, cite mistake-N.
+- "Reasoning" MUST cite which fanout source(s) informed each conclusion, using those tags. Glass-box transparency is non-negotiable; ungrounded factual claims are unacceptable.
 
 Language rules — keep these distinct:
 - 'subject' and 'body' MUST match the incoming email's language (the student's working language). Japanese in → Japanese reply; English in → English reply.
@@ -227,6 +243,17 @@ function buildUserContent(input: DraftInput): string {
     }
   }
 
+  // Phase 7 W1 — fanout block (class binding + mistakes + syllabus +
+  // calendar). When fanout is present we render it BEFORE the similar-
+  // emails reference so structured grounding takes precedence over
+  // tone-anchoring. When absent we fall back to the legacy calendar-only
+  // block at the end so callers that haven't migrated still produce a
+  // working prompt.
+  if (input.fanout) {
+    parts.push("");
+    parts.push(buildFanoutContextBlocks(input.fanout, "draft"));
+  }
+
   if (input.similarEmails.length > 0) {
     parts.push(
       `\n=== Reference: similar past emails from the user's inbox (${input.similarEmails.length}) ===`
@@ -236,27 +263,28 @@ function buildUserContent(input: DraftInput): string {
     );
     input.similarEmails.forEach((e, i) => {
       parts.push(
-        `${i + 1}. [sim=${e.similarity.toFixed(2)}] ${e.senderEmail} — ${
+        `email-${i + 1}: [sim=${e.similarity.toFixed(2)}] ${e.senderEmail} — ${
           e.subject ?? "(no subject)"
         } — ${(e.snippet ?? "").slice(0, 180)}`
       );
     });
   }
 
-  // Calendar block: present even when empty so the model knows whether to
-  // fall back to clarify-on-availability (no events = unconnected) vs
-  // confidently commit (events listed).
-  parts.push("\n=== Calendar (next 7 days) ===");
-  if (input.calendarEvents.length === 0) {
-    parts.push(
-      "(empty — calendar not connected or genuinely no events. Treat availability questions as "+
-      "unknown.)"
-    );
-  } else {
-    input.calendarEvents.forEach((e, i) => {
-      const where = e.location ? ` @ ${e.location}` : "";
-      parts.push(`${i + 1}. ${e.start} → ${e.end} :: ${e.title}${where}`);
-    });
+  // Legacy calendar block — only emit when fanout wasn't supplied (the
+  // fanout's calendar block already covers events + tasks together).
+  if (!input.fanout) {
+    parts.push("\n=== Calendar (next 7 days) ===");
+    if (input.calendarEvents.length === 0) {
+      parts.push(
+        "(empty — calendar not connected or genuinely no events. Treat availability questions as " +
+          "unknown.)"
+      );
+    } else {
+      input.calendarEvents.forEach((e, i) => {
+        const where = e.location ? ` @ ${e.location}` : "";
+        parts.push(`calendar-${i + 1}: ${e.start} → ${e.end} :: ${e.title}${where}`);
+      });
+    }
   }
 
   if (input.userEmail) {
