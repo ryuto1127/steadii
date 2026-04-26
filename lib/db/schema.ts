@@ -110,6 +110,14 @@ export const users = pgTable("users", {
   autonomySendEnabled: boolean("autonomy_send_enabled")
     .notNull()
     .default(false),
+  // Phase 7 W-Integrations — set when the user clicks "Skip" on the
+  // onboarding integrations page (Step 2). Non-null = the page never
+  // re-shows. Contextual suggestion prompts (Surface 2) remain active
+  // even after skip per locked decision Q1.
+  onboardingIntegrationsSkippedAt: timestamp(
+    "onboarding_integrations_skipped_at",
+    { mode: "date", withTimezone: true }
+  ),
   // Preferred currency for Stripe checkouts and pricing display. Set on first
   // checkout from the user's locale ('ja' → 'jpy', everything else → 'usd')
   // and persisted via the subscription webhook so future top-ups stay in the
@@ -463,6 +471,7 @@ export const events = pgTable(
         | "google_calendar"
         | "google_tasks"
         | "google_classroom_coursework"
+        | "ical_subscription"
       >()
       .notNull(),
     sourceAccountId: text("source_account_id").notNull(),
@@ -1354,3 +1363,125 @@ export const syllabusChunks = pgTable(
 
 export type SyllabusChunk = typeof syllabusChunks.$inferSelect;
 export type NewSyllabusChunk = typeof syllabusChunks.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Phase 7 W-Integrations — iCal subscriptions
+// ---------------------------------------------------------------------------
+
+// One per user-pasted webcal:// or https:// .ics URL. Sync runs every 6h
+// via /api/cron/ical-sync; events flow into the shared `events` mirror
+// table with sourceType='ical_subscription'. Bandwidth-conscious sync uses
+// the stored ETag in a conditional GET — most polls return 304 and skip
+// parsing entirely. After 3 consecutive failures the row is auto-deactivated
+// (active=false) and the user sees the lastError surface in Settings.
+export const icalSubscriptions = pgTable(
+  "ical_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    label: text("label"),
+    active: boolean("active").notNull().default(true),
+    lastSyncedAt: timestamp("last_synced_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    lastError: text("last_error"),
+    consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+    etag: text("etag"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("ical_subscriptions_user_idx").on(t.userId),
+  })
+);
+
+export type IcalSubscription = typeof icalSubscriptions.$inferSelect;
+export type NewIcalSubscription = typeof icalSubscriptions.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Phase 7 W-Integrations — Suggestion subsystem
+// ---------------------------------------------------------------------------
+
+// Stable IDs for the integrations Steadii can suggest. Add a new entry here
+// when shipping a new integration; the suggestion eligibility helpers branch
+// on this string to decide which "is connected?" check to run.
+export type IntegrationSourceId =
+  | "microsoft"
+  | "ical"
+  | "notion";
+
+// Where in the product the suggestion was rendered. Used to attribute
+// impressions back to the surface so we can tell e.g. "Trigger A inbox
+// pill" from "Step 2 onboarding card" in analytics. Onboarding Step 2 is
+// the only Surface 1 today; the three named triggers are Surface 2 entries.
+export type SuggestionSurface =
+  | "onboarding_step2"
+  | "trigger_inbox_outlook"
+  | "trigger_chat_ical"
+  | "trigger_mistakes_notion";
+
+// One row per (user, source, surface) impression so the eligibility helper
+// can enforce the 7-day-per-source cap (Q4) — the cap is computed against
+// the most-recent impression across ALL surfaces for the same source. We
+// never write more than one impression per render, so a single page view
+// is one row.
+export const integrationSuggestionImpressions = pgTable(
+  "integration_suggestion_impressions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    source: text("source").$type<IntegrationSourceId>().notNull(),
+    surface: text("surface").$type<SuggestionSurface>().notNull(),
+    shownAt: timestamp("shown_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userSourceIdx: index("integration_suggestion_impressions_user_source_idx").on(
+      t.userId,
+      t.source,
+      t.shownAt
+    ),
+  })
+);
+
+// One row per dismissal across the lifetime of a (user, source). After the
+// 3rd row the source is permanently suppressed for the user (Q4). Connect
+// events do NOT clear dismissals; they're a separate signal — once the
+// account row exists for the corresponding provider, the eligibility
+// helper short-circuits before reading dismissals.
+export const integrationSuggestionDismissals = pgTable(
+  "integration_suggestion_dismissals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    source: text("source").$type<IntegrationSourceId>().notNull(),
+    surface: text("surface").$type<SuggestionSurface>().notNull(),
+    dismissedAt: timestamp("dismissed_at", {
+      mode: "date",
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userSourceIdx: index("integration_suggestion_dismissals_user_source_idx").on(
+      t.userId,
+      t.source
+    ),
+  })
+);
+
+export type IntegrationSuggestionImpression =
+  typeof integrationSuggestionImpressions.$inferSelect;
+export type IntegrationSuggestionDismissal =
+  typeof integrationSuggestionDismissals.$inferSelect;
