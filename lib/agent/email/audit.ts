@@ -16,7 +16,14 @@ export type EmailAuditAction =
   | "email_l2_started"
   | "email_l2_completed"
   | "email_l2_paused"
-  | "email_l2_failed";
+  | "email_l2_failed"
+  // Phase 7 W1 additions — class binding (run at ingest) and the L2-side
+  // multi-source fanout retrieval. The fanout shape is logged separately
+  // from email_l2_completed so per-source counts/latencies stay
+  // independently filterable in admin dashboards.
+  | "email_class_bound"
+  | "email_fanout_completed"
+  | "email_fanout_timeout";
 
 export async function logEmailAudit(params: {
   userId: string;
