@@ -9,6 +9,30 @@ in the Claude memory for those.
 
 ---
 
+## Stripe catalog (run once before α launch)
+
+The full Stripe Products + Prices + Coupons catalog (USD + JPY) is created
+idempotently by `scripts/stripe-setup.ts`. Run before populating §1 env
+vars and before the first checkout test.
+
+1. [ ] `pnpm tsx scripts/stripe-setup.ts` — creates USD + JPY catalog
+       in test mode. Idempotent; safe to re-run.
+2. [ ] Paste the printed `STRIPE_PRICE_*` lines into `.env.local`
+       (drop in alongside the existing infra keys).
+3. [ ] Propagate the same lines to **Vercel Production AND Preview**
+       (Settings → Environment Variables → import .env). Both envs need
+       identical IDs because Stripe price IDs are global per account.
+4. [ ] Verify the locale-based currency picker at `/checkout`: a JA
+       locale (Accept-Language: ja) sees JPY prices; en sees USD. The
+       choice is driven by `users.preferred_currency` once set; first-
+       visit defaults to locale.
+5. [ ] Spot-check the JPY top-up Checkout flow end-to-end with the
+       Stripe test card `4242 4242 4242 4242` (any future expiry,
+       any CVC). Verify the webhook fires and `topup_balances`
+       increments.
+
+---
+
 ## 1. Environment variables (Vercel Production + Preview)
 
 Pull from `.env.example` as the canonical list.
@@ -47,6 +71,16 @@ paste output into Vercel env)
 - [ ] `STRIPE_COUPON_FRIEND_3MO`
 - [ ] `STRIPE_PRICE_ID_PRO` — legacy alias; set to the same value as
       `STRIPE_PRICE_PRO_MONTHLY` until the last caller migrates off
+
+**Stripe — JPY catalog** (Phase 7 W1, JP α launch). Created by the same
+`stripe-setup.ts` script; users see JPY prices when their `users.preferred_currency`
+is `jpy`. Locale-based currency selection lands at /checkout — see §6.5.
+- [ ] `STRIPE_PRICE_PRO_MONTHLY_JPY`
+- [ ] `STRIPE_PRICE_PRO_YEARLY_JPY`
+- [ ] `STRIPE_PRICE_STUDENT_4MO_JPY`
+- [ ] `STRIPE_PRICE_TOPUP_500_JPY`
+- [ ] `STRIPE_PRICE_TOPUP_2000_JPY`
+- [ ] `STRIPE_PRICE_DATA_RETENTION_JPY`
 
 ---
 

@@ -62,6 +62,7 @@ export const ja: Messages = {
     chats: "チャット",
     classes: "授業",
     calendar: "カレンダー",
+    tasks: "タスク",
     settings: "設定",
   },
   classes: {
