@@ -17,7 +17,12 @@ import {
 } from "@/lib/billing/credits";
 import { selectModel } from "@/lib/agent/models";
 import { runRiskPass, type RiskPassResult } from "./classify-risk";
-import { runDeepPass, type DeepPassResult, type DeepAction } from "./classify-deep";
+import {
+  buildProvenance,
+  runDeepPass,
+  type DeepPassResult,
+  type DeepAction,
+} from "./classify-deep";
 import { runDraft, type DraftResult } from "./draft";
 import { searchSimilarEmails, DEEP_PASS_TOP_K, type SimilarEmail } from "./retrieval";
 import { buildEmbedInput } from "./embeddings";
@@ -286,6 +291,7 @@ async function runPipeline(
       : "no_op";
 
   let draft: DraftResult | null = null;
+  let fanoutForDraft: FanoutResult | null = fanoutForDeep;
   if (decidedAction === "draft_reply") {
     // ---- Step 3: draft (Full) ----
     try {
@@ -308,7 +314,6 @@ async function runPipeline(
     // fanoutForDeep when it's already populated (same shape, same caps);
     // medium-risk drafts run a fresh fanout with classify-sized email K
     // bumped to draft window.
-    let fanoutForDraft: FanoutResult | null = fanoutForDeep;
     if (!fanoutForDraft) {
       try {
         fanoutForDraft = await fanoutForInbox({
@@ -394,6 +399,19 @@ async function runPipeline(
       ? draft.reasoning
       : (deep?.reasoning ?? risk.reasoning);
 
+  // Phase 7 W1 — provenance for medium-tier drafts. The deep pass already
+  // emits its own retrievalProvenance via buildProvenance(input.fanout).
+  // For medium tier (no deep), build the same shape from the draft-phase
+  // fanout so the inbox-detail UI can render typed pills for those rows.
+  const mediumTierProvenance =
+    riskTier === "medium" && fanoutForDraft
+      ? buildProvenance({
+          similarEmails: fanoutForDraft.similarEmails,
+          totalCandidates: fanoutForDraft.totalSimilarCandidates,
+          fanout: fanoutForDraft,
+        })
+      : null;
+
   const row: NewAgentDraft = {
     userId: item.userId,
     inboxItemId: item.id,
@@ -407,7 +425,8 @@ async function runPipeline(
     riskTier,
     action: finalAction,
     reasoning: finalReasoning,
-    retrievalProvenance: deep?.retrievalProvenance ?? null,
+    retrievalProvenance:
+      deep?.retrievalProvenance ?? mediumTierProvenance ?? null,
     draftSubject: draft?.subject ?? null,
     draftBody: draft?.body ?? null,
     draftTo: draft?.to ?? [],

@@ -206,16 +206,103 @@ function buildUserContent(input: DeepPassInput): string {
 }
 
 export function buildProvenance(
-  input: Pick<DeepPassInput, "similarEmails" | "totalCandidates">
+  input: Pick<DeepPassInput, "similarEmails" | "totalCandidates" | "fanout">
 ): RetrievalProvenance {
-  return {
-    sources: input.similarEmails.map((e) => ({
+  const sources: RetrievalProvenance["sources"] = [];
+  const fanout = input.fanout ?? null;
+
+  if (fanout) {
+    for (const m of fanout.mistakes) {
+      sources.push({
+        type: "mistake" as const,
+        id: m.mistakeId,
+        classId: m.classId,
+        snippet: (m.bodySnippet || m.title).slice(0, 400),
+      });
+    }
+    for (const s of fanout.syllabusChunks) {
+      sources.push({
+        type: "syllabus" as const,
+        id: s.chunkId,
+        syllabusId: s.syllabusId,
+        classId: s.classId,
+        similarity: s.similarity,
+        snippet: s.chunkText.slice(0, 400),
+      });
+    }
+    for (const e of fanout.calendar.events) {
+      sources.push({
+        type: "calendar" as const,
+        id: `event:${e.start}:${e.title}`,
+        kind: "event" as const,
+        title: e.title,
+        start: e.start,
+        end: e.end,
+      });
+    }
+    for (const t of fanout.calendar.tasks) {
+      sources.push({
+        type: "calendar" as const,
+        id: `task:${t.due}:${t.title}`,
+        kind: "task" as const,
+        title: t.title,
+        start: t.due,
+        end: null,
+      });
+    }
+    for (const a of fanout.calendar.assignments) {
+      sources.push({
+        type: "calendar" as const,
+        id: `assignment:${a.id}`,
+        kind: "assignment" as const,
+        title: a.title,
+        start: a.due,
+        end: null,
+      });
+    }
+  }
+
+  for (const e of input.similarEmails) {
+    sources.push({
       type: "email" as const,
       id: e.inboxItemId,
       similarity: e.similarity,
       snippet: (e.snippet ?? e.subject ?? "").slice(0, 200),
-    })),
+    });
+  }
+
+  return {
+    sources,
     total_candidates: input.totalCandidates,
     returned: input.similarEmails.length,
+    classBinding: fanout
+      ? {
+          classId: fanout.classBinding.classId,
+          className: fanout.classBinding.className,
+          classCode: fanout.classBinding.classCode,
+          method: fanout.classBinding.method,
+          confidence: fanout.classBinding.confidence,
+        }
+      : null,
+    fanoutCounts: fanout
+      ? {
+          mistakes: fanout.mistakes.length,
+          syllabus: fanout.syllabusChunks.length,
+          emails: fanout.similarEmails.length,
+          calendar:
+            fanout.calendar.events.length +
+            fanout.calendar.tasks.length +
+            fanout.calendar.assignments.length,
+        }
+      : null,
+    fanoutTimings: fanout
+      ? {
+          mistakes: fanout.timings.mistakes,
+          syllabus: fanout.timings.syllabus,
+          emails: fanout.timings.emails,
+          calendar: fanout.timings.calendar,
+          total: fanout.timings.total,
+        }
+      : null,
   };
 }
