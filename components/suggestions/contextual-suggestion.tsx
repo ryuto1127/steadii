@@ -63,6 +63,11 @@ const TRIGGER_FN: Record<
 // shouldn't render for any reason — eligibility cap, source already
 // connected, or the trigger condition not met. Records exactly one
 // impression per render so the 7-day cooldown stays accurate.
+//
+// Render is wrapped in a top-level catch so a transient subsystem hiccup
+// (DB blip, missing migration on a stale env, schema drift) degrades to
+// "no suggestion" instead of erroring the whole hosting page — the
+// suggestion is auxiliary to the host surface and should never block it.
 export async function ContextualSuggestion({
   userId,
   source,
@@ -79,13 +84,23 @@ export async function ContextualSuggestion({
   const triggerFn = TRIGGER_FN[surface];
   if (!triggerFn) return null;
 
-  const matches = await triggerFn(userId);
-  if (!matches) return null;
+  try {
+    const matches = await triggerFn(userId);
+    if (!matches) return null;
 
-  const { eligible } = await checkSuggestionEligibility(userId, source);
-  if (!eligible) return null;
+    const { eligible } = await checkSuggestionEligibility(userId, source);
+    if (!eligible) return null;
 
-  await recordSuggestionImpression(userId, source, surface);
+    await recordSuggestionImpression(userId, source, surface);
+  } catch (err) {
+    console.error("[ContextualSuggestion] eligibility/impression failed", {
+      userId,
+      source,
+      surface,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
 
   const copy = COPY[surface];
   return (
