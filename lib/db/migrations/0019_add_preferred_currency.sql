@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "preferred_currency" text DEFAULT 'usd' NOT NULL;
