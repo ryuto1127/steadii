@@ -125,7 +125,9 @@ describe("computeAgentMetrics", () => {
       [{ n: 0 }],
       // reviewable sent (sent + sent_pending + approved)
       [{ n: 3 }],
-      // retrieval rows
+      // retrieval rows (high-risk only)
+      [],
+      // all-provenance rows (Phase 7 W1 fanout aggregates)
       []
     );
 
@@ -161,7 +163,8 @@ describe("computeAgentMetrics", () => {
       [{ n: 0 }], // edited
       [{ n: 0 }], // dismissed
       [{ n: 0 }], // sent
-      [] // retrieval
+      [], // retrieval (high-risk)
+      [] // all-provenance rows (fanout aggregates)
     );
 
     const { computeAgentMetrics } = await import(
