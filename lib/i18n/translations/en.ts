@@ -56,6 +56,20 @@ type MessagesShape = {
     no_assignments_title: string;
     no_assignments_desc: string;
   };
+  mistakes: {
+    add_from_photo: string;
+    photo_upload_modal_title: string;
+    photo_upload_modal_subtitle: string;
+    photo_choose_file: string;
+    photo_supported_formats: string;
+    photo_extracting: string;
+    photo_preview_label: string;
+    photo_title_placeholder: string;
+    photo_save_button: string;
+    photo_cancel: string;
+    photo_extract_failed: string;
+    photo_save_failed: string;
+  };
   login: { title: string; subtitle: string; button: string };
   app: { welcome: string; empty_state: string };
   home: {
@@ -276,6 +290,21 @@ export const en: MessagesShape = {
     no_assignments_title: "No tasks yet.",
     no_assignments_desc:
       "Ask Steadii to add one from chat, e.g. '物理の課題を追加して'.",
+  },
+  mistakes: {
+    add_from_photo: "📷 Add from photo",
+    photo_upload_modal_title: "Extract handwritten note",
+    photo_upload_modal_subtitle:
+      "Steadii reads the page verbatim — no summarizing, no interpreting.",
+    photo_choose_file: "Choose file",
+    photo_supported_formats: "PDF, PNG, JPEG, GIF, WebP",
+    photo_extracting: "Extracting…",
+    photo_preview_label: "Preview (editable)",
+    photo_title_placeholder: "Title (e.g. 'Integration by parts — practice 3')",
+    photo_save_button: "Save mistake note",
+    photo_cancel: "Cancel",
+    photo_extract_failed: "Couldn't read the file. Try again or use a clearer image.",
+    photo_save_failed: "Couldn't save. Please try again.",
   },
   login: {
     title: "Welcome back",

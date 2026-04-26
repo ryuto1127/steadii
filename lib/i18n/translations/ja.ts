@@ -76,6 +76,22 @@ export const ja: Messages = {
     no_assignments_desc:
       "チャットからSteadiiに追加を頼めます。例：「物理の課題を追加して」。",
   },
+  mistakes: {
+    add_from_photo: "📷 写真から追加",
+    photo_upload_modal_title: "手書きノートを取り込む",
+    photo_upload_modal_subtitle:
+      "Steadiiはページをそのまま読み取ります。要約も解釈もしません。",
+    photo_choose_file: "ファイルを選択",
+    photo_supported_formats: "PDF・PNG・JPEG・GIF・WebP に対応",
+    photo_extracting: "読み取り中…",
+    photo_preview_label: "プレビュー（編集可）",
+    photo_title_placeholder: "タイトル（例：「部分積分 — 練習 3」）",
+    photo_save_button: "間違いノートに保存",
+    photo_cancel: "キャンセル",
+    photo_extract_failed:
+      "読み取りに失敗しました。もう一度試すか、より鮮明な画像を使ってください。",
+    photo_save_failed: "保存に失敗しました。もう一度お試しください。",
+  },
   login: {
     title: "おかえりなさい",
     subtitle: "大学のGoogleアカウントでサインインしてください。",

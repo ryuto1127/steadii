@@ -21,6 +21,7 @@ import { ClassDot } from "@/components/ui/class-dot";
 import { DenseList } from "@/components/ui/dense-list";
 import { DenseRowLink } from "@/components/ui/dense-row-link";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PhotoUploadButton } from "@/components/mistakes/photo-upload-button";
 import { cn } from "@/lib/utils/cn";
 import { getTranslations } from "next-intl/server";
 
@@ -262,41 +263,47 @@ async function MistakesTab({
     )
     .orderBy(desc(mistakeNotes.createdAt))
     .limit(100);
-  if (rows.length === 0) {
-    return (
-      <EmptyState
-        icon={<NotebookPen size={18} strokeWidth={1.5} />}
-        title={`No mistake notes for ${classCode} yet.`}
-        description="Paste a problem image in chat and ask for an explanation to start your mistake notebook."
-        actions={[{ label: "Open chat", href: "/app" }]}
-      />
-    );
-  }
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {rows.map((r) => (
-        <Link
-          key={r.id}
-          href={`/app/mistakes/${r.id}`}
-          className="group flex flex-col gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4 transition-hover hover:bg-[hsl(var(--surface-raised))]"
-        >
-          <div className="flex items-start gap-2">
-            <NotebookPen
-              size={14}
-              strokeWidth={1.5}
-              className="mt-0.5 shrink-0 text-[hsl(var(--muted-foreground))]"
-            />
-            <span className="line-clamp-2 text-body font-medium">{r.title}</span>
-          </div>
-          <div className="flex flex-wrap gap-1 text-small text-[hsl(var(--muted-foreground))]">
-            {[r.difficulty, r.unit, r.createdAt.toISOString().slice(0, 10)]
-              .filter(Boolean)
-              .map((s, i) => (
-                <span key={i}>{s}</span>
-              ))}
-          </div>
-        </Link>
-      ))}
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <PhotoUploadButton classId={classId} />
+      </div>
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={<NotebookPen size={18} strokeWidth={1.5} />}
+          title={`No mistake notes for ${classCode} yet.`}
+          description="Paste a problem image in chat and ask for an explanation, or scan a handwritten page with the button above."
+          actions={[{ label: "Open chat", href: "/app" }]}
+        />
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {rows.map((r) => (
+            <Link
+              key={r.id}
+              href={`/app/mistakes/${r.id}`}
+              className="group flex flex-col gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4 transition-hover hover:bg-[hsl(var(--surface-raised))]"
+            >
+              <div className="flex items-start gap-2">
+                <NotebookPen
+                  size={14}
+                  strokeWidth={1.5}
+                  className="mt-0.5 shrink-0 text-[hsl(var(--muted-foreground))]"
+                />
+                <span className="line-clamp-2 text-body font-medium">
+                  {r.title}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1 text-small text-[hsl(var(--muted-foreground))]">
+                {[r.difficulty, r.unit, r.createdAt.toISOString().slice(0, 10)]
+                  .filter(Boolean)
+                  .map((s, i) => (
+                    <span key={i}>{s}</span>
+                  ))}
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
