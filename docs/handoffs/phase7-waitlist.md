@@ -210,6 +210,11 @@ pattern.
 - Insert `waitlistRequests` row (`status='pending'`). On
   unique-conflict (already requested), return success silently — no
   need to leak that the email was already submitted
+- **On successful new insert** (not on conflict): send an admin
+  notification email via Resend to the address in env
+  `ADMIN_EMAIL` (default: `hello@mysteadii.xyz`). Failure to send
+  the notification must not block the user's submission — log via
+  Sentry but return success regardless
 - Return `{ ok: true }`
 
 **`approveWaitlistAction(ids: string[])`** (admin only)
@@ -279,7 +284,13 @@ async signIn({ user, account, profile }) {
 }
 ```
 
-### Resend email template
+### Resend email templates (two)
+
+Both templates use the project domain. From address is the existing
+`RESEND_FROM_EMAIL` for the sender identity but the access-approved
+email overrides to a more human-touch sub-address.
+
+#### Template 1: `access-approved` — sent to user on approval
 
 File: `lib/integrations/resend/templates/access-approved.tsx` (or
 whatever the existing pattern is)
@@ -323,6 +334,61 @@ Thanks,
 ```
 
 If `name` is null / empty, default to a neutral greeting (`こんにちは、` / `Hi,`).
+
+#### Template 2: `admin-new-request` — sent to admin on new submission
+
+File: `lib/integrations/resend/templates/admin-new-request.tsx`
+
+Triggered by `requestAccessAction` after successful new insert (skip
+on unique-conflict). Failure to send must NOT block the user
+submission — wrap in try/catch + Sentry log, return user success
+regardless.
+
+- **From**: `Steadii System <agent@mysteadii.xyz>` (reuse existing
+  `RESEND_FROM_EMAIL` default — this is a system notification)
+- **To**: env `ADMIN_EMAIL` (default: `hello@mysteadii.xyz`).
+  Forwarding to Ryuto's personal Gmail is handled by the inbound
+  mail forwarder (improvmx); the engineer doesn't deal with the
+  forwarding chain
+- **Reply-To**: same as From (this is informational only, replies
+  go nowhere meaningful)
+- Subject: `[Steadii waitlist] New α access request — {email}`
+- Body (EN, terse):
+
+```
+New α access request received.
+
+Email:        {email}
+Name:         {name or "—"}
+University:   {university or "—"}
+Reason:       {reason or "—"}
+Submitted:    {requestedAt ISO timestamp}
+
+Review and approve at:
+  https://mysteadii.xyz/app/admin/waitlist
+
+— Steadii
+```
+
+The body is intentionally English-only (admin tool) and structured
+so it's also human-readable in plain-text email clients. No HTML
+template fanciness needed.
+
+### Env var addition
+
+Add to `.env.example`:
+
+```
+# Admin email — receives new-waitlist-request notifications and is
+# the contact address shown on /access-denied. Defaults to
+# hello@mysteadii.xyz which forwards to Ryuto's personal inbox via
+# improvmx (set up separately, not part of this work unit).
+ADMIN_EMAIL=hello@mysteadii.xyz
+```
+
+Both `requestAccessAction` (notification target) and the
+`/access-denied` page copy should read from `ADMIN_EMAIL` (with the
+above default fallback) so the address is never hardcoded.
 
 ### Rate limit
 
