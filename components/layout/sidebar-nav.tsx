@@ -29,7 +29,16 @@ const ICONS: Record<NavItemKey, LucideIcon> = {
   tasks: ListChecks,
 };
 
-export function SidebarNav({ labels }: { labels: Record<string, string> }) {
+export function SidebarNav({
+  labels,
+  badges,
+}: {
+  labels: Record<string, string>;
+  // Server-fetched per-item counts. Today only `inbox` ships a badge
+  // (pending agent_drafts), but the prop is keyed by NavItemKey so we
+  // can extend without a new prop. Zero / missing → render no badge.
+  badges?: Partial<Record<NavItemKey, number>>;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const containerRef = useRef<HTMLElement>(null);
@@ -100,13 +109,18 @@ export function SidebarNav({ labels }: { labels: Record<string, string> }) {
         const Icon = ICONS[key];
         const href = NAV_HREFS[key];
         const active = isActive(pathname, href);
+        const badgeCount = badges?.[key] ?? 0;
+        const showBadge = badgeCount > 0;
         return (
           <Link
             key={key}
             href={href}
             data-nav-item
+            data-pending-count={showBadge ? badgeCount : undefined}
             aria-current={active ? "page" : undefined}
-            title={`g${NAV_SHORTCUTS[key]} · ${labels[key] ?? key}`}
+            title={`g${NAV_SHORTCUTS[key]} · ${labels[key] ?? key}${
+              showBadge ? ` (${badgeCount} pending)` : ""
+            }`}
             className={cn(
               // Link geometry is STATIC: always full-width, left-padded,
               // icon always at the same x. The pill background below is
@@ -134,9 +148,32 @@ export function SidebarNav({ labels }: { labels: Record<string, string> }) {
               aria-hidden
             >
               <Icon size={16} strokeWidth={1.75} />
+              {/*
+                Collapsed-state indicator: small amber dot pinned to the
+                top-right of the icon. The full count pill is hidden when
+                the rail is collapsed (it lives in the label span below),
+                so the dot keeps the "you have pending items" signal
+                visible at all times.
+              */}
+              {showBadge ? (
+                <span
+                  data-nav-badge-dot
+                  aria-hidden
+                  className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[hsl(38_92%_50%)] ring-2 ring-[hsl(var(--background))] group-hover/sidebar:hidden"
+                />
+              ) : null}
             </span>
-            <span className="relative max-w-0 flex-1 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 group-hover/sidebar:max-w-[200px] group-hover/sidebar:opacity-100">
-              {labels[key] ?? key}
+            <span className="relative flex max-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 group-hover/sidebar:max-w-[200px] group-hover/sidebar:opacity-100">
+              <span className="truncate">{labels[key] ?? key}</span>
+              {showBadge ? (
+                <span
+                  data-nav-badge-count
+                  aria-label={`${badgeCount} pending`}
+                  className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-[hsl(38_92%_50%)] px-1.5 text-[11px] font-semibold leading-none tabular-nums text-[hsl(var(--foreground))] dark:bg-[hsl(38_92%_55%)] dark:text-[hsl(220_20%_10%)]"
+                >
+                  {badgeCount > 99 ? "99+" : badgeCount}
+                </span>
+              ) : null}
             </span>
           </Link>
         );
