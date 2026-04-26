@@ -131,7 +131,9 @@ export const blobAssets = pgTable("blob_assets", {
   userId: uuid("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  source: text("source").$type<"chat_attachment" | "syllabus">().notNull(),
+  source: text("source")
+    .$type<"chat_attachment" | "syllabus" | "handwritten_note">()
+    .notNull(),
   url: text("url").notNull(),
   filename: text("filename"),
   mimeType: text("mime_type"),
@@ -1060,6 +1062,7 @@ export type NewClassRow = typeof classes.$inferInsert;
 
 export type MistakeBodyFormat = "markdown" | "tiptap_json";
 export type MistakeDifficulty = "easy" | "medium" | "hard";
+export type MistakeSource = "user_typed" | "handwritten_ocr";
 
 // Mistake Notes — α v1 ships markdown only. The body_format discriminator +
 // dual columns exist so a future flip to TipTap JSON is a forward-only
@@ -1089,6 +1092,18 @@ export const mistakeNotes = pgTable(
       .default("markdown"),
     bodyMarkdown: text("body_markdown"),
     bodyDoc: jsonb("body_doc"),
+
+    // Phase 7 W-Notes — discriminator for how the body_markdown was produced.
+    // Existing rows backfill to "user_typed". Handwritten-OCR rows carry the
+    // source blob asset id so the original scan stays linked.
+    source: text("source")
+      .$type<MistakeSource>()
+      .notNull()
+      .default("user_typed"),
+    sourceBlobAssetId: uuid("source_blob_asset_id").references(
+      () => blobAssets.id,
+      { onDelete: "set null" }
+    ),
 
     sourceChatId: uuid("source_chat_id").references(() => chats.id, {
       onDelete: "set null",

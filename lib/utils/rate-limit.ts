@@ -70,6 +70,7 @@ export const BUCKETS = {
   chatMessage: { capacity: 20, refillPerSec: 20 / 60 },
   chatStream: { capacity: 20, refillPerSec: 20 / 60 },
   syllabusExtract: { capacity: 10, refillPerSec: 10 / 300 },
+  notesExtract: { capacity: 10, refillPerSec: 10 / 300 },
   chatAttachment: { capacity: 30, refillPerSec: 30 / 60 },
 } as const satisfies Record<string, BucketConfig>;
 

@@ -3,7 +3,7 @@ import { put } from "@vercel/blob";
 import { db } from "@/lib/db/client";
 import { blobAssets } from "@/lib/db/schema";
 
-export type BlobSource = "chat_attachment" | "syllabus";
+export type BlobSource = "chat_attachment" | "syllabus" | "handwritten_note";
 
 export type UploadedAsset = {
   blobAssetId: string;
