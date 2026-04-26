@@ -41,6 +41,15 @@ Pull from `.env.example` as the canonical list.
 - [ ] `DATABASE_URL` — Neon prod branch connection string
 - [ ] `AUTH_SECRET` — `openssl rand -base64 32`
 - [ ] `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`
+- [ ] `AUTH_MS_ID`, `AUTH_MS_SECRET` — Phase 7 W-Integrations.
+      Register an app at https://entra.microsoft.com → App registrations,
+      multi-tenant (or single-tenant if you want to lock to one school
+      domain). Add redirect URI `${APP_URL}/api/auth/callback/microsoft-entra-id`.
+      Required Graph delegated scopes: `User.Read`, `Calendars.Read`,
+      `Tasks.Read`, `offline_access`. Leave blank if MS integration is
+      out of scope for the current rollout.
+- [ ] `AUTH_MS_TENANT_ID` — `common` for multi-tenant (default), or a
+      specific tenant GUID / domain for single-tenant lock-down.
 - [ ] `ENCRYPTION_KEY` — `openssl rand -base64 32` (32-byte)
 - [ ] `APP_URL` — `https://mysteadii.xyz`
 - [ ] `BLOB_READ_WRITE_TOKEN` — Vercel Storage → Blob store token
@@ -245,6 +254,7 @@ In the QStash console → **Schedules** → **Create**:
 | `https://mysteadii.xyz/api/cron/digest` | `0 * * * *` | POST | Hourly. NA timezones are all whole-hour offsets, so hourly is enough; switch to `*/30` only if onboarding India / Newfoundland users. |
 | `https://mysteadii.xyz/api/cron/send-queue` | `*/5 * * * *` | POST | Every 5 minutes. The 20s undo window is enforced client-side; this cadence only affects time-from-send-click to Gmail API call. |
 | `https://mysteadii.xyz/api/cron/ingest-sweep` | `*/15 * * * *` | POST | Every 15 minutes. Fans out `ingestLast24h` across all gmail-scoped users, bypassing the page-render auto-ingest 24h cooldown. Without this, new emails only surface when the user manually refreshes Settings. |
+| `https://mysteadii.xyz/api/cron/ical-sync` | `0 */6 * * *` | POST | Every 6 hours per Phase 7 W-Integrations Q3. Walks active `ical_subscriptions`, conditional GETs each (If-None-Match: ETag), upserts events into the shared `events` mirror. After 3 consecutive failures the row auto-deactivates so we stop hammering a broken URL. |
 
 Body: leave empty. The signing key in headers handles auth.
 
