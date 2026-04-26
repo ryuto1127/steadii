@@ -97,10 +97,12 @@ export function buildFanoutContextBlocks(
     });
   }
 
-  // === Calendar (events + Google Tasks) ===
+  // === Calendar (events + Google Tasks + Steadii assignments) ===
   lines.push("");
   const calendarTotal =
-    fanout.calendar.events.length + fanout.calendar.tasks.length;
+    fanout.calendar.events.length +
+    fanout.calendar.tasks.length +
+    fanout.calendar.assignments.length;
   lines.push(`=== Calendar (next days, ${calendarTotal} items) ===`);
   if (calendarTotal === 0) {
     lines.push(
@@ -122,6 +124,17 @@ export function buildFanoutContextBlocks(
         ? ` — ${t.notes.replace(/\s+/g, " ").trim().slice(0, 80)}`
         : "";
       lines.push(`calendar-${i}: due ${t.due} :: ${t.title}${status}${note}`);
+    }
+    for (const a of fanout.calendar.assignments.slice(
+      0,
+      caps.calendarRows - i
+    )) {
+      i++;
+      const cls = a.className ? ` [${a.className}]` : "";
+      const status = a.status === "done" ? " (done)" : ` (${a.status})`;
+      lines.push(
+        `calendar-${i}: due ${a.due} :: ${a.title}${cls}${status} [steadii]`
+      );
     }
   }
 
