@@ -6,6 +6,14 @@ const schema = z.object({
   AUTH_SECRET: z.string().min(1),
   AUTH_GOOGLE_ID: z.string().min(1),
   AUTH_GOOGLE_SECRET: z.string().min(1),
+  // Microsoft Entra ID (Outlook calendar + To Do). Optional during dev so a
+  // local start without MS secrets still boots; routes that hit MS Graph
+  // surface MsNotConnectedError when the user lacks the linked account, and
+  // sign-in via the MS provider returns a stock NextAuth provider error if
+  // the secrets are unset. Tenant defaults to "common" (multi-tenant).
+  AUTH_MS_ID: z.string().optional().default(""),
+  AUTH_MS_SECRET: z.string().optional().default(""),
+  AUTH_MS_TENANT_ID: z.string().optional().default("common"),
   NOTION_CLIENT_ID: z.string().min(1),
   NOTION_CLIENT_SECRET: z.string().min(1),
   OPENAI_API_KEY: z.string().min(1),
