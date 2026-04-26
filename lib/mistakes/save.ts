@@ -148,6 +148,81 @@ export async function saveMistakeNote(args: {
   return { id: row.id };
 }
 
+export const handwrittenMistakeSaveSchema = z.object({
+  title: z.string().min(1),
+  classId: z.string().uuid().nullish(),
+  unit: z.string().nullish(),
+  difficulty: z.enum(["easy", "medium", "hard"]).optional(),
+  tags: z.array(z.string()).optional(),
+  bodyMarkdown: z.string().min(1),
+  // The blob row for the original scan / photo. Linking it on the mistake
+  // note row keeps the source page reachable even after the user edits the
+  // markdown — without it, an edit would erase the only pointer back to
+  // the original.
+  sourceBlobAssetId: z.string().uuid(),
+});
+
+export type HandwrittenMistakeSaveInput = z.infer<
+  typeof handwrittenMistakeSaveSchema
+>;
+
+// Phase 7 W-Notes — save path for OCR'd handwritten notes. Sibling to
+// `saveMistakeNote` (which derives the body from a chat message); this
+// one accepts a body and source-blob id directly because the "extract →
+// preview → edit → save" UX has nothing to derive from.
+export async function saveHandwrittenMistakeNote(args: {
+  userId: string;
+  input: HandwrittenMistakeSaveInput;
+}): Promise<{ id: string }> {
+  await assertCreditsAvailable(args.userId);
+
+  const [row] = await db
+    .insert(mistakeNotes)
+    .values({
+      userId: args.userId,
+      classId: args.input.classId ?? null,
+      title: args.input.title,
+      unit: args.input.unit ?? null,
+      difficulty: args.input.difficulty ?? null,
+      tags: args.input.tags ?? [],
+      bodyFormat: "markdown",
+      bodyMarkdown: args.input.bodyMarkdown,
+      source: "handwritten_ocr",
+      sourceBlobAssetId: args.input.sourceBlobAssetId,
+    })
+    .returning({ id: mistakeNotes.id });
+
+  // Same fanout as the chat-driven path — chunk + embed the markdown so
+  // the new note shows up in retrieval immediately. Non-fatal on failure
+  // for the same reasoning as `saveMistakeNote` (the row is the source
+  // of truth; chunks are an advisory cache).
+  try {
+    await refreshMistakeEmbeddings({
+      userId: args.userId,
+      mistakeId: row.id,
+      text: args.input.bodyMarkdown,
+    });
+  } catch (err) {
+    console.error("[mistake.save_handwritten] embedding population failed", err);
+  }
+
+  await db.insert(auditLog).values({
+    userId: args.userId,
+    action: "mistake.save_handwritten",
+    resourceType: "mistake_note",
+    resourceId: row.id,
+    result: "success",
+    detail: {
+      title: args.input.title,
+      classId: args.input.classId ?? null,
+      tags: args.input.tags ?? [],
+      sourceBlobAssetId: args.input.sourceBlobAssetId,
+    },
+  });
+
+  return { id: row.id };
+}
+
 export async function updateMistakeNote(args: {
   userId: string;
   mistakeId: string;
