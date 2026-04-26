@@ -63,6 +63,7 @@ describe("onboarding resumability (Phase 6 step order)", () => {
           notionSetupComplete: false,
           calendarConnected: false,
           gmailConnected: false,
+          integrationsStepCompleted: false,
         })
       ).toBe(1);
     });
@@ -74,6 +75,7 @@ describe("onboarding resumability (Phase 6 step order)", () => {
           notionSetupComplete: false,
           calendarConnected: true,
           gmailConnected: false,
+          integrationsStepCompleted: false,
         })
       ).toBe(1);
     });
@@ -85,6 +87,7 @@ describe("onboarding resumability (Phase 6 step order)", () => {
           notionSetupComplete: false,
           calendarConnected: true,
           gmailConnected: true,
+          integrationsStepCompleted: true,
         })
       ).toBe(2);
     });
@@ -98,6 +101,7 @@ describe("onboarding resumability (Phase 6 step order)", () => {
             notionSetupComplete: false,
             calendarConnected: true,
             gmailConnected: true,
+          integrationsStepCompleted: true,
           },
           4
         )
@@ -111,6 +115,7 @@ describe("onboarding resumability (Phase 6 step order)", () => {
           notionSetupComplete: false,
           calendarConnected: true,
           gmailConnected: true,
+          integrationsStepCompleted: true,
         })
       ).toBe(3);
     });
@@ -122,6 +127,7 @@ describe("onboarding resumability (Phase 6 step order)", () => {
           notionSetupComplete: true,
           calendarConnected: true,
           gmailConnected: true,
+          integrationsStepCompleted: true,
         })
       ).toBe(4);
     });

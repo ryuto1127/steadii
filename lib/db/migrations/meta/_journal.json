@@ -155,6 +155,13 @@
       "when": 1777175574126,
       "tag": "0021_unique_king_bedlam",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1777177253210,
+      "tag": "0022_clean_stephen_strange",
+      "breakpoints": true
     }
   ]
 }

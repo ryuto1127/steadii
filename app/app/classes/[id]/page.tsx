@@ -22,6 +22,7 @@ import { DenseList } from "@/components/ui/dense-list";
 import { DenseRowLink } from "@/components/ui/dense-row-link";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PhotoUploadButton } from "@/components/mistakes/photo-upload-button";
+import { ContextualSuggestion } from "@/components/suggestions/contextual-suggestion";
 import { cn } from "@/lib/utils/cn";
 import { getTranslations } from "next-intl/server";
 
@@ -265,6 +266,12 @@ async function MistakesTab({
     .limit(100);
   return (
     <div className="space-y-4">
+      <ContextualSuggestion
+        userId={userId}
+        source="notion"
+        surface="trigger_mistakes_notion"
+        revalidatePath={`/app/classes/${classId}?tab=mistakes`}
+      />
       <div className="flex justify-end">
         <PhotoUploadButton classId={classId} />
       </div>
