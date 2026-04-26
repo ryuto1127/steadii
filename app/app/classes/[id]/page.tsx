@@ -22,6 +22,7 @@ import { DenseList } from "@/components/ui/dense-list";
 import { DenseRowLink } from "@/components/ui/dense-row-link";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils/cn";
+import { getTranslations } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,8 @@ export default async function ClassDetailPage({
   const cls = await loadClassById(userId, id);
   if (!cls) notFound();
 
+  const t = await getTranslations("classes");
+
   return (
     <div className="mx-auto max-w-4xl py-6">
       <header className="flex items-start gap-4 pb-4">
@@ -71,20 +74,20 @@ export default async function ClassDetailPage({
       </header>
 
       <nav className="flex items-center gap-1 border-b border-[hsl(var(--border))]">
-        {TAB_ORDER.map((t) => (
+        {TAB_ORDER.map((tabKey) => (
           <Link
-            key={t}
-            href={`/app/classes/${id}?tab=${t}`}
-            aria-current={tab === t ? "page" : undefined}
+            key={tabKey}
+            href={`/app/classes/${id}?tab=${tabKey}`}
+            aria-current={tab === tabKey ? "page" : undefined}
             className={cn(
               "relative px-3 py-2 text-small font-medium transition-hover",
-              tab === t
+              tab === tabKey
                 ? "text-[hsl(var(--foreground))]"
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
             )}
           >
-            <span className="capitalize">{t}</span>
-            {tab === t ? (
+            <span>{t(`tabs.${tabKey}`)}</span>
+            {tab === tabKey ? (
               <span
                 aria-hidden
                 className="absolute inset-x-3 -bottom-px h-[2px] rounded-full bg-[hsl(var(--primary))]"
@@ -200,17 +203,18 @@ async function AssignmentsTab({ userId, classId }: { userId: string; classId: st
       )
     )
     .orderBy(asc(assignmentsTable.dueAt));
+  const t = await getTranslations("classes");
   if (rows.length === 0) {
     return (
       <EmptyState
         icon={<GraduationCap size={18} strokeWidth={1.5} />}
-        title="No assignments yet."
-        description="Ask Steadii to add one from chat, e.g. '物理の課題を追加して'."
+        title={t("no_assignments_title")}
+        description={t("no_assignments_desc")}
       />
     );
   }
   return (
-    <DenseList ariaLabel="Assignments">
+    <DenseList ariaLabel={t("tabs.assignments")}>
       {rows.map((r) => {
         const due = r.dueAt ? r.dueAt.toISOString() : null;
         const status = r.status;
