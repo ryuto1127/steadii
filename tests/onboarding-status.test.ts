@@ -9,6 +9,7 @@ describe("isOnboardingComplete (Phase 6 — Notion optional)", () => {
         notionSetupComplete: false,
         calendarConnected: true,
         gmailConnected: false,
+        integrationsStepCompleted: true,
       })
     ).toBe(false);
   });
@@ -20,6 +21,7 @@ describe("isOnboardingComplete (Phase 6 — Notion optional)", () => {
         notionSetupComplete: false,
         calendarConnected: false,
         gmailConnected: true,
+        integrationsStepCompleted: true,
       })
     ).toBe(false);
   });
@@ -32,6 +34,7 @@ describe("isOnboardingComplete (Phase 6 — Notion optional)", () => {
         notionSetupComplete: false,
         calendarConnected: true,
         gmailConnected: true,
+        integrationsStepCompleted: true,
       })
     ).toBe(true);
   });
@@ -43,7 +46,23 @@ describe("isOnboardingComplete (Phase 6 — Notion optional)", () => {
         notionSetupComplete: true,
         calendarConnected: true,
         gmailConnected: true,
+        integrationsStepCompleted: true,
       })
     ).toBe(true);
+  });
+
+  // Phase 7 W-Integrations — onboarding now also requires Step 2 (the
+  // optional-integrations skip-once page) to have been resolved. Skipping
+  // counts as resolution; so does linking any of the optional sources.
+  it("is incomplete when integrations step has not been resolved", () => {
+    expect(
+      isOnboardingComplete({
+        notionConnected: false,
+        notionSetupComplete: false,
+        calendarConnected: true,
+        gmailConnected: true,
+        integrationsStepCompleted: false,
+      })
+    ).toBe(false);
   });
 });

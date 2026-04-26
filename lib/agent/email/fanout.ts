@@ -18,6 +18,9 @@ import {
   fetchUpcomingTasks,
   type DraftCalendarTask,
 } from "@/lib/integrations/google/tasks";
+import { fetchMsUpcomingEvents } from "@/lib/integrations/microsoft/calendar";
+import { fetchMsUpcomingTasks } from "@/lib/integrations/microsoft/tasks";
+import { fetchUpcomingIcalEvents } from "@/lib/integrations/ical/queries";
 import { logEmailAudit } from "./audit";
 import {
   searchSimilarEmails,
@@ -250,18 +253,39 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
     timed(
       "calendar",
       async () => {
-        // Three flavors per Addition A/B: Google events + Google Tasks +
-        // Steadii's own assignments. Single retrieval pipeline; the
-        // prompt renders all three in one calendar block.
-        const [events, tasks, steadiiAssignments] = await Promise.all([
+        // Five flavors per Phase 7 W-Integrations: Google events + Google
+        // Tasks + MS Outlook events + MS To Do tasks + iCal-subscribed
+        // events, all merged into Steadii's own assignments. Single
+        // retrieval pipeline; the prompt renders the union as one calendar
+        // block. Per-source soft-fail keeps a missing connection from
+        // taking the whole block down.
+        const [
+          gEvents,
+          gTasks,
+          msEvents,
+          msTasks,
+          icalEvents,
+          steadiiAssignments,
+        ] = await Promise.all([
           safelyFetchEvents(input.userId, calendarDays, calendarMax),
           safelyFetchTasks(input.userId, calendarDays, calendarMax),
+          safelyFetchMsEvents(input.userId, calendarDays, calendarMax),
+          safelyFetchMsTasks(input.userId, calendarDays, calendarMax),
+          safelyFetchIcalEvents(input.userId, calendarDays, calendarMax),
           safelyFetchSteadiiAssignments(
             input.userId,
             calendarDays,
             calendarMax
           ),
         ]);
+        // Cap the merged event list at calendarMax so a user with both
+        // Google and MS connected can't blow past the prompt budget.
+        const events = [...gEvents, ...msEvents, ...icalEvents]
+          .sort((a, b) => a.start.localeCompare(b.start))
+          .slice(0, calendarMax);
+        const tasks = [...gTasks, ...msTasks]
+          .sort((a, b) => a.due.localeCompare(b.due))
+          .slice(0, calendarMax);
         return { events, tasks, assignments: steadiiAssignments };
       },
       timeouts
@@ -569,6 +593,54 @@ async function safelyFetchTasks(
   } catch (err) {
     Sentry.captureException(err, {
       tags: { feature: "email_fanout", source: "calendar_tasks" },
+      user: { id: userId },
+    });
+    return [];
+  }
+}
+
+async function safelyFetchMsEvents(
+  userId: string,
+  days: number,
+  max: number
+): Promise<DraftCalendarEvent[]> {
+  try {
+    return await fetchMsUpcomingEvents(userId, { days, max });
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { feature: "email_fanout", source: "ms_calendar_events" },
+      user: { id: userId },
+    });
+    return [];
+  }
+}
+
+async function safelyFetchMsTasks(
+  userId: string,
+  days: number,
+  max: number
+): Promise<DraftCalendarTask[]> {
+  try {
+    return await fetchMsUpcomingTasks(userId, { days, max });
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { feature: "email_fanout", source: "ms_calendar_tasks" },
+      user: { id: userId },
+    });
+    return [];
+  }
+}
+
+async function safelyFetchIcalEvents(
+  userId: string,
+  days: number,
+  max: number
+): Promise<DraftCalendarEvent[]> {
+  try {
+    return await fetchUpcomingIcalEvents(userId, { days, max });
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { feature: "email_fanout", source: "ical_events" },
       user: { id: userId },
     });
     return [];
