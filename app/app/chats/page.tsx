@@ -8,6 +8,7 @@ import { ChatHistoryRow } from "@/components/chat/chat-history-row";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MessagesSquare, Plus } from "lucide-react";
 import Link from "next/link";
+import { ContextualSuggestion } from "@/components/suggestions/contextual-suggestion";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,13 @@ export default async function ChatsListPage() {
           New chat
         </Link>
       </header>
+
+      <ContextualSuggestion
+        userId={userId}
+        source="ical"
+        surface="trigger_chat_ical"
+        revalidatePath="/app/chats"
+      />
 
       {rows.length === 0 ? (
         <EmptyState
