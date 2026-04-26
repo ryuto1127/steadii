@@ -6,6 +6,10 @@ import { db } from "@/lib/db/client";
 import { inboxItems, accounts, agentDrafts } from "@/lib/db/schema";
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import { EmptyState } from "@/components/ui/empty-state";
+import {
+  compareInboxRows,
+  isPendingDraft,
+} from "@/lib/agent/email/pending-queries";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +119,8 @@ export default async function InboxPage() {
           // list all funnel through the same route.
           agentDraftId: agentDrafts.id,
           agentDraftCreatedAt: agentDrafts.createdAt,
+          agentDraftStatus: agentDrafts.status,
+          agentDraftAction: agentDrafts.action,
         })
         .from(inboxItems)
         .leftJoin(agentDrafts, eq(agentDrafts.inboxItemId, inboxItems.id))
@@ -145,8 +151,13 @@ export default async function InboxPage() {
     const curTs = r.agentDraftCreatedAt?.getTime() ?? 0;
     if (curTs > prevTs) seen.set(r.id, r);
   }
+  // Pending rows surface to the top so the user can see what needs their
+  // attention at a glance. Within each group (pending first, everything
+  // else after) we keep the existing newest-first ordering so the list
+  // doesn't feel reshuffled. Skipping the All/Pending/Done filter for α
+  // per scoping — this sort + the row marker is enough signal.
   const items = Array.from(seen.values())
-    .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime())
+    .sort(compareInboxRows)
     .slice(0, 50);
 
   return (
@@ -177,11 +188,29 @@ export default async function InboxPage() {
         <ul className="divide-y divide-[hsl(var(--border))] overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
           {items.map((item) => {
             const tier = tierFor(item.bucket, item.riskTier);
+            const pending = isPendingDraft(
+              item.agentDraftStatus,
+              item.agentDraftAction
+            );
             return (
-            <li key={item.id}>
+            <li key={item.id} className="relative">
+              {/*
+                Pending marker — a 3px amber bar pinned to the left edge of
+                the row. Steadii's signature electric-amber tone (locked in
+                the pre-launch redesign memo). Hidden on non-pending rows so
+                the marker carries real signal at a glance, in line with the
+                product's "show what needs you, hide what doesn't" stance.
+              */}
+              {pending ? (
+                <span
+                  aria-label="Needs your review"
+                  className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-[hsl(38_92%_45%)] dark:bg-[hsl(38_92%_55%)]"
+                />
+              ) : null}
               <Link
                 href={item.agentDraftId ? `/app/inbox/${item.agentDraftId}` : "/app/inbox"}
                 className="flex items-start gap-3 px-4 py-3 transition-hover hover:bg-[hsl(var(--surface-raised))]"
+                data-pending={pending ? "true" : undefined}
               >
                 <span
                   className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ${tierTone(tier)}`}
