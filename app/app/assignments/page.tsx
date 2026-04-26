@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
-// Folded into /app/classes/[id]?tab=assignments per REDESIGN §4.1/§4.5.
+// Renamed user-facing surface to "Tasks" per the JP α copy revision. The
+// schema/table stays `assignments`. Old URLs land here and bounce so any
+// in-flight bookmark / share-link / email-deep-link still works.
 export default function AssignmentsRedirect() {
-  redirect("/app/classes");
+  redirect("/app/tasks");
 }

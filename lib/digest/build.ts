@@ -86,16 +86,37 @@ export async function loadPendingDigestItems(
   }));
 }
 
+export type DigestLocale = "en" | "ja";
+
 // Build a subject line from the counts. Memory: content-aware, never
 // templated — "3 drafts ready — 1 urgent, 2 routine", "Light day: 2
 // drafts", "⚠️ High-risk item needs attention".
+//
+// JP α: locale-aware. EN remains the canonical wording; JA mirrors the
+// same content/tone shifts. Both share the same logic so a switch from
+// 'high present' to 'light day' fires identically.
 export function buildDigestSubject(
-  items: DigestItem[]
+  items: DigestItem[],
+  locale: DigestLocale = "en"
 ): string {
   const high = items.filter((i) => i.riskTier === "high").length;
   const medium = items.filter((i) => i.riskTier === "medium").length;
   const low = items.filter((i) => i.riskTier === "low").length;
   const total = items.length;
+  if (locale === "ja") {
+    if (total === 0) return "今日は軽め: 0 件";
+    if (total === 1 && high === 1) {
+      return "⚠️ 要確認の重要項目があります";
+    }
+    if (high > 0 && total > 1) {
+      const routine = medium + low;
+      return `緊急 ${high} 件、通常 ${routine} 件 — 登校前にチェック`;
+    }
+    if (total <= 2) {
+      return `今日は軽め: ${total} 件`;
+    }
+    return `${total} 件の下書きが準備できました`;
+  }
   if (total === 0) return "Light day: 0 drafts";
   if (total === 1 && high === 1) {
     return "⚠️ High-risk item needs attention";
@@ -112,7 +133,17 @@ export function buildDigestSubject(
   return `${total} drafts ready`;
 }
 
-function riskLabel(tier: "low" | "medium" | "high"): string {
+function riskLabel(tier: "low" | "medium" | "high", locale: DigestLocale): string {
+  if (locale === "ja") {
+    switch (tier) {
+      case "high":
+        return "重要";
+      case "medium":
+        return "通常";
+      case "low":
+        return "軽め";
+    }
+  }
   switch (tier) {
     case "high":
       return "HIGH";
@@ -126,20 +157,28 @@ function riskLabel(tier: "low" | "medium" | "high"): string {
 export function buildDigestText(args: {
   items: DigestItem[];
   appUrl: string;
+  locale?: DigestLocale;
 }): string {
+  const locale = args.locale ?? "en";
   const lines: string[] = [];
-  lines.push("Steadii Agent — morning digest");
+  lines.push(
+    locale === "ja"
+      ? "Steadii Agent — 朝のダイジェスト"
+      : "Steadii Agent — morning digest"
+  );
   lines.push("");
   for (const item of args.items) {
     const link = `${args.appUrl}/app/inbox/${item.agentDraftId}?utm_source=digest`;
     lines.push(
-      `[${riskLabel(item.riskTier)}] ${item.senderName} — ${item.subject}`
+      `[${riskLabel(item.riskTier, locale)}] ${item.senderName} — ${item.subject}`
     );
     lines.push(`  → ${link}`);
     lines.push("");
   }
   lines.push(
-    "Review + confirm each draft in Steadii. Nothing sends without your tap."
+    locale === "ja"
+      ? "Steadiiで内容を確認し、各ドラフトを承認してください。あなたのタップなしには何も送信されません。"
+      : "Review + confirm each draft in Steadii. Nothing sends without your tap."
   );
   return lines.join("\n");
 }
@@ -150,7 +189,17 @@ export function buildDigestText(args: {
 export function buildDigestHtml(args: {
   items: DigestItem[];
   appUrl: string;
+  locale?: DigestLocale;
 }): string {
+  const locale = args.locale ?? "en";
+  const reviewLabel = locale === "ja" ? "ドラフトを確認 →" : "Review draft →";
+  const titleEyebrow = "Steadii Agent";
+  const titleHeading = locale === "ja" ? "朝のダイジェスト" : "Morning digest";
+  const footerCopy =
+    locale === "ja"
+      ? "Steadiiで内容を確認し、各ドラフトを承認してください。あなたのタップなしには何も送信されません。"
+      : "Review + confirm each draft in Steadii. Nothing sends without your tap.";
+
   const rows = args.items
     .map((item) => {
       const link = `${args.appUrl}/app/inbox/${item.agentDraftId}?utm_source=digest`;
@@ -165,7 +214,7 @@ export function buildDigestHtml(args: {
           <td style="padding: 10px 0; border-bottom: 1px solid #E4E0DB;">
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; color: #1A1814;">
               <span style="display: inline-block; min-width: 44px; padding: 2px 6px; font-size: 10px; font-weight: 600; letter-spacing: 0.05em; color: #FFFFFF; background: ${color}; border-radius: 3px; margin-right: 8px;">${escapeHtml(
-                riskLabel(item.riskTier)
+                riskLabel(item.riskTier, locale)
               )}</span>
               <strong>${escapeHtml(item.senderName)}</strong>
             </div>
@@ -173,7 +222,7 @@ export function buildDigestHtml(args: {
               ${escapeHtml(item.subject)}
             </div>
             <div style="margin-top: 6px; margin-left: 52px;">
-              <a href="${escapeHtmlAttr(link)}" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; color: #D97706; text-decoration: none;">Review draft →</a>
+              <a href="${escapeHtmlAttr(link)}" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; color: #D97706; text-decoration: none;">${escapeHtml(reviewLabel)}</a>
             </div>
           </td>
         </tr>
@@ -181,7 +230,7 @@ export function buildDigestHtml(args: {
     })
     .join("");
   return `<!DOCTYPE html>
-<html>
+<html lang="${locale}">
   <body style="margin: 0; padding: 0; background: #FAFAF9;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
       <tr>
@@ -189,8 +238,8 @@ export function buildDigestHtml(args: {
           <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width: 560px; background: #FFFFFF; border: 1px solid #E4E0DB; border-radius: 8px;">
             <tr>
               <td style="padding: 24px 24px 8px 24px;">
-                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #6E6A64;">Steadii Agent</div>
-                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 600; color: #1A1814; margin-top: 4px;">Morning digest</div>
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #6E6A64;">${escapeHtml(titleEyebrow)}</div>
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 600; color: #1A1814; margin-top: 4px;">${escapeHtml(titleHeading)}</div>
               </td>
             </tr>
             <tr>
@@ -200,7 +249,7 @@ export function buildDigestHtml(args: {
             </tr>
             <tr>
               <td style="padding: 16px 24px 24px 24px;">
-                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 12px; color: #6E6A64;">Review + confirm each draft in Steadii. Nothing sends without your tap.</div>
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 12px; color: #6E6A64;">${escapeHtml(footerCopy)}</div>
               </td>
             </tr>
           </table>
@@ -233,6 +282,7 @@ export async function buildDigestPayload(
     .select({
       email: users.email,
       digestEnabled: users.digestEnabled,
+      preferences: users.preferences,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -245,9 +295,11 @@ export async function buildDigestPayload(
 
   const e = env();
   const appUrl = e.APP_URL;
-  const subject = buildDigestSubject(items);
-  const text = buildDigestText({ items, appUrl });
-  const html = buildDigestHtml({ items, appUrl });
+  const locale: DigestLocale =
+    user.preferences?.locale === "ja" ? "ja" : "en";
+  const subject = buildDigestSubject(items, locale);
+  const text = buildDigestText({ items, appUrl, locale });
+  const html = buildDigestHtml({ items, appUrl, locale });
   return {
     userEmail: user.email,
     subject,
