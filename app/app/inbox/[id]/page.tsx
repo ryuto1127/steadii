@@ -14,6 +14,7 @@ import { ThinkingBar } from "@/components/agent/thinking-bar";
 import { ReasoningPanel } from "@/components/agent/reasoning-panel";
 import { DraftActions } from "@/components/agent/draft-actions";
 import { RolePickerDialog } from "@/components/agent/role-picker-dialog";
+import { ContextualSuggestion } from "@/components/suggestions/contextual-suggestion";
 
 export const dynamic = "force-dynamic";
 
@@ -166,6 +167,14 @@ export default async function InboxItemPage({
       <ThinkingBar
         provenance={draft.retrievalProvenance}
         riskTier={draft.riskTier}
+      />
+
+      <ContextualSuggestion
+        userId={userId}
+        source="microsoft"
+        surface="trigger_inbox_outlook"
+        revalidatePath={`/app/inbox/${draft.id}`}
+        variant="pill"
       />
 
       {paused ? (

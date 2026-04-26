@@ -1,11 +1,20 @@
 import "server-only";
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
+import MicrosoftEntraId from "next-auth/providers/microsoft-entra-id";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, accounts, sessions, verificationTokens } from "@/lib/db/schema";
 import { EncryptedDrizzleAdapter } from "./encrypted-adapter";
 import { encryptOAuthToken } from "./oauth-tokens";
+
+// Providers whose accounts row we re-sync on every sign-in so scope/token
+// upgrades (re-consent with a wider scope) propagate to existing users.
+// The stock Drizzle adapter only calls linkAccount on the FIRST link, so
+// without this UPDATE-in-place the app silently believes the new scope was
+// never granted. Add a provider id here once the corresponding provider
+// shows up in the `providers` array below.
+const REFRESHABLE_PROVIDERS = new Set(["google", "microsoft-entra-id"]);
 
 export const authConfig = {
   adapter: EncryptedDrizzleAdapter(db, {
@@ -31,6 +40,25 @@ export const authConfig = {
         },
       },
     }),
+    MicrosoftEntraId({
+      clientId: process.env.AUTH_MS_ID,
+      clientSecret: process.env.AUTH_MS_SECRET,
+      // "common" lets any work/school OR personal Microsoft account sign in.
+      // We override per-user via env if a single tenant is desired.
+      issuer: `https://login.microsoftonline.com/${
+        process.env.AUTH_MS_TENANT_ID || "common"
+      }/v2.0`,
+      authorization: {
+        params: {
+          // offline_access is mandatory for a refresh_token; without it MS
+          // returns a one-shot access_token and the cron-driven calendar
+          // refresh would silently 401 after an hour.
+          scope:
+            "openid email profile offline_access User.Read Calendars.Read Tasks.Read",
+          prompt: "consent",
+        },
+      },
+    }),
   ],
   pages: {
     signIn: "/login",
@@ -46,7 +74,7 @@ export const authConfig = {
     // the initial insert as before.
     async signIn({ user, account }) {
       if (!user?.id || !account) return true;
-      if (account.provider !== "google") return true;
+      if (!REFRESHABLE_PROVIDERS.has(account.provider)) return true;
 
       const update: Record<string, unknown> = { updatedAt: new Date() };
       if (typeof account.scope === "string") update.scope = account.scope;
@@ -66,7 +94,7 @@ export const authConfig = {
         .set(update)
         .where(
           and(
-            eq(accounts.provider, "google"),
+            eq(accounts.provider, account.provider),
             eq(accounts.providerAccountId, account.providerAccountId)
           )
         );

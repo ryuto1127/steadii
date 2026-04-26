@@ -6,6 +6,7 @@ import {
   notionConnections,
   registeredResources,
   auditLog,
+  users,
 } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { parseNotionId } from "@/lib/integrations/notion/id";
@@ -105,6 +106,19 @@ export async function addResourceAction(formData: FormData) {
 // `maybeTriggerAutoIngest` in /app/layout.tsx the moment the user lands
 // on the app shell with the Gmail scope detected — so no onboarding
 // action needs to schedule it explicitly anymore.
+
+// Phase 7 W-Integrations — Step 2 skip-once. Stamp the user row so the
+// integrations page never re-renders. Contextual prompts (Surface 2)
+// remain active per locked decision Q1.
+export async function skipIntegrationsStepAction() {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  await db
+    .update(users)
+    .set({ onboardingIntegrationsSkippedAt: new Date() })
+    .where(eq(users.id, session.user.id));
+  redirect("/app");
+}
 
 export async function removeResourceAction(formData: FormData) {
   const session = await auth();
