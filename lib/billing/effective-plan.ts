@@ -84,6 +84,12 @@ export function planFromStripePriceId(
   if (e.STRIPE_PRICE_STUDENT_4MO && priceId === e.STRIPE_PRICE_STUDENT_4MO) {
     return "student";
   }
+  if (
+    e.STRIPE_PRICE_STUDENT_4MO_JPY &&
+    priceId === e.STRIPE_PRICE_STUDENT_4MO_JPY
+  ) {
+    return "student";
+  }
   return "pro";
 }
 

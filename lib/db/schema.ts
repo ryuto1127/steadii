@@ -109,6 +109,15 @@ export const users = pgTable("users", {
   autonomySendEnabled: boolean("autonomy_send_enabled")
     .notNull()
     .default(false),
+  // Preferred currency for Stripe checkouts and pricing display. Set on first
+  // checkout from the user's locale ('ja' → 'jpy', everything else → 'usd')
+  // and persisted via the subscription webhook so future top-ups stay in the
+  // same currency. Stripe Subscriptions are mono-currency, so once a paying
+  // user picks one this field stays pinned.
+  preferredCurrency: text("preferred_currency")
+    .$type<"usd" | "jpy">()
+    .notNull()
+    .default("usd"),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { mode: "date" }),
