@@ -51,6 +51,30 @@ export type AgentMetrics = {
   highRiskWithRetrieval: number;
   avgRetrievalReturned: number;
   avgRetrievalCandidates: number;
+
+  // Phase 7 W1 — multi-source fanout aggregates. Pulled from
+  // agent_drafts.retrieval_provenance.fanoutCounts / fanoutTimings /
+  // classBinding. Null on pre-W1 rows so the field counts only rows
+  // that actually emit fanout context.
+  fanout: {
+    draftsWithFanout: number;
+    avgPerSource: {
+      mistakes: number;
+      syllabus: number;
+      emails: number;
+      calendar: number;
+    };
+    avgTimingsMs: {
+      mistakes: number;
+      syllabus: number;
+      emails: number;
+      calendar: number;
+      total: number;
+    };
+    classBindingMethodCounts: Array<{ method: string; count: number; pct: number }>;
+    boundDrafts: number;
+    unboundDrafts: number;
+  };
 };
 
 const REVIEWABLE_ACTIONS = ["draft_reply", "ask_clarifying"] as const;
@@ -89,6 +113,7 @@ export async function computeAgentMetrics(
     reviewableDismissedRow,
     reviewableSentRow,
     retrievalRows,
+    allProvenanceRows,
   ] = await Promise.all([
     db
       .select({
@@ -162,6 +187,10 @@ export async function computeAgentMetrics(
       .select({ provenance: agentDrafts.retrievalProvenance })
       .from(agentDrafts)
       .where(and(draftWhere, eq(agentDrafts.riskTier, "high"))),
+    db
+      .select({ provenance: agentDrafts.retrievalProvenance })
+      .from(agentDrafts)
+      .where(draftWhere),
   ]);
 
   const totalInbox = bucketRows.reduce((s, r) => s + r.count, 0);
@@ -206,6 +235,74 @@ export async function computeAgentMetrics(
       pct: total > 0 ? (r.count / total) * 100 : 0,
     }));
 
+  // Phase 7 W1 — fanout aggregates. Pre-W1 rows have no fanoutCounts /
+  // fanoutTimings / classBinding so they're filtered out of the
+  // averages but still surface in the binding-method counts as
+  // "(legacy)".
+  const fanoutRows = allProvenanceRows.filter(
+    (r) => r.provenance && r.provenance.fanoutCounts
+  );
+  const draftsWithFanout = fanoutRows.length;
+  const sumPerSource = { mistakes: 0, syllabus: 0, emails: 0, calendar: 0 };
+  const sumTimings = {
+    mistakes: 0,
+    syllabus: 0,
+    emails: 0,
+    calendar: 0,
+    total: 0,
+  };
+  const methodTallies = new Map<string, number>();
+  let bound = 0;
+  let unbound = 0;
+  for (const r of fanoutRows) {
+    const c = r.provenance?.fanoutCounts ?? null;
+    if (c) {
+      sumPerSource.mistakes += c.mistakes;
+      sumPerSource.syllabus += c.syllabus;
+      sumPerSource.emails += c.emails;
+      sumPerSource.calendar += c.calendar;
+    }
+    const t = r.provenance?.fanoutTimings ?? null;
+    if (t) {
+      sumTimings.mistakes += t.mistakes;
+      sumTimings.syllabus += t.syllabus;
+      sumTimings.emails += t.emails;
+      sumTimings.calendar += t.calendar;
+      sumTimings.total += t.total;
+    }
+    const b = r.provenance?.classBinding ?? null;
+    if (b) {
+      methodTallies.set(b.method, (methodTallies.get(b.method) ?? 0) + 1);
+      if (b.classId) bound += 1;
+      else unbound += 1;
+    }
+  }
+  const denom = Math.max(draftsWithFanout, 1);
+  const avgPerSource = {
+    mistakes: sumPerSource.mistakes / denom,
+    syllabus: sumPerSource.syllabus / denom,
+    emails: sumPerSource.emails / denom,
+    calendar: sumPerSource.calendar / denom,
+  };
+  const avgTimingsMs = {
+    mistakes: sumTimings.mistakes / denom,
+    syllabus: sumTimings.syllabus / denom,
+    emails: sumTimings.emails / denom,
+    calendar: sumTimings.calendar / denom,
+    total: sumTimings.total / denom,
+  };
+  const totalMethods = Array.from(methodTallies.values()).reduce(
+    (s, n) => s + n,
+    0
+  );
+  const classBindingMethodCounts = Array.from(methodTallies.entries())
+    .map(([method, count]) => ({
+      method,
+      count,
+      pct: totalMethods > 0 ? (count / totalMethods) * 100 : 0,
+    }))
+    .sort((a, b) => b.count - a.count);
+
   return {
     windowDays: days,
     totalInbox,
@@ -243,5 +340,13 @@ export async function computeAgentMetrics(
     highRiskWithRetrieval: retrievalUsed.length,
     avgRetrievalReturned,
     avgRetrievalCandidates,
+    fanout: {
+      draftsWithFanout,
+      avgPerSource,
+      avgTimingsMs,
+      classBindingMethodCounts,
+      boundDrafts: bound,
+      unboundDrafts: unbound,
+    },
   };
 }

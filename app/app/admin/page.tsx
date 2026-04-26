@@ -191,6 +191,90 @@ export default async function AdminPage() {
       </section>
 
       <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-lg font-medium">
+            Multi-source fanout ·{" "}
+            <span className="text-[hsl(var(--muted-foreground))]">
+              last {metrics.windowDays}d
+            </span>
+          </h2>
+          <p className="font-mono text-[11px] text-[hsl(var(--muted-foreground))]">
+            phase 7 W1
+          </p>
+        </div>
+        <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+          Per-source citation rates and fanout latency. Drafts with
+          fanout context:{" "}
+          <span className="font-mono">{metrics.fanout.draftsWithFanout}</span>{" "}
+          / {metrics.totalDrafts}.
+        </p>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <Stat
+            label="Avg mistakes/draft"
+            value={metrics.fanout.avgPerSource.mistakes.toFixed(2)}
+          />
+          <Stat
+            label="Avg syllabus/draft"
+            value={metrics.fanout.avgPerSource.syllabus.toFixed(2)}
+          />
+          <Stat
+            label="Avg calendar/draft"
+            value={metrics.fanout.avgPerSource.calendar.toFixed(2)}
+          />
+          <Stat
+            label="Avg emails/draft"
+            value={metrics.fanout.avgPerSource.emails.toFixed(2)}
+          />
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-5">
+          <Stat
+            label="Mistakes p̂"
+            value={`${metrics.fanout.avgTimingsMs.mistakes.toFixed(0)}ms`}
+          />
+          <Stat
+            label="Syllabus p̂"
+            value={`${metrics.fanout.avgTimingsMs.syllabus.toFixed(0)}ms`}
+          />
+          <Stat
+            label="Emails p̂"
+            value={`${metrics.fanout.avgTimingsMs.emails.toFixed(0)}ms`}
+          />
+          <Stat
+            label="Calendar p̂"
+            value={`${metrics.fanout.avgTimingsMs.calendar.toFixed(0)}ms`}
+          />
+          <Stat
+            label="Total p̂"
+            value={`${metrics.fanout.avgTimingsMs.total.toFixed(0)}ms`}
+          />
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <DistributionCard
+            title="Class-binding method"
+            rows={metrics.fanout.classBindingMethodCounts.map((r) => ({
+              label: r.method,
+              count: r.count,
+              pct: r.pct,
+            }))}
+            total={metrics.fanout.draftsWithFanout}
+            footer={
+              <span>
+                Bound{" "}
+                <span className="font-mono">{metrics.fanout.boundDrafts}</span>{" "}
+                · unbound{" "}
+                <span className="font-mono">
+                  {metrics.fanout.unboundDrafts}
+                </span>
+              </span>
+            }
+          />
+        </div>
+      </section>
+
+      <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
         <h2 className="text-lg font-medium">Invite codes</h2>
         <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
           Friend invites are now Stripe Promotion Codes backed by the
