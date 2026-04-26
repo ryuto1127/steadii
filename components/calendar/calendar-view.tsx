@@ -14,6 +14,7 @@ import {
   WEEKDAYS_LONG,
   addDays,
   addMonths,
+  assignmentAsTask,
   formatDateInput,
   type CalendarEvent,
   type CalendarItem,
@@ -86,8 +87,19 @@ export function CalendarView({
     () => items.filter((i): i is CalendarEvent => i.kind === "event"),
     [items],
   );
+  // Phase 7 W1 — Steadii assignments project into the task render path.
+  // Their original CalendarAssignment shape is preserved in `items` so
+  // future detail-pane work can key off `kind === "assignment"` and
+  // surface class color / status / priority.
   const tasks = useMemo(
-    () => items.filter((i): i is CalendarTask => i.kind === "task"),
+    () =>
+      items
+        .map<CalendarTask | null>((i) => {
+          if (i.kind === "task") return i;
+          if (i.kind === "assignment") return assignmentAsTask(i);
+          return null;
+        })
+        .filter((t): t is CalendarTask => t !== null),
     [items],
   );
 
