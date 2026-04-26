@@ -96,8 +96,11 @@ is `jpy`. Locale-based currency selection lands at /checkout — see §6.5.
 ## 2. Databases
 
 - [ ] Neon prod branch provisioned
-- [ ] `pnpm db:migrate` applied on prod DB (latest: 0012, adds
-      `topup_balances`)
+- [ ] `pnpm db:migrate` applied on prod DB (latest: 0021,
+      `mistake_notes.source` for handwritten OCR — all migrations
+      through Phase 7 W-Integrations including `ical_subscriptions`,
+      `integration_suggestions`, `mistake_note_chunks`,
+      `syllabus_chunks`, `inbox_items.class_id` etc.)
 - [ ] Ryuto's own user row has `is_admin = true` (set via Neon SQL editor
       or Drizzle Studio — the previous redemption-based admin mechanism
       was removed)
@@ -122,13 +125,31 @@ is `jpy`. Locale-based currency selection lands at /checkout — see §6.5.
 
 ---
 
-## 4. Notion
+## 4. Notion (optional — one-way import only post-migration)
+
+Notion is **no longer canonical** for any Steadii entity (per the
+2026-04-25 Architecture revision in `project_decisions.md`). Postgres
+is the source of truth for Classes / Mistake Notes / Assignments /
+Syllabi. Notion remains as an **optional one-way import** for users
+who already keep notes in Notion and want to bring them in once at
+onboarding.
 
 - [ ] Public integration created at notion.so/my-integrations
 - [ ] OAuth redirect URIs:
   - `http://localhost:3000/api/integrations/notion/callback`
   - `https://mysteadii.xyz/api/integrations/notion/callback`
-- [ ] Integration capabilities: Read content, Update content, Insert content
+- [ ] Integration capabilities: **Read content** only is sufficient
+      for the import path. (Update/Insert capabilities can stay
+      enabled — the legacy two-way sync code is deprecated but not
+      deleted, and the optional Notion *export* path planned for
+      post-α will need write capabilities. Leaving them on now is
+      the simplest forward path.)
+- [ ] Notion is intentionally NOT in the onboarding required-step
+      list. Users who skip the integration page (Step 4) and never
+      touch Settings → Connections will run Steadii successfully
+      without a Notion connection. The Notion-import suggestion
+      trigger fires in-app when user behavior implies they have
+      notes-elsewhere (per `integration_suggestions` policy).
 
 ---
 
@@ -172,44 +193,192 @@ is `jpy`. Locale-based currency selection lands at /checkout — see §6.5.
 ## 7. Vercel Blob
 
 - [ ] Blob store created under Vercel Storage → Blob (public access for α)
-- [ ] `BLOB_READ_WRITE_TOKEN` in env; upload a test PDF via the app and
-      confirm the resulting Notion file block is publicly fetchable
+- [ ] `BLOB_READ_WRITE_TOKEN` in env; upload a syllabus PDF via the
+      app's Syllabus wizard, confirm the blob URL in `blob_assets.url`
+      is publicly fetchable from any browser
+- [ ] Repeat the test for the Mistakes-tab "📷 写真から追加" handwritten
+      note flow: upload a photo, confirm `blob_assets` row created
+      with `source='handwritten_note'` and a fresh URL
 
 ---
 
 ## 8. Smoke test the full journey (incognito + fresh Google account)
 
-- [ ] `/` loads; Privacy and Terms links work
-- [ ] "Sign in with Google" → consent screen shows all expected scopes
-- [ ] Redirected to `/onboarding` with instructional panel
-- [ ] `users.trial_started_at` is populated (14-day Pro trial started)
-- [ ] "Connect Notion" → select All pages → redirected back
-- [ ] "Run setup" → Steadii parent + 4 DBs appear in Notion
-- [ ] `/app` loads Home (Dashboard + chat input); send a message, agent
-      streams a response
+Run through this with a brand-new Google test account that has at
+least 5 emails in the inbox (some from `@*.ac.jp` or `@*.edu`
+domains for the suggestion triggers to fire).
+
+### 8.1 Public surfaces
+
+- [ ] `/` loads; locale auto-switches based on `Accept-Language`
+- [ ] Switch language manually (footer or header) — landing copy
+      flips between EN and JA without page reload visibility issues
+- [ ] Privacy and Terms links work in **both locales** (EN + JA);
+      JA Privacy includes the 5 APPI sections (利用目的 / 第三者提供 /
+      国境を越えた移転 / 連絡先 / 開示・訂正・停止請求方法)
+- [ ] Hero feature line shows the locked Option C copy in both
+      locales (no "Notion" mention anywhere on the landing page)
+
+### 8.2 Onboarding (Google + simplified flow)
+
+- [ ] "Sign in with Google" → consent screen shows all expected
+      scopes (Gmail, Calendar, Tasks, Classroom)
+- [ ] After consent → onboarding flow starts. Steps in order:
+  1. School auto-detect (from email domain) → confirm or pick
+  2. Gmail scope check → green
+  3. **Step 4 — Integration page** (single skip-once)
+     - Three rows visible: Microsoft 365 / iCal feed / Notion import
+     - Click "Skip for now →" — proceeds to `/app`
+     - Verify `users.onboarding_integrations_skipped_at` populated
+- [ ] `users.trial_started_at` populated (14-day Pro trial)
+- [ ] First-run 24h Gmail ingest fires in background — within ~2
+      minutes the Inbox shows triaged items with risk_tier badges
+
+### 8.3 Re-onboarding suppression
+
+- [ ] Sign out, sign back in. The integration page does NOT
+      re-appear (skip flag is sticky)
+
+### 8.4 Core agent paths
+
+- [ ] `/app` Home loads with Today's schedule / Due soon /
+      Past week retrospective (Past week shows "not enough history
+      yet" for new accounts)
+- [ ] `/app/inbox` shows triaged items; opening one shows risk tier,
+      reasoning, and (if drafted) the agent reply
+- [ ] Agent reasoning shows **typed pills** for fanout sources
+      (mistake / syllabus / calendar / past email) — verify visually
+      after the user has at least one mistake_note + syllabus
+- [ ] Send a chat message asking about a deadline → if Steadii has
+      no syllabus / no calendar match, the agent reasoning includes
+      a "no match" note, AND the **iCal suggestion trigger** fires
+      below the reasoning panel (inline pill: "I couldn't find this
+      in your data…")
+
+### 8.5 Tasks tab + Calendar unification
+
+- [ ] Sidebar shows 6 items: `Inbox / Home / Chats / Classes /
+      Calendar / Tasks` in that order
+- [ ] `g t` keyboard shortcut → navigates to `/app/tasks`
+- [ ] `/app/tasks` lists Steadii assignments (post-PR #40 rename)
+- [ ] `/app/calendar` (week view) shows Google Calendar events +
+      Google Tasks + Steadii assignments with `due_at` in range —
+      all merged in one timeline
+
+### 8.6 Mistake Notes — handwritten OCR (Phase 7 W-Notes)
+
+- [ ] Navigate to `/app/classes/[id]?tab=mistakes` for any class
+- [ ] Click "📷 写真から追加" / "📷 Add from photo"
+- [ ] Upload a photo of handwritten work or a typed PDF
+- [ ] Modal cycles through `extracting → preview` stages within ~10s
+      for a single page
+- [ ] Preview shows extracted markdown in editable textarea — math
+      rendered as LaTeX, multiple pages separated by `## Page N`,
+      illegible regions marked `[illegible]`
+- [ ] Edit the title + body, click Save → row appears in the
+      Mistakes list with `source='handwritten_ocr'` in the DB
+- [ ] Verify chunks landed:
+      `SELECT count(*) FROM mistake_note_chunks WHERE mistake_id=...`
+
+### 8.7 Microsoft 365 connect (Phase 7 W-Integrations)
+
+Skip this whole block if `AUTH_MS_ID` is not set in env.
+
+- [ ] Settings → Connections → "Connect Microsoft 365" → consent
+      screen → returned with new `accounts` row for
+      `provider='microsoft-entra-id'`
+- [ ] Send a chat message asking about upcoming events → agent
+      response includes events from BOTH Google Calendar AND MS
+      Outlook (flatten to single calendar block)
+- [ ] Verify in DB: at least one event in agent reasoning provenance
+      came from `bySource: 'microsoft_calendar'` or similar
+      (depending on engineer's exact source-tag naming)
+
+### 8.8 iCal subscription (Phase 7 W-Integrations)
+
+- [ ] Settings → Connections → "iCal Feeds" → paste a valid iCal
+      URL (test feed: many universities publish one publicly,
+      otherwise use https://www.officeholidays.com/ics for testing)
+      → click Add
+- [ ] Within 6h (or trigger manually via QStash console → "Publish
+      now" on `/api/cron/ical-sync`), `events` table populated with
+      `source='ical'` rows
+- [ ] Events appear on `/app/calendar` alongside other sources
+
+### 8.9 Suggestion triggers (verify all 3 fire correctly)
+
+- [ ] **Trigger A (Microsoft)**: open an Inbox item where the sender
+      domain is a known MS-365 university tenant (e.g., `@*.ac.jp`
+      schools that use MS 365 like `@waseda.jp`). Inline pill appears
+      at top of the message: "Connect Outlook to see your campus
+      events here too." Dismiss → pill disappears for this email.
+      Reload → pill DOES NOT come back this session.
+- [ ] **Trigger B (iCal)**: ask the agent "what's due Friday?" when
+      no syllabus / calendar matches. Inline action below reasoning:
+      "I couldn't find this. Most universities publish course schedules
+      as iCal feeds…"
+- [ ] **Trigger C (Notion-import)**: chat 3+ times mentioning notes
+      / memos when `mistake_notes` count for this user is < 5. Card
+      on Mistakes tab top: "Have notes in Notion? Connect once to
+      import…"
+- [ ] Frequency cap: dismiss Trigger A 3 times across 3 different
+      sessions over a week → 4th time it does NOT show. Verify via
+      `integration_suggestions` table: status='dismissed' rows count.
+- [ ] Connect cap: connect Microsoft from Settings → Trigger A
+      stops firing entirely.
+
+### 8.10 "How your agent thinks" route
+
+- [ ] Settings → "How your agent thinks" → renders the last 10
+      drafts each with their full pill row (typed sources) +
+      reasoning + sender / action / auto-sent badge
+
+### 8.11 Chat history rendering (post-PR #46 fix)
+
+- [ ] Open any chat with tool-using turns (e.g., one where the
+      agent created a Calendar event). Navigate away to `/app/inbox`,
+      navigate back. Tool call result JSON does NOT appear as raw
+      text (it's hidden / rendered as a card just like during live
+      streaming).
+
+### 8.12 Billing flows
+
 - [ ] `/app/settings/billing` shows **"Pro (14-day trial) · ends <date>"**
       plus credit / storage bars with reset date
+- [ ] Currency display matches user locale: JA → JPY (¥), EN → USD ($)
 - [ ] As Free user (admin flag off): click "Upgrade to Pro" → Stripe
-      Checkout with `4242 4242 4242 4242` → redirected back → webhook
-      mirrors subscription → `plan_tier='pro'` in DB
+      Checkout opens with the correct currency
+      (`STRIPE_PRICE_PRO_MONTHLY_JPY` for JA users) → pay with
+      `4242 4242 4242 4242` → redirected back → webhook mirrors
+      subscription → `plan_tier='pro'` in DB
 - [ ] First paid subscription triggers `founding_member=true` → badge
       shows in Billing UI ("Founding member. Your current price is
-      locked in for life.")
-- [ ] "+500 credits · \$10" → one-time Checkout → `topup_balances` row
-      inserted, expiry ~90 days out, Billing UI shows "+500 top-up credits"
-- [ ] "Extend data retention · \$10" → `users.data_retention_expires_at`
-      set ~1 year out
-- [ ] Student plan from a non-`.edu` account → 403 with
-      `STUDENT_EMAIL_REQUIRED`
+      locked in for life." / "Founding メンバー. 料金は永続的に固定
+      されます。")
+- [ ] "+500 credits · \$10 / +500 クレジット · ¥1,500" → one-time
+      Checkout → `topup_balances` row inserted, expiry ~90 days out,
+      Billing UI shows "+500 top-up credits"
+- [ ] "Extend data retention · \$10 / ¥1,500" →
+      `users.data_retention_expires_at` set ~1 year out
+- [ ] Student plan from a non-academic email → 403 with
+      `STUDENT_EMAIL_REQUIRED`. From `*.ac.jp` or `*.edu` or one of
+      the Canadian/JP allowlist domains → checkout proceeds
 - [ ] Friend invite flow: create Promotion Code `FRIEND_TEST` under
       `STEADII_FRIEND_3MO`; open `/invite/FRIEND_TEST` in another
-      session; "Accept invite" → Checkout at \$0 for 3 months
+      session; "Accept invite" → Checkout at \$0 / ¥0 for 3 months
 - [ ] "Cancel subscription" link at the bottom of Billing → two-step
       flow → Confirm → `subscriptions.cancel_at_period_end = 1`;
       `audit_log` has `action='billing.canceled'` with the reason
-- [ ] Mark a subscription past_due in Stripe (or force a failed payment)
-      → app shell banner "Your last payment failed…" surfaces at top of
-      every `/app/*` page
+- [ ] Mark a subscription past_due in Stripe (or force a failed
+      payment) → app shell banner "Your last payment failed…"
+      surfaces at top of every `/app/*` page
+
+### 8.13 Lighthouse audit
+
+- [ ] Run Lighthouse on `/` (landing page) — performance ≥85
+- [ ] Run Lighthouse on `/app` (Home, signed in) — performance ≥85
+- [ ] Accessibility ≥90 on both
+- [ ] No console errors on either page
 
 ---
 
@@ -221,13 +390,56 @@ is `jpy`. Locale-based currency selection lands at /checkout — see §6.5.
 
 ---
 
-## 10. Launch
+## 10. Launch (JP α — invite-only, 10 students)
 
-- [ ] Invite emails drafted with onboarding URL (use `/invite/<code>`
-      links to pre-fund the 3-month Pro via `FRIEND_3MO`)
-- [ ] Known-issue note: Stripe is test-mode; UI shows real flow but no
-      charges post
-- [ ] Ryuto's admin flag confirmed on in production DB
+### 10.1 Pre-invite final checks
+
+- [ ] All sections 1-9 + 11 above ticked through
+- [ ] Ryuto's admin flag confirmed on production DB
+      (`SELECT is_admin FROM users WHERE email = '<ryuto>'` returns true)
+- [ ] Test-mode banner verified in production: subscription flows
+      complete but no real Stripe charges post
+- [ ] Sentry shows zero unresolved errors from the full §8 smoke test pass
+
+### 10.2 Friend invite codes (one per α user)
+
+- [ ] In Stripe Dashboard → Coupons → `STEADII_FRIEND_3MO` → Promotion
+      Codes → create 10 individual codes, one per invitee. Naming
+      convention: `STEADII-α-<short-name>` (e.g., `STEADII-α-TANAKA`)
+- [ ] Verify each code redeems for $0 / ¥0 for 3 months in a test session
+- [ ] Spreadsheet maintained externally (Google Sheets) tracking:
+      invitee name / code / sent date / accepted date / first-digest date
+
+### 10.3 Founding member confirmation
+
+- [ ] All 10 α users will auto-receive `founding_member=true` on first
+      paid subscription (per locked decision in `project_decisions.md`).
+      Verify the webhook handler grants the flag after the friend-code
+      checkout
+
+### 10.4 Invite send
+
+- [ ] Send the JA invitation message (drafted separately by sparring
+      side, see `docs/handoffs/jp-alpha-invite-content.md` if committed,
+      otherwise in the chat thread) personally to each of the 10 invitees
+- [ ] Each message includes: founding-member framing + `/invite/<code>`
+      URL + 1-line expectations (week-1 sync cadence) + privacy note
+      (data flows, OpenAI processing disclosure)
+
+### 10.5 Post-invite observation cadence
+
+- [ ] First 24h: monitor Sentry + dogfood metrics admin page closely
+      for any unexpected error spikes
+- [ ] First week: 1-on-1 30-min sync with each invitee; collect
+      qualitative feedback on agent draft quality, classification
+      accuracy, suggestion prompt relevance
+- [ ] Per-user metrics target after week 2 (per
+      `project_agent_model.md`):
+      classification error <5%, draft edit rate <20%, post-send
+      regret = 0
+- [ ] Any single regret incident → agent send capability disabled,
+      user notified transparently, diagnose → patch → restart (per
+      locked rollback policy)
 
 
 ---
