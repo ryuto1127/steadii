@@ -3,6 +3,10 @@ import * as Sentry from "@sentry/nextjs";
 import { openai } from "@/lib/integrations/openai/client";
 import { selectModel } from "@/lib/agent/models";
 import { recordUsage } from "@/lib/agent/usage";
+import {
+  buildFanoutContextBlocks,
+  type FanoutResult,
+} from "./fanout-prompt";
 
 export type RiskTier = "low" | "medium" | "high";
 
@@ -14,6 +18,10 @@ export type RiskPassInput = {
   subject: string | null;
   snippet: string | null;
   firstTimeSender: boolean;
+  // Phase 7 W1 — multi-source fanout context. Optional so existing tests
+  // and the forced-tier paths can omit it; passing null produces an
+  // identical prompt shape (no fanout block) to the pre-W1 behavior.
+  fanout?: FanoutResult | null;
 };
 
 export type RiskPassResult = {
@@ -43,7 +51,11 @@ Guidelines:
 - MEDIUM risk: professors/TAs on routine topics (extensions, office hours, assignment questions), classmates asking for help on coursework.
 - LOW risk: attendance confirmations, club RSVPs, short acknowledgments, course announcements with no call to action.
 
-Never downgrade HIGH to MEDIUM even if the subject is short. If uncertain, prefer HIGH — a false HIGH costs one extra confirmation; a false LOW sends an unreviewed reply.`;
+Never downgrade HIGH to MEDIUM even if the subject is short. If uncertain, prefer HIGH — a false HIGH costs one extra confirmation; a false LOW sends an unreviewed reply.
+
+Fanout grounding (when the "Class binding" / "Relevant past mistakes" / "Relevant syllabus sections" / "Calendar" blocks are non-empty below):
+- Use them to anchor the risk decision. If the fanout shows a recurring deadline pattern in this class (mistakes-N), an interview slot already on the calendar (calendar-N), or an explicit grading rule in the syllabus (syllabus-N), cite that source by tag in your reasoning.
+- Glass-box transparency is a hard requirement: cite which fanout source informed each conclusion (mistake-N, syllabus-N, calendar-N). Ungrounded claims are unacceptable.`;
 
 const RISK_PASS_JSON_SCHEMA = {
   type: "object",
@@ -119,6 +131,12 @@ function buildUserContent(input: RiskPassInput): string {
   }
   lines.push(`Subject: ${input.subject ?? "(none)"}`);
   lines.push(`Snippet: ${(input.snippet ?? "").slice(0, 1500)}`);
+
+  if (input.fanout) {
+    lines.push("");
+    lines.push(buildFanoutContextBlocks(input.fanout, "classify"));
+  }
+
   return lines.join("\n");
 }
 

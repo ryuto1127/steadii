@@ -71,3 +71,83 @@ export function dueDateOnly(due: string | null | undefined): string | null {
 export function dueFromDateOnly(date: string): string {
   return `${date}T00:00:00.000Z`;
 }
+
+// Phase 7 W1 — light-weight task row used by the L2 fanout's calendar
+// source. Mirrors `DraftCalendarEvent` so the same prompt block can render
+// both events and tasks (a task is just "a thing due on a date with no
+// time"). Pulled live from Google Tasks, not from the local `events`
+// mirror — the mirror is sync-job populated and the agent runs async.
+export type DraftCalendarTask = {
+  title: string;
+  due: string; // YYYY-MM-DD, local-date-only
+  notes: string | null;
+  completed: boolean;
+};
+
+// Live fetch of incomplete tasks due in the next N days. Soft-fails when
+// the user hasn't connected Tasks (no scope grant) — the fanout treats
+// that as "no tasks block to render," same as the calendar path.
+export async function fetchUpcomingTasks(
+  userId: string,
+  options: { days?: number; max?: number } = {}
+): Promise<DraftCalendarTask[]> {
+  const days = options.days ?? 7;
+  const max = options.max ?? 25;
+  let tasks;
+  try {
+    tasks = await getTasksForUser(userId);
+  } catch (e) {
+    if (e instanceof TasksNotConnectedError) return [];
+    throw e;
+  }
+
+  // Pull all tasklists, then merge their tasks. α users typically have 1-2
+  // lists; the per-list fan-out is bounded.
+  let lists;
+  try {
+    lists = await tasks.tasklists.list({ maxResults: 100 });
+  } catch {
+    return [];
+  }
+  const ids = (lists.data.items ?? [])
+    .map((l) => l.id)
+    .filter((id): id is string => !!id);
+  if (ids.length === 0) return [];
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const fromDate = today.toISOString().slice(0, 10);
+  const end = new Date(today.getTime() + days * 24 * 60 * 60 * 1000);
+  const toDate = end.toISOString().slice(0, 10);
+
+  const out: DraftCalendarTask[] = [];
+  for (const id of ids) {
+    try {
+      const resp = await tasks.tasks.list({
+        tasklist: id,
+        maxResults: max,
+        showCompleted: false,
+        showHidden: false,
+        dueMin: dueFromDateOnly(fromDate),
+        dueMax: dueFromDateOnly(toDate),
+      });
+      for (const t of resp.data.items ?? []) {
+        const date = dueDateOnly(t.due);
+        if (!date || !t.title) continue;
+        out.push({
+          title: t.title,
+          due: date,
+          notes: t.notes ?? null,
+          completed: t.status === "completed",
+        });
+        if (out.length >= max) break;
+      }
+    } catch {
+      // Per-list failures are non-fatal — skip and try the next.
+    }
+    if (out.length >= max) break;
+  }
+  // Sort by due date ascending so the prompt sees the most-urgent first.
+  out.sort((a, b) => a.due.localeCompare(b.due));
+  return out;
+}

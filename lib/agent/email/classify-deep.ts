@@ -6,6 +6,10 @@ import { recordUsage } from "@/lib/agent/usage";
 import type { RetrievalProvenance } from "@/lib/db/schema";
 import type { SimilarEmail } from "./retrieval";
 import type { RiskPassResult } from "./classify-risk";
+import {
+  buildFanoutContextBlocks,
+  type FanoutResult,
+} from "./fanout-prompt";
 
 export type DeepAction =
   | "draft_reply"
@@ -26,6 +30,10 @@ export type DeepPassInput = {
   similarEmails: SimilarEmail[];
   totalCandidates: number;
   threadRecentMessages: Array<{ sender: string; snippet: string }>; // last 2 thread predecessors
+  // Phase 7 W1 — multi-source fanout. Optional so legacy paths still work
+  // (the orchestrator passes it; tests that exercise the prompt shape
+  // without DB pass null and get the existing similar-email-only prompt).
+  fanout?: FanoutResult | null;
 };
 
 export type DeepPassResult = {
@@ -38,6 +46,7 @@ export type DeepPassResult = {
 const SYSTEM_PROMPT = `You are Steadii's deep classifier for high-risk emails. You receive:
 - the email envelope + snippet
 - the cheap risk-pass output (tier + its reasoning)
+- a multi-source fanout context: class binding + relevant past mistakes + relevant syllabus chunks + upcoming calendar events/tasks
 - up to 20 retrieved similar past emails (subject + snippet + sender)
 - the immediately prior 2 messages in the same thread (if any)
 
@@ -50,7 +59,7 @@ Decide the action the agent should take:
 
 Default to draft_reply when the sender is asking for something and enough context exists. Default to ask_clarifying when the needed decision is the user's to make. Never choose archive for high-risk items that reference grades, transcripts, supervisors, or admissions unless the email is strictly a receipt.
 
-Reasoning must cite at least one retrieved similar email by subject when applicable — glass-box transparency is a hard product requirement. Reasoning is ALWAYS in English regardless of the email's language; it's an internal transparency string surfaced in a debug panel, not user-facing prose.`;
+Glass-box transparency is a hard product requirement. Reasoning bullets MUST cite which fanout source informed each conclusion using the per-source tags in the user content (mistake-N, syllabus-N, calendar-N, email-N). Cite at least one source when any are present; ungrounded claims are unacceptable. Reasoning is ALWAYS in English regardless of the email's language; it's an internal transparency string surfaced in a debug panel, not user-facing prose.`;
 
 const DEEP_PASS_JSON_SCHEMA = {
   type: "object",
@@ -171,6 +180,11 @@ function buildUserContent(input: DeepPassInput): string {
     }
   }
 
+  if (input.fanout) {
+    parts.push("");
+    parts.push(buildFanoutContextBlocks(input.fanout, "deep"));
+  }
+
   parts.push(
     `\n=== Retrieved similar emails (top ${input.similarEmails.length} of ${input.totalCandidates}) ===`
   );
@@ -179,7 +193,7 @@ function buildUserContent(input: DeepPassInput): string {
   } else {
     input.similarEmails.forEach((e, i) => {
       parts.push(
-        `${i + 1}. [sim=${e.similarity.toFixed(
+        `email-${i + 1}: [sim=${e.similarity.toFixed(
           2
         )}] ${e.senderEmail} — ${e.subject ?? "(no subject)"} — ${
           (e.snippet ?? "").slice(0, 160)
