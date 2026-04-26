@@ -38,7 +38,7 @@ describe("serializeContextForPrompt", () => {
       },
     });
     expect(out).toMatch(
-      /Academic store \(Postgres\): 5 classes, 3 active assignments, 12 mistake notes, 4 syllabi\./
+      /Academic store \(Postgres\): 5 classes, 3 active tasks, 12 mistake notes, 4 syllabi\./
     );
   });
 
