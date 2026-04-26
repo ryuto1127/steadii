@@ -4,6 +4,7 @@ import {
   timestamp,
   primaryKey,
   integer,
+  real,
   uuid,
   jsonb,
   uniqueIndex,
@@ -556,6 +557,20 @@ export type RuleProvenance = {
   why: string;
 };
 
+// Phase 7 W1 — class binding method enum. The dominant method that bound
+// an inbox item to a `class_id`. Persisted on `inbox_items` so the L2
+// fanout retriever can branch (structured-by-class-id vs vector-only)
+// without re-running the binding compute. "none" means no signal cleared
+// MIN_CONFIDENCE; the row stays unbound.
+export type ClassBindingMethod =
+  | "subject_code"
+  | "subject_name"
+  | "sender_professor"
+  | "vector_chunks"
+  | "calendar_proximity"
+  | "ja_sensei_pattern"
+  | "none";
+
 // The agent's Gmail queue. One row per message seen by L1.
 export const inboxItems = pgTable(
   "inbox_items",
@@ -596,6 +611,17 @@ export const inboxItems = pgTable(
     ruleProvenance: jsonb("rule_provenance").$type<RuleProvenance[]>(),
     firstTimeSender: boolean("first_time_sender").notNull().default(false),
 
+    // Phase 7 W1 — class binding cache. Populated once at ingest by
+    // `bindEmailToClass` so the L2 fanout retriever consults a single
+    // index probe instead of re-binding per call. Nullable: rows that
+    // bind to no class (no signal above MIN_CONFIDENCE) leave class_id
+    // null and the fanout falls back to vector-only retrieval.
+    classId: uuid("class_id").references(() => classes.id, {
+      onDelete: "set null",
+    }),
+    classBindingMethod: text("class_binding_method").$type<ClassBindingMethod>(),
+    classBindingConfidence: real("class_binding_confidence"),
+
     status: text("status").$type<InboxStatus>().notNull().default("open"),
     reviewedAt: timestamp("reviewed_at", { mode: "date", withTimezone: true }),
     resolvedAt: timestamp("resolved_at", { mode: "date", withTimezone: true }),
@@ -626,6 +652,11 @@ export const inboxItems = pgTable(
       t.userId,
       t.threadExternalId
     ),
+    // Phase 7 W1 — class-bound retrieval probe. Skips rows with no
+    // binding so the index is only as wide as the bound corpus.
+    userClassIdx: index("inbox_items_user_class_idx")
+      .on(t.userId, t.classId)
+      .where(sql`deleted_at IS NULL AND class_id IS NOT NULL`),
   })
 );
 
