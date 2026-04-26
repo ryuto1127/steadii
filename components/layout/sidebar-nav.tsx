@@ -9,6 +9,7 @@ import {
   MessagesSquare,
   GraduationCap,
   Calendar,
+  ListChecks,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -25,6 +26,7 @@ const ICONS: Record<NavItemKey, LucideIcon> = {
   chats: MessagesSquare,
   classes: GraduationCap,
   calendar: Calendar,
+  tasks: ListChecks,
 };
 
 export function SidebarNav({ labels }: { labels: Record<string, string> }) {

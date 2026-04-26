@@ -1,5 +1,8 @@
 import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
+import { and, eq, gte, isNull, lt } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { assignments, classes } from "@/lib/db/schema";
 import {
   listEventsInRange,
   shouldSync,
@@ -9,6 +12,7 @@ import { getUserTimezone } from "@/lib/agent/preferences";
 import { FALLBACK_TZ } from "@/lib/calendar/tz-utils";
 import {
   visibleRange,
+  type CalendarAssignment,
   type CalendarEvent,
   type CalendarItem,
   type CalendarTask,
@@ -194,6 +198,49 @@ export default async function CalendarPage({
       };
       items.push(ct);
     }
+  }
+
+  // Phase 7 W1 — Steadii's own assignments. Pulled directly from the
+  // canonical `assignments` table (not via the events sync) so users see
+  // their tracker tasks on the calendar without setting up a sync
+  // adapter. Joined to classes so the visible chip can show the class
+  // name without an extra round-trip in the client.
+  const steadiiRows = await db
+    .select({
+      id: assignments.id,
+      title: assignments.title,
+      dueAt: assignments.dueAt,
+      status: assignments.status,
+      priority: assignments.priority,
+      notes: assignments.notes,
+      classId: assignments.classId,
+      className: classes.name,
+    })
+    .from(assignments)
+    .leftJoin(classes, eq(classes.id, assignments.classId))
+    .where(
+      and(
+        eq(assignments.userId, userId),
+        isNull(assignments.deletedAt),
+        gte(assignments.dueAt, range.start),
+        lt(assignments.dueAt, range.end)
+      )
+    );
+  for (const a of steadiiRows) {
+    if (!a.dueAt) continue;
+    const due = zoneDateString(a.dueAt, userTz);
+    const ca: CalendarAssignment = {
+      kind: "assignment",
+      id: a.id,
+      title: a.title,
+      due,
+      notes: a.notes,
+      classId: a.classId,
+      className: a.className,
+      status: a.status,
+      priority: a.priority,
+    };
+    items.push(ca);
   }
 
   return (

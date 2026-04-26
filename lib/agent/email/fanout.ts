@@ -1,8 +1,9 @@
 import "server-only";
 import * as Sentry from "@sentry/nextjs";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
+  assignments,
   classes,
   emailEmbeddings,
   inboxItems,
@@ -64,9 +65,23 @@ export type FanoutSyllabusChunk = {
   similarity: number;
 };
 
+export type FanoutSteadiiAssignment = {
+  id: string;
+  classId: string | null;
+  className: string | null;
+  title: string;
+  due: string; // YYYY-MM-DD
+  status: "not_started" | "in_progress" | "done";
+  priority: "low" | "medium" | "high" | null;
+};
+
 export type FanoutCalendar = {
   events: DraftCalendarEvent[];
   tasks: DraftCalendarTask[];
+  // Phase 7 W1 — Steadii's own assignments due in the fanout window.
+  // Surfaced alongside Google events + Google Tasks in a single calendar
+  // block so the L2 prompts see the user's full upcoming commitments.
+  assignments: FanoutSteadiiAssignment[];
 };
 
 export type ClassBindingPayload = {
@@ -235,14 +250,19 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
     timed(
       "calendar",
       async () => {
-        // Both events and tasks live-fetched. Per Addition A, the calendar
-        // source is "events + tasks" — fanned out together so the prompt
-        // sees the user's full upcoming commitments, not just timed events.
-        const [events, tasks] = await Promise.all([
+        // Three flavors per Addition A/B: Google events + Google Tasks +
+        // Steadii's own assignments. Single retrieval pipeline; the
+        // prompt renders all three in one calendar block.
+        const [events, tasks, steadiiAssignments] = await Promise.all([
           safelyFetchEvents(input.userId, calendarDays, calendarMax),
           safelyFetchTasks(input.userId, calendarDays, calendarMax),
+          safelyFetchSteadiiAssignments(
+            input.userId,
+            calendarDays,
+            calendarMax
+          ),
         ]);
-        return { events, tasks };
+        return { events, tasks, assignments: steadiiAssignments };
       },
       timeouts
     ),
@@ -260,7 +280,9 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
       syllabus: syllabusChunks.value.length,
       emails: emails.value.results.length,
       calendar:
-        calendar.value.events.length + calendar.value.tasks.length,
+        calendar.value.events.length +
+        calendar.value.tasks.length +
+        calendar.value.assignments.length,
     },
     timings_ms: {
       mistakes: mistakes.elapsed,
@@ -553,6 +575,56 @@ async function safelyFetchTasks(
   }
 }
 
+async function safelyFetchSteadiiAssignments(
+  userId: string,
+  days: number,
+  max: number
+): Promise<FanoutSteadiiAssignment[]> {
+  try {
+    const now = new Date();
+    const end = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({
+        id: assignments.id,
+        title: assignments.title,
+        dueAt: assignments.dueAt,
+        status: assignments.status,
+        priority: assignments.priority,
+        classId: assignments.classId,
+        className: classes.name,
+      })
+      .from(assignments)
+      .leftJoin(classes, eq(classes.id, assignments.classId))
+      .where(
+        and(
+          eq(assignments.userId, userId),
+          isNull(assignments.deletedAt),
+          gte(assignments.dueAt, now),
+          lt(assignments.dueAt, end)
+        )
+      )
+      .limit(max);
+    return rows
+      .filter((r): r is typeof r & { dueAt: Date } => r.dueAt instanceof Date)
+      .map((r) => ({
+        id: r.id,
+        classId: r.classId,
+        className: r.className,
+        title: r.title,
+        due: r.dueAt.toISOString().slice(0, 10),
+        status: r.status,
+        priority: r.priority,
+      }))
+      .sort((a, b) => a.due.localeCompare(b.due));
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { feature: "email_fanout", source: "calendar_steadii" },
+      user: { id: userId },
+    });
+    return [];
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
@@ -597,7 +669,11 @@ function emptyForSource(source: string): unknown {
     case "emails":
       return { results: [] as SimilarEmail[], totalCandidates: 0 };
     case "calendar":
-      return { events: [] as DraftCalendarEvent[], tasks: [] as DraftCalendarTask[] };
+      return {
+        events: [] as DraftCalendarEvent[],
+        tasks: [] as DraftCalendarTask[],
+        assignments: [] as FanoutSteadiiAssignment[],
+      };
     default:
       return null;
   }

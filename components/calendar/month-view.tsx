@@ -13,7 +13,6 @@ import {
   startOfDay,
   startOfMonthGrid,
   type CalendarEvent,
-  type CalendarItem,
   type CalendarTask,
 } from "@/lib/calendar/events";
 
@@ -50,7 +49,10 @@ export function MonthView({
   const today = new Date();
   const [dragOver, setDragOver] = useState<string | null>(null);
 
-  const byDay = new Map<string, CalendarItem[]>();
+  // Month-view only renders events and tasks. Steadii assignments are
+  // projected into tasks by `assignmentAsTask` upstream in CalendarView,
+  // so the byDay bucket can stay narrowed.
+  const byDay = new Map<string, Array<CalendarEvent | CalendarTask>>();
   const gridEnd = addDays(gridStart, 42);
   for (const ev of events) {
     const s = parseEventStart(ev);
