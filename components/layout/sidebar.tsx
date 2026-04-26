@@ -8,6 +8,7 @@ import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
 import { chats } from "@/lib/db/schema";
 import { and, desc, eq, isNull } from "drizzle-orm";
+import { countPendingDrafts } from "@/lib/agent/email/pending-queries";
 
 function shortTime(d: Date): string {
   const now = new Date();
@@ -71,17 +72,23 @@ export async function Sidebar({
   const avatarUrl = user?.image ?? null;
 
   let recent: { id: string; title: string | null; updatedAt: Date }[] = [];
+  // Pending Inbox count drives the sidebar badge ("Inbox · 3"). Fetched
+  // alongside `recent` so the entire sidebar stays one server pass.
+  let pendingInboxCount = 0;
   if (user?.id) {
-    recent = await db
-      .select({
-        id: chats.id,
-        title: chats.title,
-        updatedAt: chats.updatedAt,
-      })
-      .from(chats)
-      .where(and(eq(chats.userId, user.id), isNull(chats.deletedAt)))
-      .orderBy(desc(chats.updatedAt))
-      .limit(3);
+    [recent, pendingInboxCount] = await Promise.all([
+      db
+        .select({
+          id: chats.id,
+          title: chats.title,
+          updatedAt: chats.updatedAt,
+        })
+        .from(chats)
+        .where(and(eq(chats.userId, user.id), isNull(chats.deletedAt)))
+        .orderBy(desc(chats.updatedAt))
+        .limit(3),
+      countPendingDrafts(user.id),
+    ]);
   }
 
   const creditsLabel =
@@ -125,7 +132,10 @@ export async function Sidebar({
         </Link>
 
         <div className="mt-4">
-          <SidebarNav labels={labels} />
+          <SidebarNav
+            labels={labels}
+            badges={{ inbox: pendingInboxCount }}
+          />
         </div>
 
         {recent.length > 0 ? (
