@@ -30,6 +30,7 @@ import {
   disconnectNotionAction,
 } from "@/app/(auth)/onboarding/actions";
 import { BillingActions } from "@/components/billing/billing-actions";
+import { priceLabelsFor } from "@/lib/billing/format-price";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { LanguageToggle } from "@/components/settings/language-toggle";
 import { TimezoneInput } from "@/components/settings/timezone-input";
@@ -427,29 +428,40 @@ export default async function SettingsPage() {
           />
         </div>
         <div className="mt-4">
-          <BillingActions
-            effectivePlan={effective.plan}
-            currency={userPrefs?.preferredCurrency ?? "usd"}
-            copy={{
-              adminBypass: tBilling("actions.admin_bypass"),
-              upgradePro: (price) =>
-                fmt(tBilling("actions.upgrade_pro"), { price }),
-              upgradeStudent: (price) =>
-                fmt(tBilling("actions.upgrade_student"), { price }),
-              opening: tBilling("actions.opening"),
-              manageSub: tBilling("actions.manage_sub"),
-              addCredits: tBilling("actions.add_credits"),
-              topup500: (price) =>
-                fmt(tBilling("actions.topup_500"), { price }),
-              topup2000: (price) =>
-                fmt(tBilling("actions.topup_2000"), { price }),
-              topupExpiry: tBilling("actions.topup_expiry"),
-              steppingAway: tBilling("actions.stepping_away"),
-              extendRetention: (price) =>
-                fmt(tBilling("actions.extend_retention"), { price }),
-              extendRetentionHelp: tBilling("actions.extend_retention_help"),
-            }}
-          />
+          {(() => {
+            const currency = userPrefs?.preferredCurrency ?? "usd";
+            const labels = priceLabelsFor(currency);
+            return (
+              <BillingActions
+                effectivePlan={effective.plan}
+                currency={currency}
+                copy={{
+                  adminBypass: tBilling("actions.admin_bypass"),
+                  upgradePro: fmt(tBilling("actions.upgrade_pro"), {
+                    price: labels.pro_monthly,
+                  }),
+                  upgradeStudent: fmt(tBilling("actions.upgrade_student"), {
+                    price: labels.student_4mo,
+                  }),
+                  opening: tBilling("actions.opening"),
+                  manageSub: tBilling("actions.manage_sub"),
+                  addCredits: tBilling("actions.add_credits"),
+                  topup500: fmt(tBilling("actions.topup_500"), {
+                    price: labels.topup_500,
+                  }),
+                  topup2000: fmt(tBilling("actions.topup_2000"), {
+                    price: labels.topup_2000,
+                  }),
+                  topupExpiry: tBilling("actions.topup_expiry"),
+                  steppingAway: tBilling("actions.stepping_away"),
+                  extendRetention: fmt(tBilling("actions.extend_retention"), {
+                    price: labels.data_retention,
+                  }),
+                  extendRetentionHelp: tBilling("actions.extend_retention_help"),
+                }}
+              />
+            );
+          })()}
         </div>
       </Section>
 
