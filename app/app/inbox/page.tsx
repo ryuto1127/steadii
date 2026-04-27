@@ -1,4 +1,4 @@
-import { Inbox as InboxIcon } from "lucide-react";
+import { Inbox as InboxIcon, HelpCircle } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
@@ -192,22 +192,23 @@ export default async function InboxPage() {
               item.agentDraftStatus,
               item.agentDraftAction
             );
+            const needsClarification =
+              pending && item.agentDraftAction === "ask_clarifying";
             return (
             <li key={item.id}>
               {/*
-                Pending visual = subtle amber background tint + bolder
-                sender/subject typography, mirroring email-client unread
-                conventions (Gmail / Apple Mail). The previous 3px
-                left-edge bar was a continuous line under consecutive
-                pending rows — Ryuto observed it read as a single stripe
-                rather than a per-row marker. Bold + tint keeps the
-                per-row signal at a glance without the line artifact.
+                Gmail-style "unread" treatment: NO background tint.
+                Pending rows (= Steadii has draft_reply or ask_clarifying
+                waiting on the user) get foreground sender/subject in
+                semibold; non-pending rows get the muted text color so
+                the read/unread distinction reads from typography alone.
+                A small HelpCircle icon next to the subject calls out
+                ask_clarifying — those need the user to provide info,
+                not just hit Send.
               */}
               <Link
                 href={item.agentDraftId ? `/app/inbox/${item.agentDraftId}` : "/app/inbox"}
-                className={`flex items-start gap-3 px-4 py-3 transition-hover hover:bg-[hsl(var(--surface-raised))] ${
-                  pending ? "bg-[hsl(var(--primary)/0.04)]" : ""
-                }`}
+                className="flex items-start gap-3 px-4 py-3 transition-hover hover:bg-[hsl(var(--surface-raised))]"
                 data-pending={pending ? "true" : undefined}
               >
                 {pending ? <span className="sr-only">Pending review.</span> : null}
@@ -219,8 +220,10 @@ export default async function InboxPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
                     <span
-                      className={`truncate text-[14px] text-[hsl(var(--foreground))] ${
-                        pending ? "font-semibold" : "font-medium"
+                      className={`truncate text-[14px] ${
+                        pending
+                          ? "font-semibold text-[hsl(var(--foreground))]"
+                          : "font-normal text-[hsl(var(--muted-foreground))]"
                       }`}
                     >
                       {item.senderName ?? item.senderEmail}
@@ -235,11 +238,24 @@ export default async function InboxPage() {
                     </span>
                   </div>
                   <div
-                    className={`truncate text-[13px] text-[hsl(var(--foreground))] ${
-                      pending ? "font-semibold" : ""
+                    className={`flex items-center gap-1.5 truncate text-[13px] ${
+                      pending
+                        ? "font-semibold text-[hsl(var(--foreground))]"
+                        : "font-normal text-[hsl(var(--muted-foreground))]"
                     }`}
                   >
-                    {item.subject ?? "(no subject)"}
+                    {needsClarification ? (
+                      <span
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[hsl(var(--primary)/0.4)] bg-[hsl(var(--primary)/0.06)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--primary))]"
+                        title="Steadii needs you to clarify before drafting."
+                      >
+                        <HelpCircle size={10} strokeWidth={2} />
+                        Question
+                      </span>
+                    ) : null}
+                    <span className="truncate">
+                      {item.subject ?? "(no subject)"}
+                    </span>
                   </div>
                   {item.snippet ? (
                     <div className="truncate text-[12px] text-[hsl(var(--muted-foreground))]">
