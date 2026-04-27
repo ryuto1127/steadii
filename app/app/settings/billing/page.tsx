@@ -5,6 +5,7 @@ import { getStorageTotals } from "@/lib/billing/storage";
 import { prettyBytes } from "@/lib/billing/plan";
 import { getEffectivePlan } from "@/lib/billing/effective-plan";
 import { BillingActions } from "@/components/billing/billing-actions";
+import { priceLabelsFor } from "@/lib/billing/format-price";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -184,26 +185,39 @@ export default async function BillingPage({
         </div>
       </section>
 
-      <BillingActions
-        effectivePlan={effective.plan}
-        currency={currency}
-        copy={{
-          adminBypass: t("actions.admin_bypass"),
-          upgradePro: (price) => fmt(t("actions.upgrade_pro"), { price }),
-          upgradeStudent: (price) =>
-            fmt(t("actions.upgrade_student"), { price }),
-          opening: t("actions.opening"),
-          manageSub: t("actions.manage_sub"),
-          addCredits: t("actions.add_credits"),
-          topup500: (price) => fmt(t("actions.topup_500"), { price }),
-          topup2000: (price) => fmt(t("actions.topup_2000"), { price }),
-          topupExpiry: t("actions.topup_expiry"),
-          steppingAway: t("actions.stepping_away"),
-          extendRetention: (price) =>
-            fmt(t("actions.extend_retention"), { price }),
-          extendRetentionHelp: t("actions.extend_retention_help"),
-        }}
-      />
+      {(() => {
+        const labels = priceLabelsFor(currency);
+        return (
+          <BillingActions
+            effectivePlan={effective.plan}
+            currency={currency}
+            copy={{
+              adminBypass: t("actions.admin_bypass"),
+              upgradePro: fmt(t("actions.upgrade_pro"), {
+                price: labels.pro_monthly,
+              }),
+              upgradeStudent: fmt(t("actions.upgrade_student"), {
+                price: labels.student_4mo,
+              }),
+              opening: t("actions.opening"),
+              manageSub: t("actions.manage_sub"),
+              addCredits: t("actions.add_credits"),
+              topup500: fmt(t("actions.topup_500"), {
+                price: labels.topup_500,
+              }),
+              topup2000: fmt(t("actions.topup_2000"), {
+                price: labels.topup_2000,
+              }),
+              topupExpiry: t("actions.topup_expiry"),
+              steppingAway: t("actions.stepping_away"),
+              extendRetention: fmt(t("actions.extend_retention"), {
+                price: labels.data_retention,
+              }),
+              extendRetentionHelp: t("actions.extend_retention_help"),
+            }}
+          />
+        );
+      })()}
 
       {(effective.plan === "pro" || effective.plan === "student") && (
         <section className="mt-10 border-t border-[hsl(var(--border))] pt-6">
