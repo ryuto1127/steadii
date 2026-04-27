@@ -3,6 +3,7 @@ import { db } from "@/lib/db/client";
 import { assignments, auditLog } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { triggerScanInBackground } from "@/lib/agent/proactive/scanner";
 
 export const assignmentSaveSchema = z.object({
   title: z.string().min(1).max(300),
@@ -49,6 +50,11 @@ export async function createAssignment(args: {
     },
   });
 
+  triggerScanInBackground(args.userId, {
+    source: "assignment.created",
+    recordId: row.id,
+  });
+
   return { id: row.id };
 }
 
@@ -91,6 +97,12 @@ export async function updateAssignment(args: {
     result: "success",
     detail: { fields: Object.keys(set).filter((k) => k !== "updatedAt") },
   });
+
+  triggerScanInBackground(args.userId, {
+    source: "assignment.updated",
+    recordId: row.id,
+  });
+
   return row;
 }
 
@@ -118,5 +130,11 @@ export async function softDeleteAssignment(args: {
     resourceId: row.id,
     result: "success",
   });
+
+  triggerScanInBackground(args.userId, {
+    source: "assignment.deleted",
+    recordId: row.id,
+  });
+
   return row;
 }

@@ -10,6 +10,7 @@ import {
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { assertCreditsAvailable } from "@/lib/billing/credits";
 import { refreshMistakeEmbeddings } from "@/lib/embeddings/entity-embed";
+import { triggerScanInBackground } from "@/lib/agent/proactive/scanner";
 import { buildMistakeMarkdownBody } from "./build-body";
 import { z } from "zod";
 
@@ -145,6 +146,11 @@ export async function saveMistakeNote(args: {
     },
   });
 
+  triggerScanInBackground(args.userId, {
+    source: "mistake.created",
+    recordId: row.id,
+  });
+
   return { id: row.id };
 }
 
@@ -220,6 +226,11 @@ export async function saveHandwrittenMistakeNote(args: {
     },
   });
 
+  triggerScanInBackground(args.userId, {
+    source: "mistake.created",
+    recordId: row.id,
+  });
+
   return { id: row.id };
 }
 
@@ -279,6 +290,11 @@ export async function updateMistakeNote(args: {
     resourceId: row.id,
     result: "success",
     detail: { fields: Object.keys(set).filter((k) => k !== "updatedAt") },
+  });
+
+  triggerScanInBackground(args.userId, {
+    source: "mistake.updated",
+    recordId: row.id,
   });
 
   return row;
