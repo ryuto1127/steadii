@@ -3,6 +3,7 @@ import { db } from "@/lib/db/client";
 import { auditLog, syllabi } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { refreshSyllabusEmbeddings } from "@/lib/embeddings/entity-embed";
+import { triggerScanInBackground } from "@/lib/agent/proactive/scanner";
 import type { Syllabus } from "./schema";
 
 export type SyllabusVerbatim = {
@@ -94,6 +95,11 @@ export async function saveSyllabusToPostgres(args: {
     },
   });
 
+  triggerScanInBackground(args.userId, {
+    source: "syllabus.uploaded",
+    recordId: row.id,
+  });
+
   return { id: row.id };
 }
 
@@ -126,5 +132,11 @@ export async function softDeleteSyllabus(args: {
     resourceId: row.id,
     result: "success",
   });
+
+  triggerScanInBackground(args.userId, {
+    source: "syllabus.deleted",
+    recordId: row.id,
+  });
+
   return row;
 }
