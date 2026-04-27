@@ -1,7 +1,12 @@
 import "server-only";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { agentDrafts, inboxItems, users } from "@/lib/db/schema";
+import {
+  agentDrafts,
+  agentProposals,
+  inboxItems,
+  users,
+} from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { PENDING_ACTIONS } from "@/lib/agent/email/pending-queries";
 
@@ -27,6 +32,13 @@ export type DigestItem = {
   action: "draft_reply" | "ask_clarifying" | "notify_only";
 };
 
+// Phase 8 — proactive proposal item shown in the "Steadii noticed"
+// subsection. Capped at 5 per D3 to keep the digest scannable.
+export type DigestProposal = {
+  proposalId: string;
+  issueSummary: string;
+};
+
 export type DigestPayload = {
   userEmail: string;
   subject: string;
@@ -36,6 +48,7 @@ export type DigestPayload = {
   highCount: number;
   mediumCount: number;
   lowCount: number;
+  proposals: DigestProposal[];
 };
 
 // Pick up pending drafts for the user. Ordered by risk (high first) then
@@ -85,6 +98,36 @@ export async function loadPendingDigestItems(
     riskTier: r.riskTier,
     action: r.action as "draft_reply" | "ask_clarifying" | "notify_only",
   }));
+}
+
+// Phase 8 — load unresolved proactive proposals for the digest's
+// "Steadii noticed" subsection. Capped at 5 per D3.
+export async function loadPendingProposals(
+  userId: string,
+  limit: number = 5
+): Promise<DigestProposal[]> {
+  const rows = await db
+    .select({
+      id: agentProposals.id,
+      issueSummary: agentProposals.issueSummary,
+      issueType: agentProposals.issueType,
+      createdAt: agentProposals.createdAt,
+    })
+    .from(agentProposals)
+    .where(
+      and(
+        eq(agentProposals.userId, userId),
+        eq(agentProposals.status, "pending")
+      )
+    )
+    .orderBy(desc(agentProposals.createdAt))
+    .limit(limit);
+  return rows
+    .filter((r) => r.issueType !== "auto_action_log")
+    .map((r) => ({
+      proposalId: r.id,
+      issueSummary: r.issueSummary,
+    }));
 }
 
 export type DigestLocale = "en" | "ja";
@@ -159,6 +202,7 @@ export function buildDigestText(args: {
   items: DigestItem[];
   appUrl: string;
   locale?: DigestLocale;
+  proposals?: DigestProposal[];
 }): string {
   const locale = args.locale ?? "en";
   const lines: string[] = [];
@@ -168,6 +212,17 @@ export function buildDigestText(args: {
       : "Steadii Agent — morning digest"
   );
   lines.push("");
+
+  if (args.proposals && args.proposals.length > 0) {
+    lines.push(locale === "ja" ? "Steadii が気付いた点:" : "Steadii noticed:");
+    for (const p of args.proposals) {
+      const link = `${args.appUrl}/app/inbox/proposals/${p.proposalId}?utm_source=digest`;
+      lines.push(`  • ${p.issueSummary}`);
+      lines.push(`    → ${link}`);
+    }
+    lines.push("");
+  }
+
   for (const item of args.items) {
     const link = `${args.appUrl}/app/inbox/${item.agentDraftId}?utm_source=digest`;
     lines.push(
@@ -191,15 +246,37 @@ export function buildDigestHtml(args: {
   items: DigestItem[];
   appUrl: string;
   locale?: DigestLocale;
+  proposals?: DigestProposal[];
 }): string {
   const locale = args.locale ?? "en";
   const reviewLabel = locale === "ja" ? "ドラフトを確認 →" : "Review draft →";
+  const noticedHeading =
+    locale === "ja" ? "Steadii が気付いた点" : "Steadii noticed";
+  const proposalReviewLabel = locale === "ja" ? "確認 →" : "Review →";
   const titleEyebrow = "Steadii Agent";
   const titleHeading = locale === "ja" ? "朝のダイジェスト" : "Morning digest";
   const footerCopy =
     locale === "ja"
       ? "Steadiiで内容を確認し、各ドラフトを承認してください。あなたのタップなしには何も送信されません。"
       : "Review + confirm each draft in Steadii. Nothing sends without your tap.";
+
+  const proposalRows = (args.proposals ?? [])
+    .map((p) => {
+      const link = `${args.appUrl}/app/inbox/proposals/${p.proposalId}?utm_source=digest`;
+      return `
+        <tr>
+          <td style="padding: 8px 0; border-bottom: 1px solid #E4E0DB;">
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; color: #1A1814;">
+              ${escapeHtml(p.issueSummary)}
+            </div>
+            <div style="margin-top: 4px;">
+              <a href="${escapeHtmlAttr(link)}" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 12px; color: #D97706; text-decoration: none;">${escapeHtml(proposalReviewLabel)}</a>
+            </div>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
 
   const rows = args.items
     .map((item) => {
@@ -243,6 +320,17 @@ export function buildDigestHtml(args: {
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 600; color: #1A1814; margin-top: 4px;">${escapeHtml(titleHeading)}</div>
               </td>
             </tr>
+            ${
+              proposalRows.length > 0
+                ? `
+            <tr>
+              <td style="padding: 8px 24px 0 24px;">
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #6E6A64;">${escapeHtml(noticedHeading)}</div>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">${proposalRows}</table>
+              </td>
+            </tr>`
+                : ""
+            }
             <tr>
               <td style="padding: 0 24px;">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">${rows}</table>
@@ -292,15 +380,18 @@ export async function buildDigestPayload(
   if (!user.digestEnabled) return null;
 
   const items = await loadPendingDigestItems(userId);
-  if (items.length === 0) return null;
+  const proposals = await loadPendingProposals(userId);
+  // Send a digest if either bucket has signal — a clean inbox with
+  // unresolved proactive proposals is exactly when the digest matters.
+  if (items.length === 0 && proposals.length === 0) return null;
 
   const e = env();
   const appUrl = e.APP_URL;
   const locale: DigestLocale =
     user.preferences?.locale === "ja" ? "ja" : "en";
   const subject = buildDigestSubject(items, locale);
-  const text = buildDigestText({ items, appUrl, locale });
-  const html = buildDigestHtml({ items, appUrl, locale });
+  const text = buildDigestText({ items, appUrl, locale, proposals });
+  const html = buildDigestHtml({ items, appUrl, locale, proposals });
   return {
     userEmail: user.email,
     subject,
@@ -310,5 +401,6 @@ export async function buildDigestPayload(
     highCount: items.filter((i) => i.riskTier === "high").length,
     mediumCount: items.filter((i) => i.riskTier === "medium").length,
     lowCount: items.filter((i) => i.riskTier === "low").length,
+    proposals,
   };
 }
