@@ -15,6 +15,7 @@ import { auth } from "@/lib/auth/config";
 import { logEmailAudit } from "./audit";
 import { deleteGmailDraft } from "@/lib/agent/tools/gmail";
 import { enqueueSendForDraft } from "./send-enqueue";
+import { recordSenderFeedback } from "./feedback";
 
 async function getUserId(): Promise<string> {
   const session = await auth();
@@ -103,7 +104,7 @@ export async function cancelPendingSendAction(draftId: string): Promise<void> {
 
 export async function dismissAgentDraftAction(draftId: string): Promise<void> {
   const userId = await getUserId();
-  const { draft } = await loadDraftAndInbox(userId, draftId);
+  const { draft, inbox } = await loadDraftAndInbox(userId, draftId);
   const now = new Date();
   await db
     .update(agentDrafts)
@@ -113,6 +114,15 @@ export async function dismissAgentDraftAction(draftId: string): Promise<void> {
     .update(inboxItems)
     .set({ status: "dismissed", resolvedAt: now, updatedAt: now })
     .where(eq(inboxItems.id, draft.inboxItemId));
+  await recordSenderFeedback({
+    userId,
+    senderEmail: inbox.senderEmail,
+    senderDomain: inbox.senderDomain,
+    proposedAction: draft.action,
+    userResponse: "dismissed",
+    inboxItemId: inbox.id,
+    agentDraftId: draft.id,
+  });
   await logEmailAudit({
     userId,
     action: "email_l2_completed",
@@ -163,7 +173,7 @@ export async function saveDraftEditsAction(args: {
   cc?: string[];
 }): Promise<void> {
   const userId = await getUserId();
-  const { draft } = await loadDraftAndInbox(userId, args.draftId);
+  const { draft, inbox } = await loadDraftAndInbox(userId, args.draftId);
   if (draft.status === "sent" || draft.status === "sent_pending") {
     throw new Error("Cannot edit a sent draft");
   }
@@ -179,6 +189,15 @@ export async function saveDraftEditsAction(args: {
       updatedAt: now,
     })
     .where(eq(agentDrafts.id, draft.id));
+  await recordSenderFeedback({
+    userId,
+    senderEmail: inbox.senderEmail,
+    senderDomain: inbox.senderDomain,
+    proposedAction: draft.action,
+    userResponse: "edited",
+    inboxItemId: inbox.id,
+    agentDraftId: draft.id,
+  });
   await logEmailAudit({
     userId,
     action: "email_l2_completed",
@@ -261,5 +280,17 @@ export async function deleteAgentRuleAction(ruleId: string): Promise<void> {
     .update(agentRules)
     .set({ deletedAt: now, enabled: false, updatedAt: now })
     .where(and(eq(agentRules.id, ruleId), eq(agentRules.userId, userId)));
+  revalidatePath("/app/settings");
+}
+
+// polish-7 — clear all feedback rows for one (user, sender) pair.
+// Powers the "this contact's history was wrong" reset affordance in
+// Settings → Agent Rules → Recent feedback.
+export async function clearSenderFeedbackAction(formData: FormData): Promise<void> {
+  const userId = await getUserId();
+  const senderEmail = String(formData.get("sender_email") ?? "").trim();
+  if (!senderEmail) return;
+  const { clearSenderFeedback } = await import("./feedback");
+  await clearSenderFeedback({ userId, senderEmail });
   revalidatePath("/app/settings");
 }

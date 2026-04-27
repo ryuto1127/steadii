@@ -1,4 +1,12 @@
-import { Send, HelpCircle, Archive, Clock, Check, Pause } from "lucide-react";
+import {
+  Send,
+  HelpCircle,
+  Archive,
+  Clock,
+  Check,
+  Pause,
+  Star,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 type Action =
@@ -7,6 +15,7 @@ type Action =
   | "archive"
   | "snooze"
   | "no_op"
+  | "notify_only"
   | "paused";
 
 type BannerSpec = {
@@ -52,6 +61,13 @@ function specFor(action: Action): BannerSpec {
         title: "No action proposed.",
         body: "Steadii didn't see anything that needs you. Dismiss to clear it.",
         tone: "muted",
+      };
+    case "notify_only":
+      return {
+        icon: <Star size={14} strokeWidth={1.75} fill="currentColor" />,
+        title: "Important — no reply needed.",
+        body: "Steadii flagged this so you don't miss it. Read and dismiss.",
+        tone: "primary",
       };
     case "paused":
       return {

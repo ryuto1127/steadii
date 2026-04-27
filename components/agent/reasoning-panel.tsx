@@ -23,6 +23,7 @@ type ReasoningAction =
   | "archive"
   | "snooze"
   | "no_op"
+  | "notify_only"
   | "paused";
 
 function reasoningHeader(action: ReasoningAction | null | undefined): string {
@@ -37,6 +38,8 @@ function reasoningHeader(action: ReasoningAction | null | undefined): string {
       return "Why snooze";
     case "no_op":
       return "Why no action";
+    case "notify_only":
+      return "Why this is important";
     case "paused":
       return "Why paused";
     default:

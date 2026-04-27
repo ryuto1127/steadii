@@ -3,13 +3,14 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { agentDrafts, inboxItems, users } from "@/lib/db/schema";
 import { env } from "@/lib/env";
+import { PENDING_ACTIONS } from "@/lib/agent/email/pending-queries";
 
 // ---------------------------------------------------------------------------
 // Digest renderer. Pure enough to unit-test with a mocked db.
 //
 // Contract (memory):
 // - Scope: pending drafts only (drafts with status='pending' AND
-//   action in ('draft_reply','ask_clarifying')).
+//   action in PENDING_ACTIONS — draft_reply / ask_clarifying / notify_only).
 // - Never include body preview — deep-linking to Steadii is the point.
 // - Subject is dynamic (assembled from pending count + risk distribution).
 // - Skip sending when pending = 0; return null.
@@ -23,7 +24,7 @@ export type DigestItem = {
   senderEmail: string;
   subject: string;
   riskTier: "low" | "medium" | "high";
-  action: "draft_reply" | "ask_clarifying";
+  action: "draft_reply" | "ask_clarifying" | "notify_only";
 };
 
 export type DigestPayload = {
@@ -61,7 +62,7 @@ export async function loadPendingDigestItems(
       and(
         eq(agentDrafts.userId, userId),
         eq(agentDrafts.status, "pending"),
-        inArray(agentDrafts.action, ["draft_reply", "ask_clarifying"])
+        inArray(agentDrafts.action, [...PENDING_ACTIONS])
       )
     )
     .orderBy(desc(agentDrafts.createdAt))
@@ -82,7 +83,7 @@ export async function loadPendingDigestItems(
     senderEmail: r.senderEmail,
     subject: r.subject ?? "(no subject)",
     riskTier: r.riskTier,
-    action: r.action as "draft_reply" | "ask_clarifying",
+    action: r.action as "draft_reply" | "ask_clarifying" | "notify_only",
   }));
 }
 
