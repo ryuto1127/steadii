@@ -115,6 +115,50 @@ export async function getMessage(
   );
 }
 
+// Full-body fetch — returns the message with `payload.parts` populated
+// with raw body data so the inbox-detail page can render the full
+// email. Separate from `getMessage` (which uses `format: "metadata"`
+// for the L1 / triage path) because most call sites don't need the
+// body and Gmail charges quota proportional to the response size.
+//
+// Body parsing (text/plain vs text/html, base64url decode, charset
+// handling) lives in `lib/agent/email/body-extract.ts`; this just
+// returns the raw payload.
+export async function getMessageFull(
+  userId: string,
+  messageId: string
+): Promise<gmail_v1.Schema$Message> {
+  return Sentry.startSpan(
+    {
+      name: "gmail.messages.get_full",
+      op: "http.client",
+      attributes: {
+        "steadii.user_id": userId,
+        "gmail.message_id": messageId,
+      },
+    },
+    async () => {
+      try {
+        const gmail = await getGmailForUser(userId);
+        const res = await requestWithRetry(() =>
+          gmail.users.messages.get({
+            userId: "me",
+            id: messageId,
+            format: "full",
+          })
+        );
+        return res.data;
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: { integration: "gmail", op: "messages.get_full" },
+          user: { id: userId },
+        });
+        throw err;
+      }
+    }
+  );
+}
+
 // Helpers — header extraction. Gmail's `payload.headers` is an array of
 // `{ name, value }`; we always want case-insensitive matching because
 // `From` / `FROM` / `from` all occur in the wild.
