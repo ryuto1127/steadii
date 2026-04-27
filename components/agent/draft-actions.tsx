@@ -41,7 +41,14 @@ export function DraftActions({
 }: {
   draftId: string;
   status: Status;
-  action: "draft_reply" | "archive" | "snooze" | "no_op" | "ask_clarifying" | "paused";
+  action:
+    | "draft_reply"
+    | "archive"
+    | "snooze"
+    | "no_op"
+    | "ask_clarifying"
+    | "notify_only"
+    | "paused";
   initialSubject: string;
   initialBody: string;
   initialTo: string[];
