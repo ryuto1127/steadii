@@ -439,8 +439,17 @@ export async function generateChatTitle(
     messages: [
       {
         role: "system",
-        content:
-          "Summarize this conversation in at most 6 words. Match the language of the user. No quotes, no trailing punctuation.",
+        content: [
+          "Title this chat in 2-4 words.",
+          "Use the main subject the user is asking about — a noun phrase, not a meta-summary of the exchange.",
+          "Match the user's language.",
+          "No quotes, no trailing punctuation, no leading verbs like 'Discussion of' or 'Question about'.",
+          "",
+          "Good (English): 'Linear algebra eigenvalues', 'CSC110 lab 3', 'Tomorrow's class plan'",
+          "Bad (English): 'User asks about eigenvalues', 'A discussion about CSC110', 'The plan for tomorrow'",
+          "Good (日本語): '線形代数 固有値', 'CSC110 課題 3', '明日の授業'",
+          "Bad (日本語): '線形代数についての質問', 'CSC110 についての会話', '明日の授業の計画について'",
+        ].join("\n"),
       },
       { role: "user", content: `User: ${firstUserMessage}\n\nAssistant: ${firstAssistantMessage}` },
     ],
