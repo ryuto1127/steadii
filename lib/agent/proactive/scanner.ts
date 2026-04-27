@@ -12,6 +12,10 @@ import {
 import { buildUserSnapshot } from "./snapshot";
 import { ALL_RULES } from "./rules";
 import { buildDedupKey } from "./dedup";
+import {
+  generateProposalActions,
+  shouldGenerateActionsFor,
+} from "./proposal-generator";
 import type { DetectedIssue } from "./types";
 
 // 5-minute per-user debounce. Two scans within the window short-circuit
@@ -152,9 +156,9 @@ export async function runScanner(
 
 // Insert one proposal. Returns "created" if the row was inserted, or
 // "skipped" if the dedup index prevented it (an identical pending /
-// resolved row already exists). PR 2 will plug in the LLM-driven
-// `actionOptions[]`; for now we use the rule's baseline actions or a
-// minimal `dismiss`-only menu so the row is still useful.
+// resolved row already exists). The LLM proposal generator runs only
+// on first-time detections — if the unique index would reject the
+// insert, we skip the LLM call entirely to honor the D7 cost budget.
 async function persistProposal(
   userId: string,
   triggerEventId: string,
@@ -164,15 +168,34 @@ async function persistProposal(
   const expiresAt = new Date(
     Date.now() + PROPOSAL_TTL_DAYS * 24 * 60 * 60 * 1000
   );
-  const actionOptions = issue.baselineActions ?? [
+
+  let actionOptions = issue.baselineActions ?? [
     {
       key: "dismiss",
       label: "Dismiss",
       description: "Hide this notice for 24 hours.",
-      tool: "dismiss",
+      tool: "dismiss" as const,
       payload: {},
     },
   ];
+
+  if (shouldGenerateActionsFor(issue.issueType)) {
+    try {
+      const result = await generateProposalActions({ userId, issue });
+      if (result.actions.length > 0) {
+        actionOptions = result.actions;
+      }
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: {
+          module: "proactive_scanner",
+          phase: "generate_actions",
+          issueType: issue.issueType,
+        },
+      });
+      // Fall through: keep the baseline / dismiss-only menu.
+    }
+  }
 
   const row: NewAgentProposalRow = {
     userId,
