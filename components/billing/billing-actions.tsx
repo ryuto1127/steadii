@@ -1,10 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  priceLabelsFor,
-  type SupportedCurrency,
-} from "@/lib/billing/format-price";
+import { type SupportedCurrency } from "@/lib/billing/format-price";
 
 type BusyKey =
   | "checkout"
@@ -13,6 +10,12 @@ type BusyKey =
   | "topup_2000"
   | "data_retention";
 
+// All price-templated copy strings come in pre-formatted from the
+// server (RSC). Server-side knows the user's locale + currency and
+// resolves `{price}` template placeholders before passing strings
+// across the client boundary. We can't accept functions here — Next
+// 16 RSC strict mode rejects function props that aren't `"use server"`
+// actions.
 export function BillingActions({
   effectivePlan,
   currency,
@@ -22,20 +25,19 @@ export function BillingActions({
   currency: SupportedCurrency;
   copy: {
     adminBypass: string;
-    upgradePro: (price: string) => string;
-    upgradeStudent: (price: string) => string;
+    upgradePro: string;
+    upgradeStudent: string;
     opening: string;
     manageSub: string;
     addCredits: string;
-    topup500: (price: string) => string;
-    topup2000: (price: string) => string;
+    topup500: string;
+    topup2000: string;
     topupExpiry: string;
     steppingAway: string;
-    extendRetention: (price: string) => string;
+    extendRetention: string;
     extendRetentionHelp: string;
   };
 }) {
-  const labels = priceLabelsFor(currency);
   const [busy, setBusy] = useState<BusyKey | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,7 +94,7 @@ export function BillingActions({
             >
               {busy === "checkout"
                 ? copy.opening
-                : copy.upgradePro(labels.pro_monthly)}
+                : copy.upgradePro}
             </button>
             <button
               type="button"
@@ -108,7 +110,7 @@ export function BillingActions({
             >
               {busy === "checkout"
                 ? copy.opening
-                : copy.upgradeStudent(labels.student_4mo)}
+                : copy.upgradeStudent}
             </button>
           </>
         )}
@@ -154,7 +156,7 @@ export function BillingActions({
             >
               {busy === "topup_500"
                 ? copy.opening
-                : copy.topup500(labels.topup_500)}
+                : copy.topup500}
             </button>
             <button
               type="button"
@@ -169,7 +171,7 @@ export function BillingActions({
             >
               {busy === "topup_2000"
                 ? copy.opening
-                : copy.topup2000(labels.topup_2000)}
+                : copy.topup2000}
             </button>
           </div>
           <p className="mt-2 text-[11px] text-[hsl(var(--muted-foreground))]">
@@ -195,7 +197,7 @@ export function BillingActions({
         >
           {busy === "data_retention"
             ? copy.opening
-            : copy.extendRetention(labels.data_retention)}
+            : copy.extendRetention}
         </button>
         <p className="mt-2 text-[11px] text-[hsl(var(--muted-foreground))]">
           {copy.extendRetentionHelp}
