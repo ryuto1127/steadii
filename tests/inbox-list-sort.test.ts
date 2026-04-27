@@ -28,6 +28,13 @@ describe("isPendingDraft", () => {
     expect(isPendingDraft("pending", "ask_clarifying")).toBe(true);
   });
 
+  // polish-7 — notify_only is the new 2-category-triage Category B path:
+  // "important but no reply needed". The user must still see it (so it
+  // sorts pending), but the detail page renders no draft form.
+  it("returns true for status='pending' with a notify_only action", () => {
+    expect(isPendingDraft("pending", "notify_only")).toBe(true);
+  });
+
   it("returns false for status='pending' with a non-confirm action", () => {
     // archive / snooze / no_op resolve themselves; paused needs billing.
     expect(isPendingDraft("pending", "archive")).toBe(false);
@@ -113,5 +120,76 @@ describe("compareInboxRows — pending-first ordering", () => {
     const sorted = [stillClassifying, pendingRecent].sort(compareInboxRows);
     expect(sorted[0]).toBe(pendingRecent);
     expect(sorted[1]).toBe(stillClassifying);
+  });
+});
+
+// polish-7 — Gmail-style read state widens the comparator's group key
+// from 2-state (pending vs not) to 3-state (pending → unread non-pending
+// → read non-pending). Within each group, newest first.
+describe("compareInboxRows — 3-state read tracking", () => {
+  const T = (mins: number): Date => new Date(Date.UTC(2026, 3, 25, 12, 0, 0) + mins * 60_000);
+
+  const pendingNew = {
+    receivedAt: T(0),
+    agentDraftStatus: "pending",
+    agentDraftAction: "draft_reply",
+    reviewedAt: null,
+  };
+  const unreadOld = {
+    receivedAt: T(-60),
+    agentDraftStatus: "sent",
+    agentDraftAction: "draft_reply",
+    reviewedAt: null,
+  };
+  const readNew = {
+    receivedAt: T(10),
+    agentDraftStatus: "sent",
+    agentDraftAction: "draft_reply",
+    reviewedAt: T(11),
+  };
+  const readOlder = {
+    receivedAt: T(-30),
+    agentDraftStatus: "sent",
+    agentDraftAction: "draft_reply",
+    reviewedAt: T(-20),
+  };
+  const pendingOld = {
+    receivedAt: T(-90),
+    agentDraftStatus: "pending",
+    agentDraftAction: "notify_only",
+    reviewedAt: T(-89),
+  };
+
+  it("orders rows pending → unread non-pending → read non-pending", () => {
+    const sorted = [readOlder, readNew, unreadOld, pendingOld, pendingNew].sort(
+      compareInboxRows
+    );
+    // Group 0 (pending) — newest first inside
+    expect(sorted[0]).toBe(pendingNew);
+    expect(sorted[1]).toBe(pendingOld);
+    // Group 1 (unread non-pending)
+    expect(sorted[2]).toBe(unreadOld);
+    // Group 2 (read non-pending) — newest first inside
+    expect(sorted[3]).toBe(readNew);
+    expect(sorted[4]).toBe(readOlder);
+  });
+
+  it("treats a notify_only pending row exactly like a draft_reply pending row", () => {
+    // Both sit in group 0 — neither demoted regardless of reviewedAt.
+    const a = {
+      receivedAt: T(5),
+      agentDraftStatus: "pending",
+      agentDraftAction: "notify_only",
+      reviewedAt: T(6), // even reviewed, still pending
+    };
+    const b = {
+      receivedAt: T(0),
+      agentDraftStatus: "sent",
+      agentDraftAction: "draft_reply",
+      reviewedAt: null, // unread but not pending
+    };
+    const sorted = [b, a].sort(compareInboxRows);
+    expect(sorted[0]).toBe(a);
+    expect(sorted[1]).toBe(b);
   });
 });

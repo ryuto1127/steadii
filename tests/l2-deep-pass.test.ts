@@ -152,6 +152,87 @@ describe("runDeepPass", () => {
     expect(out.reasoning).toMatch(/unparseable|deferring/i);
   });
 
+  // polish-7 — the 2-category triage adds notify_only as a valid
+  // model output. parseDeepPassOutput must accept it without
+  // downgrading to the safety default (ask_clarifying).
+  it("parseDeepPassOutput accepts notify_only", async () => {
+    const { parseDeepPassOutput } = await import(
+      "@/lib/agent/email/classify-deep"
+    );
+    const out = parseDeepPassOutput(
+      JSON.stringify({
+        action: "notify_only",
+        reasoning: "Grade posted, no reply expected.",
+      })
+    );
+    expect(out.action).toBe("notify_only");
+    expect(out.reasoning).toContain("Grade posted");
+  });
+
+  // polish-7 — the recent-feedback prompt block. When non-null and
+  // non-empty, the deep pass should inject a "Recent feedback" header
+  // plus per-row counts. When null/empty, the prompt shape stays
+  // identical to the pre-polish-7 build (no header at all).
+  it("includes a recent-feedback block when summary rows exist", async () => {
+    const { runDeepPass } = await import("@/lib/agent/email/classify-deep");
+    await runDeepPass({
+      userId: "u1",
+      senderEmail: "registrar@x.edu",
+      senderDomain: "x.edu",
+      senderRole: null,
+      subject: "Grade posted",
+      snippet: "Your grade has been recorded.",
+      bodySnippet: "Your grade has been recorded.",
+      riskPass: {
+        riskTier: "high",
+        confidence: 0.9,
+        reasoning: "Grade keyword.",
+        usageId: null,
+      },
+      similarEmails: [],
+      totalCandidates: 0,
+      threadRecentMessages: [],
+      recentFeedback: {
+        scope: "sender",
+        proposedCounts: {
+          draft_reply: { dismissed: 3 },
+          notify_only: { dismissed: 1 },
+        },
+        windowDays: 30,
+        totalRows: 4,
+      },
+    });
+    const prompt = openaiCalls.at(-1)!.userPrompt;
+    expect(prompt).toContain("Recent feedback");
+    expect(prompt).toContain("3× the agent proposed draft_reply");
+    expect(prompt).toContain("revealed preference");
+  });
+
+  it("omits the feedback block when summary is null", async () => {
+    const { runDeepPass } = await import("@/lib/agent/email/classify-deep");
+    await runDeepPass({
+      userId: "u1",
+      senderEmail: "x@y.com",
+      senderDomain: "y.com",
+      senderRole: null,
+      subject: "hi",
+      snippet: "",
+      bodySnippet: "",
+      riskPass: {
+        riskTier: "high",
+        confidence: 0.5,
+        reasoning: "x",
+        usageId: null,
+      },
+      similarEmails: [],
+      totalCandidates: 0,
+      threadRecentMessages: [],
+      recentFeedback: null,
+    });
+    const prompt = openaiCalls.at(-1)!.userPrompt;
+    expect(prompt).not.toContain("Recent feedback");
+  });
+
   it("buildProvenance snippet capped at 200 chars", async () => {
     const { buildProvenance } = await import(
       "@/lib/agent/email/classify-deep"

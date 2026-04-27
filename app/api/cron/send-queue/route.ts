@@ -2,9 +2,10 @@ import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
 import { and, eq, lte } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { agentDrafts, sendQueue } from "@/lib/db/schema";
+import { agentDrafts, inboxItems, sendQueue } from "@/lib/db/schema";
 import { sendAndAudit } from "@/lib/agent/tools/gmail";
 import { verifyQStashSignature } from "@/lib/integrations/qstash/verify";
+import { recordSenderFeedback } from "@/lib/agent/email/feedback";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -72,6 +73,34 @@ export async function POST(req: Request) {
               updatedAt,
             })
             .where(eq(agentDrafts.id, row.agentDraftId));
+
+          // polish-7 — record the user's revealed preference now that
+          // the send is final (past the undo window). auto_sent rows
+          // get a separate response value so the L2 prior can tell the
+          // staged-autonomy path apart from explicit user sends.
+          const [draftRow] = await db
+            .select({
+              action: agentDrafts.action,
+              autoSent: agentDrafts.autoSent,
+              inboxItemId: agentDrafts.inboxItemId,
+              senderEmail: inboxItems.senderEmail,
+              senderDomain: inboxItems.senderDomain,
+            })
+            .from(agentDrafts)
+            .innerJoin(inboxItems, eq(inboxItems.id, agentDrafts.inboxItemId))
+            .where(eq(agentDrafts.id, row.agentDraftId))
+            .limit(1);
+          if (draftRow) {
+            await recordSenderFeedback({
+              userId: row.userId,
+              senderEmail: draftRow.senderEmail,
+              senderDomain: draftRow.senderDomain,
+              proposedAction: draftRow.action,
+              userResponse: draftRow.autoSent ? "auto_sent" : "sent",
+              inboxItemId: draftRow.inboxItemId,
+              agentDraftId: row.agentDraftId,
+            });
+          }
           sent++;
         } catch (err) {
           failed++;
