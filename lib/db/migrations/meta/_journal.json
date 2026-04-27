@@ -176,6 +176,13 @@
       "when": 1777319328109,
       "tag": "0024_moaning_fenris",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1777326447281,
+      "tag": "0025_majestic_thor",
+      "breakpoints": true
     }
   ]
 }

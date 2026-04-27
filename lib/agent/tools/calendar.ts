@@ -17,6 +17,7 @@ import {
   addDaysToDateStr,
   localMidnightAsUtc,
 } from "@/lib/calendar/tz-utils";
+import { triggerScanInBackground } from "@/lib/agent/proactive/scanner";
 import type { ToolExecutor } from "./types";
 
 async function logAudit(args: {
@@ -236,6 +237,10 @@ export const calendarCreateEvent: ToolExecutor<
         result: "success",
         detail: { summary: args.summary },
       });
+      triggerScanInBackground(ctx.userId, {
+        source: "calendar.created",
+        recordId: id,
+      });
       return { eventId: id, htmlLink: resp.data.htmlLink ?? null };
     } catch (err) {
       await logAudit({
@@ -335,6 +340,10 @@ export const calendarUpdateEvent: ToolExecutor<
         resourceId: args.eventId,
         result: "success",
       });
+      triggerScanInBackground(ctx.userId, {
+        source: "calendar.updated",
+        recordId: args.eventId,
+      });
       return { eventId: args.eventId };
     } catch (err) {
       await logAudit({
@@ -393,6 +402,10 @@ export const calendarDeleteEvent: ToolExecutor<
         toolName: "calendar_delete_event",
         resourceId: args.eventId,
         result: "success",
+      });
+      triggerScanInBackground(ctx.userId, {
+        source: "calendar.deleted",
+        recordId: args.eventId,
       });
       return { eventId: args.eventId };
     } catch (err) {
