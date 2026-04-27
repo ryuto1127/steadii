@@ -193,25 +193,24 @@ export default async function InboxPage() {
               item.agentDraftAction
             );
             return (
-            <li key={item.id} className="relative">
+            <li key={item.id}>
               {/*
-                Pending marker — a 3px amber bar pinned to the left edge of
-                the row. Steadii's signature electric-amber tone (locked in
-                the pre-launch redesign memo). Hidden on non-pending rows so
-                the marker carries real signal at a glance, in line with the
-                product's "show what needs you, hide what doesn't" stance.
+                Pending visual = subtle amber background tint + bolder
+                sender/subject typography, mirroring email-client unread
+                conventions (Gmail / Apple Mail). The previous 3px
+                left-edge bar was a continuous line under consecutive
+                pending rows — Ryuto observed it read as a single stripe
+                rather than a per-row marker. Bold + tint keeps the
+                per-row signal at a glance without the line artifact.
               */}
-              {pending ? (
-                <span
-                  aria-label="Needs your review"
-                  className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-[hsl(38_92%_45%)] dark:bg-[hsl(38_92%_55%)]"
-                />
-              ) : null}
               <Link
                 href={item.agentDraftId ? `/app/inbox/${item.agentDraftId}` : "/app/inbox"}
-                className="flex items-start gap-3 px-4 py-3 transition-hover hover:bg-[hsl(var(--surface-raised))]"
+                className={`flex items-start gap-3 px-4 py-3 transition-hover hover:bg-[hsl(var(--surface-raised))] ${
+                  pending ? "bg-[hsl(var(--primary)/0.04)]" : ""
+                }`}
                 data-pending={pending ? "true" : undefined}
               >
+                {pending ? <span className="sr-only">Pending review.</span> : null}
                 <span
                   className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ${tierTone(tier)}`}
                 >
@@ -219,7 +218,11 @@ export default async function InboxPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
-                    <span className="truncate text-[14px] font-medium text-[hsl(var(--foreground))]">
+                    <span
+                      className={`truncate text-[14px] text-[hsl(var(--foreground))] ${
+                        pending ? "font-semibold" : "font-medium"
+                      }`}
+                    >
                       {item.senderName ?? item.senderEmail}
                     </span>
                     {item.firstTimeSender ? (
@@ -231,7 +234,11 @@ export default async function InboxPage() {
                       {shortTime(item.receivedAt)}
                     </span>
                   </div>
-                  <div className="truncate text-[13px] text-[hsl(var(--foreground))]">
+                  <div
+                    className={`truncate text-[13px] text-[hsl(var(--foreground))] ${
+                      pending ? "font-semibold" : ""
+                    }`}
+                  >
                     {item.subject ?? "(no subject)"}
                   </div>
                   {item.snippet ? (
