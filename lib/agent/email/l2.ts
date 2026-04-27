@@ -29,6 +29,7 @@ import { buildEmbedInput } from "./embeddings";
 import { fetchRecentThreadMessages } from "./thread";
 import { logEmailAudit } from "./audit";
 import { fanoutForInbox, type FanoutResult } from "./fanout";
+import { loadRecentFeedbackSummary } from "./feedback";
 import {
   fetchUpcomingEvents,
   type DraftCalendarEvent,
@@ -262,6 +263,16 @@ async function runPipeline(
       }
     }
 
+    // polish-7 — per-user feedback prior. Read once at deep-pass time
+    // so the prompt sees the student's revealed preference for this
+    // sender. Returns null on read failure or when no rows exist; the
+    // prompt then renders unchanged from the pre-polish-7 shape.
+    const recentFeedback = await loadRecentFeedbackSummary({
+      userId: item.userId,
+      senderEmail: item.senderEmail,
+      senderDomain: item.senderDomain,
+    });
+
     deep = await runDeepPass({
       userId: item.userId,
       senderEmail: item.senderEmail,
@@ -275,6 +286,7 @@ async function runPipeline(
       totalCandidates,
       threadRecentMessages: threadMessages,
       fanout: fanoutForDeep,
+      recentFeedback,
     });
   }
 

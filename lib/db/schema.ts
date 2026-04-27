@@ -736,6 +736,11 @@ export type AgentDraftAction =
   | "snooze"
   | "no_op"
   | "ask_clarifying"
+  // polish-7: Category B from the 2-category triage. Sender doesn't expect
+  // a reply but the content matters to the student (grade posted,
+  // scholarship awarded, course-wide announcement). Surfaces in the inbox
+  // list as a pending row with an "Important" pill, no draft form.
+  | "notify_only"
   // Set when status='paused' so analytics don't conflate genuine
   // ask_clarifying actions with credit-exhausted pipeline halts. The DB
   // column is plain text so no migration is needed — only the TS enum.
@@ -918,6 +923,64 @@ export const agentDrafts = pgTable(
 
 export type AgentDraft = typeof agentDrafts.$inferSelect;
 export type NewAgentDraft = typeof agentDrafts.$inferInsert;
+
+// polish-7 — per-user feedback log for the agent's L2 action proposals.
+// One row per user-action moment (dismiss / send / edit / auto-send) so
+// the L2 classifier can read recent precedent for a sender at classify
+// time and bias toward the student's revealed preference. Locked
+// decision in memory deferred this until ≥100 users; α dogfood revised
+// it forward because over-drafting is acute.
+export type AgentSenderFeedbackResponse =
+  | "dismissed"
+  | "sent"
+  | "edited"
+  | "auto_sent";
+
+export const agentSenderFeedback = pgTable(
+  "agent_sender_feedback",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    senderEmail: text("sender_email").notNull(),
+    senderDomain: text("sender_domain").notNull(),
+
+    // What the agent proposed for this row. Mirrors agent_drafts.action.
+    proposedAction: text("proposed_action").$type<AgentDraftAction>().notNull(),
+
+    // What the user did. Independent of agent_drafts.status because we
+    // care about per-action moments (a user can dismiss without ever
+    // editing) — not the final draft state.
+    userResponse: text("user_response")
+      .$type<AgentSenderFeedbackResponse>()
+      .notNull(),
+
+    inboxItemId: uuid("inbox_item_id").references(() => inboxItems.id, {
+      onDelete: "set null",
+    }),
+    agentDraftId: uuid("agent_draft_id").references(() => agentDrafts.id, {
+      onDelete: "set null",
+    }),
+
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userSenderIdx: index("agent_sender_feedback_user_sender_idx").on(
+      t.userId,
+      t.senderEmail
+    ),
+    userDomainIdx: index("agent_sender_feedback_user_domain_idx").on(
+      t.userId,
+      t.senderDomain
+    ),
+  })
+);
+
+export type AgentSenderFeedback = typeof agentSenderFeedback.$inferSelect;
+export type NewAgentSenderFeedback = typeof agentSenderFeedback.$inferInsert;
 
 // One row per inbox_item holding the OpenAI `text-embedding-3-small` 1536-dim
 // vector of its subject+body. Used by L2 deep-pass retrieval to surface

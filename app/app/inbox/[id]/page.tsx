@@ -105,6 +105,19 @@ export default async function InboxItemPage({
   const paused = draft.status === "paused";
   const sent = draft.status === "sent";
 
+  // polish-7 — Gmail-style "read" tracking. The detail page open is the
+  // signal; we mirror it onto inbox_items.reviewed_at so the inbox list
+  // can demote the row from unread (bold) to read (muted). Idempotent
+  // — subsequent opens skip the write. We don't await this in a way
+  // that blocks render: the user shouldn't wait on a UI metadata write.
+  if (!inbox.reviewedAt) {
+    const now = new Date();
+    await db
+      .update(inboxItems)
+      .set({ reviewedAt: now, updatedAt: now })
+      .where(eq(inboxItems.id, inbox.id));
+  }
+
   // Live-fetch the full Gmail body for the detail page. We don't store
   // bodies on `inbox_items` (only the snippet) — the L1/L2 pipeline
   // doesn't need the full text, and persisting it would balloon the
@@ -272,7 +285,8 @@ export default async function InboxItemPage({
           sentAt={draft.sentAt ?? null}
           autoSent={draft.autoSent ?? false}
         />
-      ) : draft.action === "ask_clarifying" && !paused ? (
+      ) : (draft.action === "ask_clarifying" || draft.action === "notify_only") &&
+        !paused ? (
         <DraftActions
           draftId={draft.id}
           status={draft.status}
