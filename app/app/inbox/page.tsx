@@ -1,10 +1,21 @@
-import { Inbox as InboxIcon, HelpCircle, Star } from "lucide-react";
+import {
+  Inbox as InboxIcon,
+  HelpCircle,
+  Star,
+  AlertCircle,
+  Sparkles,
+} from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
-import { inboxItems, accounts, agentDrafts } from "@/lib/db/schema";
-import { and, desc, eq, isNull, ne } from "drizzle-orm";
+import {
+  inboxItems,
+  accounts,
+  agentDrafts,
+  agentProposals,
+} from "@/lib/db/schema";
+import { and, desc, eq, isNull, ne, or } from "drizzle-orm";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   compareInboxRows,
@@ -165,6 +176,57 @@ export default async function InboxPage() {
     .sort(compareInboxRows)
     .slice(0, 50);
 
+  // Phase 8 — proactive proposals. Surfaced in their own "Steadii
+  // noticed" section above the email-driven inbox per the locked
+  // sectioned-list approach. Show pending first, then recently
+  // resolved/dismissed muted (≤7d). Wrapped in try/catch so that a
+  // missing agent_proposals table (migration drift between Postgres
+  // and the deployed schema) degrades to "no proposals" instead of
+  // crashing the email inbox.
+  let proposals: Array<{
+    id: string;
+    issueType: typeof agentProposals.$inferSelect.issueType;
+    issueSummary: string;
+    status: typeof agentProposals.$inferSelect.status;
+    viewedAt: Date | null;
+    resolvedAt: Date | null;
+    createdAt: Date;
+  }> = [];
+  try {
+    proposals = await db
+      .select({
+        id: agentProposals.id,
+        issueType: agentProposals.issueType,
+        issueSummary: agentProposals.issueSummary,
+        status: agentProposals.status,
+        viewedAt: agentProposals.viewedAt,
+        resolvedAt: agentProposals.resolvedAt,
+        createdAt: agentProposals.createdAt,
+      })
+      .from(agentProposals)
+      .where(
+        and(
+          eq(agentProposals.userId, userId),
+          or(
+            eq(agentProposals.status, "pending"),
+            eq(agentProposals.status, "resolved"),
+            eq(agentProposals.status, "dismissed")
+          )
+        )
+      )
+      .orderBy(desc(agentProposals.createdAt))
+      .limit(20);
+  } catch {
+    proposals = [];
+  }
+
+  const sortedProposals = proposals.sort((a, b) => {
+    const aPending = a.status === "pending" ? 0 : 1;
+    const bPending = b.status === "pending" ? 0 : 1;
+    if (aPending !== bPending) return aPending - bPending;
+    return b.createdAt.getTime() - a.createdAt.getTime();
+  });
+
   return (
     <div className="mx-auto max-w-4xl">
       <header className="mb-6 flex items-center justify-between">
@@ -176,6 +238,63 @@ export default async function InboxPage() {
         </div>
       </header>
 
+      {sortedProposals.length > 0 ? (
+        <section className="mb-6">
+          <h2 className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+            <Sparkles size={11} strokeWidth={2.5} />
+            Steadii noticed
+          </h2>
+          <ul className="divide-y divide-[hsl(var(--border))] overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
+            {sortedProposals.map((p) => {
+              const isPending = p.status === "pending";
+              const isAuto = p.issueType === "auto_action_log";
+              return (
+                <li key={p.id}>
+                  <Link
+                    href={`/app/inbox/proposals/${p.id}`}
+                    className="flex items-start gap-3 px-4 py-3 transition-hover hover:bg-[hsl(var(--surface-raised))]"
+                    data-pending={isPending ? "true" : undefined}
+                  >
+                    <span
+                      className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        isAuto
+                          ? "text-[hsl(var(--muted-foreground))] bg-[hsl(var(--surface-raised))]"
+                          : "text-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.08)]"
+                      }`}
+                    >
+                      {isAuto ? "Action" : "Proposal"}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className={`truncate text-[14px] ${
+                          isPending
+                            ? "font-semibold text-[hsl(var(--foreground))]"
+                            : "font-normal text-[hsl(var(--muted-foreground))]"
+                        }`}
+                      >
+                        <AlertCircle
+                          size={11}
+                          strokeWidth={2.5}
+                          className="mr-1 inline align-text-top"
+                        />
+                        {p.issueSummary}
+                      </div>
+                      <div className="text-[12px] text-[hsl(var(--muted-foreground))]">
+                        {p.status === "pending"
+                          ? "Pending — pick an action"
+                          : p.status === "resolved"
+                          ? "Resolved"
+                          : "Dismissed"}
+                      </div>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+
       {!gmailConnected ? (
         <EmptyState
           icon={<InboxIcon size={18} />}
@@ -183,13 +302,13 @@ export default async function InboxPage() {
           description="Sign in again with Google to grant the Gmail scope. The agent triages, you confirm."
           actions={[{ label: "Reconnect in Settings", href: "/app/settings" }]}
         />
-      ) : items.length === 0 ? (
+      ) : items.length === 0 && sortedProposals.length === 0 ? (
         <EmptyState
           icon={<InboxIcon size={18} />}
           title="You're clear."
           description="Nothing pending. The agent will surface new items as they arrive."
         />
-      ) : (
+      ) : items.length === 0 ? null : (
         <ul className="divide-y divide-[hsl(var(--border))] overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
           {items.map((item) => {
             const tier = tierFor(item.bucket, item.riskTier);

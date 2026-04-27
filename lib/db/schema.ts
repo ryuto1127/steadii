@@ -1592,3 +1592,177 @@ export const waitlistRequests = pgTable(
 
 export type WaitlistRequest = typeof waitlistRequests.$inferSelect;
 export type NewWaitlistRequest = typeof waitlistRequests.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Phase 8 — Proactive agent (event log + proposals)
+// ---------------------------------------------------------------------------
+
+// Every meaningful change that should trigger a scan. Inserted by the write
+// hooks (calendar / syllabus / assignment / mistake / inbox) and by the
+// daily cron fallback. Processed by lib/agent/proactive/scanner.ts.
+export type AgentEventSource =
+  | "calendar.created"
+  | "calendar.updated"
+  | "calendar.deleted"
+  | "syllabus.uploaded"
+  | "syllabus.deleted"
+  | "assignment.created"
+  | "assignment.updated"
+  | "assignment.deleted"
+  | "mistake.created"
+  | "mistake.updated"
+  | "inbox.classified"
+  | "cron.daily";
+
+export type AgentEventStatus =
+  | "pending"
+  | "analyzed"
+  | "no_issue"
+  | "error";
+
+export const agentEvents = pgTable(
+  "agent_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    source: text("source").$type<AgentEventSource>().notNull(),
+    sourceRecordId: text("source_record_id"),
+    status: text("status")
+      .$type<AgentEventStatus>()
+      .notNull()
+      .default("pending"),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    analyzedAt: timestamp("analyzed_at", { mode: "date", withTimezone: true }),
+  },
+  (t) => ({
+    userPendingIdx: index("agent_events_user_pending_idx").on(
+      t.userId,
+      t.status,
+      t.createdAt
+    ),
+  })
+);
+
+export type AgentEventRow = typeof agentEvents.$inferSelect;
+export type NewAgentEventRow = typeof agentEvents.$inferInsert;
+
+// Proactive issue surfaces — one row per detected (or auto-action-logged)
+// item. Issues with `status='pending'` await the user's click in the inbox
+// "Steadii noticed" section; status transitions on resolve / dismiss /
+// expire. The dedup index (userId + dedupKey) guards the 24h re-surface
+// window described in D2 — recreate-after-expire happens by recomputing
+// the same key after the prior row was set to `expired`.
+export type AgentProposalIssueType =
+  | "time_conflict"
+  | "exam_conflict"
+  | "deadline_during_travel"
+  | "exam_under_prepared"
+  | "workload_over_capacity"
+  | "syllabus_calendar_ambiguity"
+  // D11 — informational "Steadii did X" log entry. status='resolved' on
+  // creation; surfaces in inbox as a muted row until viewed.
+  | "auto_action_log";
+
+export type AgentProposalStatus =
+  | "pending"
+  | "resolved"
+  | "dismissed"
+  | "expired";
+
+export type AgentProposalActionTool =
+  | "email_professor"
+  | "reschedule_event"
+  | "delete_event"
+  | "create_task"
+  | "chat_followup"
+  | "add_mistake_note"
+  | "link_existing"
+  | "add_anyway"
+  | "auto"
+  | "dismiss";
+
+// One option in a proposal's action menu. `payload` is pre-filled args
+// for the named tool — passed verbatim to the resolver endpoint when
+// the user picks this key.
+export type ActionOption = {
+  key: string;
+  label: string;
+  description: string;
+  tool: AgentProposalActionTool;
+  payload: Record<string, unknown>;
+};
+
+// `kind` discriminates the source label/url shape so the detail page can
+// render a deep-link back to the originating record (e.g., a calendar
+// event, an assignment row, a syllabus PDF).
+export type ProposalSourceRef = {
+  kind:
+    | "calendar_event"
+    | "assignment"
+    | "syllabus"
+    | "syllabus_event"
+    | "class"
+    | "mistake"
+    | "inbox_item";
+  id: string;
+  label: string;
+};
+
+export const agentProposals = pgTable(
+  "agent_proposals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    triggerEventId: uuid("trigger_event_id").references(() => agentEvents.id, {
+      onDelete: "set null",
+    }),
+
+    issueType: text("issue_type").$type<AgentProposalIssueType>().notNull(),
+    issueSummary: text("issue_summary").notNull(),
+    reasoning: text("reasoning").notNull(),
+    sourceRefs: jsonb("source_refs")
+      .$type<ProposalSourceRef[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+
+    actionOptions: jsonb("action_options")
+      .$type<ActionOption[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+
+    // sha256(issueType + sorted source_record_ids). Per-user unique,
+    // so identical re-detections don't double-surface.
+    dedupKey: text("dedup_key").notNull(),
+
+    status: text("status")
+      .$type<AgentProposalStatus>()
+      .notNull()
+      .default("pending"),
+    resolvedAction: text("resolved_action"),
+    resolvedAt: timestamp("resolved_at", { mode: "date", withTimezone: true }),
+    viewedAt: timestamp("viewed_at", { mode: "date", withTimezone: true }),
+
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }),
+  },
+  (t) => ({
+    userPendingIdx: index("agent_proposals_user_pending_idx").on(
+      t.userId,
+      t.status,
+      t.createdAt
+    ),
+    dedupIdx: uniqueIndex("agent_proposals_dedup_idx").on(t.userId, t.dedupKey),
+  })
+);
+
+export type AgentProposalRow = typeof agentProposals.$inferSelect;
+export type NewAgentProposalRow = typeof agentProposals.$inferInsert;

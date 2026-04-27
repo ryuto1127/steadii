@@ -3,6 +3,8 @@ import { db } from "@/lib/db/client";
 import { auditLog, syllabi } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { refreshSyllabusEmbeddings } from "@/lib/embeddings/entity-embed";
+import { triggerScanInBackground } from "@/lib/agent/proactive/scanner";
+import { runSyllabusAutoImport } from "@/lib/agent/proactive/syllabus-import";
 import type { Syllabus } from "./schema";
 
 export type SyllabusVerbatim = {
@@ -94,6 +96,20 @@ export async function saveSyllabusToPostgres(args: {
     },
   });
 
+  triggerScanInBackground(args.userId, {
+    source: "syllabus.uploaded",
+    recordId: row.id,
+  });
+
+  // D10 — auto-import schedule rows into Google Calendar with dedup +
+  // ambiguity proposals. Fire-and-forget so the wizard's "Saving…"
+  // spinner doesn't depend on Google Calendar latency.
+  runSyllabusAutoImport({ userId: args.userId, syllabusId: row.id }).catch(
+    (err) => {
+      console.error("[syllabus.save] auto-import failed", err);
+    }
+  );
+
   return { id: row.id };
 }
 
@@ -126,5 +142,11 @@ export async function softDeleteSyllabus(args: {
     resourceId: row.id,
     result: "success",
   });
+
+  triggerScanInBackground(args.userId, {
+    source: "syllabus.deleted",
+    recordId: row.id,
+  });
+
   return row;
 }
