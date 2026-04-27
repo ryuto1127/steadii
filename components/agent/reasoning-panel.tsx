@@ -17,7 +17,40 @@ const COLLAPSE_AT = 800;
 
 const CITATION_RE = /\((mistake|syllabus|calendar|email)-(\d+)\)/g;
 
-export function ReasoningPanel({ reasoning }: { reasoning: string | null }) {
+type ReasoningAction =
+  | "draft_reply"
+  | "ask_clarifying"
+  | "archive"
+  | "snooze"
+  | "no_op"
+  | "paused";
+
+function reasoningHeader(action: ReasoningAction | null | undefined): string {
+  switch (action) {
+    case "draft_reply":
+      return "Why this draft";
+    case "ask_clarifying":
+      return "Why Steadii is asking";
+    case "archive":
+      return "Why archive";
+    case "snooze":
+      return "Why snooze";
+    case "no_op":
+      return "Why no action";
+    case "paused":
+      return "Why paused";
+    default:
+      return "Steadii's reasoning";
+  }
+}
+
+export function ReasoningPanel({
+  reasoning,
+  action,
+}: {
+  reasoning: string | null;
+  action?: ReasoningAction | null;
+}) {
   const [expanded, setExpanded] = useState(false);
   if (!reasoning || reasoning.trim().length === 0) return null;
 
@@ -29,7 +62,7 @@ export function ReasoningPanel({ reasoning }: { reasoning: string | null }) {
   return (
     <section className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
       <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-        Why this draft
+        {reasoningHeader(action)}
       </h2>
       {bullets.length > 0 ? (
         <ul className="flex list-disc flex-col gap-1 pl-5 text-small text-[hsl(var(--foreground))]">
