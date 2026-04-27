@@ -131,45 +131,56 @@ export function DraftActions({
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
-        <div className="border-b border-[hsl(var(--border))] px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-          Draft
-        </div>
-        <div className="px-4 py-3">
-          <div className="text-small text-[hsl(var(--muted-foreground))]">
-            To: <span className="text-[hsl(var(--foreground))]">{initialTo.join(", ")}</span>
+      {/*
+        The Draft form only carries content when the agent's proposed
+        action is `draft_reply`. For `ask_clarifying` (Steadii needs the
+        user to clarify something before drafting), every field would be
+        empty — Ryuto observed the empty `Draft / To: ` block read as a
+        bug. Skip the section entirely in that case; the agent's
+        question lives in the ReasoningPanel above and the user can
+        Dismiss with the button below.
+      */}
+      {action === "draft_reply" ? (
+        <section className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
+          <div className="border-b border-[hsl(var(--border))] px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+            Draft
           </div>
-          {initialCc.length > 0 ? (
+          <div className="px-4 py-3">
             <div className="text-small text-[hsl(var(--muted-foreground))]">
-              Cc: <span className="text-[hsl(var(--foreground))]">{initialCc.join(", ")}</span>
+              To: <span className="text-[hsl(var(--foreground))]">{initialTo.join(", ")}</span>
             </div>
-          ) : null}
-          {editMode ? (
-            <>
-              <input
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                className="mt-2 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-body focus:border-[hsl(var(--ring))] focus:outline-none"
-              />
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={10}
-                className="mt-2 w-full resize-y rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 font-mono text-[13px] leading-relaxed focus:border-[hsl(var(--ring))] focus:outline-none"
-              />
-            </>
-          ) : (
-            <>
-              <div className="mt-2 text-body font-medium text-[hsl(var(--foreground))]">
-                {subject}
+            {initialCc.length > 0 ? (
+              <div className="text-small text-[hsl(var(--muted-foreground))]">
+                Cc: <span className="text-[hsl(var(--foreground))]">{initialCc.join(", ")}</span>
               </div>
-              <pre className="mt-2 whitespace-pre-wrap font-sans text-small leading-relaxed text-[hsl(var(--foreground))]">
-                {body}
-              </pre>
-            </>
-          )}
-        </div>
-      </section>
+            ) : null}
+            {editMode ? (
+              <>
+                <input
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  className="mt-2 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-body focus:border-[hsl(var(--ring))] focus:outline-none"
+                />
+                <textarea
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  rows={10}
+                  className="mt-2 w-full resize-y rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 font-mono text-[13px] leading-relaxed focus:border-[hsl(var(--ring))] focus:outline-none"
+                />
+              </>
+            ) : (
+              <>
+                <div className="mt-2 text-body font-medium text-[hsl(var(--foreground))]">
+                  {subject}
+                </div>
+                <pre className="mt-2 whitespace-pre-wrap font-sans text-small leading-relaxed text-[hsl(var(--foreground))]">
+                  {body}
+                </pre>
+              </>
+            )}
+          </div>
+        </section>
+      ) : null}
 
       {status === "sent" ? (
         <SentBanner sentAt={sentAt} autoSent={autoSent} />
