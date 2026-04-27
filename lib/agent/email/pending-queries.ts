@@ -13,15 +13,18 @@ import {
 
 // One source of truth for "this draft is waiting on the user." A pending
 // row is one the agent has finished thinking about (status='pending')
-// AND that proposes an action only a human can confirm — draft_reply or
-// ask_clarifying. archive/snooze/no_op/paused either auto-resolve or
-// can't be moved by the user from the inbox list. The phase 7 polish PR
-// added the inbox-list amber-dot marker and the sidebar count badge,
-// both of which call through this helper so every surface aligns on the
-// same definition.
+// AND that proposes an action only a human can confirm — draft_reply,
+// ask_clarifying, or (polish-7) notify_only. archive/snooze/no_op/paused
+// either auto-resolve or can't be moved by the user from the inbox list.
+// notify_only is "important but no reply" — the user must still see it
+// (so it sorts pending), but the detail page renders no draft form.
+// The sidebar badge, notification bell, digest picker, and inbox-list
+// typography all call through this helper so every surface aligns on
+// the same definition.
 export const PENDING_ACTIONS: ReadonlyArray<AgentDraftAction> = [
   "draft_reply",
   "ask_clarifying",
+  "notify_only",
 ];
 
 export function isPendingDraft(
@@ -30,26 +33,39 @@ export function isPendingDraft(
 ): boolean {
   if (status !== "pending") return false;
   return (
-    action === "draft_reply" || action === "ask_clarifying"
+    action === "draft_reply" ||
+    action === "ask_clarifying" ||
+    action === "notify_only"
   );
 }
 
 // Comparator the inbox-list page feeds to Array.prototype.sort. Keeps the
 // sort logic out of the page render so tests can prove pending-first
-// ordering without mocking Drizzle.
+// ordering without mocking Drizzle. polish-7 widens the group key from
+// 2-state (pending/non-pending) to 3-state (pending → unread non-pending
+// → read non-pending), with newest-first within each group. The
+// reviewedAt field is treated as the read-state marker — set by the
+// detail page on first open, mirrored from inbox_items.reviewed_at.
 export type InboxRowForSort = {
   receivedAt: Date;
   agentDraftStatus: AgentDraftStatus | string | null | undefined;
   agentDraftAction: AgentDraftAction | string | null | undefined;
+  reviewedAt?: Date | null;
 };
+
+function groupKey(row: InboxRowForSort): 0 | 1 | 2 {
+  if (isPendingDraft(row.agentDraftStatus, row.agentDraftAction)) return 0;
+  if (!row.reviewedAt) return 1;
+  return 2;
+}
 
 export function compareInboxRows(
   a: InboxRowForSort,
   b: InboxRowForSort
 ): number {
-  const ap = isPendingDraft(a.agentDraftStatus, a.agentDraftAction) ? 0 : 1;
-  const bp = isPendingDraft(b.agentDraftStatus, b.agentDraftAction) ? 0 : 1;
-  if (ap !== bp) return ap - bp;
+  const ag = groupKey(a);
+  const bg = groupKey(b);
+  if (ag !== bg) return ag - bg;
   return b.receivedAt.getTime() - a.receivedAt.getTime();
 }
 

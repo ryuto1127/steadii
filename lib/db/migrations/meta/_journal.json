@@ -169,6 +169,13 @@
       "when": 1777240131498,
       "tag": "0023_bouncy_matthew_murdock",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1777319328109,
+      "tag": "0024_moaning_fenris",
+      "breakpoints": true
     }
   ]
 }
