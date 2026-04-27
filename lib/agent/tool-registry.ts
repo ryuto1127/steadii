@@ -4,6 +4,7 @@ import { CALENDAR_TOOLS } from "./tools/calendar";
 import { TASKS_TOOLS } from "./tools/tasks";
 import { CLASSROOM_TOOLS } from "./tools/classroom";
 import { SYLLABUS_TOOLS } from "./tools/syllabus";
+import { CLASSES_TOOLS } from "./tools/classes";
 import { summarizeWeekTool } from "./tools/summarize-week";
 import { toOpenAIToolDefinition, type ToolExecutor } from "./tools/types";
 
@@ -13,6 +14,7 @@ export const ALL_TOOLS: ToolExecutor[] = [
   ...(TASKS_TOOLS as ToolExecutor[]),
   ...(CLASSROOM_TOOLS as ToolExecutor[]),
   ...(SYLLABUS_TOOLS as ToolExecutor[]),
+  ...(CLASSES_TOOLS as ToolExecutor[]),
   summarizeWeekTool as ToolExecutor,
 ];
 
