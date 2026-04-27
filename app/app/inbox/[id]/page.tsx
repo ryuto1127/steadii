@@ -1,13 +1,15 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Mail, AlertTriangle, Pause } from "lucide-react";
+import { ArrowLeft, Mail, Pause } from "lucide-react";
 import { and, eq } from "drizzle-orm";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
 import {
   agentDrafts,
   agentRules,
+  chats,
   inboxItems,
+  messages as messagesTable,
   users,
 } from "@/lib/db/schema";
 import { ThinkingBar } from "@/components/agent/thinking-bar";
@@ -15,6 +17,15 @@ import { ReasoningPanel } from "@/components/agent/reasoning-panel";
 import { DraftActions } from "@/components/agent/draft-actions";
 import { RolePickerDialog } from "@/components/agent/role-picker-dialog";
 import { ContextualSuggestion } from "@/components/suggestions/contextual-suggestion";
+import { EmailBody } from "@/components/agent/email-body";
+import { NextActionBanner } from "@/components/agent/next-action-banner";
+import { ClarificationReply } from "@/components/agent/clarification-reply";
+import { getMessageFull } from "@/lib/integrations/google/gmail-fetch";
+import {
+  extractEmailBody,
+  linkifySegments,
+  type LinkifiedSegment,
+} from "@/lib/agent/email/body-extract";
 
 export const dynamic = "force-dynamic";
 
@@ -38,30 +49,9 @@ function riskLabel(tier: "low" | "medium" | "high" | null): string {
   return "Classifying";
 }
 
-function actionLabel(
-  action:
-    | "draft_reply"
-    | "archive"
-    | "snooze"
-    | "no_op"
-    | "ask_clarifying"
-    | "paused"
-): string {
-  switch (action) {
-    case "draft_reply":
-      return "Proposed: send reply";
-    case "archive":
-      return "Proposed: archive";
-    case "snooze":
-      return "Proposed: snooze";
-    case "ask_clarifying":
-      return "Proposed: ask clarifying question";
-    case "no_op":
-      return "No action needed";
-    case "paused":
-      return "Paused — credits exhausted";
-  }
-}
+// actionLabel was removed in polish-6. The same per-action signal is
+// now carried by `NextActionBanner` (which combines title + body + icon
+// per action) — keeping a separate redundant line just added density.
 
 export default async function InboxItemPage({
   params,
@@ -115,6 +105,63 @@ export default async function InboxItemPage({
   const paused = draft.status === "paused";
   const sent = draft.status === "sent";
 
+  // Live-fetch the full Gmail body for the detail page. We don't store
+  // bodies on `inbox_items` (only the snippet) — the L1/L2 pipeline
+  // doesn't need the full text, and persisting it would balloon the
+  // table. The detail page is the only surface that wants the verbatim
+  // body, and one Gmail messages.get per page open is well within
+  // quota at α scale. Errors fall back silently to the snippet.
+  let bodySegments: LinkifiedSegment[] = [];
+  try {
+    if (inbox.sourceType === "gmail") {
+      const msg = await getMessageFull(userId, inbox.externalId);
+      const extracted = extractEmailBody(msg);
+      bodySegments = linkifySegments(extracted.text);
+    }
+  } catch {
+    // Network / scope / permissions error — render the snippet via
+    // EmailBody's `fallbackSnippet` path. We don't surface the error
+    // because the page is still useful with snippet alone.
+  }
+
+  // Inline reply server action — used by ClarificationReply when the
+  // agent's proposed action is `ask_clarifying`. Creates a new chat
+  // seeded with the email context + the user's clarification, then
+  // redirects to /app/chat/[id]?stream=1 so Steadii picks up the
+  // response and drafts the reply with the new info.
+  async function submitClarificationAction(formData: FormData): Promise<void> {
+    "use server";
+    const session = await auth();
+    if (!session?.user?.id) redirect("/login");
+    const ctx = String(formData.get("context") ?? "").trim();
+    if (!ctx) redirect(`/app/inbox/${draft.id}`);
+
+    const seed = [
+      `I'm replying to an email from ${
+        inbox.senderName ?? inbox.senderEmail
+      } about "${inbox.subject ?? "(no subject)"}".`,
+      "",
+      "Steadii's clarifying question:",
+      draft.reasoning?.trim() ?? "(no reasoning recorded)",
+      "",
+      "My answer / context:",
+      ctx,
+      "",
+      "Please draft the reply now.",
+    ].join("\n");
+
+    const [chatRow] = await db
+      .insert(chats)
+      .values({ userId: session.user.id })
+      .returning({ id: chats.id });
+    await db.insert(messagesTable).values({
+      chatId: chatRow.id,
+      role: "user",
+      content: seed,
+    });
+    redirect(`/app/chat/${chatRow.id}?stream=1`);
+  }
+
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 py-2">
       <div>
@@ -157,11 +204,12 @@ export default async function InboxItemPage({
             <span>&lt;{inbox.senderEmail}&gt;</span>
           </span>
         </div>
-        {inbox.snippet ? (
-          <p className="mt-3 rounded-md bg-[hsl(var(--surface-raised))] px-3 py-2 text-small text-[hsl(var(--muted-foreground))]">
-            {inbox.snippet}
-          </p>
-        ) : null}
+        <div className="mt-3">
+          <EmailBody
+            segments={bodySegments}
+            fallbackSnippet={inbox.snippet ?? null}
+          />
+        </div>
       </header>
 
       <ThinkingBar
@@ -197,13 +245,19 @@ export default async function InboxItemPage({
           </div>
         </div>
       ) : sent ? null : (
-        <div className="flex items-center gap-2 text-small text-[hsl(var(--muted-foreground))]">
-          <AlertTriangle size={14} strokeWidth={1.75} />
-          <span>{actionLabel(draft.action)}</span>
-        </div>
+        <NextActionBanner action={draft.action} />
       )}
 
-      <ReasoningPanel reasoning={draft.reasoning} />
+      <ReasoningPanel reasoning={draft.reasoning} action={draft.action} />
+
+      {draft.action === "ask_clarifying" && !paused ? (
+        <ClarificationReply
+          emailSubject={inbox.subject ?? "(no subject)"}
+          emailSender={inbox.senderName ?? inbox.senderEmail}
+          agentQuestion={draft.reasoning ?? null}
+          submitAction={submitClarificationAction}
+        />
+      ) : null}
 
       {draft.action === "draft_reply" && !paused ? (
         <DraftActions
