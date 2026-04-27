@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { loadClasses, loadTimelineForToday } from "@/lib/classes/loader";
 import { TimelineStrip } from "@/components/ui/timeline-strip";
 import { DenseList } from "@/components/ui/dense-list";
@@ -44,7 +45,7 @@ export default async function ClassesListPage() {
             icon={<GraduationCap size={18} strokeWidth={1.5} />}
             title="No classes yet."
             description="Classes are Steadii's core unit. Add one to start tracking assignments, mistakes, and syllabi."
-            actions={[{ label: "+ Add class", href: "/app" }]}
+            actions={[{ label: "+ Add class", href: "/app/classes/new" }]}
           />
         </div>
       </div>
@@ -56,7 +57,15 @@ export default async function ClassesListPage() {
 
   return (
     <div className="mx-auto max-w-4xl py-6">
-      <h1 className="text-h1 text-[hsl(var(--foreground))]">Classes</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-h1 text-[hsl(var(--foreground))]">Classes</h1>
+        <Link
+          href="/app/classes/new"
+          className="rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
+        >
+          + New class
+        </Link>
+      </div>
 
       <section className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-5">
         <TimelineStrip days={enrichedDays} />
