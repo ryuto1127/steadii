@@ -69,15 +69,25 @@ export function compareInboxRows(
   return b.receivedAt.getTime() - a.receivedAt.getTime();
 }
 
+// "Pending and not yet seen by the user" — the badge / digest count must
+// drop the moment the user opens an inbox item's detail page (which sets
+// inbox_items.reviewed_at), even before they act on it. Without the
+// reviewedAt join the badge stayed pinned at the high-water mark and
+// "vibes unread" forever; users complained items they'd already read
+// kept screaming for attention. The list-view sort still surfaces
+// reviewed-but-pending items at the top (compareInboxRows group 0), so
+// nothing is forgotten — only the count and bold typography decay.
 export async function countPendingDrafts(userId: string): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(agentDrafts)
+    .innerJoin(inboxItems, eq(agentDrafts.inboxItemId, inboxItems.id))
     .where(
       and(
         eq(agentDrafts.userId, userId),
         eq(agentDrafts.status, "pending"),
-        inArray(agentDrafts.action, PENDING_ACTIONS as AgentDraftAction[])
+        inArray(agentDrafts.action, PENDING_ACTIONS as AgentDraftAction[]),
+        sql`${inboxItems.reviewedAt} IS NULL`
       )
     );
   return row?.n ?? 0;
