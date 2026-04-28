@@ -14,22 +14,52 @@ type MessagesShape = {
       confirm: { title: string; body: string };
       yours: { title: string; body: string };
     };
-    mock: {
-      today_schedule: string;
-      due_soon: string;
-      past_week: string;
-      past_week_window: string;
-      past_week_counts: string;
-      past_week_pattern: string;
-      csc108_lecture: string;
-      office_hours: string;
-      mat135_tutorial: string;
-      physics_ps4: string;
-      essay_outline: string;
-      mat135_hw: string;
-      in_14h: string;
-      in_2d: string;
-      in_3d: string;
+    what_you_do: {
+      title: string;
+      subhead: string;
+      cards: {
+        calendar: { input: string; action: string };
+        syllabus: { input: string; action: string };
+        absence: { input: string; action: string };
+      };
+    };
+    steadii_in_motion: {
+      title: string;
+      body: string;
+      real_screen: string;
+      step_calendar: string;
+      step_calendar_meta: string;
+      step_notification: string;
+      step_notification_meta: string;
+      step_proposal: string;
+      step_proposal_meta: string;
+      action_email: string;
+      action_reschedule: string;
+      action_dismiss: string;
+    };
+    how_it_works: {
+      title: string;
+      steps: {
+        connect: { title: string; body: string };
+        watch: { title: string; body: string };
+        trust: { title: string; body: string };
+      };
+    };
+    glass_box: {
+      title: string;
+      paragraph_reasoning: string;
+      paragraph_yours: string;
+      paragraph_confirm: string;
+    };
+    founding: {
+      headline: string;
+      body: string;
+      cta: string;
+    };
+    locale_toggle: {
+      en: string;
+      ja: string;
+      aria_label: string;
     };
     footer: {
       privacy: string;
@@ -279,22 +309,80 @@ export const en: MessagesShape = {
         body: "Verbatim mistakes, syllabi, and tasks. Yours to read, search, and export — never locked in.",
       },
     },
-    mock: {
-      today_schedule: "Today's schedule",
-      due_soon: "Due soon",
-      past_week: "Past week",
-      past_week_window: "4/13 — 4/20",
-      past_week_counts: "{chats} chats · {mistakes} mistakes · {syllabi} syllabi",
-      past_week_pattern: "Stuck on free-fall problems 3 times this week.",
-      csc108_lecture: "CSC108 lecture",
-      office_hours: "Office hours",
-      mat135_tutorial: "MAT135 tutorial",
-      physics_ps4: "Physics PS 4",
-      essay_outline: "Essay outline",
-      mat135_hw: "MAT135 HW",
-      in_14h: "in 14h",
-      in_2d: "in 2d",
-      in_3d: "in 3d",
+    what_you_do: {
+      title: "Just chat. Steadii does the rest.",
+      subhead:
+        "No buttons to find, no menus to navigate. The chat input is the entire app.",
+      cards: {
+        calendar: {
+          input: "Meeting with Prof. Tanaka, Friday 2pm",
+          action: "Calendar event added.",
+        },
+        syllabus: {
+          input: "What's covered on the Math II midterm?",
+          action:
+            "Reads your syllabus → \"Chapter 3-5, midterm 5/16, focus on §3.4 limits.\"",
+        },
+        absence: {
+          input: "I might not make it to campus tomorrow",
+          action:
+            "Drafts emails to tomorrow's professors and offers a calendar absence-mark.",
+        },
+      },
+    },
+    steadii_in_motion: {
+      title: "And it watches your back.",
+      body:
+        "Steadii reads your syllabus, calendar, and recent mistakes — then surfaces what you'd otherwise miss.",
+      real_screen: "Real screen. No mocks.",
+      step_calendar: "Tokyo trip · 5/15 — 5/17",
+      step_calendar_meta: "Calendar · 3-day event added",
+      step_notification: "Important — schedule conflict",
+      step_notification_meta:
+        "5/16 Math II midterm overlaps with your Tokyo trip.",
+      step_proposal: "Conflict found",
+      step_proposal_meta:
+        "Cited: syllabus §midterms · calendar · 2 prior reschedule emails",
+      action_email: "Email professor",
+      action_reschedule: "Reschedule trip",
+      action_dismiss: "Dismiss",
+    },
+    how_it_works: {
+      title: "How it works",
+      steps: {
+        connect: {
+          title: "Connect",
+          body: "Sign in with Google. Steadii reads your inbox + calendar. Setup ≈ 90 seconds.",
+        },
+        watch: {
+          title: "Watch",
+          body: "Steadii triages your emails, watches for conflicts, drafts replies. You see everything; nothing sends without you.",
+        },
+        trust: {
+          title: "Trust",
+          body: "Use the dismiss button when Steadii is wrong. It learns. The more you use it, the more it gets you.",
+        },
+      },
+    },
+    glass_box: {
+      title: "Glass box, all the way down.",
+      paragraph_reasoning:
+        "Every reason behind every decision is visible. Click the reasoning panel under any draft and you see what the agent read, what it weighed, and which past emails it cited.",
+      paragraph_yours:
+        "Your data stays yours. Verbatim mistakes, syllabi, and assignments. Yours to read, search, and export — never locked in.",
+      paragraph_confirm:
+        "Nothing sends without you. Every outgoing message rides a 20-second undo and your explicit approval. The staged-autonomy mode that auto-sends low-stakes drafts is opt-in and per-user.",
+    },
+    founding: {
+      headline: "α is invite-only — 10 students this round.",
+      body:
+        "Founding members get permanent price-lock at signup rate, plus early access to every feature ahead of NA public launch (Sept 2026).",
+      cta: "Request α access",
+    },
+    locale_toggle: {
+      en: "EN",
+      ja: "JA",
+      aria_label: "Language",
     },
     footer: {
       privacy: "Privacy",
