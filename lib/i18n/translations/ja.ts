@@ -32,23 +32,83 @@ export const ja: Messages = {
         body: "間違いノート・シラバス・課題はそのまま保管。読む・検索する・書き出す——いつでも自由、囲い込みません。",
       },
     },
-    mock: {
-      today_schedule: "今日の予定",
-      due_soon: "まもなく締切",
-      past_week: "先週の振り返り",
-      past_week_window: "4/13 — 4/20",
-      past_week_counts:
-        "チャット {chats} · 間違い {mistakes} · シラバス {syllabi}",
-      past_week_pattern: "自由落下問題で3回詰まりました",
-      csc108_lecture: "CSC108 講義",
-      office_hours: "オフィスアワー",
-      mat135_tutorial: "MAT135 演習",
-      physics_ps4: "物理 PS 4",
-      essay_outline: "レポートの構成",
-      mat135_hw: "MAT135 課題",
-      in_14h: "14時間後",
-      in_2d: "2日後",
-      in_3d: "3日後",
+    what_you_do: {
+      title: "話すだけ。あとは Steadii が動く。",
+      subhead:
+        "ボタン探しもメニュー操作も不要。チャット入力だけが Steadii の操作画面。",
+      cards: {
+        calendar: {
+          input: "金曜 14 時に田中先生と meeting",
+          action: "予定に追加しました。",
+        },
+        syllabus: {
+          input: "数学 II の試験範囲どこ?",
+          action:
+            "シラバスを読み取り → 「3〜5章、5/16 中間、§3.4 極限が要注意」。",
+        },
+        absence: {
+          input: "明日大学行けないかも",
+          action:
+            "今日の教授に欠席連絡 draft、カレンダーに欠席マークを提案。",
+        },
+      },
+    },
+    steadii_in_motion: {
+      title: "そして、先回りもする。",
+      body:
+        "シラバス、カレンダー、過去の間違い。Steadii はそれを横断して読み、あなたが見落とすことに気づきます。",
+      real_screen: "実画面。モックではありません。",
+      step_calendar: "東京旅行 · 5/15 — 5/17",
+      step_calendar_meta: "カレンダー · 3 日間の予定を追加",
+      step_notification: "重要 — 日程の衝突",
+      step_notification_meta:
+        "5/16 の数学 II 中間試験と東京旅行が重なります。",
+      step_proposal: "衝突を検出",
+      step_proposal_meta:
+        "参照：シラバス §中間 · カレンダー · 過去の振替メール 2 件",
+      action_email: "教授にメール",
+      action_reschedule: "旅行を再調整",
+      action_dismiss: "閉じる",
+    },
+    how_it_works: {
+      title: "使い方",
+      steps: {
+        connect: {
+          title: "つなぐ",
+          body:
+            "Google でサインイン。Steadii が受信箱とカレンダーを読み取ります。セットアップは約 90 秒。",
+        },
+        watch: {
+          title: "見守る",
+          body:
+            "Steadii がメールをトリアージし、衝突を監視し、返信案を準備。すべてが見え、あなたを通さずには何も送られません。",
+        },
+        trust: {
+          title: "任せる",
+          body:
+            "間違っているときは「閉じる」を押す。Steadii はそこから学びます。使うほど、あなたに合っていきます。",
+        },
+      },
+    },
+    glass_box: {
+      title: "全部、ガラス箱の中。",
+      paragraph_reasoning:
+        "判断の理由はすべて見えます。各ドラフトの reasoning パネルを開けば、エージェントが読んだもの、比較したこと、参照した過去のメールが確認できます。",
+      paragraph_yours:
+        "データはあなたのもの。間違いノート・シラバス・課題はそのまま保管。読む・検索する・書き出す——いつでも自由、囲い込みません。",
+      paragraph_confirm:
+        "送信は必ずあなたを通ります。送信は 20 秒の undo と明示的な承認を経て送られます。低リスクのドラフトを自動送信するステージド自律モードはオプトイン、ユーザー単位で切替可能です。",
+    },
+    founding: {
+      headline: "α は招待制 — 今回は 10 名のみ。",
+      body:
+        "Founding メンバーはサインアップ時の料金が永続固定、さらに北米公開（2026 年 9 月）前にすべての新機能を先行利用できます。",
+      cta: "α アクセスをリクエスト",
+    },
+    locale_toggle: {
+      en: "EN",
+      ja: "JA",
+      aria_label: "言語",
     },
     footer: {
       privacy: "プライバシー",
