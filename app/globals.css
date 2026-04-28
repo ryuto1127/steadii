@@ -536,3 +536,22 @@
     animation: none;
   }
 }
+
+/* Landing CTA — gentle 3s pulse, pauses on hover/focus. */
+@keyframes steadii-cta-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.02); }
+}
+.landing-cta {
+  animation: steadii-cta-pulse 3s ease-in-out infinite;
+  transform-origin: center;
+}
+.landing-cta:hover,
+.landing-cta:focus-visible {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-cta {
+    animation: none;
+  }
+}
