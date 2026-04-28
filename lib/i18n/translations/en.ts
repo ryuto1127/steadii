@@ -87,6 +87,69 @@ type MessagesShape = {
     };
     no_assignments_title: string;
     no_assignments_desc: string;
+    actions: {
+      edit: string;
+      delete: string;
+      cancel: string;
+      save: string;
+      saving: string;
+      menu_label: string;
+    };
+    edit_class: {
+      button: string;
+      title: string;
+      name_label: string;
+      code_label: string;
+      term_label: string;
+      professor_label: string;
+      color_label: string;
+      saved_toast: string;
+      save_failed: string;
+    };
+    delete_class: {
+      button: string;
+      confirm_title: string;
+      confirm_body: string;
+      confirm_body_no_cascade: string;
+      success_toast: string;
+      delete_failed: string;
+    };
+    syllabus: {
+      edit_title: string;
+      edit_term: string;
+      delete_confirm_title: string;
+      delete_confirm_body: string;
+      saved_toast: string;
+      deleted_toast: string;
+      save_failed: string;
+      delete_failed: string;
+    };
+    assignments: {
+      edit_title: string;
+      edit_due: string;
+      edit_status: string;
+      edit_priority: string;
+      edit_notes: string;
+      status_not_started: string;
+      status_in_progress: string;
+      status_done: string;
+      priority_low: string;
+      priority_medium: string;
+      priority_high: string;
+      priority_none: string;
+      delete_confirm_title: string;
+      delete_confirm_body: string;
+      saved_toast: string;
+      deleted_toast: string;
+      save_failed: string;
+      delete_failed: string;
+    };
+    mistakes_grid: {
+      delete_confirm_title: string;
+      delete_confirm_body: string;
+      deleted_toast: string;
+      delete_failed: string;
+    };
   };
   mistakes: {
     add_from_photo: string;
@@ -101,6 +164,11 @@ type MessagesShape = {
     photo_cancel: string;
     photo_extract_failed: string;
     photo_save_failed: string;
+    delete_button: string;
+    delete_confirm_title: string;
+    delete_confirm_body: string;
+    deleted_toast: string;
+    delete_failed: string;
   };
   login: { title: string; subtitle: string; button: string };
   request_access: {
@@ -197,6 +265,35 @@ type MessagesShape = {
     timezone_detected: string;
     timezone_saved: string;
     timezone_invalid: string;
+    danger_zone: {
+      account_placeholder: string;
+      account_button: string;
+      wipe_data_button: string;
+      wipe_data_description: string;
+      wipe_modal: {
+        title: string;
+        list_header: string;
+        list_classes: string;
+        list_syllabi: string;
+        list_mistakes: string;
+        list_assignments: string;
+        list_chats: string;
+        list_inbox: string;
+        list_proposals: string;
+        list_integrations: string;
+        list_blobs: string;
+        stays_note: string;
+        irreversible: string;
+        type_to_confirm: string;
+        type_to_confirm_placeholder: string;
+        cancel: string;
+        submit: string;
+        submitting: string;
+        success_toast: string;
+        load_failed: string;
+        wipe_failed: string;
+      };
+    };
   };
   billing: {
     page_title: string;
@@ -412,6 +509,73 @@ export const en: MessagesShape = {
     no_assignments_title: "No tasks yet.",
     no_assignments_desc:
       "Ask Steadii to add one from chat, e.g. '物理の課題を追加して'.",
+    actions: {
+      edit: "Edit",
+      delete: "Delete",
+      cancel: "Cancel",
+      save: "Save",
+      saving: "Saving…",
+      menu_label: "More actions",
+    },
+    edit_class: {
+      button: "Edit class",
+      title: "Edit class",
+      name_label: "Name",
+      code_label: "Code",
+      term_label: "Term",
+      professor_label: "Professor",
+      color_label: "Color",
+      saved_toast: "Class updated.",
+      save_failed: "Couldn't save class.",
+    },
+    delete_class: {
+      button: "Delete class",
+      confirm_title: "Delete {name}?",
+      confirm_body:
+        "This will also delete {syllabi} syllabi, {assignments} tasks, and {mistakes} mistake notes. Chats referencing this class will be untagged but kept.",
+      confirm_body_no_cascade:
+        "This class has no syllabi, tasks, or mistake notes. Chats referencing this class will be untagged but kept.",
+      success_toast: "Deleted {name}.",
+      delete_failed: "Couldn't delete class.",
+    },
+    syllabus: {
+      edit_title: "Title",
+      edit_term: "Term",
+      delete_confirm_title: "Delete this syllabus?",
+      delete_confirm_body:
+        "Calendar events already imported won't be affected.",
+      saved_toast: "Syllabus updated.",
+      deleted_toast: "Syllabus deleted.",
+      save_failed: "Couldn't save syllabus.",
+      delete_failed: "Couldn't delete syllabus.",
+    },
+    assignments: {
+      edit_title: "Title",
+      edit_due: "Due",
+      edit_status: "Status",
+      edit_priority: "Priority",
+      edit_notes: "Notes",
+      status_not_started: "Not started",
+      status_in_progress: "In progress",
+      status_done: "Done",
+      priority_low: "Low",
+      priority_medium: "Medium",
+      priority_high: "High",
+      priority_none: "—",
+      delete_confirm_title: "Delete this task?",
+      delete_confirm_body:
+        "Pending Steadii proposals referencing it may break.",
+      saved_toast: "Task updated.",
+      deleted_toast: "Task deleted.",
+      save_failed: "Couldn't save task.",
+      delete_failed: "Couldn't delete task.",
+    },
+    mistakes_grid: {
+      delete_confirm_title: "Delete this mistake note?",
+      delete_confirm_body: "You can recreate it from chat anytime.",
+      deleted_toast: "Mistake note deleted.",
+      delete_failed: "Couldn't delete mistake note.",
+    },
   },
   mistakes: {
     add_from_photo: "📷 Add from photo",
@@ -427,6 +591,11 @@ export const en: MessagesShape = {
     photo_cancel: "Cancel",
     photo_extract_failed: "Couldn't read the file. Try again or use a clearer image.",
     photo_save_failed: "Couldn't save. Please try again.",
+    delete_button: "Delete",
+    delete_confirm_title: "Delete this mistake note?",
+    delete_confirm_body: "You can recreate it from chat anytime.",
+    deleted_toast: "Mistake note deleted.",
+    delete_failed: "Couldn't delete mistake note.",
   },
   login: {
     title: "Welcome back",
@@ -550,6 +719,38 @@ export const en: MessagesShape = {
     timezone_detected: "Detected",
     timezone_saved: "Saved.",
     timezone_invalid: "Unknown time zone.",
+    danger_zone: {
+      account_placeholder:
+        "Delete account and all associated data. (Coming after α.)",
+      account_button: "Delete account",
+      wipe_data_button: "Delete all data",
+      wipe_data_description:
+        "Wipes your classes, tasks, syllabi, mistakes, chats, inbox, and uploads. Your account, billing, and OAuth connections stay.",
+      wipe_modal: {
+        title: "Permanently delete all your data?",
+        list_header: "This will permanently delete:",
+        list_classes: "{count} classes",
+        list_syllabi: "{count} syllabi",
+        list_mistakes: "{count} mistake notes",
+        list_assignments: "{count} tasks",
+        list_chats: "{count} chats ({messages} messages)",
+        list_inbox: "{count} inbox items",
+        list_proposals: "{count} proactive proposals",
+        list_integrations: "{count} connected integrations",
+        list_blobs: "{count} file uploads (~{size})",
+        stays_note:
+          "Your account, billing, and OAuth connections will stay.",
+        irreversible: "This cannot be undone.",
+        type_to_confirm: "Type DELETE to confirm",
+        type_to_confirm_placeholder: "DELETE",
+        cancel: "Cancel",
+        submit: "Delete all data",
+        submitting: "Deleting…",
+        success_toast: "All data deleted. Welcome back to a clean slate.",
+        load_failed: "Couldn't load data counts.",
+        wipe_failed: "Couldn't delete data.",
+      },
+    },
   },
   billing: {
     page_title: "Billing",
