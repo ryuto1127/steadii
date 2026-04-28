@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { MarkdownMessage } from "@/components/chat/markdown-message";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type ClassOption = { id: string; name: string };
 
@@ -26,6 +29,8 @@ export function MistakeMarkdownEditor({
   classes: ClassOption[];
 }) {
   const router = useRouter();
+  const tMistakes = useTranslations("mistakes");
+  const tActions = useTranslations("classes.actions");
   const [title, setTitle] = useState(initialTitle);
   const [unit, setUnit] = useState(initialUnit ?? "");
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard" | "">(
@@ -38,6 +43,33 @@ export function MistakeMarkdownEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function deleteNote() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/mistakes/${mistakeId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast.success(tMistakes("deleted_toast"));
+      // Redirect to the parent class detail page when we know it; otherwise
+      // fall back to the classes index. router.back() is unreliable here
+      // because the editor can be reached from grid, chat, or notification.
+      if (initialClassId) {
+        router.push(`/app/classes/${initialClassId}?tab=mistakes`);
+      } else {
+        router.push("/app/classes");
+      }
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : tMistakes("delete_failed")
+      );
+      setDeleting(false);
+      setConfirmingDelete(false);
+    }
+  }
 
   function wrap(prefix: string, suffix = prefix) {
     const ta = document.getElementById("mistake-body") as HTMLTextAreaElement | null;
@@ -111,6 +143,14 @@ export function MistakeMarkdownEditor({
         />
         <button
           type="button"
+          onClick={() => setConfirmingDelete(true)}
+          disabled={saving || deleting}
+          className="rounded-md border border-[hsl(var(--destructive)/0.3)] px-3 py-1.5 text-small text-[hsl(var(--destructive))] transition-hover hover:bg-[hsl(var(--destructive)/0.08)] disabled:opacity-40"
+        >
+          {tMistakes("delete_button")}
+        </button>
+        <button
+          type="button"
           onClick={save}
           disabled={saving}
           className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))] disabled:opacity-40"
@@ -118,6 +158,16 @@ export function MistakeMarkdownEditor({
           {saving ? "Saving…" : "Save"}
         </button>
       </div>
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={tMistakes("delete_confirm_title")}
+        body={tMistakes("delete_confirm_body")}
+        confirmLabel={tMistakes("delete_button")}
+        cancelLabel={tActions("cancel")}
+        busy={deleting}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={deleteNote}
+      />
       {savedAt && (
         <div className="text-xs text-[hsl(var(--muted-foreground))]">
           Saved at {savedAt.toLocaleTimeString()}

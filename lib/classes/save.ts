@@ -1,6 +1,12 @@
 import "server-only";
 import { db } from "@/lib/db/client";
-import { auditLog, classes } from "@/lib/db/schema";
+import {
+  assignments,
+  auditLog,
+  classes,
+  mistakeNotes,
+  syllabi,
+} from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { ClassColorEnum } from "@/lib/db/schema";
@@ -83,13 +89,20 @@ export async function updateClass(args: {
   return row;
 }
 
+// Soft-deleting a class also soft-deletes its child entities (syllabi,
+// assignments, mistake notes). We don't rely on FK cascade because the FKs
+// are `onDelete: set null` (so child rows survive a hard delete) and the
+// class delete here is a soft delete (deletedAt timestamp), not a row
+// removal — cascade wouldn't fire either way. Doing it explicitly keeps the
+// listings consistent with what the cascade-count modal showed the user.
 export async function softDeleteClass(args: {
   userId: string;
   classId: string;
 }): Promise<{ id: string } | null> {
+  const now = new Date();
   const [row] = await db
     .update(classes)
-    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .set({ deletedAt: now, updatedAt: now })
     .where(
       and(
         eq(classes.id, args.classId),
@@ -99,6 +112,39 @@ export async function softDeleteClass(args: {
     )
     .returning({ id: classes.id });
   if (!row) return null;
+
+  await Promise.all([
+    db
+      .update(syllabi)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(syllabi.userId, args.userId),
+          eq(syllabi.classId, args.classId),
+          isNull(syllabi.deletedAt)
+        )
+      ),
+    db
+      .update(assignments)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(assignments.userId, args.userId),
+          eq(assignments.classId, args.classId),
+          isNull(assignments.deletedAt)
+        )
+      ),
+    db
+      .update(mistakeNotes)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(mistakeNotes.userId, args.userId),
+          eq(mistakeNotes.classId, args.classId),
+          isNull(mistakeNotes.deletedAt)
+        )
+      ),
+  ]);
 
   await db.insert(auditLog).values({
     userId: args.userId,
