@@ -1020,6 +1020,12 @@ export type NewEmailEmbedding = typeof emailEmbeddings.$inferInsert;
 
 export type SendQueueStatus =
   | "pending"
+  // polish-13b — exclusive claim by a single cron tick. Acquired via
+  // UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED). Transitions
+  // to 'sent' on success or 'failed' on Gmail-API error. A stale-claim
+  // sweep at cron entry flips rows stuck >5 min back to 'pending' so a
+  // crashed worker doesn't strand its row.
+  | "processing"
   | "sent"
   | "cancelled"
   | "failed";
@@ -1049,6 +1055,13 @@ export const sendQueue = pgTable(
       .default("pending"),
     attemptCount: integer("attempt_count").notNull().default(0),
     attemptedAt: timestamp("attempted_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    // polish-13b — set when a cron tick atomically claims the row
+    // (status: pending → processing). Used by the stale-claim sweep
+    // to detect rows held >5 min by a presumed-dead worker.
+    processingStartedAt: timestamp("processing_started_at", {
       mode: "date",
       withTimezone: true,
     }),
@@ -1616,6 +1629,15 @@ export type AgentEventSource =
 
 export type AgentEventStatus =
   | "pending"
+  // polish-13b — distributed lock state. Inserted with status='running'
+  // via the partial unique index agent_events_running_per_user_idx, which
+  // permits at most one running row per user. Two near-simultaneous
+  // triggers on different serverless instances thus collapse into a
+  // single scan: the loser sees a unique-violation and returns early.
+  // Transitions to 'analyzed' / 'no_issue' / 'error' when the scan
+  // completes (or to 'error' if a stale-claim sweep flips a row stuck
+  // >10 min by a presumed-dead worker).
+  | "running"
   | "analyzed"
   | "no_issue"
   | "error";
@@ -1645,6 +1667,14 @@ export const agentEvents = pgTable(
       t.status,
       t.createdAt
     ),
+    // polish-13b — partial unique index enforcing at most one running
+    // claim per user. The proactive scanner inserts with status='running'
+    // via ON CONFLICT DO NOTHING; the second concurrent caller sees no
+    // row returned and short-circuits. Historical analyzed / no_issue /
+    // error rows are unconstrained.
+    runningPerUserIdx: uniqueIndex("agent_events_running_per_user_idx")
+      .on(t.userId)
+      .where(sql`${t.status} = 'running'`),
   })
 );
 
