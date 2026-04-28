@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { prettyBytes } from "@/lib/billing/plan";
+import { prettyBytes } from "@/lib/format/bytes";
 
 type WipeCounts = {
   classes: number;

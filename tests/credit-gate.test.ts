@@ -20,7 +20,6 @@ vi.mock("@/lib/billing/plan", () => ({
     free: { monthlyCredits: 250, maxFileBytes: 0, maxTotalBytes: 0 },
     pro: { monthlyCredits: 1000, maxFileBytes: 0, maxTotalBytes: 0 },
   },
-  prettyBytes: (n: number) => `${n} B`,
   getUserPlan: async () => "free",
 }));
 
