@@ -28,7 +28,13 @@ import { SyllabusRowActions } from "@/components/classes/syllabus-row-actions";
 import { AssignmentRow } from "@/components/classes/assignment-row";
 import { MistakeGridItem } from "@/components/classes/mistake-grid-item";
 import { cn } from "@/lib/utils/cn";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
+
+function fmt(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k) =>
+    k in vars ? String(vars[k]) : `{${k}}`
+  );
+}
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +80,8 @@ export default async function ClassDetailPage({
             ) : null}
           </div>
           <p className="mt-1 text-small text-[hsl(var(--muted-foreground))]">
-            {[cls.professor, cls.term].filter(Boolean).join(" · ") || "No term set"}
+            {[cls.professor, cls.term].filter(Boolean).join(" · ") ||
+              t("no_term_set")}
           </p>
         </div>
         <ClassHeaderActions
@@ -155,15 +162,17 @@ async function SyllabusTab({
     )
     .orderBy(desc(syllabi.createdAt))
     .limit(50);
+  const tSyllabus = await getTranslations("classes.syllabus");
+  const tClasses = await getTranslations("classes");
   if (rows.length === 0) {
     return (
       <EmptyState
         icon={<FileText size={18} strokeWidth={1.5} />}
-        title={`No syllabus saved for ${classCode}.`}
-        description="Drop a PDF, paste a URL, or upload an image and Steadii will extract the structure."
+        title={fmt(tSyllabus("empty_title"), { className: classCode })}
+        description={tSyllabus("empty_description")}
         actions={[
-          { label: "Upload PDF", href: "/app/syllabus/new" },
-          { label: "Paste URL", href: "/app/syllabus/new" },
+          { label: tSyllabus("upload_pdf"), href: "/app/syllabus/new" },
+          { label: tSyllabus("paste_url"), href: "/app/syllabus/new" },
         ]}
       />
     );
@@ -179,7 +188,7 @@ async function SyllabusTab({
           <div className="flex-1">
             <div className="text-body font-medium">{r.title}</div>
             <div className="text-small text-[hsl(var(--muted-foreground))]">
-              {[r.term].filter(Boolean).join(" · ") || "(no term)"}
+              {[r.term].filter(Boolean).join(" · ") || tClasses("no_term")}
             </div>
           </div>
           {r.blobUrl ? (
@@ -189,7 +198,7 @@ async function SyllabusTab({
               rel="noreferrer"
               className="text-small underline-offset-4 hover:underline"
             >
-              Open original
+              {tSyllabus("open_original")}
             </a>
           ) : r.sourceUrl ? (
             <a
@@ -198,7 +207,7 @@ async function SyllabusTab({
               rel="noreferrer"
               className="text-small underline-offset-4 hover:underline"
             >
-              Source
+              {tSyllabus("source")}
             </a>
           ) : null}
           <SyllabusRowActions
@@ -281,6 +290,7 @@ async function MistakesTab({
     )
     .orderBy(desc(mistakeNotes.createdAt))
     .limit(100);
+  const tMistakes = await getTranslations("classes.mistakes_grid");
   return (
     <div className="space-y-4">
       <ContextualSuggestion
@@ -295,9 +305,9 @@ async function MistakesTab({
       {rows.length === 0 ? (
         <EmptyState
           icon={<NotebookPen size={18} strokeWidth={1.5} />}
-          title={`No mistake notes for ${classCode} yet.`}
-          description="Paste a problem image in chat and ask for an explanation, or scan a handwritten page with the button above."
-          actions={[{ label: "Open chat", href: "/app" }]}
+          title={fmt(tMistakes("empty_title"), { className: classCode })}
+          description={tMistakes("empty_description")}
+          actions={[{ label: tMistakes("open_chat"), href: "/app" }]}
         />
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -328,13 +338,16 @@ async function ChatsTab({ userId, classId }: { userId: string; classId: string }
     .where(and(eq(chats.userId, userId), isNull(chats.deletedAt)))
     .orderBy(desc(chats.updatedAt))
     .limit(200);
+  const tClasses = await getTranslations("classes");
+  const locale = await getLocale();
+  const dateLocale = locale === "ja" ? "ja-JP" : "en-US";
   if (recent.length === 0) {
     return (
       <EmptyState
         icon={<MessagesSquare size={18} strokeWidth={1.5} />}
-        title="No chats tagged to this class yet."
-        description="Start a chat and Steadii will auto-tag when you mention the class."
-        actions={[{ label: "Start a chat", href: "/app" }]}
+        title={tClasses("no_chats_tagged_title")}
+        description={tClasses("no_chats_tagged_desc")}
+        actions={[{ label: tClasses("start_a_chat"), href: "/app" }]}
       />
     );
   }
@@ -353,21 +366,21 @@ async function ChatsTab({ userId, classId }: { userId: string; classId: string }
     return (
       <EmptyState
         icon={<MessagesSquare size={18} strokeWidth={1.5} />}
-        title="No chats tagged to this class yet."
-        description="Start a chat and Steadii will auto-tag when you mention the class."
-        actions={[{ label: "Start a chat", href: "/app" }]}
+        title={tClasses("no_chats_tagged_title")}
+        description={tClasses("no_chats_tagged_desc")}
+        actions={[{ label: tClasses("start_a_chat"), href: "/app" }]}
       />
     );
   }
   void classId;
   return (
-    <DenseList ariaLabel="Chats for this class">
+    <DenseList ariaLabel={tClasses("chats_for_class_aria")}>
       {matching.slice(0, 20).map((c) => (
         <DenseRowLink
           key={c.id}
           href={`/app/chat/${c.id}`}
-          title={c.title ?? "Untitled chat"}
-          metadata={[c.updatedAt.toLocaleDateString()]}
+          title={c.title ?? tClasses("untitled_chat")}
+          metadata={[c.updatedAt.toLocaleDateString(dateLocale)]}
         />
       ))}
     </DenseList>
