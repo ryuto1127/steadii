@@ -137,6 +137,14 @@ export const ja: Messages = {
     no_assignments_title: "タスクはまだありません。",
     no_assignments_desc:
       "チャットからSteadiiに追加を頼めます。例：「物理の課題を追加して」。",
+    no_term: "（学期未設定）",
+    no_term_set: "学期未設定",
+    chats_for_class_aria: "この授業のチャット",
+    no_chats_tagged_title: "この授業に紐付くチャットはまだありません。",
+    no_chats_tagged_desc:
+      "チャットで授業名に触れると、Steadii が自動で紐付けます。",
+    start_a_chat: "チャットを始める",
+    untitled_chat: "無題のチャット",
     actions: {
       edit: "編集",
       delete: "削除",
@@ -160,7 +168,7 @@ export const ja: Messages = {
       button: "授業を削除",
       confirm_title: "{name} を削除しますか？",
       confirm_body:
-        "シラバス {syllabi} 件、タスク {assignments} 件、間違いノート {mistakes} 件も同時に削除されます。この授業を参照しているチャットはタグが外れますが、チャット自体は残ります。",
+        "シラバス {syllabi} 件、タスク {assignments} 件、間違いノート {mistakes} 件も同時に削除されます。この授業を参照しているチャットのタグは外れますが、内容は保持されます。",
       confirm_body_no_cascade:
         "この授業に紐付くシラバス・タスク・間違いノートはありません。参照しているチャットはタグが外れますが、チャット自体は残ります。",
       success_toast: "{name} を削除しました。",
@@ -169,6 +177,14 @@ export const ja: Messages = {
     syllabus: {
       edit_title: "タイトル",
       edit_term: "学期",
+      edit_modal_title: "シラバスを編集",
+      empty_title: "{className} のシラバスはまだ登録されていません。",
+      empty_description:
+        "PDF をドロップ、URL を貼り付け、または画像をアップロードすると、Steadii が構造を抽出します。",
+      upload_pdf: "PDF をアップロード",
+      paste_url: "URL を貼り付け",
+      open_original: "原本を開く",
+      source: "ソース",
       delete_confirm_title: "このシラバスを削除しますか？",
       delete_confirm_body:
         "取り込み済みのカレンダー予定には影響しません。",
@@ -190,6 +206,9 @@ export const ja: Messages = {
       priority_medium: "中",
       priority_high: "高",
       priority_none: "—",
+      no_due: "期限なし",
+      due_short: "{date} 締切",
+      priority_inline: "優先度: {value}",
       delete_confirm_title: "このタスクを削除しますか？",
       delete_confirm_body:
         "このタスクを参照中の Steadii の提案が壊れる可能性があります。",
@@ -199,6 +218,10 @@ export const ja: Messages = {
       delete_failed: "タスクを削除できませんでした。",
     },
     mistakes_grid: {
+      empty_title: "{className} の間違いノートはまだありません。",
+      empty_description:
+        "問題画像をチャットに貼って解説を頼むか、上のボタンから手書きページを取り込んでください。",
+      open_chat: "チャットを開く",
       delete_confirm_title: "この間違いノートを削除しますか？",
       delete_confirm_body: "チャットからいつでも作り直せます。",
       deleted_toast: "間違いノートを削除しました。",
@@ -324,6 +347,7 @@ export const ja: Messages = {
   settings: {
     title: "設定",
     sign_out: "サインアウト",
+    no_name: "（名前未設定）",
     sections: {
       profile: "プロフィール",
       connections: "連携",
@@ -334,6 +358,78 @@ export const ja: Messages = {
       language: "言語",
       timezone: "タイムゾーン",
       danger: "危険な操作",
+    },
+    connections: {
+      workspace_fallback: "ワークスペース",
+      connected_to: "{workspaceName} に接続済み",
+      setup_complete: "セットアップ完了",
+      setup_pending: "セットアップ中",
+      not_connected: "未接続",
+      disconnect: "接続解除",
+      connect: "接続",
+      calendar_label: "Google カレンダー",
+      calendar_granted: "カレンダー権限を付与済み。",
+      calendar_missing: "カレンダー権限がありません。",
+      gmail_label: "Gmail",
+      gmail_granted:
+        "Gmail 権限を付与済み。エージェントが受信箱を分類して下書きを作れます。",
+      gmail_missing:
+        "Gmail 権限がありません。サインアウトして再度サインインすると付与できます。",
+      sign_out_to_reauth: "再認証するにはサインアウト",
+      refresh_inbox: "受信箱を再読み込み",
+      refresh_inbox_title: "直近 24 時間の Gmail を再取得",
+    },
+    resources: {
+      description:
+        "エージェントが読める Notion ページ（任意）。Steadii 親ページ配下は自動登録、それ以外は URL を貼って追加します。Steadii の学習データは Postgres に保存されるので、既存の Notion ワークスペースから引用させたい場合のみ設定してください。",
+      not_connected_hint:
+        "Notion が未接続です。上の「連携」から接続するとリソースを登録できます。",
+      add_placeholder: "https://notion.so/...",
+      add_button: "追加",
+      empty: "登録されたリソースはまだありません。",
+      auto_registered: "自動登録",
+      manual: "手動",
+      remove: "削除",
+      refresh_from_notion: "Notion から再取得",
+    },
+    agent_thinks: {
+      section_title: "エージェントの思考過程",
+      description:
+        "直近の判断の振り返りビュー（読み取り専用）。何を取り上げたか、なぜか、どの間違いノート・シラバス断片・カレンダー予定・過去メールを根拠にしたかが見えます。最後までガラス箱。",
+      open: "開く",
+    },
+    agent_rules: {
+      section_title: "エージェントのルール",
+      description:
+        "透明性が前提です。受信箱のトリアージで使うルール（共通キーワード、学習済み連絡先、手動の上書き）はすべて下に並んでいます。",
+    },
+    notifications_section: "通知",
+    staged_autonomy: {
+      section_title: "段階的な自律送信",
+      description_prefix:
+        "オンにすると、低リスクの下書き（現状は中位の返信 — オフィスアワー、締切、日程確認）を Steadii が自動送信します。20 秒の undo は引き続き有効で、受信箱には ",
+      description_em: "自動送信",
+      description_suffix:
+        " ラベルとガラス箱の理由が表示されます。デフォルトはオフ — 送信ごとに確認したい場合はそのまま。",
+      toggle_label: "対象の下書きを自動送信（20 秒 undo あり）",
+      on: "オン — オフにする",
+      off: "オフ — オンにする",
+    },
+    agent_modes: {
+      destructive_only_label:
+        "破壊的な操作だけ確認する（推奨）",
+      destructive_only_hint:
+        "作成・更新は自動。削除は承認待ちで止まります。",
+      all_label: "すべての書き込みを確認する",
+      all_hint:
+        "作成・更新・削除のいずれも承認待ちで止まります。",
+      none_label: "確認しない",
+      none_hint: "Steadii が即座に実行します。慎重に。",
+      save: "保存",
+    },
+    usage: {
+      credits_this_month: "今月のクレジット",
+      storage_label: "ストレージ",
     },
     appearance_theme_label: "テーマ",
     language_description:
