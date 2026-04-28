@@ -34,6 +34,7 @@ import { priceLabelsFor } from "@/lib/billing/format-price";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { LanguageToggle } from "@/components/settings/language-toggle";
 import { TimezoneInput } from "@/components/settings/timezone-input";
+import { WipeDataSection } from "@/components/settings/wipe-data-section";
 import { getUserThemePreference } from "@/lib/theme/get-preference";
 import { isLocale } from "@/lib/i18n/config";
 
@@ -506,18 +507,7 @@ export default async function SettingsPage() {
       </Section>
 
       <Section title={t("sections.danger")} tone="warn">
-        <div className="flex items-center justify-between">
-          <p className="text-small text-[hsl(var(--muted-foreground))]">
-            Delete account and all associated data. (Coming after α.)
-          </p>
-          <button
-            type="button"
-            disabled
-            className="text-small text-[hsl(var(--muted-foreground))] opacity-60"
-          >
-            Delete account
-          </button>
-        </div>
+        <WipeDataSection />
       </Section>
     </div>
   );

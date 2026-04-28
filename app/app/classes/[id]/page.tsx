@@ -23,6 +23,10 @@ import { DenseRowLink } from "@/components/ui/dense-row-link";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PhotoUploadButton } from "@/components/mistakes/photo-upload-button";
 import { ContextualSuggestion } from "@/components/suggestions/contextual-suggestion";
+import { ClassHeaderActions } from "@/components/classes/class-header-actions";
+import { SyllabusRowActions } from "@/components/classes/syllabus-row-actions";
+import { AssignmentRow } from "@/components/classes/assignment-row";
+import { MistakeGridItem } from "@/components/classes/mistake-grid-item";
 import { cn } from "@/lib/utils/cn";
 import { getTranslations } from "next-intl/server";
 
@@ -73,6 +77,16 @@ export default async function ClassDetailPage({
             {[cls.professor, cls.term].filter(Boolean).join(" · ") || "No term set"}
           </p>
         </div>
+        <ClassHeaderActions
+          classId={cls.id}
+          initial={{
+            name: cls.name,
+            code: cls.code,
+            term: cls.term,
+            professor: cls.professor,
+            color: cls.color,
+          }}
+        />
       </header>
 
       <nav className="flex items-center gap-1 border-b border-[hsl(var(--border))]">
@@ -187,6 +201,11 @@ async function SyllabusTab({
               Source
             </a>
           ) : null}
+          <SyllabusRowActions
+            syllabusId={r.id}
+            initialTitle={r.title}
+            initialTerm={r.term}
+          />
         </div>
       ))}
     </div>
@@ -215,24 +234,22 @@ async function AssignmentsTab({ userId, classId }: { userId: string; classId: st
       />
     );
   }
+  void classId;
   return (
     <DenseList ariaLabel={t("tabs.assignments")}>
-      {rows.map((r) => {
-        const due = r.dueAt ? r.dueAt.toISOString() : null;
-        const status = r.status;
-        return (
-          <DenseRowLink
-            key={r.id}
-            href={`/app/classes/${classId}?tab=assignments`}
-            title={r.title}
-            secondary={status !== "not_started" ? status.replace("_", " ") : undefined}
-            metadata={[
-              due ? formatDueShort(due) : "No due",
-              r.priority ? `priority: ${r.priority}` : "",
-            ].filter(Boolean)}
-          />
-        );
-      })}
+      {rows.map((r) => (
+        <AssignmentRow
+          key={r.id}
+          initial={{
+            id: r.id,
+            title: r.title,
+            dueAt: r.dueAt ? r.dueAt.toISOString() : null,
+            status: r.status,
+            priority: r.priority,
+            notes: r.notes,
+          }}
+        />
+      ))}
     </DenseList>
   );
 }
@@ -285,29 +302,14 @@ async function MistakesTab({
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {rows.map((r) => (
-            <Link
+            <MistakeGridItem
               key={r.id}
-              href={`/app/mistakes/${r.id}`}
-              className="group flex flex-col gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4 transition-hover hover:bg-[hsl(var(--surface-raised))]"
-            >
-              <div className="flex items-start gap-2">
-                <NotebookPen
-                  size={14}
-                  strokeWidth={1.5}
-                  className="mt-0.5 shrink-0 text-[hsl(var(--muted-foreground))]"
-                />
-                <span className="line-clamp-2 text-body font-medium">
-                  {r.title}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-1 text-small text-[hsl(var(--muted-foreground))]">
-                {[r.difficulty, r.unit, r.createdAt.toISOString().slice(0, 10)]
-                  .filter(Boolean)
-                  .map((s, i) => (
-                    <span key={i}>{s}</span>
-                  ))}
-              </div>
-            </Link>
+              id={r.id}
+              title={r.title}
+              unit={r.unit}
+              difficulty={r.difficulty}
+              createdAt={r.createdAt}
+            />
           ))}
         </div>
       )}
@@ -372,11 +374,3 @@ async function ChatsTab({ userId, classId }: { userId: string; classId: string }
   );
 }
 
-function formatDueShort(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return `due ${d.toLocaleDateString()}`;
-  } catch {
-    return iso;
-  }
-}

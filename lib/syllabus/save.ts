@@ -118,6 +118,45 @@ export async function saveSyllabusToPostgres(args: {
 // during the cutover; renaming in a follow-up cleanup PR.
 export const saveSyllabusToNotion = saveSyllabusToPostgres;
 
+export async function updateSyllabus(args: {
+  userId: string;
+  syllabusId: string;
+  input: {
+    title?: string;
+    term?: string | null;
+    classId?: string | null;
+  };
+}): Promise<{ id: string } | null> {
+  const set: Record<string, unknown> = { updatedAt: new Date() };
+  if (args.input.title !== undefined) set.title = args.input.title;
+  if (args.input.term !== undefined) set.term = args.input.term;
+  if (args.input.classId !== undefined) set.classId = args.input.classId;
+
+  const [row] = await db
+    .update(syllabi)
+    .set(set)
+    .where(
+      and(
+        eq(syllabi.id, args.syllabusId),
+        eq(syllabi.userId, args.userId),
+        isNull(syllabi.deletedAt)
+      )
+    )
+    .returning({ id: syllabi.id });
+  if (!row) return null;
+
+  await db.insert(auditLog).values({
+    userId: args.userId,
+    action: "syllabus.update",
+    resourceType: "syllabus",
+    resourceId: row.id,
+    result: "success",
+    detail: { fields: Object.keys(set).filter((k) => k !== "updatedAt") },
+  });
+
+  return row;
+}
+
 export async function softDeleteSyllabus(args: {
   userId: string;
   syllabusId: string;
