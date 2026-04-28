@@ -229,7 +229,6 @@ export const ja: Messages = {
   },
   chat_input: {
     placeholder: "Steadiiに聞く…",
-    send_hint: "⌘⏎ で送信",
     example_prompts: [
       "今週の課題は？",
       "この物理の問題を解説して",
