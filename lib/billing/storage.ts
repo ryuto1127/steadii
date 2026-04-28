@@ -2,7 +2,8 @@ import "server-only";
 import { db } from "@/lib/db/client";
 import { blobAssets } from "@/lib/db/schema";
 import { and, eq, isNull, sum } from "drizzle-orm";
-import { getPlanLimits, prettyBytes, type Plan } from "./plan";
+import { getPlanLimits, type Plan } from "./plan";
+import { prettyBytes } from "@/lib/format/bytes";
 
 export type StorageTotals = {
   plan: Plan;
