@@ -183,6 +183,13 @@
       "when": 1777326447281,
       "tag": "0025_majestic_thor",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1777418533334,
+      "tag": "0026_race_condition_locks",
+      "breakpoints": true
     }
   ]
 }
