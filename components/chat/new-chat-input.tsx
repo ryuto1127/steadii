@@ -76,20 +76,25 @@ async function createChatAndPost(
     return { error: msg };
   }
 
-  const post = await fetch("/api/chat/message", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chatId, content }),
-  });
-  if (!post.ok) {
-    let msg = "Couldn't send the message.";
-    try {
-      const body = await post.json();
-      if (typeof body?.error === "string") msg = body.error;
-    } catch {
-      // ignore
+  // Skip the follow-up text message when the user only attached a file —
+  // posting an empty content row creates a useless extra turn since the
+  // attachment row already represents the user's intent.
+  if (content.length > 0) {
+    const post = await fetch("/api/chat/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chatId, content }),
+    });
+    if (!post.ok) {
+      let msg = "Couldn't send the message.";
+      try {
+        const body = await post.json();
+        if (typeof body?.error === "string") msg = body.error;
+      } catch {
+        // ignore
+      }
+      return { error: msg };
     }
-    return { error: msg };
   }
   return chatId;
 }
@@ -183,7 +188,7 @@ export function NewChatInput({
     el.style.overflowY = el.scrollHeight > MAX_HEIGHT_PX ? "auto" : "hidden";
   }, [value]);
 
-  const canSubmit = value.trim().length > 0 && !isPending;
+  const canSubmit = (value.trim().length > 0 || file !== null) && !isPending;
   const auraActive = isFocused || value.length > 0;
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -257,8 +262,10 @@ export function NewChatInput({
                 autoFocus={autoFocus}
                 rows={1}
                 onKeyDown={(e) => {
+                  // Skip Enter while the IME is composing (e.g. Japanese
+                  // henkan) — Enter there confirms the conversion, not submit.
                   if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
                   }
@@ -330,17 +337,6 @@ export function NewChatInput({
           {error}
         </p>
       ) : null}
-      <p className="mt-3 text-center font-medium text-[10px] tracking-wide text-[hsl(var(--muted-foreground))]">
-        Press{" "}
-        <span className="rounded border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-1 py-0.5 font-mono">
-          ⌘
-        </span>{" "}
-        +{" "}
-        <span className="rounded border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-1 py-0.5 font-mono">
-          Enter
-        </span>{" "}
-        to send
-      </p>
     </div>
   );
 }

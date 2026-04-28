@@ -162,7 +162,6 @@ type MessagesShape = {
   };
   chat_input: {
     placeholder: string;
-    send_hint: string;
     example_prompts: string[];
   };
   chat: {
@@ -505,7 +504,6 @@ export const en: MessagesShape = {
   },
   chat_input: {
     placeholder: "Ask Steadii…",
-    send_hint: "⌘⏎ to send",
     example_prompts: [
       "What's due this week?",
       "Explain this physics problem",
