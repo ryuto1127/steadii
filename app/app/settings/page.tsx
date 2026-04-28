@@ -21,7 +21,7 @@ import {
 } from "./actions";
 import { getCreditBalance } from "@/lib/billing/credits";
 import { getStorageTotals } from "@/lib/billing/storage";
-import { prettyBytes } from "@/lib/billing/plan";
+import { prettyBytes } from "@/lib/format/bytes";
 import { getEffectivePlan } from "@/lib/billing/effective-plan";
 import {
   addResourceAction,
