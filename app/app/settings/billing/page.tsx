@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import { getCreditBalance } from "@/lib/billing/credits";
 import { getStorageTotals } from "@/lib/billing/storage";
-import { prettyBytes } from "@/lib/billing/plan";
+import { prettyBytes } from "@/lib/format/bytes";
 import { getEffectivePlan } from "@/lib/billing/effective-plan";
 import { BillingActions } from "@/components/billing/billing-actions";
 import { priceLabelsFor } from "@/lib/billing/format-price";
