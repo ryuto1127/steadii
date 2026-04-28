@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
 import type {
   AssignmentPriority,
@@ -23,13 +23,10 @@ type AssignmentInitial = {
 const STATUSES: AssignmentStatus[] = ["not_started", "in_progress", "done"];
 const PRIORITIES: AssignmentPriority[] = ["low", "medium", "high"];
 
-function formatDueShort(iso: string | null): string {
-  if (!iso) return "No due";
-  try {
-    return `due ${new Date(iso).toLocaleDateString()}`;
-  } catch {
-    return iso;
-  }
+function fmt(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k) =>
+    k in vars ? String(vars[k]) : `{${k}}`
+  );
 }
 
 function toLocalDateTime(iso: string | null): string {
@@ -52,7 +49,20 @@ function fromLocalDateTime(local: string): string | null {
 export function AssignmentRow({ initial }: { initial: AssignmentInitial }) {
   const tActions = useTranslations("classes.actions");
   const tA = useTranslations("classes.assignments");
+  const locale = useLocale();
+  const dateLocale = locale === "ja" ? "ja-JP" : "en-US";
   const router = useRouter();
+
+  const formatDueShort = (iso: string | null): string => {
+    if (!iso) return tA("no_due");
+    try {
+      return fmt(tA("due_short"), {
+        date: new Date(iso).toLocaleDateString(dateLocale),
+      });
+    } catch {
+      return iso;
+    }
+  };
 
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -123,7 +133,7 @@ export function AssignmentRow({ initial }: { initial: AssignmentInitial }) {
         </span>
         {initial.status !== "not_started" ? (
           <span className="text-small text-[hsl(var(--muted-foreground))]">
-            {initial.status.replace("_", " ")}
+            {tA(`status_${initial.status}` as const)}
           </span>
         ) : null}
         <span className="text-small text-[hsl(var(--muted-foreground))]">
@@ -131,7 +141,9 @@ export function AssignmentRow({ initial }: { initial: AssignmentInitial }) {
         </span>
         {initial.priority ? (
           <span className="text-small text-[hsl(var(--muted-foreground))]">
-            priority: {initial.priority}
+            {fmt(tA("priority_inline"), {
+              value: tA(`priority_${initial.priority}` as const),
+            })}
           </span>
         ) : null}
       </button>

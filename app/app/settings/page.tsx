@@ -102,6 +102,14 @@ export default async function SettingsPage() {
       .then((rows) => rows[0] ?? null),
   ]);
   const tBilling = await getTranslations("billing");
+  const tConn = await getTranslations("settings.connections");
+  const tRes = await getTranslations("settings.resources");
+  const tThinks = await getTranslations("settings.agent_thinks");
+  const tRules = await getTranslations("settings.agent_rules");
+  const tStaged = await getTranslations("settings.staged_autonomy");
+  const tModes = await getTranslations("settings.agent_modes");
+  const tUsage = await getTranslations("settings.usage");
+  const dateLocale = currentLocale === "ja" ? "ja-JP" : "en-US";
   const fmt = (template: string, vars: Record<string, string | number>) =>
     template.replace(/\{(\w+)\}/g, (_, k) =>
       k in vars ? String(vars[k]) : `{${k}}`
@@ -122,7 +130,7 @@ export default async function SettingsPage() {
       <Section title={t("sections.profile")}>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-body">{session.user.name ?? "(no name)"}</p>
+            <p className="text-body">{session.user.name ?? t("no_name")}</p>
             <p className="text-small text-[hsl(var(--muted-foreground))]">
               {session.user.email}
             </p>
@@ -144,10 +152,15 @@ export default async function SettingsPage() {
             <p className="text-body">Notion</p>
             <p className="text-small text-[hsl(var(--muted-foreground))]">
               {notionConn
-                ? `Connected to ${notionConn.workspaceName ?? "workspace"}${
-                    notionConn.setupCompletedAt ? " · setup complete" : " · setup pending"
+                ? `${fmt(tConn("connected_to"), {
+                    workspaceName:
+                      notionConn.workspaceName ?? tConn("workspace_fallback"),
+                  })} · ${
+                    notionConn.setupCompletedAt
+                      ? tConn("setup_complete")
+                      : tConn("setup_pending")
                   }`
-                : "Not connected"}
+                : tConn("not_connected")}
             </p>
           </div>
           {notionConn ? (
@@ -156,7 +169,7 @@ export default async function SettingsPage() {
                 type="submit"
                 className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))]"
               >
-                Disconnect
+                {tConn("disconnect")}
               </button>
             </form>
           ) : (
@@ -164,15 +177,17 @@ export default async function SettingsPage() {
               href="/api/integrations/notion/connect"
               className="inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
             >
-              Connect
+              {tConn("connect")}
             </Link>
           )}
         </div>
         <div className="mt-3 flex items-center justify-between border-t border-[hsl(var(--border))] pt-3">
           <div>
-            <p className="text-body">Google Calendar</p>
+            <p className="text-body">{tConn("calendar_label")}</p>
             <p className="text-small text-[hsl(var(--muted-foreground))]">
-              {calendarConnected ? "Calendar scope granted." : "Calendar scope missing."}
+              {calendarConnected
+                ? tConn("calendar_granted")
+                : tConn("calendar_missing")}
             </p>
           </div>
           {!calendarConnected ? (
@@ -181,18 +196,18 @@ export default async function SettingsPage() {
                 type="submit"
                 className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
               >
-                Sign out to re-auth
+                {tConn("sign_out_to_reauth")}
               </button>
             </form>
           ) : null}
         </div>
         <div className="mt-3 flex items-center justify-between border-t border-[hsl(var(--border))] pt-3">
           <div>
-            <p className="text-body">Gmail</p>
+            <p className="text-body">{tConn("gmail_label")}</p>
             <p className="text-small text-[hsl(var(--muted-foreground))]">
               {gmailConnected
-                ? "Gmail scope granted. The agent can triage and draft replies."
-                : "Gmail scope missing — sign out and sign back in to grant it."}
+                ? tConn("gmail_granted")
+                : tConn("gmail_missing")}
             </p>
           </div>
           {gmailConnected ? (
@@ -200,10 +215,10 @@ export default async function SettingsPage() {
               <button
                 type="submit"
                 className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
-                title="Re-ingest the last 24 hours of Gmail"
+                title={tConn("refresh_inbox_title")}
               >
                 <RefreshCw size={14} strokeWidth={1.75} />
-                Refresh inbox
+                {tConn("refresh_inbox")}
               </button>
             </form>
           ) : (
@@ -212,7 +227,7 @@ export default async function SettingsPage() {
                 type="submit"
                 className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
               >
-                Sign out to re-auth
+                {tConn("sign_out_to_reauth")}
               </button>
             </form>
           )}
@@ -221,33 +236,29 @@ export default async function SettingsPage() {
 
       <Section title={t("sections.resources")}>
         <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
-          Optional Notion pages the agent can read. Pages under the Steadii
-          parent auto-register; add extra ones with a URL. Steadii&rsquo;s
-          academic data lives in Postgres — this section only matters if you
-          also want the agent to quote from your existing Notion workspace.
+          {tRes("description")}
         </p>
         {!notionConn ? (
           <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
-            Notion is not connected. Connect it under <strong>Connections</strong> above to
-            register Notion resources.
+            {tRes("not_connected_hint")}
           </p>
         ) : null}
         <form action={addResourceAction} className="mb-3 flex gap-2">
           <input
             name="notion_url"
-            placeholder="https://notion.so/..."
+            placeholder={tRes("add_placeholder")}
             className="flex-1 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small focus:outline-none focus:border-[hsl(var(--ring))]"
           />
           <button
             type="submit"
             className="inline-flex items-center rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
           >
-            Add
+            {tRes("add_button")}
           </button>
         </form>
         {resources.length === 0 ? (
           <p className="text-small text-[hsl(var(--muted-foreground))]">
-            No manual resources yet.
+            {tRes("empty")}
           </p>
         ) : (
           <ul className="flex flex-col divide-y divide-[hsl(var(--border))]">
@@ -256,7 +267,10 @@ export default async function SettingsPage() {
                 <div className="min-w-0">
                   <p className="truncate text-body">{r.title ?? r.notionId}</p>
                   <p className="truncate text-[hsl(var(--muted-foreground))]">
-                    {r.autoRegistered ? "auto-registered" : "manual"} · {r.resourceType}
+                    {r.autoRegistered
+                      ? tRes("auto_registered")
+                      : tRes("manual")}{" "}
+                    · {r.resourceType}
                   </p>
                 </div>
                 <form action={removeResourceAction}>
@@ -265,7 +279,7 @@ export default async function SettingsPage() {
                     type="submit"
                     className="text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))]"
                   >
-                    Remove
+                    {tRes("remove")}
                   </button>
                 </form>
               </li>
@@ -278,37 +292,32 @@ export default async function SettingsPage() {
             className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
           >
             <RefreshCw size={12} strokeWidth={1.5} />
-            Refresh from Notion
+            {tRes("refresh_from_notion")}
           </button>
         </form>
       </Section>
 
-      <Section title="How your agent thinks">
+      <Section title={tThinks("section_title")}>
         <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
-          A read-only retrospective view of the agent's last decisions:
-          what it surfaced, why, and which mistakes / syllabus chunks /
-          calendar items / past emails grounded each draft. Glass-box
-          transparency, end to end.
+          {tThinks("description")}
         </p>
         <Link
           href="/app/settings/how-your-agent-thinks"
           className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
         >
-          Open
+          {tThinks("open")}
           <ExternalLink size={12} strokeWidth={1.5} />
         </Link>
       </Section>
 
-      <Section title="Agent Rules">
+      <Section title={tRules("section_title")}>
         <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
-          Transparency is the promise. Every rule the agent uses to triage
-          your inbox — global keyword lists, learned contacts, manual
-          overrides — is listed below.
+          {tRules("description")}
         </p>
         <AgentRulesSection userId={userId} />
       </Section>
 
-      <Section title="Notifications">
+      <Section title={t("notifications_section")}>
         <NotificationSettings
           initial={{
             digestEnabled: userPrefs?.digestEnabled ?? true,
@@ -320,22 +329,17 @@ export default async function SettingsPage() {
         />
       </Section>
 
-      <Section title="Staged autonomy">
+      <Section title={tStaged("section_title")}>
         <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
-          When on, Steadii sends low-stakes drafts (currently medium-tier
-          replies — office hours, deadlines, scheduling acknowledgments)
-          on its own. The 20-second undo still applies, and the inbox
-          item is labeled <em>Sent automatically</em> with the full
-          glass-box reasoning visible. Off by default — you stay in
-          the loop on every send.
+          {tStaged("description_prefix")}
+          <em>{tStaged("description_em")}</em>
+          {tStaged("description_suffix")}
         </p>
         <form
           action={setAutonomySendEnabledAction}
           className="flex items-center justify-between rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2.5"
         >
-          <span className="text-body">
-            Auto-send eligible drafts (with 20s undo)
-          </span>
+          <span className="text-body">{tStaged("toggle_label")}</span>
           <input
             type="hidden"
             name="enabled"
@@ -351,7 +355,7 @@ export default async function SettingsPage() {
                 : "border border-[hsl(var(--border))] hover:bg-[hsl(var(--surface-raised))]"
             }`}
           >
-            {userPrefs?.autonomySendEnabled ? "On — turn off" : "Off — turn on"}
+            {userPrefs?.autonomySendEnabled ? tStaged("on") : tStaged("off")}
           </button>
         </form>
       </Section>
@@ -362,28 +366,28 @@ export default async function SettingsPage() {
             value="destructive_only"
             name="mode"
             checked={mode === "destructive_only"}
-            label="Only confirm destructive actions (recommended)"
-            hint="Creating or updating is automatic; deletions pause for approval."
+            label={tModes("destructive_only_label")}
+            hint={tModes("destructive_only_hint")}
           />
           <Option
             value="all"
             name="mode"
             checked={mode === "all"}
-            label="Confirm every write"
-            hint="Any change — create, update, delete — pauses for approval."
+            label={tModes("all_label")}
+            hint={tModes("all_hint")}
           />
           <Option
             value="none"
             name="mode"
             checked={mode === "none"}
-            label="Never ask"
-            hint="Steadii acts immediately. Use with care."
+            label={tModes("none_label")}
+            hint={tModes("none_hint")}
           />
           <button
             type="submit"
             className="mt-2 inline-flex items-center rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
           >
-            Save
+            {tModes("save")}
           </button>
         </form>
       </Section>
@@ -391,25 +395,27 @@ export default async function SettingsPage() {
       <Section title={t("sections.usage")}>
         <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
           {effective.plan === "admin"
-            ? "Admin (flag) · unlimited"
+            ? tBilling("plan_admin")
             : effective.plan === "student"
-            ? `Student${
-                effective.until
-                  ? ` · renews ${effective.until.toLocaleDateString()}`
-                  : ""
-              }`
+            ? effective.until
+              ? fmt(tBilling("plan_student_renews"), {
+                  date: effective.until.toLocaleDateString(dateLocale),
+                })
+              : tBilling("plan_student")
             : effective.plan === "pro" && effective.source === "trial"
-            ? `Pro (14-day trial) · ends ${effective.until.toLocaleDateString()}`
+            ? fmt(tBilling("plan_pro_trial"), {
+                date: effective.until.toLocaleDateString(dateLocale),
+              })
             : effective.plan === "pro"
-            ? `Pro${
-                effective.until
-                  ? ` · renews ${effective.until.toLocaleDateString()}`
-                  : ""
-              }`
-            : "Free"}
+            ? effective.until
+              ? fmt(tBilling("plan_pro_renews"), {
+                  date: effective.until.toLocaleDateString(dateLocale),
+                })
+              : tBilling("plan_pro")
+            : tBilling("plan_free")}
         </p>
         <MeterRow
-          label="Credits this month"
+          label={tUsage("credits_this_month")}
           used={balance.used}
           limit={balance.limit}
           unit=""
@@ -418,7 +424,7 @@ export default async function SettingsPage() {
         />
         <div className="mt-3">
           <MeterRow
-            label="Storage"
+            label={tUsage("storage_label")}
             used={storage.usedBytes}
             limit={storage.maxTotalBytes}
             unit="bytes"
