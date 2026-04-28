@@ -16,7 +16,6 @@ export function SyllabusRowActions({
   initialTitle: string;
   initialTerm: string | null;
 }) {
-  const t = useTranslations("classes");
   const tActions = useTranslations("classes.actions");
   const tSyllabus = useTranslations("classes.syllabus");
   const router = useRouter();
@@ -91,7 +90,7 @@ export function SyllabusRowActions({
         >
           <div className="w-full max-w-md rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-5 shadow-xl">
             <h2 className="text-h3 text-[hsl(var(--foreground))]">
-              {t("edit_class.title").replace("Edit class", "Edit syllabus")}
+              {tSyllabus("edit_modal_title")}
             </h2>
             <div className="mt-3 space-y-3">
               <label className="block text-xs text-[hsl(var(--muted-foreground))]">

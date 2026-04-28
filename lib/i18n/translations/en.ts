@@ -87,6 +87,13 @@ type MessagesShape = {
     };
     no_assignments_title: string;
     no_assignments_desc: string;
+    no_term: string;
+    no_term_set: string;
+    chats_for_class_aria: string;
+    no_chats_tagged_title: string;
+    no_chats_tagged_desc: string;
+    start_a_chat: string;
+    untitled_chat: string;
     actions: {
       edit: string;
       delete: string;
@@ -117,6 +124,13 @@ type MessagesShape = {
     syllabus: {
       edit_title: string;
       edit_term: string;
+      edit_modal_title: string;
+      empty_title: string;
+      empty_description: string;
+      upload_pdf: string;
+      paste_url: string;
+      open_original: string;
+      source: string;
       delete_confirm_title: string;
       delete_confirm_body: string;
       saved_toast: string;
@@ -137,6 +151,9 @@ type MessagesShape = {
       priority_medium: string;
       priority_high: string;
       priority_none: string;
+      no_due: string;
+      due_short: string;
+      priority_inline: string;
       delete_confirm_title: string;
       delete_confirm_body: string;
       saved_toast: string;
@@ -145,6 +162,9 @@ type MessagesShape = {
       delete_failed: string;
     };
     mistakes_grid: {
+      empty_title: string;
+      empty_description: string;
+      open_chat: string;
       delete_confirm_title: string;
       delete_confirm_body: string;
       deleted_toast: string;
@@ -244,6 +264,7 @@ type MessagesShape = {
   settings: {
     title: string;
     sign_out: string;
+    no_name: string;
     sections: {
       profile: string;
       connections: string;
@@ -254,6 +275,67 @@ type MessagesShape = {
       language: string;
       timezone: string;
       danger: string;
+    };
+    connections: {
+      workspace_fallback: string;
+      connected_to: string;
+      setup_complete: string;
+      setup_pending: string;
+      not_connected: string;
+      disconnect: string;
+      connect: string;
+      calendar_label: string;
+      calendar_granted: string;
+      calendar_missing: string;
+      gmail_label: string;
+      gmail_granted: string;
+      gmail_missing: string;
+      sign_out_to_reauth: string;
+      refresh_inbox: string;
+      refresh_inbox_title: string;
+    };
+    resources: {
+      description: string;
+      not_connected_hint: string;
+      add_placeholder: string;
+      add_button: string;
+      empty: string;
+      auto_registered: string;
+      manual: string;
+      remove: string;
+      refresh_from_notion: string;
+    };
+    agent_thinks: {
+      section_title: string;
+      description: string;
+      open: string;
+    };
+    agent_rules: {
+      section_title: string;
+      description: string;
+    };
+    notifications_section: string;
+    staged_autonomy: {
+      section_title: string;
+      description_prefix: string;
+      description_em: string;
+      description_suffix: string;
+      toggle_label: string;
+      on: string;
+      off: string;
+    };
+    agent_modes: {
+      destructive_only_label: string;
+      destructive_only_hint: string;
+      all_label: string;
+      all_hint: string;
+      none_label: string;
+      none_hint: string;
+      save: string;
+    };
+    usage: {
+      credits_this_month: string;
+      storage_label: string;
     };
     appearance_theme_label: string;
     language_description: string;
@@ -509,6 +591,14 @@ export const en: MessagesShape = {
     no_assignments_title: "No tasks yet.",
     no_assignments_desc:
       "Ask Steadii to add one from chat, e.g. '物理の課題を追加して'.",
+    no_term: "(no term)",
+    no_term_set: "No term set",
+    chats_for_class_aria: "Chats for this class",
+    no_chats_tagged_title: "No chats tagged to this class yet.",
+    no_chats_tagged_desc:
+      "Start a chat and Steadii will auto-tag when you mention the class.",
+    start_a_chat: "Start a chat",
+    untitled_chat: "Untitled chat",
     actions: {
       edit: "Edit",
       delete: "Delete",
@@ -541,6 +631,14 @@ export const en: MessagesShape = {
     syllabus: {
       edit_title: "Title",
       edit_term: "Term",
+      edit_modal_title: "Edit syllabus",
+      empty_title: "No syllabus saved for {className}.",
+      empty_description:
+        "Drop a PDF, paste a URL, or upload an image and Steadii will extract the structure.",
+      upload_pdf: "Upload PDF",
+      paste_url: "Paste URL",
+      open_original: "Open original",
+      source: "Source",
       delete_confirm_title: "Delete this syllabus?",
       delete_confirm_body:
         "Calendar events already imported won't be affected.",
@@ -562,6 +660,9 @@ export const en: MessagesShape = {
       priority_medium: "Medium",
       priority_high: "High",
       priority_none: "—",
+      no_due: "No due",
+      due_short: "due {date}",
+      priority_inline: "priority: {value}",
       delete_confirm_title: "Delete this task?",
       delete_confirm_body:
         "Pending Steadii proposals referencing it may break.",
@@ -571,6 +672,10 @@ export const en: MessagesShape = {
       delete_failed: "Couldn't delete task.",
     },
     mistakes_grid: {
+      empty_title: "No mistake notes for {className} yet.",
+      empty_description:
+        "Paste a problem image in chat and ask for an explanation, or scan a handwritten page with the button above.",
+      open_chat: "Open chat",
       delete_confirm_title: "Delete this mistake note?",
       delete_confirm_body: "You can recreate it from chat anytime.",
       deleted_toast: "Mistake note deleted.",
@@ -696,6 +801,7 @@ export const en: MessagesShape = {
   settings: {
     title: "Settings",
     sign_out: "Sign out",
+    no_name: "(no name)",
     sections: {
       profile: "Profile",
       connections: "Connections",
@@ -706,6 +812,78 @@ export const en: MessagesShape = {
       language: "Language",
       timezone: "Time zone",
       danger: "Danger zone",
+    },
+    connections: {
+      workspace_fallback: "workspace",
+      connected_to: "Connected to {workspaceName}",
+      setup_complete: "setup complete",
+      setup_pending: "setup pending",
+      not_connected: "Not connected",
+      disconnect: "Disconnect",
+      connect: "Connect",
+      calendar_label: "Google Calendar",
+      calendar_granted: "Calendar scope granted.",
+      calendar_missing: "Calendar scope missing.",
+      gmail_label: "Gmail",
+      gmail_granted:
+        "Gmail scope granted. The agent can triage and draft replies.",
+      gmail_missing:
+        "Gmail scope missing — sign out and sign back in to grant it.",
+      sign_out_to_reauth: "Sign out to re-auth",
+      refresh_inbox: "Refresh inbox",
+      refresh_inbox_title: "Re-ingest the last 24 hours of Gmail",
+    },
+    resources: {
+      description:
+        "Optional Notion pages the agent can read. Pages under the Steadii parent auto-register; add extra ones with a URL. Steadii's academic data lives in Postgres — this section only matters if you also want the agent to quote from your existing Notion workspace.",
+      not_connected_hint:
+        "Notion is not connected. Connect it under Connections above to register Notion resources.",
+      add_placeholder: "https://notion.so/...",
+      add_button: "Add",
+      empty: "No manual resources yet.",
+      auto_registered: "auto-registered",
+      manual: "manual",
+      remove: "Remove",
+      refresh_from_notion: "Refresh from Notion",
+    },
+    agent_thinks: {
+      section_title: "How your agent thinks",
+      description:
+        "A read-only retrospective view of the agent's last decisions: what it surfaced, why, and which mistakes / syllabus chunks / calendar items / past emails grounded each draft. Glass-box transparency, end to end.",
+      open: "Open",
+    },
+    agent_rules: {
+      section_title: "Agent Rules",
+      description:
+        "Transparency is the promise. Every rule the agent uses to triage your inbox — global keyword lists, learned contacts, manual overrides — is listed below.",
+    },
+    notifications_section: "Notifications",
+    staged_autonomy: {
+      section_title: "Staged autonomy",
+      description_prefix:
+        "When on, Steadii sends low-stakes drafts (currently medium-tier replies — office hours, deadlines, scheduling acknowledgments) on its own. The 20-second undo still applies, and the inbox item is labeled ",
+      description_em: "Sent automatically",
+      description_suffix:
+        " with the full glass-box reasoning visible. Off by default — you stay in the loop on every send.",
+      toggle_label: "Auto-send eligible drafts (with 20s undo)",
+      on: "On — turn off",
+      off: "Off — turn on",
+    },
+    agent_modes: {
+      destructive_only_label:
+        "Only confirm destructive actions (recommended)",
+      destructive_only_hint:
+        "Creating or updating is automatic; deletions pause for approval.",
+      all_label: "Confirm every write",
+      all_hint:
+        "Any change — create, update, delete — pauses for approval.",
+      none_label: "Never ask",
+      none_hint: "Steadii acts immediately. Use with care.",
+      save: "Save",
+    },
+    usage: {
+      credits_this_month: "Credits this month",
+      storage_label: "Storage",
     },
     appearance_theme_label: "Theme",
     language_description:
