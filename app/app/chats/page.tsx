@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { MessagesSquare, Plus } from "lucide-react";
 import Link from "next/link";
 import { ContextualSuggestion } from "@/components/suggestions/contextual-suggestion";
+import { getLocale } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,9 @@ export default async function ChatsListPage() {
     .from(chats)
     .where(and(eq(chats.userId, userId), isNull(chats.deletedAt)))
     .orderBy(desc(chats.updatedAt));
+
+  const locale = await getLocale();
+  const dateLocale = locale === "ja" ? "ja-JP" : "en-US";
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -57,7 +61,7 @@ export default async function ChatsListPage() {
               key={chat.id}
               id={chat.id}
               title={chat.title ?? "Untitled chat"}
-              updatedAt={chat.updatedAt.toLocaleDateString()}
+              updatedAt={chat.updatedAt.toLocaleDateString(dateLocale)}
             />
           ))}
         </DenseList>
