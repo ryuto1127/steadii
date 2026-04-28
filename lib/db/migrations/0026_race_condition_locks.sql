@@ -1,0 +1,2 @@
+ALTER TABLE "send_queue" ADD COLUMN "processing_started_at" timestamp with time zone;--> statement-breakpoint
+CREATE UNIQUE INDEX "agent_events_running_per_user_idx" ON "agent_events" USING btree ("user_id") WHERE "agent_events"."status" = 'running';
