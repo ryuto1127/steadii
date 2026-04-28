@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { ArrowLeft, Mail, Pause } from "lucide-react";
 import { and, eq } from "drizzle-orm";
@@ -116,6 +117,13 @@ export default async function InboxItemPage({
       .update(inboxItems)
       .set({ reviewedAt: now, updatedAt: now })
       .where(eq(inboxItems.id, inbox.id));
+    // Refresh the sidebar Inbox badge + the inbox list page. The badge
+    // count is cached at the layout level, so we need the layout-scope
+    // revalidate to bust it; otherwise opening a detail page sets the
+    // reviewed flag in DB but the user sees the same stale count until a
+    // hard reload.
+    revalidatePath("/app", "layout");
+    revalidatePath("/app/inbox");
   }
 
   // Live-fetch the full Gmail body for the detail page. We don't store
