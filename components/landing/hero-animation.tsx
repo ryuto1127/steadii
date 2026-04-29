@@ -13,6 +13,7 @@ import {
   Loader2,
   MousePointer2,
 } from "lucide-react";
+import { Logo } from "@/components/layout/logo";
 
 // We dropped the `motion` package after install: motion/react v12 hooks
 // didn't kick in under Next 16 + Turbopack + React 19 — components mounted
@@ -178,7 +179,7 @@ function Sidebar({ phase }: { phase: Phase }) {
     idx >= PHASE_INDEX.calendar ? 4 : idx >= PHASE_INDEX.classesUp ? 3 : 1;
   return (
     <div className="flex w-[8%] min-w-[44px] flex-col items-center gap-1.5 border-r border-black/[0.05] bg-white py-4">
-      <div className="mb-2 h-1.5 w-4 rounded-full bg-[#0A0A0A]/85" />
+      <Logo size={18} className="mb-2" />
       {SIDEBAR_ICONS.map((Icon, i) => (
         <span
           key={i}
@@ -198,7 +199,11 @@ function Sidebar({ phase }: { phase: Phase }) {
 function ChatPanel({ phase }: { phase: Phase }) {
   const idx = PHASE_INDEX[phase];
   const showFloatingPdf = phase === "pdfDragging";
-  const attached = idx >= PHASE_INDEX.attached && idx < PHASE_INDEX.classesUp;
+  // Pill is visible only during the brief `attached` window — once the
+  // cursor presses send (which happens at the attached → extracting
+  // boundary), the pill collapses out and the input returns to its
+  // empty/ready state, mirroring the real app.
+  const attached = phase === "attached";
   const sendPulse = phase === "attached";
   const toolState: "extracting" | "extracted" | null =
     idx >= PHASE_INDEX.extracted && idx < PHASE_INDEX.classesUp

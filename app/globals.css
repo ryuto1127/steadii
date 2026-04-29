@@ -196,14 +196,17 @@
   animation: steadii-fade-in 240ms cubic-bezier(0.34, 1.2, 0.64, 1) both;
 }
 
-/* Brand mark: rounded square with a warm gradient that slowly cycles
-   hue — subtle "living" feel without stealing attention. */
+/* Brand mark: diamond (45°-rotated square) with a warm gradient that
+   slowly cycles hue — subtle "living" feel without stealing attention.
+   Slight border-radius softens the points so the diamond reads modern,
+   not razor-sharp. */
 @keyframes steadii-logo-hue {
   0%   { filter: hue-rotate(0deg); }
   100% { filter: hue-rotate(360deg); }
 }
 .steadii-logo {
-  border-radius: 7px;
+  border-radius: 2px;
+  transform: rotate(45deg);
   background:
     radial-gradient(circle at 30% 25%, #ffe28a 0%, transparent 55%),
     linear-gradient(135deg, #ff5db1 0%, #ff7a3d 55%, #ffc861 100%);
