@@ -6,7 +6,9 @@ import { events, type EventRow, type NewEventRow } from "@/lib/db/schema";
 export type SourceType =
   | "google_calendar"
   | "google_tasks"
-  | "google_classroom_coursework";
+  | "google_classroom_coursework"
+  | "microsoft_graph"
+  | "microsoft_todo";
 
 export type Kind = "event" | "task" | "assignment";
 
