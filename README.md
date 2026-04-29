@@ -6,7 +6,7 @@
 [![α invite-only](https://img.shields.io/badge/status-α%20invite--only-F59E0B?style=flat-square)](https://mysteadii.com)
 [![License: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-blue?style=flat-square)](./LICENSE)
 
-[**mysteadii.com →**](https://mysteadii.com)
+[**mysteadii.com**](https://mysteadii.com)
 
 ---
 
