@@ -150,7 +150,7 @@ export default async function HomePage() {
         </p>
       </header>
 
-      <div className="grid gap-4 sm:gap-6 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
         <PendingCard count={pendingCount} />
         <TodayCard
           events={events}
@@ -215,7 +215,7 @@ function BentoCard({
   return (
     <section
       className={cn(
-        "steadii-card-enter group flex flex-col gap-5 rounded-3xl border border-[hsl(var(--border)/0.6)] bg-[hsl(var(--surface-raised))] p-6 transition-default hover:border-[hsl(var(--border))] hover:shadow-[0_14px_36px_-18px_rgba(0,0,0,0.12)]",
+        "steadii-card-enter group flex flex-col gap-3 rounded-2xl border border-[hsl(var(--border)/0.6)] bg-[hsl(var(--surface-raised))] p-4 transition-default hover:border-[hsl(var(--border))] hover:shadow-[0_14px_36px_-18px_rgba(0,0,0,0.12)] sm:gap-5 sm:rounded-3xl sm:p-6",
         className
       )}
     >
@@ -255,7 +255,7 @@ function PendingCard({ count }: { count: number }) {
         </p>
       ) : (
         <div className="flex items-baseline gap-2">
-          <span className="font-mono text-[38px] font-bold leading-none tracking-tight tabular-nums text-[hsl(var(--foreground))]">
+          <span className="font-mono text-[28px] font-bold leading-none tracking-tight tabular-nums text-[hsl(var(--foreground))] sm:text-[38px]">
             {count}
           </span>
           <span className="text-[12px] font-medium lowercase text-[hsl(var(--muted-foreground))]">
@@ -479,7 +479,7 @@ function PastWeekCard({
       ) : (
         <>
           <div className="flex items-baseline gap-2">
-            <span className="font-mono text-[38px] font-bold leading-none tracking-tight text-[hsl(268_70%_56%)] dark:text-[hsl(268_80%_78%)] tabular-nums">
+            <span className="font-mono text-[28px] font-bold leading-none tracking-tight text-[hsl(268_70%_56%)] dark:text-[hsl(268_80%_78%)] tabular-nums sm:text-[38px]">
               {sessions}
             </span>
             <span className="text-[12px] font-medium lowercase text-[hsl(var(--muted-foreground))]">
@@ -491,7 +491,7 @@ function PastWeekCard({
               {pattern}
             </p>
           ) : null}
-          <div className="mt-auto grid grid-cols-2 gap-2 pt-5">
+          <div className="mt-auto grid grid-cols-1 gap-2 pt-5 sm:grid-cols-2">
             <SeedPill seed="review_recent_mistakes" label={reviewLabel} />
             <SeedPill seed="generate_similar_problems" label={practiceLabel} />
           </div>
