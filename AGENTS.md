@@ -200,3 +200,21 @@ See `.env.example` for the canonical list. Key groupings:
 - **Error codes**: user-facing errors get stable codes (e.g. `BILLING_QUOTA_EXCEEDED`, `STUDENT_EMAIL_REQUIRED`, `RATE_LIMITED`).
 - **No default exports** from utility modules; Next.js pages are the exception.
 - **Commit granularity**: PR-sized, not monolithic. Handoff docs under `docs/handoffs/` outline the commit plan per week.
+
+---
+
+## 12. Handoff completion contract
+
+When you complete a work unit handed off via a `docs/handoffs/<name>.md` brief, your final report (in the PR body and/or in chat) **must include a "Memory entries to update" section**.
+
+For each memory entry the work has obsoleted, advanced, or contradicted, list:
+
+- **File**: e.g. `project_steadii.md`, `project_decisions.md`
+- **Section / line range**: enough that the sparring side can locate it without re-reading the whole file
+- **Suggested change**: brief — "mark as shipped (commit `<sha>`)", "remove planned-future framing", "revise estimate from X to Y", "delete entry — superseded by Z"
+
+If no memory entries are affected, write `**Memory entries to update**: none`.
+
+Why: memory captures intent at decision time; engineer ships async; without this contract the loop never closes and the next sparring session opens stale memory and re-litigates settled decisions. The engineer side does not edit memory directly (role split — see `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/feedback_role_split.md`); it only flags the delta. The sparring side applies the changes after merge.
+
+Memory locations are listed at the top of this file (`project_*.md`, `feedback_*.md`, etc.). When in doubt about which entry is affected, list the file and let sparring narrow it.
