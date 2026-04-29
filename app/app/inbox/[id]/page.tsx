@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import Link from "next/link";
 import { ArrowLeft, Mail, Pause } from "lucide-react";
 import { and, eq } from "drizzle-orm";
@@ -117,13 +118,14 @@ export default async function InboxItemPage({
       .update(inboxItems)
       .set({ reviewedAt: now, updatedAt: now })
       .where(eq(inboxItems.id, inbox.id));
-    // Refresh the sidebar Inbox badge + the inbox list page. The badge
-    // count is cached at the layout level, so we need the layout-scope
-    // revalidate to bust it; otherwise opening a detail page sets the
-    // reviewed flag in DB but the user sees the same stale count until a
-    // hard reload.
-    revalidatePath("/app", "layout");
-    revalidatePath("/app/inbox");
+    // Refresh the sidebar Inbox badge + the inbox list page. revalidatePath
+    // can't be called directly from a server component's render path
+    // (Next.js 15+ throws: cache invalidation is not allowed mid-render).
+    // Defer to `after()` so the revalidation runs once the response is sent.
+    after(() => {
+      revalidatePath("/app", "layout");
+      revalidatePath("/app/inbox");
+    });
   }
 
   // Live-fetch the full Gmail body for the detail page. We don't store
