@@ -12,9 +12,12 @@ export const runtime = "nodejs";
 // Periodic Gmail ingest fan-out. Triggered by Upstash QStash (recommended
 // every 15 minutes — see DEPLOY.md).
 //
-// auto-ingest's 24h cooldown was designed for the page-render path; cron
-// triggering bypasses it intentionally so newly-arrived emails surface
-// without forcing the user to open Settings → Refresh.
+// The 24h cooldown lives in `maybeTriggerAutoIngest` (lib/agent/email/
+// auto-ingest.ts) — it checks `users.last_gmail_ingest_at` and short-
+// circuits if the last attempt was within 24h. That wrapper exists to
+// stop repeated page renders from spamming Gmail. The cron path bypasses
+// it simply by calling `ingestLast24h` directly; there is no
+// source-arg-based opt-out — the bypass is "skip the wrapper."
 //
 // ingestLast24h is idempotent (UNIQUE(user_id, source_type, external_id)
 // on inbox_items) so the 24h window overlap between ticks doesn't

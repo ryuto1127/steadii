@@ -110,6 +110,12 @@ export default async function BillingPage({
         </p>
       )}
 
+      {(effective.source === "stripe" || balance.topupRemaining > 0) && (
+        <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+          {fmt(t("currency_locked"), { currency: currency.toUpperCase() })}
+        </p>
+      )}
+
       <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
         <h2 className="text-lg font-medium">{t("current_plan")}</h2>
         <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
