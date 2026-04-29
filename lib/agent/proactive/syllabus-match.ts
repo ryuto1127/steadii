@@ -71,11 +71,55 @@ export function matchToCalendar(
   return { kind: "confident_no_match" };
 }
 
+const MONTHS_EN: Record<string, number> = {
+  jan: 0,
+  january: 0,
+  feb: 1,
+  february: 1,
+  mar: 2,
+  march: 2,
+  apr: 3,
+  april: 3,
+  may: 4,
+  jun: 5,
+  june: 5,
+  jul: 6,
+  july: 6,
+  aug: 7,
+  august: 7,
+  sep: 8,
+  sept: 8,
+  september: 8,
+  oct: 9,
+  october: 9,
+  nov: 10,
+  november: 10,
+  dec: 11,
+  december: 11,
+};
+
 export function parseSimpleDate(input: string): Date | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
+
+  // Bare YYYY-MM-DD parses as UTC midnight, which lands a day early in
+  // negative-offset timezones. Default to 9 AM local so the calendar event
+  // sits on the intended day.
+  const isoBare = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoBare) {
+    const [, y, m, d] = isoBare;
+    return new Date(Number(y), Number(m) - 1, Number(d), 9, 0);
+  }
+
+  // Try the English month-day allowlist before `new Date()` — V8 parses
+  // bare "Jan 13" as midnight of the current year, which is right by date
+  // but wrong by time-of-day. The regex defaults missing times to 9 AM.
+  const en = matchEnglishMonthDay(trimmed);
+  if (en) return en;
+
   const iso = new Date(trimmed);
   if (!Number.isNaN(iso.getTime())) return iso;
+
   const slash = trimmed.match(
     /^(\d{1,2})[\/\-](\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?/
   );
@@ -100,6 +144,35 @@ export function parseSimpleDate(input: string): Date | null {
       year,
       Number(m) - 1,
       Number(d),
+      hh ? Number(hh) : 9,
+      mm ? Number(mm) : 0
+    );
+  }
+
+  return null;
+}
+
+// Scans for the first English `<Month> <day>` pair anywhere in the string,
+// optionally followed by a year and a time. Catches "Jan 13", "January 13,
+// 2026", "Mon Jan 13", and "Week 1: Jan 8" — the new Date() fallback above
+// handles a subset of these but is implementation-dependent across Node
+// versions, so we do an explicit allowlist here. "TBD" / "Week N" / "第1週"
+// don't match and correctly return null.
+function matchEnglishMonthDay(input: string): Date | null {
+  const re =
+    /\b([A-Za-z]+)\s+(\d{1,2})\b(?:[,\s]+(\d{4}))?(?:[,\s]+(?:at\s+)?(\d{1,2}):(\d{2}))?/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(input)) !== null) {
+    const [, mStr, dStr, yStr, hh, mm] = match;
+    const monthIdx = MONTHS_EN[mStr.toLowerCase()];
+    if (monthIdx === undefined) continue;
+    const day = Number(dStr);
+    if (day < 1 || day > 31) continue;
+    const year = yStr ? Number(yStr) : new Date().getFullYear();
+    return new Date(
+      year,
+      monthIdx,
+      day,
       hh ? Number(hh) : 9,
       mm ? Number(mm) : 0
     );

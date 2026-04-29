@@ -80,4 +80,45 @@ describe("syllabus auto-import — parseSimpleDate", () => {
   it("returns null on garbage", () => {
     expect(parseSimpleDate("")).toBeNull();
   });
+  it("defaults bare YYYY-MM-DD to 9 AM local time", () => {
+    const d = parseSimpleDate("2026-01-13");
+    expect(d).not.toBeNull();
+    expect(d!.getFullYear()).toBe(2026);
+    expect(d!.getMonth()).toBe(0); // January
+    expect(d!.getDate()).toBe(13);
+    expect(d!.getHours()).toBe(9);
+  });
+  it("parses 'Jan 13' (current year, 9 AM)", () => {
+    const d = parseSimpleDate("Jan 13");
+    expect(d).not.toBeNull();
+    expect(d!.getMonth()).toBe(0);
+    expect(d!.getDate()).toBe(13);
+    expect(d!.getHours()).toBe(9);
+  });
+  it("parses 'January 13, 2026'", () => {
+    const d = parseSimpleDate("January 13, 2026");
+    expect(d).not.toBeNull();
+    expect(d!.getFullYear()).toBe(2026);
+    expect(d!.getMonth()).toBe(0);
+    expect(d!.getDate()).toBe(13);
+  });
+  it("parses 'Week 1: Jan 8' by scanning the string", () => {
+    const d = parseSimpleDate("Week 1: Jan 8");
+    expect(d).not.toBeNull();
+    expect(d!.getMonth()).toBe(0);
+    expect(d!.getDate()).toBe(8);
+  });
+  it("parses 'Mon Jan 13 2026'", () => {
+    const d = parseSimpleDate("Mon Jan 13 2026");
+    expect(d).not.toBeNull();
+    expect(d!.getFullYear()).toBe(2026);
+    expect(d!.getMonth()).toBe(0);
+    expect(d!.getDate()).toBe(13);
+  });
+  it("returns null on 'TBD'", () => {
+    expect(parseSimpleDate("TBD")).toBeNull();
+  });
+  it("returns null on '第1週' (Japanese week marker)", () => {
+    expect(parseSimpleDate("第1週")).toBeNull();
+  });
 });
