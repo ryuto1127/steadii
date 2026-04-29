@@ -472,6 +472,8 @@ export const events = pgTable(
         | "google_tasks"
         | "google_classroom_coursework"
         | "ical_subscription"
+        | "microsoft_graph"
+        | "microsoft_todo"
       >()
       .notNull(),
     sourceAccountId: text("source_account_id").notNull(),
