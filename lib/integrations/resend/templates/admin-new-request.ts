@@ -1,6 +1,6 @@
 import "server-only";
 
-// Sent to the admin (default ADMIN_EMAIL = hello@mysteadii.xyz, forwarded
+// Sent to the admin (default ADMIN_EMAIL = hello@mysteadii.com, forwarded
 // onward via improvmx) when someone submits the public /request-access
 // form for the first time. Re-submissions of the same email are silently
 // merged at the DB layer (unique index), so this notification only fires
@@ -52,8 +52,8 @@ export function buildAdminNewRequestEmail(
   const html = `<pre style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word;margin:0;">${escapedText}</pre>`;
 
   return {
-    from: "Steadii System <agent@mysteadii.xyz>",
-    replyTo: "agent@mysteadii.xyz",
+    from: "Steadii System <agent@mysteadii.com>",
+    replyTo: "agent@mysteadii.com",
     subject: `[Steadii waitlist] New α access request — ${input.email}`,
     text,
     html,

@@ -57,12 +57,12 @@ const schema = z.object({
   // starts without secrets. Routes that send through Resend must validate
   // the key is non-empty before using it and return a clear error if not.
   RESEND_API_KEY: z.string().optional().default(""),
-  RESEND_FROM_EMAIL: z.string().optional().default("agent@mysteadii.xyz"),
+  RESEND_FROM_EMAIL: z.string().optional().default("agent@mysteadii.com"),
   // Admin email — receives new-waitlist-request notifications and is the
-  // contact address shown on /access-denied. Defaults to hello@mysteadii.xyz
+  // contact address shown on /access-denied. Defaults to hello@mysteadii.com
   // which forwards to Ryuto's personal inbox via improvmx (set up
   // separately, not part of this app).
-  ADMIN_EMAIL: z.string().optional().default("hello@mysteadii.xyz"),
+  ADMIN_EMAIL: z.string().optional().default("hello@mysteadii.com"),
   // Upstash QStash signing keys. Cron endpoints (/api/cron/*) verify the
   // `upstash-signature` header against these. Both empty in dev = endpoints
   // skip verification; both required in production. See lib/integrations/

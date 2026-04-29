@@ -71,8 +71,8 @@ export function buildAccessApprovedEmail(
   const html = `<pre style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;margin:0;">${escapedText}</pre>`;
 
   return {
-    from: "Steadii <hello@mysteadii.xyz>",
-    replyTo: "hello@mysteadii.xyz",
+    from: "Steadii <hello@mysteadii.com>",
+    replyTo: "hello@mysteadii.com",
     subject: "Steadii: アクセスが承認されました / Your Steadii access is ready",
     text,
     html,

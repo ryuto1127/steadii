@@ -329,7 +329,7 @@ export const ja: Messages = {
     body_en: "Contact the address below for access.",
     contact_label_ja: "お問い合わせ:",
     contact_label_en: "Contact:",
-    contact_email: "hello@mysteadii.xyz",
+    contact_email: "hello@mysteadii.com",
     request_access_cta: "α アクセスをリクエスト →",
   },
   app: {
@@ -630,12 +630,12 @@ export const ja: Messages = {
       appi_contact: {
         heading: "個人情報取扱事業者の連絡先",
         body:
-          "個人情報取扱事業者：Steadii（個人事業主）。連絡先：サインアップに使用したメールアドレスから hello@mysteadii.xyz までご連絡ください。日本居住のユーザーからのお問い合わせは、件名に「APPIに関する依頼」と明記してください。",
+          "個人情報取扱事業者：Steadii（個人事業主）。連絡先：サインアップに使用したメールアドレスから hello@mysteadii.com までご連絡ください。日本居住のユーザーからのお問い合わせは、件名に「APPIに関する依頼」と明記してください。",
       },
       appi_request_procedure: {
         heading: "開示・訂正・利用停止請求の方法",
         body:
-          "保有個人情報の開示、内容の訂正、利用停止、または削除をご請求いただけます。アカウント登録メールアドレスから hello@mysteadii.xyz 宛にメールを送信し、対象となるレコードを明記してください。14日以内にご対応します。手数料は不要です。",
+          "保有個人情報の開示、内容の訂正、利用停止、または削除をご請求いただけます。アカウント登録メールアドレスから hello@mysteadii.com 宛にメールを送信し、対象となるレコードを明記してください。14日以内にご対応します。手数料は不要です。",
       },
     },
     terms: {
@@ -682,7 +682,7 @@ export const ja: Messages = {
       contact: {
         heading: "お問い合わせ",
         body:
-          "ご質問や削除依頼は hello@mysteadii.xyz 宛にメールいただくか、オンボーディング時に届いたメールにご返信ください。",
+          "ご質問や削除依頼は hello@mysteadii.com 宛にメールいただくか、オンボーディング時に届いたメールにご返信ください。",
       },
     },
   },
