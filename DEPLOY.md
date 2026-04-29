@@ -51,7 +51,7 @@ Pull from `.env.example` as the canonical list.
 - [ ] `AUTH_MS_TENANT_ID` — `common` for multi-tenant (default), or a
       specific tenant GUID / domain for single-tenant lock-down.
 - [ ] `ENCRYPTION_KEY` — `openssl rand -base64 32` (32-byte)
-- [ ] `APP_URL` — `https://mysteadii.xyz`
+- [ ] `APP_URL` — `https://mysteadii.com`
 - [ ] `BLOB_READ_WRITE_TOKEN` — Vercel Storage → Blob store token
 - [ ] `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`
 
@@ -121,7 +121,7 @@ is `jpy`. Locale-based currency selection lands at /checkout — see §6.5.
 - [ ] All ten α users added as test users in Google Cloud Console
 - [ ] OAuth redirect URIs include both:
   - `http://localhost:3000/api/auth/callback/google`
-  - `https://mysteadii.xyz/api/auth/callback/google`
+  - `https://mysteadii.com/api/auth/callback/google`
 
 ---
 
@@ -137,7 +137,7 @@ onboarding.
 - [ ] Public integration created at notion.so/my-integrations
 - [ ] OAuth redirect URIs:
   - `http://localhost:3000/api/integrations/notion/callback`
-  - `https://mysteadii.xyz/api/integrations/notion/callback`
+  - `https://mysteadii.com/api/integrations/notion/callback`
 - [ ] Integration capabilities: **Read content** only is sufficient
       for the import path. (Update/Insert capabilities can stay
       enabled — the legacy two-way sync code is deprecated but not
@@ -166,8 +166,8 @@ onboarding.
       wants to test the checkout path)
 - [ ] Friend invite codes: create individual Promotion Codes under the
       `STEADII_FRIEND_3MO` coupon in Stripe Dashboard. Share URLs like
-      `https://mysteadii.xyz/invite/<code>`.
-- [ ] Webhook endpoint registered at `https://mysteadii.xyz/api/stripe/webhook`
+      `https://mysteadii.com/invite/<code>`.
+- [ ] Webhook endpoint registered at `https://mysteadii.com/api/stripe/webhook`
       with events:
   - `checkout.session.completed` (covers subscription-mode + one-time top-ups)
   - `customer.subscription.created`
@@ -463,10 +463,10 @@ In the QStash console → **Schedules** → **Create**:
 
 | Endpoint | Schedule | Method | Notes |
 |---|---|---|---|
-| `https://mysteadii.xyz/api/cron/digest` | `0 * * * *` | POST | Hourly. NA timezones are all whole-hour offsets, so hourly is enough; switch to `*/30` only if onboarding India / Newfoundland users. |
-| `https://mysteadii.xyz/api/cron/send-queue` | `*/5 * * * *` | POST | Every 5 minutes. The 20s undo window is enforced client-side; this cadence only affects time-from-send-click to Gmail API call. |
-| `https://mysteadii.xyz/api/cron/ingest-sweep` | `*/15 * * * *` | POST | Every 15 minutes. Fans out `ingestLast24h` across all gmail-scoped users, bypassing the page-render auto-ingest 24h cooldown. Without this, new emails only surface when the user manually refreshes Settings. |
-| `https://mysteadii.xyz/api/cron/ical-sync` | `0 */6 * * *` | POST | Every 6 hours per Phase 7 W-Integrations Q3. Walks active `ical_subscriptions`, conditional GETs each (If-None-Match: ETag), upserts events into the shared `events` mirror. After 3 consecutive failures the row auto-deactivates so we stop hammering a broken URL. |
+| `https://mysteadii.com/api/cron/digest` | `0 * * * *` | POST | Hourly. NA timezones are all whole-hour offsets, so hourly is enough; switch to `*/30` only if onboarding India / Newfoundland users. |
+| `https://mysteadii.com/api/cron/send-queue` | `*/5 * * * *` | POST | Every 5 minutes. The 20s undo window is enforced client-side; this cadence only affects time-from-send-click to Gmail API call. |
+| `https://mysteadii.com/api/cron/ingest-sweep` | `*/15 * * * *` | POST | Every 15 minutes. Fans out `ingestLast24h` across all gmail-scoped users, bypassing the page-render auto-ingest 24h cooldown. Without this, new emails only surface when the user manually refreshes Settings. |
+| `https://mysteadii.com/api/cron/ical-sync` | `0 */6 * * *` | POST | Every 6 hours per Phase 7 W-Integrations Q3. Walks active `ical_subscriptions`, conditional GETs each (If-None-Match: ETag), upserts events into the shared `events` mirror. After 3 consecutive failures the row auto-deactivates so we stop hammering a broken URL. |
 
 Body: leave empty. The signing key in headers handles auth.
 

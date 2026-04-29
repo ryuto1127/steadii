@@ -14,7 +14,7 @@ vi.mock("drizzle-orm", () => ({
   inArray: () => ({}),
 }));
 vi.mock("@/lib/env", () => ({
-  env: () => ({ APP_URL: "https://mysteadii.xyz" }),
+  env: () => ({ APP_URL: "https://mysteadii.com" }),
 }));
 
 import {
@@ -85,7 +85,7 @@ describe("buildDigestSubject", () => {
 });
 
 describe("buildDigestText / buildDigestHtml", () => {
-  const appUrl = "https://mysteadii.xyz";
+  const appUrl = "https://mysteadii.com";
 
   it("deep-links each item with the utm_source=digest query", () => {
     const text = buildDigestText({
@@ -93,10 +93,10 @@ describe("buildDigestText / buildDigestHtml", () => {
       appUrl,
     });
     expect(text).toContain(
-      "https://mysteadii.xyz/app/inbox/draft-1?utm_source=digest"
+      "https://mysteadii.com/app/inbox/draft-1?utm_source=digest"
     );
     expect(text).toContain(
-      "https://mysteadii.xyz/app/inbox/draft-2?utm_source=digest"
+      "https://mysteadii.com/app/inbox/draft-2?utm_source=digest"
     );
   });
 
