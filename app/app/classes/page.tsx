@@ -38,7 +38,7 @@ export default async function ClassesListPage() {
 
   if (active.length === 0) {
     return (
-      <div className="mx-auto max-w-3xl py-6">
+      <div className="mx-auto max-w-3xl py-2 md:py-6">
         <h1 className="text-h1 text-[hsl(var(--foreground))]">Classes</h1>
         <div className="mt-8">
           <EmptyState
@@ -56,18 +56,18 @@ export default async function ClassesListPage() {
   const tomorrowLabels = classesByLabel(enrichedDays[1]?.events ?? []);
 
   return (
-    <div className="mx-auto max-w-4xl py-6">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-4xl py-2 md:py-6">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-h1 text-[hsl(var(--foreground))]">Classes</h1>
         <Link
           href="/app/classes/new"
-          className="rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
+          className="inline-flex h-9 shrink-0 items-center rounded-md bg-[hsl(var(--primary))] px-3 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
         >
           + New class
         </Link>
       </div>
 
-      <section className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-5">
+      <section className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3 sm:p-5">
         <TimelineStrip days={enrichedDays} />
       </section>
 

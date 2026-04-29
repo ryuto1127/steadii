@@ -340,7 +340,7 @@ export default async function InboxPage() {
               */}
               <Link
                 href={item.agentDraftId ? `/app/inbox/${item.agentDraftId}` : "/app/inbox"}
-                className="flex items-start gap-3 px-4 py-3 transition-hover hover:bg-[hsl(var(--surface-raised))]"
+                className="flex min-h-[44px] items-start gap-3 px-3 py-3 transition-hover hover:bg-[hsl(var(--surface-raised))] sm:px-4"
                 data-pending={pending ? "true" : undefined}
                 data-unread={isUnread ? "true" : undefined}
               >
@@ -351,9 +351,9 @@ export default async function InboxPage() {
                   {tierLabel(tier)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                     <span
-                      className={`truncate text-[14px] ${
+                      className={`min-w-0 truncate text-[14px] ${
                         isAttention
                           ? "font-semibold text-[hsl(var(--foreground))]"
                           : "font-normal text-[hsl(var(--muted-foreground))]"

@@ -68,7 +68,7 @@ export default async function TasksPage() {
 
   if (rows.length === 0) {
     return (
-      <div className="mx-auto max-w-3xl py-6">
+      <div className="mx-auto max-w-3xl py-2 md:py-6">
         <h1 className="text-h1 text-[hsl(var(--foreground))]">Tasks</h1>
         <div className="mt-8">
           <EmptyState
@@ -83,8 +83,8 @@ export default async function TasksPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl py-6">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-4xl py-2 md:py-6">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-h1 text-[hsl(var(--foreground))]">Tasks</h1>
         <span className="text-small text-[hsl(var(--muted-foreground))]">
           {rows.length} pending
