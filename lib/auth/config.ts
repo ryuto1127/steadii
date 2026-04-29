@@ -135,7 +135,7 @@ export const authConfig = {
 
       if (!request) return "/access-denied?reason=not-requested";
       if (request.status === "pending")
-        return "/access-pending?already-submitted";
+        return "/access-pending?reason=pending";
       if (request.status === "denied") return "/access-denied?reason=denied";
 
       // Approved — record the first sign-in timestamp so the admin page

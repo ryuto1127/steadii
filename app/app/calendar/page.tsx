@@ -33,6 +33,16 @@ function parseAnchor(v: string | undefined): Date {
   return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
+// Recognize the Google API error shapes that mean "user lost the Tasks scope
+// after granting it." Covers: explicit scope check failures, googleapis 403
+// PERMISSION_DENIED with insufficient-permissions reason, and the
+// invalid_grant case where the refresh token was revoked outright.
+function isScopeRevokedError(error: string): boolean {
+  return /insufficient[\s_-]*(?:scope|permission|authentication scopes)|PERMISSION_DENIED|ACCESS_TOKEN_SCOPE_INSUFFICIENT|invalid_grant|not connect/i.test(
+    error
+  );
+}
+
 // Format a UTC Date as a "YYYY-MM-DDTHH:mm:ss±HH:MM" string in `tz`, suitable
 // for the calendar UI's CalendarEvent.start/end fields, which parse both
 // RFC3339 strings (timed) and YYYY-MM-DD (all-day).
@@ -113,8 +123,8 @@ export default async function CalendarPage({
         // Surface a hint if tasks scope is missing (TasksNotConnectedError is
         // swallowed by the adapter as ok:true, so inspect non-ok sources).
         const tasksRes = result.bySource.google_tasks;
-        if (tasksRes && !tasksRes.ok) {
-          if (/scope|not connect/i.test(tasksRes.error)) tasksScopeMissing = true;
+        if (tasksRes && !tasksRes.ok && isScopeRevokedError(tasksRes.error)) {
+          tasksScopeMissing = true;
         }
       } catch (e) {
         err = e instanceof Error ? e.message : "failed to load";
