@@ -15,11 +15,13 @@ type Copy = {
   action_dismiss: string;
 };
 
-// Each phase reveals at the same 1.8s cadence so the rhythm feels even.
-// The mock plays exactly once on viewport entry and stays on phase 3 —
-// looping the cycle was distracting on scroll-back, and the moat reveal
-// is more powerful as a one-shot reveal that holds.
-const STEPS = [1800, 1800, 1800] as const;
+// First reveal fires fast (400ms) so the section feels responsive to
+// scroll — the previous 1800ms first-step let the user scroll past
+// before anything appeared. Subsequent steps stay at 1500ms to keep the
+// rhythm even. The mock plays exactly once on viewport entry and stays
+// on phase 3 — looping was distracting on scroll-back, and the moat
+// reveal is more powerful as a one-shot reveal that holds.
+const STEPS = [400, 1500, 1500] as const;
 
 export function ProactiveMock({ copy }: { copy: Copy }) {
   const ref = useRef<HTMLDivElement | null>(null);
