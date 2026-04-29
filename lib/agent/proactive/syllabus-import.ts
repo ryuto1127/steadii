@@ -1,6 +1,6 @@
 import "server-only";
 import * as Sentry from "@sentry/nextjs";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   classes,
@@ -10,7 +10,15 @@ import {
   type NewAgentProposalRow,
 } from "@/lib/db/schema";
 import { agentProposals } from "@/lib/db/schema";
-import { getCalendarForUser } from "@/lib/integrations/google/calendar";
+import {
+  CalendarNotConnectedError,
+  getCalendarForUser,
+} from "@/lib/integrations/google/calendar";
+import {
+  createMsEvent,
+} from "@/lib/integrations/microsoft/calendar";
+import { MsNotConnectedError } from "@/lib/integrations/microsoft/graph-client";
+import { getConnectedCalendarProviders } from "@/lib/agent/tools/connected-providers";
 import { upsertFromSourceRow } from "@/lib/calendar/events-store";
 import { recordAutoActionLog } from "./notify";
 import { buildDedupKey } from "./dedup";
@@ -125,6 +133,10 @@ export async function runSyllabusAutoImport(args: {
   const maxDate = new Date(
     Math.max(...allDates) + FUZZY_TIME_WINDOW_HOURS * 3600 * 1000
   );
+  // Dedup against BOTH Google Calendar and Microsoft Calendar — a syllabus
+  // event already on either upstream shouldn't be re-added. iCal-subscription
+  // events are read-only and intentionally excluded (the user's own syllabus
+  // shouldn't dedup against an externally subscribed feed).
   const calendarRows = await db
     .select({
       id: events.id,
@@ -136,7 +148,7 @@ export async function runSyllabusAutoImport(args: {
     .where(
       and(
         eq(events.userId, args.userId),
-        eq(events.sourceType, "google_calendar")
+        inArray(events.sourceType, ["google_calendar", "microsoft_graph"])
       )
     );
   const inWindow = calendarRows.filter(
@@ -199,34 +211,85 @@ async function createAndMirror(args: {
   extracted: ExtractedSyllabusEvent;
 }): Promise<boolean> {
   const evt = args.extracted;
-  const cal = await getCalendarForUser(args.userId);
   const title = `${STEADII_PREFIX} ${evt.classCode ? evt.classCode + " " : ""}${evt.label}`.trim();
   const description = `Imported from Steadii syllabus ${args.syllabusId}.`;
-  const resp = await cal.events.insert({
-    calendarId: "primary",
-    requestBody: {
-      summary: title,
-      description,
-      start: { dateTime: evt.startsAt.toISOString() },
-      end: { dateTime: evt.endsAt.toISOString() },
-    },
-  });
-  if (!resp.data.id) return false;
-  await upsertFromSourceRow({
-    userId: args.userId,
-    sourceType: "google_calendar",
-    sourceAccountId: "primary",
-    externalId: resp.data.id,
-    title,
-    description,
-    startsAt: evt.startsAt,
-    endsAt: evt.endsAt,
-    isAllDay: false,
-    kind: "event",
-    status: "confirmed",
-    sourceMetadata: { source: "syllabus_auto_import", syllabusId: args.syllabusId },
-  });
-  return true;
+  const providers = await getConnectedCalendarProviders(args.userId);
+
+  // No calendar provider connected — the auto-import has nothing to write
+  // to. The proactive layer will still record the no-op via the summary
+  // log; surfaced as `errors: 0, added: 0` from the caller's perspective.
+  if (providers.length === 0) return false;
+
+  let createdAny = false;
+
+  for (const target of providers) {
+    if (target === "google") {
+      try {
+        const cal = await getCalendarForUser(args.userId);
+        const resp = await cal.events.insert({
+          calendarId: "primary",
+          requestBody: {
+            summary: title,
+            description,
+            start: { dateTime: evt.startsAt.toISOString() },
+            end: { dateTime: evt.endsAt.toISOString() },
+          },
+        });
+        if (resp.data.id) {
+          await upsertFromSourceRow({
+            userId: args.userId,
+            sourceType: "google_calendar",
+            sourceAccountId: "primary",
+            externalId: resp.data.id,
+            title,
+            description,
+            startsAt: evt.startsAt,
+            endsAt: evt.endsAt,
+            isAllDay: false,
+            kind: "event",
+            status: "confirmed",
+            sourceMetadata: {
+              source: "syllabus_auto_import",
+              syllabusId: args.syllabusId,
+            },
+          });
+          createdAny = true;
+        }
+      } catch (err) {
+        if (err instanceof CalendarNotConnectedError) {
+          // Defensive: the providers list said Google was connected but the
+          // helper disagrees. Skip silently — the dual-write is best-effort.
+        } else {
+          throw err;
+        }
+      }
+    } else if (target === "microsoft-entra-id") {
+      try {
+        // createMsEvent already mirrors into the events table via
+        // writeThroughMsEvent — no manual upsert here.
+        await createMsEvent({
+          userId: args.userId,
+          summary: title,
+          description,
+          start: evt.startsAt.toISOString(),
+          end: evt.endsAt.toISOString(),
+        });
+        createdAny = true;
+      } catch (err) {
+        if (err instanceof MsNotConnectedError) {
+          // User hadn't re-consented to ReadWrite yet — skip silently. The
+          // legacy Read-only scope still lets reads through, but writes
+          // need the wider scope.
+        } else {
+          // Don't fail the whole import on one upstream's hiccup — log to
+          // Sentry via the caller's catch and let Google succeed.
+          throw err;
+        }
+      }
+    }
+  }
+
+  return createdAny;
 }
 
 async function proposeAmbiguity(args: {
@@ -319,7 +382,7 @@ function buildSummaryReasoning(
 ): string {
   return [
     `Steadii ran the syllabus auto-import for "${syllabusTitle}":`,
-    `  • added ${r.added} events to Google Calendar`,
+    `  • added ${r.added} events to the user's connected calendars (Google + Microsoft when both linked)`,
     `  • skipped ${r.skippedConfidentMatch} that already existed`,
     `  • surfaced ${r.ambiguousProposed} ambiguous matches for confirmation`,
     `  • errors: ${r.errors}`,
