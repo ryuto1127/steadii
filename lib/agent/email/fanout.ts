@@ -174,13 +174,16 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
   const confidence = row?.classBindingConfidence ?? 0;
 
   // Resolve class metadata for the provenance payload (one row, cheap).
+  // Soft-deleted classes must not surface in agent provenance — when the
+  // user deletes a class, fanout should treat it as if no class binding
+  // exists rather than ghost the deleted name into the reasoning panel.
   let className: string | null = null;
   let classCode: string | null = null;
   if (classId) {
     const [c] = await db
       .select({ name: classes.name, code: classes.code })
       .from(classes)
-      .where(eq(classes.id, classId))
+      .where(and(eq(classes.id, classId), isNull(classes.deletedAt)))
       .limit(1);
     className = c?.name ?? null;
     classCode = c?.code ?? null;
@@ -666,7 +669,10 @@ async function safelyFetchSteadiiAssignments(
         className: classes.name,
       })
       .from(assignments)
-      .leftJoin(classes, eq(classes.id, assignments.classId))
+      .leftJoin(
+        classes,
+        and(eq(classes.id, assignments.classId), isNull(classes.deletedAt))
+      )
       .where(
         and(
           eq(assignments.userId, userId),
