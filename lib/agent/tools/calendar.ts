@@ -1,6 +1,11 @@
 import "server-only";
 import { z } from "zod";
 import { getCalendarForUser } from "@/lib/integrations/google/calendar";
+import {
+  createMsEvent,
+  deleteMsEvent,
+  patchMsEvent,
+} from "@/lib/integrations/microsoft/calendar";
 import { db } from "@/lib/db/client";
 import { auditLog } from "@/lib/db/schema";
 import {
@@ -18,6 +23,10 @@ import {
   localMidnightAsUtc,
 } from "@/lib/calendar/tz-utils";
 import { triggerScanInBackground } from "@/lib/agent/proactive/scanner";
+import {
+  getConnectedCalendarProviders,
+  lookupEventSource,
+} from "./connected-providers";
 import type { ToolExecutor } from "./types";
 
 async function logAudit(args: {
@@ -95,7 +104,7 @@ export const calendarListEvents: ToolExecutor<
       await syncAllForRange(ctx.userId, timeMin, timeMax);
     }
     const rows = await listEventsInRange(ctx.userId, timeMin, timeMax, {
-      sourceTypes: ["google_calendar"],
+      sourceTypes: ["google_calendar", "microsoft_graph"],
     });
     const q = args.q?.toLowerCase();
     const limit = args.limit ?? 25;
@@ -165,14 +174,26 @@ function isAllDayStr(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
+export type CalendarCreateResult = {
+  eventId: string;
+  htmlLink: string | null;
+  // Sources where the create succeeded (in dispatch order). When the user has
+  // both Google and Microsoft connected, we write to both by default and
+  // surface so the model can confirm the dual-write to the user.
+  createdIn: Array<"google_calendar" | "microsoft_graph">;
+  // Per-source failures so the response can include "added to Google;
+  // failed on Outlook — try again or check Settings → Connections".
+  failedIn: Array<{ source: "google_calendar" | "microsoft_graph"; error: string }>;
+};
+
 export const calendarCreateEvent: ToolExecutor<
   z.infer<typeof createArgs>,
-  { eventId: string; htmlLink: string | null }
+  CalendarCreateResult
 > = {
   schema: {
     name: "calendar_create_event",
     description:
-      "Create a Google Calendar event. `start`/`end` must be RFC3339 timestamps (with timezone) or all-day YYYY-MM-DD strings. `recurrence` is an array of RRULE strings (e.g. ['RRULE:FREQ=WEEKLY;BYDAY=MO,WE']). `reminders.minutes` is an array (up to 5) of minutes before the event to fire popup reminders — pass [60, 10] to get reminders 1 hour and 10 minutes out.",
+      "Create a calendar event. By default writes to ALL the user's connected calendar integrations (Google Calendar + Microsoft Outlook). `start`/`end` must be RFC3339 timestamps (with timezone) or all-day YYYY-MM-DD strings. `recurrence` is an array of RRULE strings (Google-only; ignored on Microsoft). `reminders.minutes` is an array (up to 5) of minutes before the event to fire popup reminders — Microsoft only honors the smallest non-zero value (single-reminder limitation).",
     mutability: "write",
     parameters: {
       type: "object",
@@ -204,54 +225,141 @@ export const calendarCreateEvent: ToolExecutor<
   },
   async execute(ctx, rawArgs) {
     const args = createArgs.parse(rawArgs);
-    const cal = await getCalendarForUser(ctx.userId);
-    try {
-      const body: Record<string, unknown> = {
-        summary: args.summary,
-        description: args.description,
-        location: args.location,
-        start: isAllDayStr(args.start) ? { date: args.start } : { dateTime: args.start },
-        end: isAllDayStr(args.end) ? { date: args.end } : { dateTime: args.end },
-      };
-      if (args.recurrence && args.recurrence.length > 0) {
-        body.recurrence = args.recurrence;
+    const providers = await getConnectedCalendarProviders(ctx.userId);
+
+    // Defensive default: a user must always have Google connected as the
+    // primary identity provider, but if they've revoked Calendar scope only
+    // we still want a sane fallback. Treat zero connections as Google
+    // (which will error with not-connected — preserves prior behavior).
+    const targets = providers.length > 0 ? providers : (["google"] as const);
+
+    const createdIn: CalendarCreateResult["createdIn"] = [];
+    const failedIn: CalendarCreateResult["failedIn"] = [];
+    let primaryEventId = "";
+    let primaryHtmlLink: string | null = null;
+
+    for (const target of targets) {
+      if (target === "google") {
+        try {
+          const cal = await getCalendarForUser(ctx.userId);
+          const body: Record<string, unknown> = {
+            summary: args.summary,
+            description: args.description,
+            location: args.location,
+            start: isAllDayStr(args.start)
+              ? { date: args.start }
+              : { dateTime: args.start },
+            end: isAllDayStr(args.end)
+              ? { date: args.end }
+              : { dateTime: args.end },
+          };
+          if (args.recurrence && args.recurrence.length > 0) {
+            body.recurrence = args.recurrence;
+          }
+          if (args.reminders) {
+            body.reminders = {
+              useDefault: false,
+              overrides: args.reminders.minutes.map((m) => ({
+                method: "popup",
+                minutes: m,
+              })),
+            };
+          }
+          const calendarId = args.calendarId ?? "primary";
+          const resp = await cal.events.insert({
+            calendarId,
+            requestBody: body,
+          });
+          const id = resp.data.id ?? "";
+          await writeThroughCalendarEvent(ctx.userId, calendarId, resp.data);
+          await logAudit({
+            userId: ctx.userId,
+            action: "calendar.event.create",
+            toolName: "calendar_create_event",
+            resourceId: id,
+            result: "success",
+            detail: { summary: args.summary, source: "google_calendar" },
+          });
+          triggerScanInBackground(ctx.userId, {
+            source: "calendar.created",
+            recordId: id,
+          });
+          createdIn.push("google_calendar");
+          if (!primaryEventId) {
+            primaryEventId = id;
+            primaryHtmlLink = resp.data.htmlLink ?? null;
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          failedIn.push({ source: "google_calendar", error: message });
+          await logAudit({
+            userId: ctx.userId,
+            action: "calendar.event.create",
+            toolName: "calendar_create_event",
+            result: "failure",
+            detail: { message, source: "google_calendar" },
+          });
+        }
+      } else if (target === "microsoft-entra-id") {
+        try {
+          const reminderMin =
+            args.reminders &&
+            args.reminders.minutes.filter((m) => m > 0).length > 0
+              ? Math.min(...args.reminders.minutes.filter((m) => m > 0))
+              : undefined;
+          const created = await createMsEvent({
+            userId: ctx.userId,
+            summary: args.summary,
+            start: args.start,
+            end: args.end,
+            description: args.description,
+            location: args.location,
+            reminderMinutesBeforeStart: reminderMin,
+          });
+          await logAudit({
+            userId: ctx.userId,
+            action: "calendar.event.create",
+            toolName: "calendar_create_event",
+            resourceId: created.id,
+            result: "success",
+            detail: { summary: args.summary, source: "microsoft_graph" },
+          });
+          triggerScanInBackground(ctx.userId, {
+            source: "calendar.created",
+            recordId: created.id,
+          });
+          createdIn.push("microsoft_graph");
+          if (!primaryEventId) {
+            primaryEventId = created.id;
+            primaryHtmlLink = created.webLink;
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          failedIn.push({ source: "microsoft_graph", error: message });
+          await logAudit({
+            userId: ctx.userId,
+            action: "calendar.event.create",
+            toolName: "calendar_create_event",
+            result: "failure",
+            detail: { message, source: "microsoft_graph" },
+          });
+        }
       }
-      if (args.reminders) {
-        body.reminders = {
-          useDefault: false,
-          overrides: args.reminders.minutes.map((m) => ({ method: "popup", minutes: m })),
-        };
-      }
-      const calendarId = args.calendarId ?? "primary";
-      const resp = await cal.events.insert({
-        calendarId,
-        requestBody: body,
-      });
-      const id = resp.data.id ?? "";
-      await writeThroughCalendarEvent(ctx.userId, calendarId, resp.data);
-      await logAudit({
-        userId: ctx.userId,
-        action: "calendar.event.create",
-        toolName: "calendar_create_event",
-        resourceId: id,
-        result: "success",
-        detail: { summary: args.summary },
-      });
-      triggerScanInBackground(ctx.userId, {
-        source: "calendar.created",
-        recordId: id,
-      });
-      return { eventId: id, htmlLink: resp.data.htmlLink ?? null };
-    } catch (err) {
-      await logAudit({
-        userId: ctx.userId,
-        action: "calendar.event.create",
-        toolName: "calendar_create_event",
-        result: "failure",
-        detail: { message: err instanceof Error ? err.message : String(err) },
-      });
-      throw err;
     }
+
+    if (createdIn.length === 0) {
+      // Surface the first failure so the orchestrator can render an error
+      // toast — same behaviour as the old single-source throw.
+      const first = failedIn[0]?.error ?? "no calendar provider connected";
+      throw new Error(first);
+    }
+
+    return {
+      eventId: primaryEventId,
+      htmlLink: primaryHtmlLink,
+      createdIn,
+      failedIn,
+    };
   },
 };
 
@@ -308,6 +416,63 @@ export const calendarUpdateEvent: ToolExecutor<
   },
   async execute(ctx, rawArgs) {
     const args = updateArgs.parse(rawArgs);
+    // Route by the source the event was originally created from. The events
+    // store row carries `sourceType`; if the event isn't mirrored locally
+    // we fall through to Google for backward-compatibility.
+    const source = await lookupEventSource({
+      userId: ctx.userId,
+      externalId: args.eventId,
+    });
+    const isMs = source === "microsoft_graph";
+
+    if (isMs) {
+      try {
+        const reminderMin =
+          args.reminders &&
+          args.reminders.minutes.filter((m) => m > 0).length > 0
+            ? Math.min(...args.reminders.minutes.filter((m) => m > 0))
+            : undefined;
+        await patchMsEvent({
+          userId: ctx.userId,
+          eventId: args.eventId,
+          patch: {
+            summary: args.summary,
+            description: args.description,
+            location: args.location,
+            start: args.start,
+            end: args.end,
+            reminderMinutesBeforeStart: reminderMin,
+          },
+        });
+        await logAudit({
+          userId: ctx.userId,
+          action: "calendar.event.update",
+          toolName: "calendar_update_event",
+          resourceId: args.eventId,
+          result: "success",
+          detail: { source: "microsoft_graph" },
+        });
+        triggerScanInBackground(ctx.userId, {
+          source: "calendar.updated",
+          recordId: args.eventId,
+        });
+        return { eventId: args.eventId };
+      } catch (err) {
+        await logAudit({
+          userId: ctx.userId,
+          action: "calendar.event.update",
+          toolName: "calendar_update_event",
+          resourceId: args.eventId,
+          result: "failure",
+          detail: {
+            message: err instanceof Error ? err.message : String(err),
+            source: "microsoft_graph",
+          },
+        });
+        throw err;
+      }
+    }
+
     const cal = await getCalendarForUser(ctx.userId);
     const body: Record<string, unknown> = {};
     if (args.summary !== undefined) body.summary = args.summary;
@@ -339,6 +504,7 @@ export const calendarUpdateEvent: ToolExecutor<
         toolName: "calendar_update_event",
         resourceId: args.eventId,
         result: "success",
+        detail: { source: "google_calendar" },
       });
       triggerScanInBackground(ctx.userId, {
         source: "calendar.updated",
@@ -352,7 +518,10 @@ export const calendarUpdateEvent: ToolExecutor<
         toolName: "calendar_update_event",
         resourceId: args.eventId,
         result: "failure",
-        detail: { message: err instanceof Error ? err.message : String(err) },
+        detail: {
+          message: err instanceof Error ? err.message : String(err),
+          source: "google_calendar",
+        },
       });
       throw err;
     }
@@ -385,23 +554,42 @@ export const calendarDeleteEvent: ToolExecutor<
   },
   async execute(ctx, rawArgs) {
     const args = deleteArgs.parse(rawArgs);
-    const cal = await getCalendarForUser(ctx.userId);
+    const source = await lookupEventSource({
+      userId: ctx.userId,
+      externalId: args.eventId,
+    });
+    const isMs = source === "microsoft_graph";
+
     try {
-      await cal.events.delete({
-        calendarId: args.calendarId ?? "primary",
-        eventId: args.eventId,
-      });
-      await markDeletedByExternalId(
-        ctx.userId,
-        "google_calendar",
-        args.eventId
-      );
+      if (isMs) {
+        await deleteMsEvent({
+          userId: ctx.userId,
+          eventId: args.eventId,
+        });
+        await markDeletedByExternalId(
+          ctx.userId,
+          "microsoft_graph",
+          args.eventId
+        );
+      } else {
+        const cal = await getCalendarForUser(ctx.userId);
+        await cal.events.delete({
+          calendarId: args.calendarId ?? "primary",
+          eventId: args.eventId,
+        });
+        await markDeletedByExternalId(
+          ctx.userId,
+          "google_calendar",
+          args.eventId
+        );
+      }
       await logAudit({
         userId: ctx.userId,
         action: "calendar.event.delete",
         toolName: "calendar_delete_event",
         resourceId: args.eventId,
         result: "success",
+        detail: { source: isMs ? "microsoft_graph" : "google_calendar" },
       });
       triggerScanInBackground(ctx.userId, {
         source: "calendar.deleted",
@@ -415,7 +603,10 @@ export const calendarDeleteEvent: ToolExecutor<
         toolName: "calendar_delete_event",
         resourceId: args.eventId,
         result: "failure",
-        detail: { message: err instanceof Error ? err.message : String(err) },
+        detail: {
+          message: err instanceof Error ? err.message : String(err),
+          source: isMs ? "microsoft_graph" : "google_calendar",
+        },
       });
       throw err;
     }

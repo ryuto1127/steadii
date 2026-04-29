@@ -4,6 +4,11 @@ import {
   dueFromDateOnly,
   getTasksForUser,
 } from "@/lib/integrations/google/tasks";
+import {
+  createMsTask,
+  deleteMsTask,
+  patchMsTask,
+} from "@/lib/integrations/microsoft/tasks";
 import { db } from "@/lib/db/client";
 import { auditLog } from "@/lib/db/schema";
 import {
@@ -20,6 +25,10 @@ import {
   addDaysToDateStr,
   localMidnightAsUtc,
 } from "@/lib/calendar/tz-utils";
+import {
+  getConnectedTasksProviders,
+  lookupEventSource,
+} from "./connected-providers";
 import type { ToolExecutor } from "./types";
 
 async function logAudit(args: {
@@ -103,7 +112,7 @@ export const tasksListEvents: ToolExecutor<
       await syncAllForRange(ctx.userId, fromISO, toISO);
     }
     const rows = await listEventsInRange(ctx.userId, fromISO, toISO, {
-      sourceTypes: ["google_tasks"],
+      sourceTypes: ["google_tasks", "microsoft_todo"],
     });
     const includeCompleted = args.includeCompleted ?? true;
     const limit = args.limit ?? 100;
@@ -140,14 +149,21 @@ const createArgs = z.object({
   parentId: z.string().optional(),
 });
 
+export type TasksCreateResult = {
+  taskId: string;
+  taskListId: string;
+  createdIn: Array<"google_tasks" | "microsoft_todo">;
+  failedIn: Array<{ source: "google_tasks" | "microsoft_todo"; error: string }>;
+};
+
 export const tasksCreateTask: ToolExecutor<
   z.infer<typeof createArgs>,
-  { taskId: string; taskListId: string }
+  TasksCreateResult
 > = {
   schema: {
     name: "tasks_create",
     description:
-      "Create a Google Task. `due` is YYYY-MM-DD (local-date-only; Google Tasks doesn't support times). Defaults to the primary task list.",
+      "Create a task. By default writes to ALL the user's connected tasks integrations (Google Tasks + Microsoft To Do). `due` is YYYY-MM-DD (local-date-only; neither provider supports time-of-day on tasks). Microsoft uses the wellknown defaultList; Google uses the primary task list.",
     mutability: "write",
     parameters: {
       type: "object",
@@ -164,39 +180,100 @@ export const tasksCreateTask: ToolExecutor<
   },
   async execute(ctx, rawArgs) {
     const args = createArgs.parse(rawArgs);
-    const tasks = await getTasksForUser(ctx.userId);
-    const taskListId = args.taskListId ?? "@default";
-    try {
-      const resp = await tasks.tasks.insert({
-        tasklist: taskListId,
-        parent: args.parentId,
-        requestBody: {
-          title: args.title,
-          notes: args.notes,
-          due: args.due ? dueFromDateOnly(args.due) : undefined,
-        },
-      });
-      const taskId = resp.data.id ?? "";
-      await writeThroughTask(ctx.userId, taskListId, resp.data);
-      await logAudit({
-        userId: ctx.userId,
-        action: "tasks.task.create",
-        toolName: "tasks_create",
-        resourceId: taskId,
-        result: "success",
-        detail: { title: args.title },
-      });
-      return { taskId, taskListId };
-    } catch (err) {
-      await logAudit({
-        userId: ctx.userId,
-        action: "tasks.task.create",
-        toolName: "tasks_create",
-        result: "failure",
-        detail: { message: err instanceof Error ? err.message : String(err) },
-      });
-      throw err;
+    const providers = await getConnectedTasksProviders(ctx.userId);
+    const targets = providers.length > 0 ? providers : (["google"] as const);
+
+    const createdIn: TasksCreateResult["createdIn"] = [];
+    const failedIn: TasksCreateResult["failedIn"] = [];
+    let primaryTaskId = "";
+    let primaryListId = args.taskListId ?? "@default";
+
+    for (const target of targets) {
+      if (target === "google") {
+        try {
+          const tasks = await getTasksForUser(ctx.userId);
+          const taskListId = args.taskListId ?? "@default";
+          const resp = await tasks.tasks.insert({
+            tasklist: taskListId,
+            parent: args.parentId,
+            requestBody: {
+              title: args.title,
+              notes: args.notes,
+              due: args.due ? dueFromDateOnly(args.due) : undefined,
+            },
+          });
+          const taskId = resp.data.id ?? "";
+          await writeThroughTask(ctx.userId, taskListId, resp.data);
+          await logAudit({
+            userId: ctx.userId,
+            action: "tasks.task.create",
+            toolName: "tasks_create",
+            resourceId: taskId,
+            result: "success",
+            detail: { title: args.title, source: "google_tasks" },
+          });
+          createdIn.push("google_tasks");
+          if (!primaryTaskId) {
+            primaryTaskId = taskId;
+            primaryListId = taskListId;
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          failedIn.push({ source: "google_tasks", error: message });
+          await logAudit({
+            userId: ctx.userId,
+            action: "tasks.task.create",
+            toolName: "tasks_create",
+            result: "failure",
+            detail: { message, source: "google_tasks" },
+          });
+        }
+      } else if (target === "microsoft-entra-id") {
+        try {
+          const created = await createMsTask({
+            userId: ctx.userId,
+            title: args.title,
+            notes: args.notes,
+            due: args.due,
+          });
+          await logAudit({
+            userId: ctx.userId,
+            action: "tasks.task.create",
+            toolName: "tasks_create",
+            resourceId: created.id,
+            result: "success",
+            detail: { title: args.title, source: "microsoft_todo" },
+          });
+          createdIn.push("microsoft_todo");
+          if (!primaryTaskId) {
+            primaryTaskId = created.id;
+            primaryListId = created.listId;
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          failedIn.push({ source: "microsoft_todo", error: message });
+          await logAudit({
+            userId: ctx.userId,
+            action: "tasks.task.create",
+            toolName: "tasks_create",
+            result: "failure",
+            detail: { message, source: "microsoft_todo" },
+          });
+        }
+      }
     }
+
+    if (createdIn.length === 0) {
+      const first = failedIn[0]?.error ?? "no tasks provider connected";
+      throw new Error(first);
+    }
+
+    return {
+      taskId: primaryTaskId,
+      taskListId: primaryListId,
+      createdIn,
+      failedIn,
+    };
   },
 };
 
@@ -229,6 +306,51 @@ export const tasksCompleteTask: ToolExecutor<
   },
   async execute(ctx, rawArgs) {
     const args = completeArgs.parse(rawArgs);
+    const source = await lookupEventSource({
+      userId: ctx.userId,
+      externalId: args.taskId,
+    });
+    const isMs = source === "microsoft_todo";
+
+    if (isMs) {
+      const listId = args.taskListId ?? (await lookupMsTaskListId(ctx.userId, args.taskId));
+      if (!listId) {
+        throw new Error("MS task list id not found for this task");
+      }
+      try {
+        await patchMsTask({
+          userId: ctx.userId,
+          taskId: args.taskId,
+          listId,
+          patch: {
+            status: args.completed ? "completed" : "notStarted",
+          },
+        });
+        await logAudit({
+          userId: ctx.userId,
+          action: args.completed ? "tasks.task.complete" : "tasks.task.reopen",
+          toolName: "tasks_complete",
+          resourceId: args.taskId,
+          result: "success",
+          detail: { source: "microsoft_todo" },
+        });
+        return { taskId: args.taskId };
+      } catch (err) {
+        await logAudit({
+          userId: ctx.userId,
+          action: args.completed ? "tasks.task.complete" : "tasks.task.reopen",
+          toolName: "tasks_complete",
+          resourceId: args.taskId,
+          result: "failure",
+          detail: {
+            message: err instanceof Error ? err.message : String(err),
+            source: "microsoft_todo",
+          },
+        });
+        throw err;
+      }
+    }
+
     const tasks = await getTasksForUser(ctx.userId);
     const taskListId = args.taskListId ?? "@default";
     try {
@@ -246,6 +368,7 @@ export const tasksCompleteTask: ToolExecutor<
         toolName: "tasks_complete",
         resourceId: args.taskId,
         result: "success",
+        detail: { source: "google_tasks" },
       });
       return { taskId: args.taskId };
     } catch (err) {
@@ -255,7 +378,10 @@ export const tasksCompleteTask: ToolExecutor<
         toolName: "tasks_complete",
         resourceId: args.taskId,
         result: "failure",
-        detail: { message: err instanceof Error ? err.message : String(err) },
+        detail: {
+          message: err instanceof Error ? err.message : String(err),
+          source: "google_tasks",
+        },
       });
       throw err;
     }
@@ -295,6 +421,53 @@ export const tasksUpdateTask: ToolExecutor<
   },
   async execute(ctx, rawArgs) {
     const args = updateArgs.parse(rawArgs);
+    const source = await lookupEventSource({
+      userId: ctx.userId,
+      externalId: args.taskId,
+    });
+    const isMs = source === "microsoft_todo";
+
+    if (isMs) {
+      const listId = args.taskListId ?? (await lookupMsTaskListId(ctx.userId, args.taskId));
+      if (!listId) {
+        throw new Error("MS task list id not found for this task");
+      }
+      try {
+        await patchMsTask({
+          userId: ctx.userId,
+          taskId: args.taskId,
+          listId,
+          patch: {
+            title: args.title,
+            notes: args.notes,
+            due: args.due,
+          },
+        });
+        await logAudit({
+          userId: ctx.userId,
+          action: "tasks.task.update",
+          toolName: "tasks_update",
+          resourceId: args.taskId,
+          result: "success",
+          detail: { source: "microsoft_todo" },
+        });
+        return { taskId: args.taskId };
+      } catch (err) {
+        await logAudit({
+          userId: ctx.userId,
+          action: "tasks.task.update",
+          toolName: "tasks_update",
+          resourceId: args.taskId,
+          result: "failure",
+          detail: {
+            message: err instanceof Error ? err.message : String(err),
+            source: "microsoft_todo",
+          },
+        });
+        throw err;
+      }
+    }
+
     const tasks = await getTasksForUser(ctx.userId);
     const taskListId = args.taskListId ?? "@default";
     const body: Record<string, unknown> = {};
@@ -316,6 +489,7 @@ export const tasksUpdateTask: ToolExecutor<
         toolName: "tasks_update",
         resourceId: args.taskId,
         result: "success",
+        detail: { source: "google_tasks" },
       });
       return { taskId: args.taskId };
     } catch (err) {
@@ -325,7 +499,10 @@ export const tasksUpdateTask: ToolExecutor<
         toolName: "tasks_update",
         resourceId: args.taskId,
         result: "failure",
-        detail: { message: err instanceof Error ? err.message : String(err) },
+        detail: {
+          message: err instanceof Error ? err.message : String(err),
+          source: "google_tasks",
+        },
       });
       throw err;
     }
@@ -358,24 +535,49 @@ export const tasksDeleteTask: ToolExecutor<
   },
   async execute(ctx, rawArgs) {
     const args = deleteArgs.parse(rawArgs);
-    const tasks = await getTasksForUser(ctx.userId);
-    const taskListId = args.taskListId ?? "@default";
+    const source = await lookupEventSource({
+      userId: ctx.userId,
+      externalId: args.taskId,
+    });
+    const isMs = source === "microsoft_todo";
+
     try {
-      await tasks.tasks.delete({
-        tasklist: taskListId,
-        task: args.taskId,
-      });
-      await markDeletedByExternalId(
-        ctx.userId,
-        "google_tasks",
-        args.taskId
-      );
+      if (isMs) {
+        const listId =
+          args.taskListId ?? (await lookupMsTaskListId(ctx.userId, args.taskId));
+        if (!listId) {
+          throw new Error("MS task list id not found for this task");
+        }
+        await deleteMsTask({
+          userId: ctx.userId,
+          listId,
+          taskId: args.taskId,
+        });
+        await markDeletedByExternalId(
+          ctx.userId,
+          "microsoft_todo",
+          args.taskId
+        );
+      } else {
+        const tasks = await getTasksForUser(ctx.userId);
+        const taskListId = args.taskListId ?? "@default";
+        await tasks.tasks.delete({
+          tasklist: taskListId,
+          task: args.taskId,
+        });
+        await markDeletedByExternalId(
+          ctx.userId,
+          "google_tasks",
+          args.taskId
+        );
+      }
       await logAudit({
         userId: ctx.userId,
         action: "tasks.task.delete",
         toolName: "tasks_delete",
         resourceId: args.taskId,
         result: "success",
+        detail: { source: isMs ? "microsoft_todo" : "google_tasks" },
       });
       return { taskId: args.taskId };
     } catch (err) {
@@ -385,12 +587,40 @@ export const tasksDeleteTask: ToolExecutor<
         toolName: "tasks_delete",
         resourceId: args.taskId,
         result: "failure",
-        detail: { message: err instanceof Error ? err.message : String(err) },
+        detail: {
+          message: err instanceof Error ? err.message : String(err),
+          source: isMs ? "microsoft_todo" : "google_tasks",
+        },
       });
       throw err;
     }
   },
 };
+
+// Resolve the MS To Do listId for a given taskId by reading it from the
+// local events mirror. The complete/update/delete tools take an optional
+// `taskListId` arg, but the agent often only knows the taskId from a prior
+// list call — surface the listId from the row's externalParentId so the
+// agent doesn't have to thread it explicitly.
+async function lookupMsTaskListId(
+  userId: string,
+  taskId: string
+): Promise<string | null> {
+  const { events } = await import("@/lib/db/schema");
+  const { and, eq } = await import("drizzle-orm");
+  const [row] = await db
+    .select({ externalParentId: events.externalParentId })
+    .from(events)
+    .where(
+      and(
+        eq(events.userId, userId),
+        eq(events.sourceType, "microsoft_todo"),
+        eq(events.externalId, taskId)
+      )
+    )
+    .limit(1);
+  return row?.externalParentId ?? null;
+}
 
 async function writeThroughTask(
   userId: string,
