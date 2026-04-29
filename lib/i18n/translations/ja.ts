@@ -254,6 +254,47 @@ export const ja: Messages = {
     subtitle: "大学のGoogleアカウントでサインインしてください。",
     button: "Googleで続ける",
   },
+  onboarding: {
+    step1: {
+      title: "Google を接続",
+      one_line:
+        "一度の許可で Calendar と Gmail を連携。Steadii が予定の調整・メールのトリアージ・返信案の作成を行います。",
+      why_title: "何を許可することになりますか？",
+      why_calendar_gmail:
+        "Calendar の読み書きと、Gmail の読み取り・修正・送信が可能になります。エージェントが受信メールをトリアージし、確認用に返信案を準備します。あなたの承認と 20 秒の undo を経ないと送信は行われません。許可はいつでも Google アカウントから取り消せます。",
+      why_notion:
+        "Notion は任意です。設定 → 連携から後でも追加できます。連携すると既存の授業・間違いノート・シラバス・課題を Steadii にインポートできます。",
+      button: "Google アクセスを許可",
+    },
+    step2: {
+      title: "他のサービス（任意）",
+      one_line:
+        "Steadii が見える範囲を広げます — Outlook・学校時間割・Notion。使っていないものはスキップで OK。",
+      why_title: "何が連携されますか？",
+      why_body:
+        "各サービスは Google と同じカレンダー＋タスクの処理パイプラインに繋がります。Microsoft 365 は Outlook の予定と To Do、iCal 購読は学校の時間割フィード（6 時間ごとに同期）、Notion は既存の授業とノートをインポートします。後から設定 → 連携でいつでも追加・削除できます。",
+      skip: "あとで設定",
+      connect_link: "連携 →",
+      add_url_link: "URL を追加 →",
+      sources: {
+        microsoft: {
+          label: "Microsoft 365",
+          one_line:
+            "Outlook のカレンダーと Microsoft To Do を Google と並べて Steadii に取り込みます。",
+        },
+        ical: {
+          label: "iCal 購読",
+          one_line:
+            "学校の時間割 URL（.ics）を貼り付けると、締切が Steadii の予定に表示されます。",
+        },
+        notion: {
+          label: "Notion",
+          one_line:
+            "既存の授業・間違いノート・シラバス・課題を Notion からインポートします。",
+        },
+      },
+    },
+  },
   request_access: {
     title: "α アクセスをリクエスト",
     subtitle:
@@ -488,6 +529,8 @@ export const ja: Messages = {
     founding_member_label: "Founding メンバー。",
     founding_member_body: "現在の料金がそのまま永続的に固定されます。",
     price_locked_until: "料金は {date} まで固定されています。",
+    currency_locked:
+      "このアカウントは {currency} 表記で固定されています。変更はサポートまでご連絡ください。",
     current_plan: "現在のプラン",
     plan_admin: "Admin（フラグ付与）· 上限なし",
     plan_student: "Student",
