@@ -115,7 +115,7 @@ export function SyllabusRowActions({
                 type="button"
                 disabled={busy}
                 onClick={() => setEditing(false)}
-                className="rounded-md px-3 py-1.5 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))] disabled:opacity-50"
+                className="inline-flex h-9 items-center rounded-md px-3 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))] disabled:opacity-50"
               >
                 {tActions("cancel")}
               </button>
@@ -123,7 +123,7 @@ export function SyllabusRowActions({
                 type="button"
                 disabled={busy}
                 onClick={save}
-                className="rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-50"
+                className="inline-flex h-9 items-center rounded-md bg-[hsl(var(--primary))] px-4 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-50"
               >
                 {busy ? tActions("saving") : tActions("save")}
               </button>

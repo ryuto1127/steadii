@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,26 @@ export function CalendarView({
   const [pendingCreate, setPendingCreate] = useState<PendingCreate>(null);
   const [, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(initialError);
+  // Auto-collapse to day view on small screens. The URL still allows the
+  // user to reach week/month explicitly, but the default cold-load on a
+  // phone shows day so the time grid is legible. Tracked separately from
+  // the view state so user explicit picks (via the segmented control)
+  // are never overridden.
+  const userPickedView = useRef(false);
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia("(max-width: 639px)");
+    const apply = (matches: boolean) => {
+      if (userPickedView.current) return;
+      if (matches) {
+        setView("day");
+      }
+    };
+    apply(mql.matches);
+    const handler = (e: MediaQueryListEvent) => apply(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
 
   useEffect(() => {
     if (panel.state !== "create") setPendingCreate(null);
@@ -355,15 +375,15 @@ export function CalendarView({
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col">
-      <header className="flex items-center justify-between gap-3 pb-4">
-        <div className="flex items-center gap-2">
+    <div className="flex h-[calc(100dvh-7rem)] flex-col md:h-[calc(100vh-4rem)]">
+      <header className="flex flex-col gap-3 pb-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="text-h1 text-[hsl(var(--foreground))]">Calendar</h1>
-          <span className="ml-2 text-small text-[hsl(var(--muted-foreground))] tabular-nums">
+          <span className="text-small text-[hsl(var(--muted-foreground))] tabular-nums">
             {heading}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" size="sm" onClick={goToday}>
             Today
           </Button>
@@ -371,21 +391,27 @@ export function CalendarView({
             <button
               onClick={goPrev}
               aria-label="Previous"
-              className="h-7 px-2.5 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
+              className="flex h-9 w-9 items-center justify-center text-small text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
             >
               ←
             </button>
-            <span className="h-4 w-px bg-[hsl(var(--border))]" />
+            <span className="h-5 w-px bg-[hsl(var(--border))]" />
             <button
               onClick={goNext}
               aria-label="Next"
-              className="h-7 px-2.5 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
+              className="flex h-9 w-9 items-center justify-center text-small text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
             >
               →
             </button>
           </div>
-          <ViewToggle view={view} onChange={setView} />
-          <Button size="sm" onClick={openNewEmpty}>
+          <ViewToggle
+            view={view}
+            onChange={(v) => {
+              userPickedView.current = true;
+              setView(v);
+            }}
+          />
+          <Button size="sm" onClick={openNewEmpty} className="ml-auto md:ml-0">
             New event
           </Button>
         </div>
@@ -409,8 +435,8 @@ export function CalendarView({
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 gap-3">
-        <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 md:flex-row">
+        <div className="min-h-[420px] min-w-0 flex-1 overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
           {view === "month" && (
             <MonthView
               anchor={anchor}
@@ -492,7 +518,7 @@ function ViewToggle({
           key={opt}
           onClick={() => onChange(opt)}
           className={
-            "h-6 rounded px-2 text-small capitalize transition-hover " +
+            "flex h-8 items-center rounded px-3 text-small capitalize transition-hover " +
             (view === opt
               ? "bg-[hsl(var(--surface-raised))] text-[hsl(var(--foreground))]"
               : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]")

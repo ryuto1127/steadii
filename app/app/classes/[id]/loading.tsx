@@ -1,6 +1,6 @@
 export default function ClassDetailLoading() {
   return (
-    <div role="status" aria-label="Loading" className="mx-auto max-w-4xl py-6">
+    <div role="status" aria-label="Loading" className="mx-auto max-w-4xl py-2 md:py-6">
       <header className="flex items-start gap-4 pb-4">
         <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-[hsl(var(--border)/0.7)]" />
         <div className="flex-1 space-y-2">

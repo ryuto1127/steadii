@@ -304,7 +304,7 @@ export function ChatView({
   );
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col">
+    <div className="flex h-[calc(100dvh-12rem)] flex-col md:h-[calc(100vh-8rem)]">
       <div className="flex-1 overflow-y-auto py-4">
         <ul className="space-y-5">
           {messages.map((m, idx) => {
@@ -503,7 +503,7 @@ export function ChatView({
             <div className="flex items-center gap-2">
               <label
                 className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded-md transition-hover",
+                  "flex h-10 w-10 items-center justify-center rounded-md transition-hover",
                   blobConfigured
                     ? "cursor-pointer text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
                     : "cursor-not-allowed text-[hsl(var(--muted-foreground)/0.5)]"
@@ -515,7 +515,7 @@ export function ChatView({
                 }
                 aria-label="Attach"
               >
-                <Paperclip size={14} strokeWidth={1.5} />
+                <Paperclip size={16} strokeWidth={1.5} />
                 <input
                   type="file"
                   accept="image/*,application/pdf"
@@ -533,9 +533,9 @@ export function ChatView({
               type="submit"
               disabled={streaming || (!input.trim() && !attachment)}
               aria-label="Send"
-              className="flex h-7 w-7 items-center justify-center rounded-md bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] transition-hover disabled:opacity-40"
+              className="flex h-10 w-10 items-center justify-center rounded-md bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] transition-hover disabled:opacity-40"
             >
-              <ArrowUp size={14} strokeWidth={1.75} />
+              <ArrowUp size={16} strokeWidth={1.75} />
             </button>
           </div>
         </form>

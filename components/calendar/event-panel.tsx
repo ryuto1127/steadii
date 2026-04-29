@@ -241,13 +241,13 @@ function EventModePanel({
   };
 
   return (
-    <aside className="flex w-[360px] shrink-0 flex-col overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
+    <aside className="flex w-full shrink-0 flex-col overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] md:w-[360px]">
       <header className="flex items-center justify-between border-b border-[hsl(var(--border))] px-4 py-3">
         <h2 className="text-h3">{editing ? "Edit event" : "New event"}</h2>
         <button
           onClick={onClose}
           aria-label="Close"
-          className="h-7 w-7 rounded-md text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
+          className="flex h-9 w-9 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
         >
           ×
         </button>
@@ -542,13 +542,13 @@ function TaskModePanel({
   };
 
   return (
-    <aside className="flex w-[360px] shrink-0 flex-col overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
+    <aside className="flex w-full shrink-0 flex-col overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] md:w-[360px]">
       <header className="flex items-center justify-between border-b border-[hsl(var(--border))] px-4 py-3">
         <h2 className="text-h3">{editing ? "Edit task" : "New task"}</h2>
         <button
           onClick={onClose}
           aria-label="Close"
-          className="h-7 w-7 rounded-md text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
+          className="flex h-9 w-9 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
         >
           ×
         </button>
