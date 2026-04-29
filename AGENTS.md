@@ -13,7 +13,7 @@ If something in this file conflicts with memory, **memory wins** — update this
 
 ## 1. Project context
 
-Steadii is an AI-driven proactive agent for university students. Core value proposition is Gmail L1/L2 triage + draft generation + confirm-UX. Notion and Google Calendar are secondary integrations (Notion is now optional). Bilingual (JA/EN), desktop-first, solo dev, production on `mysteadii.xyz`.
+Steadii is an AI-driven proactive agent for university students. Core value proposition is Gmail L1/L2 triage + draft generation + confirm-UX. Notion and Google Calendar are secondary integrations (Notion is now optional). Bilingual (JA/EN), desktop-first, solo dev, production on `mysteadii.com`.
 
 ---
 
