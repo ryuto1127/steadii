@@ -65,7 +65,7 @@ export default async function OpengraphImage() {
           />
         </div>
 
-        <div style={{ fontSize: 24, color: "#A8A29E" }}>mysteadii.xyz</div>
+        <div style={{ fontSize: 24, color: "#A8A29E" }}>mysteadii.com</div>
       </div>
     ),
     { ...size }

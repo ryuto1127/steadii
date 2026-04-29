@@ -6,7 +6,7 @@ import { evaluateApiRequest } from "@/proxy";
 // NextRequest. Anything observable from the route handler's perspective
 // goes through `evaluateApiRequest`.
 
-const HOST = "mysteadii.xyz";
+const HOST = "mysteadii.com";
 
 function evaluate(overrides: {
   method?: string;
