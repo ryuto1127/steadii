@@ -294,6 +294,8 @@ type MessagesShape = {
       sign_out_to_reauth: string;
       refresh_inbox: string;
       refresh_inbox_title: string;
+      manage_summary: string;
+      manage_link: string;
     };
     resources: {
       description: string;
@@ -833,6 +835,9 @@ export const en: MessagesShape = {
       sign_out_to_reauth: "Sign out to re-auth",
       refresh_inbox: "Refresh inbox",
       refresh_inbox_title: "Re-ingest the last 24 hours of Gmail",
+      manage_summary:
+        "Notion, Google, Microsoft 365, and iCal feeds.",
+      manage_link: "Manage connections",
     },
     resources: {
       description:
