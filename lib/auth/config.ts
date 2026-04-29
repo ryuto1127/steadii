@@ -61,7 +61,7 @@ export const authConfig = {
           // returns a one-shot access_token and the cron-driven calendar
           // refresh would silently 401 after an hour.
           scope:
-            "openid email profile offline_access User.Read Calendars.Read Tasks.Read",
+            "openid email profile offline_access User.Read Calendars.ReadWrite Tasks.ReadWrite",
           prompt: "consent",
         },
       },
