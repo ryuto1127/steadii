@@ -44,17 +44,14 @@ export function LocaleToggle({
               className={cn(
                 "transition-hover",
                 isActive
-                  ? "text-[hsl(var(--foreground))]"
-                  : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]",
+                  ? "text-[#1A1814]"
+                  : "text-[#1A1814]/50 hover:text-[#7C3AED]",
               )}
             >
               {labels[value]}
             </button>
             {idx === 0 ? (
-              <span
-                aria-hidden
-                className="mx-1.5 text-[hsl(var(--muted-foreground))]"
-              >
+              <span aria-hidden className="mx-1.5 text-[#1A1814]/40">
                 /
               </span>
             ) : null}
