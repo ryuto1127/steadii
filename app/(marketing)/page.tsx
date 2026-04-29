@@ -78,7 +78,7 @@ export default async function LandingPage() {
           <p className="font-mono text-[11px] uppercase tracking-widest text-[#7C3AED]">
             {t("landing.alpha")}
           </p>
-          <h1 className="mt-6 text-[48px] font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] md:text-[72px] lg:text-[80px]">
+          <h1 className="mt-6 whitespace-pre-line text-[48px] font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[72px] lg:text-[80px]">
             {t("landing.headline")}
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-[17px] leading-[1.55] text-[#1A1814]/70 md:mx-0 md:text-[18px]">
@@ -124,7 +124,7 @@ export default async function LandingPage() {
         <section className="py-20 md:py-28">
           <div className="landing-strip mb-16 w-full" />
           <div className="mb-12 max-w-2xl">
-            <h2 className="text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] md:text-[44px]">
+            <h2 className="whitespace-pre-line text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[44px]">
               {t("landing.what_you_do.title")}
             </h2>
             <p className="mt-4 text-[17px] leading-[1.55] text-[#1A1814]/65 md:text-[18px]">
@@ -141,7 +141,7 @@ export default async function LandingPage() {
         <section className="py-20 md:py-28">
           <div className="landing-strip mb-16 w-full" />
           <div className="mb-12 max-w-2xl">
-            <h2 className="text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] md:text-[44px]">
+            <h2 className="whitespace-pre-line text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[44px]">
               {t("landing.steadii_in_motion.title")}
             </h2>
             <p className="mt-4 text-[17px] leading-[1.55] text-[#1A1814]/65 md:text-[18px]">
@@ -157,7 +157,7 @@ export default async function LandingPage() {
         {/* Section 4 — How it works */}
         <section className="py-20 md:py-28">
           <div className="landing-strip mb-16 w-full" />
-          <h2 className="mb-12 text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] md:text-[44px]">
+          <h2 className="mb-12 whitespace-pre-line text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[44px]">
             {t("landing.how_it_works.title")}
           </h2>
           <ol className="grid gap-5 md:grid-cols-3">
@@ -193,7 +193,7 @@ export default async function LandingPage() {
         {/* Section 5 — Glass box */}
         <section className="py-20 md:py-28">
           <div className="landing-strip mb-16 w-full" />
-          <h2 className="text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] md:text-[44px]">
+          <h2 className="whitespace-pre-line text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[44px]">
             {t("landing.glass_box.title")}
           </h2>
           <div className="mt-8 grid max-w-3xl gap-5 text-[17px] leading-[1.6] text-[#1A1814]/75 md:text-[18px]">

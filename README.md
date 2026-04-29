@@ -1,7 +1,7 @@
 # Steadii
 
-> **Steady through the semester.**
-> Your classes, assignments, and mistakes — in one conversation.
+> **AI secretary for your studies.**
+> Reads, writes, and remembers — for you.
 
 [![α invite-only](https://img.shields.io/badge/status-α%20invite--only-F59E0B?style=flat-square)](https://mysteadii.xyz)
 [![License: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-blue?style=flat-square)](./LICENSE)
@@ -99,8 +99,8 @@ If you find a security issue, please report it privately to [hello@mysteadii.xyz
 
 # Steadii
 
-> **学期を、淡々と乗り切る。**
-> 授業も、課題も、間違いノートも、ひとつの会話の中で。
+> **学業に、あなただけの AI 秘書を。**
+> あなたの代わりに読み、書き、思い出す。
 
 [**mysteadii.xyz →**](https://mysteadii.xyz)
 
