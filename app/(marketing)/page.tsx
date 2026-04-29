@@ -138,7 +138,10 @@ export default async function LandingPage() {
               {t("landing.what_you_do.subhead")}
             </p>
           </div>
-          <ChatActionCards cards={cards} />
+          <ChatActionCards
+            cards={cards}
+            youTypeLabel={t("landing.what_you_do.you_type_label")}
+          />
         </section>
 
         {/* Section 3 — Steadii in motion */}
