@@ -34,8 +34,8 @@ export function EmailBody({
     : truncateSegments(segments, COLLAPSE_THRESHOLD);
 
   return (
-    <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-small text-[hsl(var(--foreground))]">
-      <pre className="whitespace-pre-wrap font-sans leading-relaxed">
+    <div className="overflow-hidden rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-small text-[hsl(var(--foreground))]">
+      <pre className="whitespace-pre-wrap break-words font-sans leading-relaxed">
         {visibleSegments.map((seg, i) =>
           seg.kind === "link" ? (
             <a

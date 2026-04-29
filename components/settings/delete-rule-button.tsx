@@ -24,7 +24,7 @@ export function DeleteRuleButton({ ruleId }: { ruleId: string }) {
           }
         })
       }
-      className="rounded-md p-1 text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--destructive))] disabled:opacity-50"
+      className="flex h-9 w-9 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--destructive))] disabled:opacity-50"
       aria-label="Remove rule"
     >
       <Trash2 size={14} strokeWidth={1.75} />

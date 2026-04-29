@@ -190,15 +190,15 @@ export default async function InboxItemPage({
       <div>
         <Link
           href="/app/inbox"
-          className="inline-flex items-center gap-1 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+          className="inline-flex h-8 items-center gap-1 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
         >
           <ArrowLeft size={14} strokeWidth={1.75} />
           Inbox
         </Link>
       </div>
 
-      <header className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
-        <div className="flex items-center gap-2">
+      <header className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3 sm:p-4">
+        <div className="flex flex-wrap items-center gap-2">
           <span
             className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${riskTone(
               draft.riskTier
@@ -215,16 +215,16 @@ export default async function InboxItemPage({
             {formatReceivedAt(inbox.receivedAt)}
           </span>
         </div>
-        <h1 className="mt-2 text-h2 text-[hsl(var(--foreground))]">
+        <h1 className="mt-2 text-h2 text-[hsl(var(--foreground))] break-words">
           {inbox.subject ?? "(no subject)"}
         </h1>
-        <div className="mt-1 flex items-center gap-2 text-small text-[hsl(var(--muted-foreground))]">
-          <Mail size={14} strokeWidth={1.75} />
-          <span>
+        <div className="mt-1 flex items-start gap-2 text-small text-[hsl(var(--muted-foreground))]">
+          <Mail size={14} strokeWidth={1.75} className="mt-0.5 shrink-0" />
+          <span className="min-w-0 break-words">
             <span className="text-[hsl(var(--foreground))]">
               {inbox.senderName ?? inbox.senderEmail}
             </span>{" "}
-            <span>&lt;{inbox.senderEmail}&gt;</span>
+            <span className="break-all">&lt;{inbox.senderEmail}&gt;</span>
           </span>
         </div>
         <div className="mt-3">

@@ -48,7 +48,7 @@ export function KebabMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="rounded-md p-1 text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
+        className="flex h-9 w-9 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
       >
         <MoreVertical size={16} strokeWidth={1.75} />
       </button>
@@ -67,7 +67,7 @@ export function KebabMenu({
                 item.onSelect();
               }}
               className={cn(
-                "block w-full rounded-sm px-2.5 py-1.5 text-left text-small transition-hover",
+                "block w-full rounded-sm px-2.5 py-2 text-left text-small transition-hover",
                 item.destructive
                   ? "text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/0.1)]"
                   : "text-[hsl(var(--foreground))] hover:bg-[hsl(var(--surface-raised))]"
