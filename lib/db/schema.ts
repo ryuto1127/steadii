@@ -83,7 +83,7 @@ export const users = pgTable("users", {
   // lives in Settings → Notifications), high-risk immediate push toggle
   // (no-op until web push ships post-α), and timestamps that gate
   // auto-ingest / digest cron from firing more often than necessary.
-  undoWindowSeconds: smallint("undo_window_seconds").notNull().default(20),
+  undoWindowSeconds: smallint("undo_window_seconds").notNull().default(10),
   highRiskNotifyImmediate: boolean("high_risk_notify_immediate")
     .notNull()
     .default(true),
@@ -756,7 +756,7 @@ export type AgentDraftStatus =
   // W2 addition — status set when credit gate denies deep/draft mid-pipeline.
   // `paused_at_step` records which step hit the gate so W3 UI can explain.
   | "paused"
-  // W3 addition — in-flight between Send click and the 20s undo worker
+  // W3 addition — in-flight between Send click and the 10s undo worker
   // dispatch. A send_queue row with status='pending' exists for this draft.
   // Cancellation flips back to 'approved'; successful worker dispatch flips
   // to 'sent'. Exists only in TS; DB column is plain text.
@@ -1015,7 +1015,7 @@ export type EmailEmbedding = typeof emailEmbeddings.$inferSelect;
 export type NewEmailEmbedding = typeof emailEmbeddings.$inferInsert;
 
 // ---------------------------------------------------------------------------
-// Phase 6 W3 — Send queue (20s undo window dispatcher)
+// Phase 6 W3 — Send queue (10s undo window dispatcher)
 // ---------------------------------------------------------------------------
 
 export type SendQueueStatus =

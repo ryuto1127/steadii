@@ -322,7 +322,7 @@ export default async function SettingsPage() {
           initial={{
             digestEnabled: userPrefs?.digestEnabled ?? true,
             digestHourLocal: userPrefs?.digestHourLocal ?? 7,
-            undoWindowSeconds: userPrefs?.undoWindowSeconds ?? 20,
+            undoWindowSeconds: userPrefs?.undoWindowSeconds ?? 10,
             highRiskNotifyImmediate:
               userPrefs?.highRiskNotifyImmediate ?? true,
           }}

@@ -190,6 +190,13 @@
       "when": 1777418533334,
       "tag": "0026_race_condition_locks",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1777424174222,
+      "tag": "0027_jazzy_silver_centurion",
+      "breakpoints": true
     }
   ]
 }

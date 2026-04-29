@@ -17,6 +17,7 @@ type MessagesShape = {
     what_you_do: {
       title: string;
       subhead: string;
+      you_type_label: string;
       cards: {
         calendar: { input: string; action: string };
         syllabus: { input: string; action: string };
@@ -480,7 +481,7 @@ export const en: MessagesShape = {
       },
       confirm: {
         title: "You confirm. Always.",
-        body: "Send needs one-click approval and rides a 20-second undo. Nothing leaves your account without you.",
+        body: "Send needs one-click approval and rides a 10-second undo. Nothing leaves your account without you.",
       },
       yours: {
         title: "Your data stays yours",
@@ -491,6 +492,7 @@ export const en: MessagesShape = {
       title: "Just chat. Steadii does the rest.",
       subhead:
         "No buttons to find, no menus to navigate. The chat input is the entire app.",
+      you_type_label: "You type",
       cards: {
         calendar: {
           input: "Meeting with Prof. Tanaka, Friday 2pm",
@@ -549,10 +551,10 @@ export const en: MessagesShape = {
       paragraph_yours:
         "Your data stays yours. Verbatim mistakes, syllabi, and assignments. Yours to read, search, and export — never locked in.",
       paragraph_confirm:
-        "Nothing sends without you. Every outgoing message rides a 20-second undo and your explicit approval. The staged-autonomy mode that auto-sends low-stakes drafts is opt-in and per-user.",
+        "Nothing sends without you. Every outgoing message rides a 10-second undo and your explicit approval. The staged-autonomy mode that auto-sends low-stakes drafts is opt-in and per-user.",
     },
     founding: {
-      headline: "α is invite-only — 10 students this round.",
+      headline: "α is invite-only.",
       body:
         "Founding members get permanent price-lock at signup rate, plus early access to every feature ahead of NA public launch (Sept 2026).",
       cta: "Request α access",
@@ -861,11 +863,11 @@ export const en: MessagesShape = {
     staged_autonomy: {
       section_title: "Staged autonomy",
       description_prefix:
-        "When on, Steadii sends low-stakes drafts (currently medium-tier replies — office hours, deadlines, scheduling acknowledgments) on its own. The 20-second undo still applies, and the inbox item is labeled ",
+        "When on, Steadii sends low-stakes drafts (currently medium-tier replies — office hours, deadlines, scheduling acknowledgments) on its own. The 10-second undo still applies, and the inbox item is labeled ",
       description_em: "Sent automatically",
       description_suffix:
         " with the full glass-box reasoning visible. Off by default — you stay in the loop on every send.",
-      toggle_label: "Auto-send eligible drafts (with 20s undo)",
+      toggle_label: "Auto-send eligible drafts (with 10s undo)",
       on: "On — turn off",
       off: "Off — turn on",
     },
