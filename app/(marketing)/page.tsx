@@ -240,7 +240,7 @@ export default async function LandingPage() {
             {t("landing.footer.terms")}
           </Link>
           <a
-            href="mailto:hello@mysteadii.xyz"
+            href="mailto:hello@mysteadii.com"
             className="transition-hover hover:text-[#7C3AED]"
           >
             {t("landing.footer.contact")}

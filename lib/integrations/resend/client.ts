@@ -23,10 +23,10 @@ export function resend(): Resend {
 
 export function getFromEmail(): string {
   const e = env();
-  return e.RESEND_FROM_EMAIL || "agent@mysteadii.xyz";
+  return e.RESEND_FROM_EMAIL || "agent@mysteadii.com";
 }
 
-// Formatted "Steadii Agent <agent@mysteadii.xyz>" — memory locks the
+// Formatted "Steadii Agent <agent@mysteadii.com>" — memory locks the
 // from-name so the user always sees it's the agent, never a human.
 export function getFromAddress(): string {
   return `Steadii Agent <${getFromEmail()}>`;
