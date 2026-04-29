@@ -11,6 +11,20 @@ import { safeFetch } from "@/lib/utils/ssrf-guard";
 const SYSTEM_PROMPT = `You extract structured syllabus data from a raw document.
 Return strictly the fields in the provided JSON schema. Use null for any field
 you can't find. Schedule entries should be chronological and terse.
+
+Format every \`schedule[].date\` as ISO 8601 so downstream tooling can parse it
+without ambiguity:
+- If a time is given, use \`YYYY-MM-DDTHH:MM\` (e.g. \`2026-01-13T10:00\`).
+- If only a date is given, use \`YYYY-MM-DD\` (e.g. \`2026-01-13\`); calendar
+  import will default that to 9 AM local time.
+- If only a week number is given (e.g. "Week 1"), infer the calendar date
+  from the term's start date when it is stated in the syllabus.
+- If the date is genuinely TBD or unknown, set \`date\` to null (the row
+  will be skipped during calendar import).
+- The year MUST appear in the ISO string. Infer it from the term ("Spring
+  2026", "Sept 2026 - Dec 2026", etc.) when the schedule lists only month
+  and day.
+
 ALWAYS populate \`raw\` with a close-to-verbatim transcription of the source,
 preserving section headings, tables, and the weekly schedule — the student
 will re-read it later, so don't summarize.`;
