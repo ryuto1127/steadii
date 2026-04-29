@@ -8,8 +8,8 @@ export const ja: Messages = {
   landing: {
     headline: "学期を、淡々と乗り切る。",
     subhead:
-      "Steadiiが大学のメールをトリアージし、アプリを開く前に返信案を用意します。すべての理由が見え、いつでも編集でき、送信は必ずあなたが承認します。",
-    cta: "Googleで続ける",
+      "Steadii が大学のメールをトリアージし、アプリを開く前に返信案を用意します。すべての理由が見え、いつでも編集でき、送信は必ずあなたが承認します。",
+    cta: "Google で続ける",
     cta_request_access: "α アクセスをリクエスト",
     cta_already_approved: "既に承認済の方: サインイン",
     alpha: "α版 — 招待制",
@@ -25,7 +25,7 @@ export const ja: Messages = {
       },
       confirm: {
         title: "送信は必ずあなたが承認",
-        body: "送信はワンクリック承認＋20秒のundoを通ります。あなたを通さずに何も出ません。",
+        body: "送信はワンクリック承認＋10 秒の undo を通ります。あなたを通さずに何も出ません。",
       },
       yours: {
         title: "データはあなたのもの",
@@ -36,6 +36,7 @@ export const ja: Messages = {
       title: "話すだけ。あとは Steadii が動く。",
       subhead:
         "ボタン探しもメニュー操作も不要。チャット入力だけが Steadii の操作画面。",
+      you_type_label: "あなたが入力",
       cards: {
         calendar: {
           input: "金曜 14 時に田中先生と meeting",
@@ -97,10 +98,10 @@ export const ja: Messages = {
       paragraph_yours:
         "データはあなたのもの。間違いノート・シラバス・課題はそのまま保管。読む・検索する・書き出す——いつでも自由、囲い込みません。",
       paragraph_confirm:
-        "送信は必ずあなたを通ります。送信は 20 秒の undo と明示的な承認を経て送られます。低リスクのドラフトを自動送信するステージド自律モードはオプトイン、ユーザー単位で切替可能です。",
+        "送信は必ずあなたを通ります。送信は 10 秒の undo と明示的な承認を経て送られます。低リスクのドラフトを自動送信するステージド自律モードはオプトイン、ユーザー単位で切替可能です。",
     },
     founding: {
-      headline: "α は招待制 — 今回は 10 名のみ。",
+      headline: "α は招待制。",
       body:
         "Founding メンバーはサインアップ時の料金が永続固定、さらに北米公開（2026 年 9 月）前にすべての新機能を先行利用できます。",
       cta: "α アクセスをリクエスト",
@@ -407,11 +408,11 @@ export const ja: Messages = {
     staged_autonomy: {
       section_title: "段階的な自律送信",
       description_prefix:
-        "オンにすると、低リスクの下書き（現状は中位の返信 — オフィスアワー、締切、日程確認）を Steadii が自動送信します。20 秒の undo は引き続き有効で、受信箱には ",
+        "オンにすると、低リスクの下書き（現状は中位の返信 — オフィスアワー、締切、日程確認）を Steadii が自動送信します。10 秒の undo は引き続き有効で、受信箱には ",
       description_em: "自動送信",
       description_suffix:
         " ラベルとガラス箱の理由が表示されます。デフォルトはオフ — 送信ごとに確認したい場合はそのまま。",
-      toggle_label: "対象の下書きを自動送信（20 秒 undo あり）",
+      toggle_label: "対象の下書きを自動送信（10 秒 undo あり）",
       on: "オン — オフにする",
       off: "オフ — オンにする",
     },

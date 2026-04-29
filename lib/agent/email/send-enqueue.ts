@@ -58,7 +58,7 @@ export async function enqueueSendForDraft(args: {
     .from(users)
     .where(eq(users.id, args.userId))
     .limit(1);
-  const undoWindowSeconds = userRow?.undoWindowSeconds ?? 20;
+  const undoWindowSeconds = userRow?.undoWindowSeconds ?? 10;
 
   const { gmailDraftId } = await createGmailDraft(args.userId, {
     to: draft.draftTo,
