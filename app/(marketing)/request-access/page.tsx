@@ -22,34 +22,34 @@ export default async function RequestAccessPage({
   }
 
   return (
-    <div className="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
+    <div className="min-h-screen">
       <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
-        <Link href="/" className="text-[15px] font-semibold tracking-tight">
+        <Link href="/" className="text-[17px] font-semibold tracking-tight text-[#1A1814]">
           Steadii
         </Link>
         <Link
           href="/login"
-          className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+          className="text-small text-[#1A1814]/70 transition-hover hover:text-[#7C3AED]"
         >
           {t("landing.cta_already_approved")}
         </Link>
       </nav>
 
       <main className="mx-auto max-w-lg px-6 pt-8 pb-16">
-        <p className="font-mono text-[11px] uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+        <p className="font-mono text-[11px] uppercase tracking-widest text-[#7C3AED]">
           {t("landing.alpha")}
         </p>
-        <h1 className="mt-4 font-display text-[32px] leading-tight tracking-tight md:text-[40px]">
+        <h1 className="mt-4 text-[32px] font-semibold leading-[1.1] tracking-[-0.02em] text-[#1A1814] md:text-[44px]">
           {t("request_access.title")}
         </h1>
-        <p className="mt-3 text-body text-[hsl(var(--muted-foreground))]">
+        <p className="mt-4 text-[17px] leading-[1.55] text-[#1A1814]/70 md:text-[18px]">
           {t("request_access.subtitle")}
         </p>
 
         {errorMessage ? (
           <div
             role="alert"
-            className="mt-6 rounded-md border border-[hsl(var(--destructive))] bg-[hsl(var(--destructive)/0.08)] px-3 py-2 text-small text-[hsl(var(--destructive))]"
+            className="mt-6 rounded-[8px] border border-red-300 bg-red-50 px-3 py-2 text-small text-red-700"
           >
             {errorMessage}
           </div>
@@ -83,16 +83,16 @@ export default async function RequestAccessPage({
 
           <button
             type="submit"
-            className="mt-2 inline-flex h-10 items-center justify-center rounded-md bg-[hsl(var(--primary))] px-4 text-body font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
+            className="mt-2 inline-flex h-11 items-center justify-center rounded-full bg-[#0A0A0A] px-6 text-[15px] font-medium text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] transition-hover hover:scale-[1.02]"
           >
             {t("request_access.submit")}
           </button>
         </form>
 
-        <p className="mt-8 text-small text-[hsl(var(--muted-foreground))]">
+        <p className="mt-8 text-small text-[#1A1814]/60">
           <Link
             href="/"
-            className="transition-hover hover:text-[hsl(var(--foreground))]"
+            className="transition-hover hover:text-[#7C3AED]"
           >
             {t("request_access.back_to_landing")}
           </Link>
@@ -117,14 +117,14 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1.5 text-small">
-      <span className="text-[hsl(var(--muted-foreground))]">{label}</span>
+      <span className="text-[#1A1814]/65">{label}</span>
       <input
         name={name}
         type={type}
         required={required}
         autoComplete={autoComplete}
         maxLength={320}
-        className="h-10 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-body text-[hsl(var(--foreground))] outline-none transition focus:border-[hsl(var(--primary))]"
+        className="h-11 rounded-[8px] border border-black/[0.10] bg-white px-3 text-[15px] text-[#1A1814] outline-none transition focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/20"
       />
     </label>
   );
@@ -141,13 +141,13 @@ function TextareaField({
 }) {
   return (
     <label className="flex flex-col gap-1.5 text-small">
-      <span className="text-[hsl(var(--muted-foreground))]">{label}</span>
+      <span className="text-[#1A1814]/65">{label}</span>
       <textarea
         name={name}
         rows={4}
         maxLength={1000}
         placeholder={placeholder}
-        className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-body text-[hsl(var(--foreground))] outline-none transition focus:border-[hsl(var(--primary))]"
+        className="rounded-[8px] border border-black/[0.10] bg-white px-3 py-2 text-[15px] text-[#1A1814] outline-none transition focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/20"
       />
     </label>
   );

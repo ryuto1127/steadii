@@ -15,8 +15,11 @@ type Copy = {
   action_dismiss: string;
 };
 
-const STEPS = [1800, 2400, 5500] as const; // dwell per phase — phase 3 (the multi-action proposal) needs longer to read
-const PAUSE_MS = 2800;
+// Each phase reveals at the same 1.8s cadence so the rhythm feels even.
+// The mock plays exactly once on viewport entry and stays on phase 3 —
+// looping the cycle was distracting on scroll-back, and the moat reveal
+// is more powerful as a one-shot reveal that holds.
+const STEPS = [1800, 1800, 1800] as const;
 
 export function ProactiveMock({ copy }: { copy: Copy }) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -43,22 +46,18 @@ export function ProactiveMock({ copy }: { copy: Copy }) {
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
           obs.disconnect();
-          const cycle = () => {
-            if (cancelled) return;
-            setPhase(0);
-            let cumulative = 0;
-            timers.push(
-              window.setTimeout(() => setPhase(1), (cumulative += STEPS[0])),
-            );
-            timers.push(
-              window.setTimeout(() => setPhase(2), (cumulative += STEPS[1])),
-            );
-            timers.push(
-              window.setTimeout(() => setPhase(3), (cumulative += STEPS[2])),
-            );
-            timers.push(window.setTimeout(cycle, cumulative + PAUSE_MS));
-          };
-          cycle();
+          if (cancelled) return;
+          setPhase(0);
+          let cumulative = 0;
+          timers.push(
+            window.setTimeout(() => setPhase(1), (cumulative += STEPS[0])),
+          );
+          timers.push(
+            window.setTimeout(() => setPhase(2), (cumulative += STEPS[1])),
+          );
+          timers.push(
+            window.setTimeout(() => setPhase(3), (cumulative += STEPS[2])),
+          );
           return;
         }
       },
@@ -75,9 +74,19 @@ export function ProactiveMock({ copy }: { copy: Copy }) {
   return (
     <div
       ref={ref}
-      className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4 shadow-sm md:p-6"
+      className="relative overflow-hidden rounded-[14px] border border-black/[0.06] bg-white p-5 shadow-[0_8px_30px_-12px_rgba(20,20,40,0.10)] md:p-7"
     >
-      <div className="grid gap-3 md:grid-cols-[1fr_1.4fr]">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-60"
+        style={{
+          background: `
+            radial-gradient(circle at 0% 0%, rgba(6, 182, 212, 0.06) 0%, transparent 40%),
+            radial-gradient(circle at 100% 100%, rgba(124, 58, 237, 0.06) 0%, transparent 40%)
+          `,
+        }}
+      />
+      <div className="relative grid gap-3 md:grid-cols-[1fr_1.4fr]">
         <Phase1 copy={copy} active={phase >= 1} />
         <div className="flex flex-col gap-3">
           <Phase2 copy={copy} active={phase >= 2} />
@@ -91,27 +100,25 @@ export function ProactiveMock({ copy }: { copy: Copy }) {
 function Phase1({ copy, active }: { copy: Copy; active: boolean }) {
   return (
     <div
-      className={`rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] p-3 transition-all duration-500 ${
+      className={`rounded-[10px] border border-black/[0.06] bg-[#FAFAF9] p-3.5 transition-all duration-500 ${
         active ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
       }`}
     >
-      <p className="font-mono text-[10px] uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+      <p className="font-mono text-[10px] uppercase tracking-widest text-[#1A1814]/50">
         {copy.step_calendar_meta}
       </p>
       <div className="mt-2 flex items-center gap-2">
         <Calendar
           size={14}
-          strokeWidth={1.5}
-          className="text-[hsl(var(--muted-foreground))]"
+          strokeWidth={1.6}
+          className="text-[#1A1814]/55"
         />
-        <p className="text-small text-[hsl(var(--foreground))]">
-          {copy.step_calendar}
-        </p>
+        <p className="text-[13px] text-[#1A1814]">{copy.step_calendar}</p>
       </div>
       <div className="mt-3 flex gap-1">
-        <span className="h-2 flex-1 rounded-sm bg-[hsl(var(--primary))] opacity-60" />
-        <span className="h-2 flex-1 rounded-sm bg-[hsl(var(--primary))] opacity-60" />
-        <span className="h-2 flex-1 rounded-sm bg-[hsl(var(--primary))] opacity-60" />
+        <span className="h-2 flex-1 rounded-sm bg-[#7C3AED]/55" />
+        <span className="h-2 flex-1 rounded-sm bg-[#7C3AED]/55" />
+        <span className="h-2 flex-1 rounded-sm bg-[#7C3AED]/55" />
       </div>
     </div>
   );
@@ -120,20 +127,20 @@ function Phase1({ copy, active }: { copy: Copy; active: boolean }) {
 function Phase2({ copy, active }: { copy: Copy; active: boolean }) {
   return (
     <div
-      className={`flex items-start gap-2.5 rounded-md border border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 p-3 transition-all duration-500 ${
+      className={`flex items-start gap-2.5 rounded-[10px] border border-[#7C3AED]/30 bg-[#7C3AED]/[0.06] p-3.5 transition-all duration-500 ${
         active ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0"
       }`}
     >
       <AlertCircle
         size={14}
-        strokeWidth={1.5}
-        className="mt-0.5 shrink-0 text-[hsl(var(--primary))]"
+        strokeWidth={1.6}
+        className="mt-0.5 shrink-0 text-[#7C3AED]"
       />
       <div className="min-w-0 flex-1">
-        <p className="text-small font-medium text-[hsl(var(--foreground))]">
+        <p className="text-[13px] font-medium text-[#1A1814]">
           {copy.step_notification}
         </p>
-        <p className="mt-0.5 text-small text-[hsl(var(--muted-foreground))]">
+        <p className="mt-0.5 text-[13px] text-[#1A1814]/65">
           {copy.step_notification_meta}
         </p>
       </div>
@@ -144,14 +151,14 @@ function Phase2({ copy, active }: { copy: Copy; active: boolean }) {
 function Phase3({ copy, active }: { copy: Copy; active: boolean }) {
   return (
     <div
-      className={`rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] p-3 transition-all duration-500 ${
+      className={`rounded-[10px] border border-black/[0.06] bg-[#FAFAF9] p-3.5 transition-all duration-500 ${
         active ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
       }`}
     >
-      <p className="font-mono text-[10px] uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+      <p className="font-mono text-[10px] uppercase tracking-widest text-[#1A1814]/50">
         {copy.step_proposal}
       </p>
-      <p className="mt-1 text-small text-[hsl(var(--muted-foreground))]">
+      <p className="mt-1 text-[13px] text-[#1A1814]/70">
         {copy.step_proposal_meta}
       </p>
       <div className="mt-3 flex flex-wrap gap-1.5">
@@ -174,13 +181,13 @@ function ActionPill({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[12px] ${
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] ${
         primary
-          ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
-          : "border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--muted-foreground))]"
+          ? "bg-[#0A0A0A] text-white"
+          : "border border-black/[0.08] bg-white text-[#1A1814]/70"
       }`}
     >
-      <Icon size={11} strokeWidth={1.5} />
+      <Icon size={11} strokeWidth={1.6} />
       {label}
     </span>
   );
