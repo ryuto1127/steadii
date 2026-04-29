@@ -454,7 +454,7 @@ async function runPipeline(
 
   // W4.3 staged-autonomy auto-send. When the user has opted in AND the
   // draft is eligible, enqueue it directly into send_queue with the
-  // standard 20s undo. Eligibility today: medium tier + draft_reply +
+  // standard 10s undo. Eligibility today: medium tier + draft_reply +
   // a complete draft (to/subject/body present). Failures are swallowed
   // — auto-send is a nicety; the draft is already persisted in pending
   // state so the worst case is the user sees a normal review queue
