@@ -6,11 +6,104 @@ import {
   blobAssets,
   classes as classesTable,
   messageAttachments,
+  type ClassColorEnum,
 } from "@/lib/db/schema";
 import { extractSyllabus } from "@/lib/syllabus/extract";
 import { extractPdfText, formatPdfWithPageMarkers } from "@/lib/syllabus/pdf";
 import { saveSyllabusToPostgres } from "@/lib/syllabus/save";
+import { createClass } from "@/lib/classes/save";
 import type { ToolExecutor } from "./types";
+
+const CLASS_COLOR_PALETTE: ClassColorEnum[] = [
+  "blue",
+  "green",
+  "orange",
+  "purple",
+  "red",
+  "gray",
+  "brown",
+  "pink",
+];
+
+async function resolveOrCreateClass(args: {
+  userId: string;
+  courseName: string | null | undefined;
+  courseCode: string | null | undefined;
+}): Promise<{
+  classId: string | null;
+  className: string | null;
+  classCode: string | null;
+  createdClass: boolean;
+}> {
+  const courseName = args.courseName?.trim() ?? "";
+  const courseCode = args.courseCode?.trim() ?? "";
+  if (!courseName && !courseCode) {
+    return {
+      classId: null,
+      className: null,
+      classCode: null,
+      createdClass: false,
+    };
+  }
+
+  const existing = await db
+    .select({
+      id: classesTable.id,
+      name: classesTable.name,
+      code: classesTable.code,
+    })
+    .from(classesTable)
+    .where(
+      and(eq(classesTable.userId, args.userId), isNull(classesTable.deletedAt))
+    );
+
+  const codeNorm = courseCode.toLowerCase();
+  const nameNorm = courseName.toLowerCase();
+  if (codeNorm) {
+    const match = existing.find(
+      (c) => (c.code ?? "").trim().toLowerCase() === codeNorm
+    );
+    if (match) {
+      return {
+        classId: match.id,
+        className: match.name,
+        classCode: match.code,
+        createdClass: false,
+      };
+    }
+  }
+  if (nameNorm) {
+    const match = existing.find(
+      (c) => c.name.trim().toLowerCase() === nameNorm
+    );
+    if (match) {
+      return {
+        classId: match.id,
+        className: match.name,
+        classCode: match.code,
+        createdClass: false,
+      };
+    }
+  }
+
+  const color =
+    CLASS_COLOR_PALETTE[existing.length % CLASS_COLOR_PALETTE.length];
+  const name = courseName || courseCode;
+  const created = await createClass({
+    userId: args.userId,
+    input: {
+      name,
+      code: courseCode || null,
+      color,
+    },
+  });
+  return {
+    classId: created.id,
+    className: name,
+    classCode: courseCode || null,
+    createdClass: true,
+  };
+}
 
 const args = z.object({
   attachmentUrl: z
@@ -32,6 +125,9 @@ export type SyllabusExtractResult = {
   syllabusId: string;
   title: string;
   classId: string | null;
+  className: string | null;
+  classCode: string | null;
+  createdClass: boolean;
   scheduleCount: number;
 };
 
@@ -42,7 +138,7 @@ export const syllabusExtract: ToolExecutor<
   schema: {
     name: "syllabus_extract",
     description:
-      "Extract a syllabus PDF or image the user just attached and persist it to Steadii's syllabus store. Use ONLY when the user's attachment appears to be a course syllabus (course code in filename, mentions exam dates, has a weekly schedule). The tool: (1) downloads the attached file, (2) runs structured extraction (course info, weekly schedule, grading), (3) saves it — which triggers an automatic Google Calendar import of the schedule (skipping items already on the calendar, surfacing ambiguous matches as proposals). DO NOT call this for non-syllabus PDFs (past exams, lecture slides, scanned notes, study material).",
+      "Extract a syllabus PDF or image the user just attached and persist it to Steadii's syllabus store. Use ONLY when the user's attachment appears to be a course syllabus (course code in filename, mentions exam dates, has a weekly schedule). The tool: (1) downloads the attached file, (2) runs structured extraction (course info, weekly schedule, grading), (3) resolves a class — when `classId` isn't supplied, matches the extracted course code/name to an existing class, otherwise creates a new class with a free color (the result indicates which via `createdClass`), (4) saves it — which triggers an automatic Google Calendar import of the schedule (skipping items already on the calendar, surfacing ambiguous matches as proposals). The response surfaces `className`/`classCode`/`createdClass` so the assistant can mention which class was attached or freshly created. DO NOT call this for non-syllabus PDFs (past exams, lecture slides, scanned notes, study material).",
     mutability: "write",
     parameters: {
       type: "object",
@@ -87,9 +183,15 @@ export const syllabusExtract: ToolExecutor<
       throw new Error(`Unsupported attachment kind: ${att.kind}`);
     }
 
+    let explicitClass: { id: string; name: string; code: string | null } | null =
+      null;
     if (parsed.classId) {
       const [owned] = await db
-        .select({ id: classesTable.id })
+        .select({
+          id: classesTable.id,
+          name: classesTable.name,
+          code: classesTable.code,
+        })
         .from(classesTable)
         .where(
           and(
@@ -102,6 +204,7 @@ export const syllabusExtract: ToolExecutor<
       if (!owned) {
         throw new Error("classId does not belong to this user.");
       }
+      explicitClass = owned;
     }
 
     const fetched = await fetch(att.url);
@@ -138,9 +241,22 @@ export const syllabusExtract: ToolExecutor<
       fullText = extracted.raw ?? "";
     }
 
+    const resolved = explicitClass
+      ? {
+          classId: explicitClass.id,
+          className: explicitClass.name,
+          classCode: explicitClass.code,
+          createdClass: false,
+        }
+      : await resolveOrCreateClass({
+          userId: ctx.userId,
+          courseName: extracted.courseName,
+          courseCode: extracted.courseCode,
+        });
+
     const saved = await saveSyllabusToPostgres({
       userId: ctx.userId,
-      classId: parsed.classId ?? null,
+      classId: resolved.classId,
       syllabus: extracted,
       verbatim: {
         fullText,
@@ -164,7 +280,10 @@ export const syllabusExtract: ToolExecutor<
         extracted.courseCode ??
         att.filename ??
         "Untitled Syllabus",
-      classId: parsed.classId ?? null,
+      classId: resolved.classId,
+      className: resolved.className,
+      classCode: resolved.classCode,
+      createdClass: resolved.createdClass,
       scheduleCount: extracted.schedule?.length ?? 0,
     };
   },
