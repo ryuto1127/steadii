@@ -9,7 +9,7 @@ import type { ToolExecutor } from "./types";
 // ---------------------------------------------------------------------------
 // Gmail draft + send helpers. Two-step flow per memory:
 //   1. users.drafts.create — gives us a Gmail draft ID visible in the
-//      user's own Gmail UI during the 20s undo window.
+//      user's own Gmail UI during the 10s undo window.
 //   2. users.drafts.send — promotes the draft to sent; called by the
 //      send_queue worker after the window elapses.
 // Cancellation = users.drafts.delete. No `gmail.send` direct path — we
@@ -218,7 +218,7 @@ export const gmailSendTool: ToolExecutor<
   schema: {
     name: "gmail_send",
     description:
-      "Create a Gmail draft from the user's authenticated Gmail. Destructive — the caller must honor the confirm + 20-second undo flow before promoting the draft to sent.",
+      "Create a Gmail draft from the user's authenticated Gmail. Destructive — the caller must honor the confirm + 10-second undo flow before promoting the draft to sent.",
     mutability: "destructive",
     parameters: {
       type: "object",

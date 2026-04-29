@@ -7,17 +7,36 @@ const CHAR_MS = 28;
 
 type CardCopy = { input: string; action: string };
 
-export function ChatActionCards({ cards }: { cards: CardCopy[] }) {
+export function ChatActionCards({
+  cards,
+  youTypeLabel,
+}: {
+  cards: CardCopy[];
+  youTypeLabel: string;
+}) {
   return (
     <div className="grid gap-4 md:grid-cols-3">
       {cards.map((card, i) => (
-        <ChatActionCard key={i} card={card} delayMs={i * 200} />
+        <ChatActionCard
+          key={i}
+          card={card}
+          delayMs={i * 200}
+          youTypeLabel={youTypeLabel}
+        />
       ))}
     </div>
   );
 }
 
-function ChatActionCard({ card, delayMs }: { card: CardCopy; delayMs: number }) {
+function ChatActionCard({
+  card,
+  delayMs,
+  youTypeLabel,
+}: {
+  card: CardCopy;
+  delayMs: number;
+  youTypeLabel: string;
+}) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [phase, setPhase] = useState<"idle" | "typing" | "done">("idle");
   const [typed, setTyped] = useState("");
@@ -69,7 +88,7 @@ function ChatActionCard({ card, delayMs }: { card: CardCopy; delayMs: number }) 
       className="flex flex-col gap-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4"
     >
       <p className="font-mono text-[11px] uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
-        You type
+        {youTypeLabel}
       </p>
       <div className="flex items-start gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2.5">
         <MessageSquare
