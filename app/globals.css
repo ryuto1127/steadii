@@ -582,10 +582,15 @@
   0%, 100% { transform: scale(1) rotate(0deg); }
   50%      { transform: scale(1.06) rotate(2deg); }
 }
-.steadii-mesh {
-  animation: steadii-mesh-drift 30s ease-in-out infinite;
-  transform-origin: center;
-  will-change: transform;
+/* Wrap in @layer utilities so the animation property survives Tailwind v4's
+   utility-layer reset (un-layered .steadii-mesh was getting animation: none
+   from Preflight on cascade evaluation, especially on mobile builds). */
+@layer utilities {
+  .steadii-mesh {
+    animation: steadii-mesh-drift 30s ease-in-out infinite;
+    transform-origin: center;
+    will-change: transform;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .steadii-mesh { animation: none; }
