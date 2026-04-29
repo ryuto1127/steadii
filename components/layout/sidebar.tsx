@@ -36,14 +36,21 @@ function initials(name: string | null | undefined, email: string | null | undefi
 // w-60. Labels, Recent, and the profile footer live in group-hover:
 // reveal wrappers so we keep the whole thing as a server component
 // (data + SSR) without any client-state glue.
+//
+// `variant` controls layout mode. "rail" (default) is the desktop
+// hover-to-expand pattern. "expanded" forces full-width with all labels
+// visible — used inside the mobile drawer where there's no hover and
+// the user expects the full nav up front.
 export async function Sidebar({
   creditsUsed,
   creditsLimit,
   plan,
+  variant = "rail",
 }: {
   creditsUsed: number;
   creditsLimit: number;
   plan: "free" | "student" | "pro" | "admin";
+  variant?: "rail" | "expanded";
 }) {
   const creditsRemaining = Math.max(0, creditsLimit - creditsUsed);
   // Percentage consumed; 0 for admins (shown as a full bar with infinity-tone).
@@ -108,19 +115,30 @@ export async function Sidebar({
       ? "text-[hsl(268_70%_56%)] dark:text-[hsl(268_80%_78%)]"
       : "text-[hsl(var(--muted-foreground))]";
 
+  // The mobile drawer is always-expanded: no hover-to-reveal, labels +
+  // recent + credits bar are visible from the moment the drawer opens.
+  // The rail variant keeps the existing hover-reveal pattern unchanged.
+  const expanded = variant === "expanded";
+  const outerClass = expanded ? "relative w-full flex-1" : "relative z-20 w-14 shrink-0";
+  const asideClass = expanded
+    ? "group/sidebar flex h-full w-full flex-col overflow-y-auto px-3 py-3"
+    : "group/sidebar absolute inset-y-0 left-0 flex w-14 flex-col overflow-hidden rounded-xl px-2 py-3 transition-all duration-200 ease-out hover:w-60 hover:bg-[hsl(var(--background))] hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)]";
+  const labelRevealClass = expanded
+    ? ""
+    : "opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100";
+
   return (
-    <div className="relative z-20 w-14 shrink-0">
-      <aside
-        aria-label="Primary"
-        className="group/sidebar absolute inset-y-0 left-0 flex w-14 flex-col overflow-hidden rounded-xl px-2 py-3 transition-all duration-200 ease-out hover:w-60 hover:bg-[hsl(var(--background))] hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)]"
-      >
+    <div className={outerClass}>
+      <aside aria-label="Primary" className={asideClass}>
         <Link
           href="/app"
           aria-label="Steadii home"
           className="flex h-9 items-center gap-2.5 rounded-lg px-1.5 transition-hover"
         >
           <Logo size={26} />
-          <span className="flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-[15px] font-semibold tracking-tight text-[hsl(var(--foreground))] opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
+          <span
+            className={`flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-[15px] font-semibold tracking-tight text-[hsl(var(--foreground))] ${labelRevealClass}`}
+          >
             Steadii
             <ChevronRight
               size={14}
@@ -135,11 +153,12 @@ export async function Sidebar({
           <SidebarNav
             labels={labels}
             badges={{ inbox: pendingInboxCount }}
+            expanded={expanded}
           />
         </div>
 
         {recent.length > 0 ? (
-          <div className="mt-5 flex flex-col gap-0.5 opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
+          <div className={`mt-5 flex flex-col gap-0.5 ${labelRevealClass}`}>
             <span className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
               Recent chats
             </span>
@@ -167,7 +186,7 @@ export async function Sidebar({
           Admin accounts get a full-width tinted bar (no meaningful percent).
         */}
         <div
-          className="mt-auto px-1.5 pb-2 opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"
+          className={`mt-auto px-1.5 pb-2 ${labelRevealClass}`}
           aria-hidden
         >
           <Link
@@ -190,7 +209,7 @@ export async function Sidebar({
 
         <Link
           href="/app/settings"
-          className="flex h-10 items-center gap-2.5 rounded-lg px-1.5 text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
+          className="flex h-11 items-center gap-2.5 rounded-lg px-1.5 text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
         >
           <span
             aria-hidden
@@ -208,7 +227,9 @@ export async function Sidebar({
               initial
             )}
           </span>
-          <span className="flex min-w-0 flex-1 flex-col whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
+          <span
+            className={`flex min-w-0 flex-1 flex-col whitespace-nowrap ${labelRevealClass}`}
+          >
             <span className="flex items-center gap-1.5 truncate text-[13px] font-medium text-[hsl(var(--foreground))]">
               <span className="truncate">{displayName}</span>
             </span>

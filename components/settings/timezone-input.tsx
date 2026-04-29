@@ -103,7 +103,7 @@ export function TimezoneInput({
           placeholder={labels.placeholder}
           spellCheck={false}
           autoComplete="off"
-          className="flex-1 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 font-mono text-small focus:outline-none focus:border-[hsl(var(--ring))]"
+          className="h-9 flex-1 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 font-mono text-small focus:border-[hsl(var(--ring))] focus:outline-none"
         />
         <datalist id="steadii-tz-options">
           {options.map((z) => (
@@ -113,7 +113,7 @@ export function TimezoneInput({
         <button
           type="submit"
           disabled={isPending || value.trim().length === 0}
-          className="inline-flex items-center rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-60"
+          className="inline-flex h-9 shrink-0 items-center rounded-md bg-[hsl(var(--primary))] px-4 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-60"
         >
           {labels.save}
         </button>

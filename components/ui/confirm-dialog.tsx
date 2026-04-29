@@ -60,7 +60,7 @@ export function ConfirmDialog({
             type="button"
             disabled={busy}
             onClick={onCancel}
-            className="rounded-md px-3 py-1.5 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))] disabled:opacity-50"
+            className="inline-flex h-9 items-center rounded-md px-3 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))] disabled:opacity-50"
           >
             {cancelLabel}
           </button>
@@ -70,8 +70,8 @@ export function ConfirmDialog({
             onClick={onConfirm}
             className={
               destructive
-                ? "rounded-md bg-[hsl(var(--destructive))] px-3 py-1.5 text-small font-medium text-white transition-hover hover:opacity-90 disabled:opacity-50"
-                : "rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-50"
+                ? "inline-flex h-9 items-center rounded-md bg-[hsl(var(--destructive))] px-4 text-small font-medium text-white transition-hover hover:opacity-90 disabled:opacity-50"
+                : "inline-flex h-9 items-center rounded-md bg-[hsl(var(--primary))] px-4 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-50"
             }
           >
             {confirmLabel}

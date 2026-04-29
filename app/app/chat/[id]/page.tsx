@@ -111,8 +111,8 @@ export default async function SingleChatPage({
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col">
-      <header className="flex items-center justify-between border-b border-[hsl(var(--border))] pb-3">
-        <form action={renameChatAction} className="flex-1">
+      <header className="flex flex-wrap items-center gap-3 border-b border-[hsl(var(--border))] pb-3">
+        <form action={renameChatAction} className="min-w-0 flex-1">
           <input type="hidden" name="id" value={chat.id} />
           <input
             name="title"
@@ -124,7 +124,7 @@ export default async function SingleChatPage({
         <div className="flex items-center gap-3">
           <Link
             href="/app"
-            className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2.5 py-1 text-small font-medium text-[hsl(var(--foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))]"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium text-[hsl(var(--foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))]"
           >
             <Plus size={13} strokeWidth={1.5} />
             New chat
@@ -133,7 +133,7 @@ export default async function SingleChatPage({
             <input type="hidden" name="id" value={chat.id} />
             <button
               type="submit"
-              className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))]"
+              className="inline-flex h-9 items-center text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))]"
             >
               Delete
             </button>
