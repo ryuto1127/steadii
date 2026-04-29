@@ -15,8 +15,11 @@ type Copy = {
   action_dismiss: string;
 };
 
-const STEPS = [1800, 2400, 5500] as const; // dwell per phase — phase 3 (the multi-action proposal) needs longer to read
-const PAUSE_MS = 2800;
+// Each phase reveals at the same 1.8s cadence so the rhythm feels even.
+// The mock plays exactly once on viewport entry and stays on phase 3 —
+// looping the cycle was distracting on scroll-back, and the moat reveal
+// is more powerful as a one-shot reveal that holds.
+const STEPS = [1800, 1800, 1800] as const;
 
 export function ProactiveMock({ copy }: { copy: Copy }) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -43,22 +46,18 @@ export function ProactiveMock({ copy }: { copy: Copy }) {
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
           obs.disconnect();
-          const cycle = () => {
-            if (cancelled) return;
-            setPhase(0);
-            let cumulative = 0;
-            timers.push(
-              window.setTimeout(() => setPhase(1), (cumulative += STEPS[0])),
-            );
-            timers.push(
-              window.setTimeout(() => setPhase(2), (cumulative += STEPS[1])),
-            );
-            timers.push(
-              window.setTimeout(() => setPhase(3), (cumulative += STEPS[2])),
-            );
-            timers.push(window.setTimeout(cycle, cumulative + PAUSE_MS));
-          };
-          cycle();
+          if (cancelled) return;
+          setPhase(0);
+          let cumulative = 0;
+          timers.push(
+            window.setTimeout(() => setPhase(1), (cumulative += STEPS[0])),
+          );
+          timers.push(
+            window.setTimeout(() => setPhase(2), (cumulative += STEPS[1])),
+          );
+          timers.push(
+            window.setTimeout(() => setPhase(3), (cumulative += STEPS[2])),
+          );
           return;
         }
       },
