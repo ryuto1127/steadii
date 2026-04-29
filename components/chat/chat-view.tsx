@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Paperclip, ArrowUp, FileText as FileTextIcon } from "lucide-react";
+import Link from "next/link";
+import {
+  Paperclip,
+  ArrowUp,
+  FileText as FileTextIcon,
+  Plus,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 import { MistakeNoteDialog } from "./mistake-note-dialog";
 import { MarkdownMessage } from "./markdown-message";
@@ -10,6 +16,10 @@ import { ToolCallCard, type ToolCallStatus } from "./tool-call-card";
 import { ActionPill } from "@/components/ui/action-pill";
 import { cn } from "@/lib/utils/cn";
 import { reportDetectedTimezone } from "@/lib/utils/report-timezone";
+import {
+  deleteChatAction,
+  renameChatAction,
+} from "@/lib/agent/chat-actions";
 
 type Attachment = {
   id: string;
@@ -41,16 +51,19 @@ type Message = {
 
 export function ChatView({
   chatId,
+  initialTitle,
   initialMessages,
   blobConfigured = true,
   autoStream = false,
 }: {
   chatId: string;
+  initialTitle: string | null;
   initialMessages: Message[];
   blobConfigured?: boolean;
   autoStream?: boolean;
 }) {
   const t = useTranslations();
+  const [title, setTitle] = useState<string>(initialTitle ?? "");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [attachment, setAttachment] = useState<Attachment | null>(null);
@@ -164,6 +177,10 @@ export function ChatView({
                     : x
                 )
               );
+            } else if (payload.type === "title") {
+              if (typeof payload.title === "string" && payload.title.trim()) {
+                setTitle(payload.title);
+              }
             } else if (payload.type === "error") {
               setMessages((m) =>
                 m.map((x) =>
@@ -304,6 +321,38 @@ export function ChatView({
   );
 
   return (
+    <>
+      <header className="flex flex-wrap items-center gap-3 border-b border-[hsl(var(--border))] pb-3">
+        <form action={renameChatAction} className="min-w-0 flex-1">
+          <input type="hidden" name="id" value={chatId} />
+          <input
+            name="title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Untitled chat"
+            className="w-full bg-transparent text-h2 text-[hsl(var(--foreground))] focus:outline-none"
+          />
+        </form>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/app"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium text-[hsl(var(--foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))]"
+          >
+            <Plus size={13} strokeWidth={1.5} />
+            New chat
+          </Link>
+          <form action={deleteChatAction}>
+            <input type="hidden" name="id" value={chatId} />
+            <button
+              type="submit"
+              className="inline-flex h-9 items-center text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))]"
+            >
+              Delete
+            </button>
+          </form>
+        </div>
+      </header>
+
     <div className="flex h-[calc(100dvh-12rem)] flex-col md:h-[calc(100vh-8rem)]">
       <div className="flex-1 overflow-y-auto py-4">
         <ul className="space-y-5">
@@ -548,6 +597,7 @@ export function ChatView({
         onClose={() => setMistakeFor(null)}
       />
     </div>
+    </>
   );
 }
 
