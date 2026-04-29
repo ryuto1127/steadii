@@ -1,7 +1,13 @@
+import Link from "next/link";
 import { auth } from "@/lib/auth/config";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db/client";
-import { users, usageEvents, subscriptions } from "@/lib/db/schema";
+import {
+  users,
+  usageEvents,
+  subscriptions,
+  waitlistRequests,
+} from "@/lib/db/schema";
 import { isUnlimitedPlan } from "@/lib/billing/effective-plan";
 import { count, sum, gt, desc, eq, isNull } from "drizzle-orm";
 import { computeAgentMetrics } from "@/lib/agent/dogfood/metrics";
@@ -51,6 +57,12 @@ export default async function AdminPage() {
     .select({ n: count(subscriptions.id) })
     .from(subscriptions)
     .where(eq(subscriptions.status, "active"));
+
+  const [pendingWaitlistRow] = await db
+    .select({ n: count(waitlistRequests.id) })
+    .from(waitlistRequests)
+    .where(eq(waitlistRequests.status, "pending"));
+  const pendingWaitlist = pendingWaitlistRow?.n ?? 0;
 
   const metrics = await computeAgentMetrics({ days: 7 });
 
@@ -272,6 +284,33 @@ export default async function AdminPage() {
             }
           />
         </div>
+      </section>
+
+      <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+        <Link
+          href="/app/admin/waitlist"
+          className="group flex items-center justify-between gap-4"
+        >
+          <div>
+            <h2 className="text-lg font-medium group-hover:underline">
+              α access waitlist
+            </h2>
+            <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
+              Approve requests, generate Stripe Promotion Codes, send invite
+              emails.
+            </p>
+          </div>
+          <span
+            className={`inline-flex min-w-[3.5rem] items-center justify-center rounded-full px-2.5 py-1 font-mono text-xs ${
+              pendingWaitlist > 0
+                ? "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
+                : "bg-[hsl(var(--surface-raised))] text-[hsl(var(--muted-foreground))]"
+            }`}
+            aria-label={`${pendingWaitlist} pending`}
+          >
+            {pendingWaitlist} pending
+          </span>
+        </Link>
       </section>
 
       <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">

@@ -192,6 +192,30 @@ type MessagesShape = {
     delete_failed: string;
   };
   login: { title: string; subtitle: string; button: string };
+  onboarding: {
+    step1: {
+      title: string;
+      one_line: string;
+      why_title: string;
+      why_calendar_gmail: string;
+      why_notion: string;
+      button: string;
+    };
+    step2: {
+      title: string;
+      one_line: string;
+      why_title: string;
+      why_body: string;
+      skip: string;
+      connect_link: string;
+      add_url_link: string;
+      sources: {
+        microsoft: { label: string; one_line: string };
+        ical: { label: string; one_line: string };
+        notion: { label: string; one_line: string };
+      };
+    };
+  };
   request_access: {
     title: string;
     subtitle: string;
@@ -388,6 +412,7 @@ type MessagesShape = {
     founding_member_label: string;
     founding_member_body: string;
     price_locked_until: string;
+    currency_locked: string;
     current_plan: string;
     plan_admin: string;
     plan_student: string;
@@ -710,6 +735,47 @@ export const en: MessagesShape = {
     subtitle: "Sign in with your university Google account.",
     button: "Continue with Google",
   },
+  onboarding: {
+    step1: {
+      title: "Connect Google",
+      one_line:
+        "One consent grants Calendar + Gmail so Steadii can schedule, triage, and draft.",
+      why_title: "What does this grant?",
+      why_calendar_gmail:
+        "Read + write access to your Calendar and read/modify/send on Gmail. The agent triages incoming mail and prepares drafts for your review — nothing sends without your confirmation and a 20-second undo window. You can revoke access anytime from your Google account.",
+      why_notion:
+        "Notion is optional and lives in Settings → Connections — connect it to import your existing classes, mistakes, syllabi, and assignments into Steadii.",
+      button: "Grant Google access",
+    },
+    step2: {
+      title: "Add more sources (optional)",
+      one_line:
+        "These widen what Steadii can see — Outlook, school timetables, Notion. Skip whatever you don't use.",
+      why_title: "What gets connected?",
+      why_body:
+        "Each source plugs into the same calendar + tasks pipeline as Google. Microsoft 365 mirrors Outlook events and To Do tasks; an iCal subscription pulls a school timetable feed every 6 hours; Notion imports your existing classes and notes. You can add or remove any of these later from Settings → Connections.",
+      skip: "Skip for now",
+      connect_link: "Connect →",
+      add_url_link: "Add URL →",
+      sources: {
+        microsoft: {
+          label: "Microsoft 365",
+          one_line:
+            "Bring your Outlook calendar and Microsoft To Do into Steadii alongside Google.",
+        },
+        ical: {
+          label: "iCal subscription",
+          one_line:
+            "Paste a school timetable URL (.ics) so deadlines show up in Steadii's planning.",
+        },
+        notion: {
+          label: "Notion",
+          one_line:
+            "Import your existing classes, mistakes, syllabi, and assignments from Notion.",
+        },
+      },
+    },
+  },
   request_access: {
     title: "Request α access",
     subtitle:
@@ -946,6 +1012,8 @@ export const en: MessagesShape = {
     founding_member_label: "Founding member.",
     founding_member_body: "Your current price is locked in for life.",
     price_locked_until: "Price locked until {date}.",
+    currency_locked:
+      "Pricing locked to {currency} for this account. Reach out to support to change currency.",
     current_plan: "Current plan",
     plan_admin: "Admin (flag) · unlimited",
     plan_student: "Student",
