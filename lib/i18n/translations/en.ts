@@ -811,7 +811,7 @@ export const en: MessagesShape = {
     body_en: "Contact the address below for access.",
     contact_label_ja: "お問い合わせ:",
     contact_label_en: "Contact:",
-    contact_email: "hello@mysteadii.xyz",
+    contact_email: "hello@mysteadii.com",
     request_access_cta: "Request α access →",
   },
   app: {
@@ -1114,12 +1114,12 @@ export const en: MessagesShape = {
       appi_contact: {
         heading: "Personal-information-handler contact",
         body:
-          "Personal-information handler: Steadii (sole proprietor, contact via the email you used to sign up). For inquiries from Japanese-resident users specifically, write to hello@mysteadii.xyz with the subject line \"APPI request\".",
+          "Personal-information handler: Steadii (sole proprietor, contact via the email you used to sign up). For inquiries from Japanese-resident users specifically, write to hello@mysteadii.com with the subject line \"APPI request\".",
       },
       appi_request_procedure: {
         heading: "How to request disclosure, correction, or suspension of use",
         body:
-          "You may request disclosure of your retained personal information, correction of inaccuracies, suspension of use, or deletion. Send an email to hello@mysteadii.xyz from the address registered on your account, stating which records you wish to access or change. We respond within 14 days. There is no fee.",
+          "You may request disclosure of your retained personal information, correction of inaccuracies, suspension of use, or deletion. Send an email to hello@mysteadii.com from the address registered on your account, stating which records you wish to access or change. We respond within 14 days. There is no fee.",
       },
     },
     terms: {
@@ -1166,7 +1166,7 @@ export const en: MessagesShape = {
       contact: {
         heading: "Contact",
         body:
-          "Questions or deletion requests: email hello@mysteadii.xyz, or reply to your onboarding email.",
+          "Questions or deletion requests: email hello@mysteadii.com, or reply to your onboarding email.",
       },
     },
   },
