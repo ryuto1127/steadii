@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { auth, signIn } from "@/lib/auth/config";
 import {
   getOnboardingStatus,
@@ -21,6 +22,8 @@ export default async function OnboardingPage() {
   if (isOnboardingComplete(status)) {
     redirect("/app");
   }
+
+  const t = await getTranslations("onboarding");
 
   // Step 1: Connect Google. Once Calendar+Gmail scopes land, we move to Step 2.
   const onStep1 = !(status.calendarConnected && status.gmailConnected);
@@ -54,21 +57,13 @@ export default async function OnboardingPage() {
       <section className="flex flex-1 flex-col items-center text-center">
         {onStep1 ? (
           <StepPane
-            title="Connect Google"
-            oneLine="One consent grants Calendar + Gmail so Steadii can schedule, triage, and draft."
-            whyTitle="What does this grant?"
+            title={t("step1.title")}
+            oneLine={t("step1.one_line")}
+            whyTitle={t("step1.why_title")}
             why={
               <>
-                Read + write access to your Calendar and read/modify/send on
-                Gmail. The agent triages incoming mail and prepares drafts for
-                your review — nothing sends without your confirmation and a
-                20-second undo window. You can revoke access anytime from your
-                Google account.
-                <br />
-                <br />
-                Notion is optional and lives in Settings → Connections — connect
-                it to import your existing classes, mistakes, syllabi, and
-                assignments into Steadii.
+                <p>{t("step1.why_calendar_gmail")}</p>
+                <p className="mt-3">{t("step1.why_notion")}</p>
               </>
             }
           >
@@ -77,24 +72,16 @@ export default async function OnboardingPage() {
                 type="submit"
                 className="inline-flex items-center justify-center rounded-md bg-[hsl(var(--primary))] px-3.5 py-2 text-body font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
               >
-                Grant Google access
+                {t("step1.button")}
               </button>
             </form>
           </StepPane>
         ) : (
           <StepPane
-            title="Add more sources (optional)"
-            oneLine="These widen what Steadii can see — Outlook, school timetables, Notion. Skip whatever you don't use."
-            whyTitle="What gets connected?"
-            why={
-              <>
-                Each source plugs into the same calendar + tasks pipeline as
-                Google. Microsoft 365 mirrors Outlook events and To Do tasks;
-                an iCal subscription pulls a school timetable feed every 6
-                hours; Notion imports your existing classes and notes. You can
-                add or remove any of these later from Settings → Connections.
-              </>
-            }
+            title={t("step2.title")}
+            oneLine={t("step2.one_line")}
+            whyTitle={t("step2.why_title")}
+            why={<>{t("step2.why_body")}</>}
           >
             <ul className="flex w-full flex-col gap-3 text-left">
               {INTEGRATION_SOURCES.map((s) => (
@@ -103,25 +90,27 @@ export default async function OnboardingPage() {
                   className="flex flex-col gap-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4"
                 >
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-medium">{s.label}</span>
+                    <span className="font-medium">
+                      {t(`step2.sources.${s.id}.label`)}
+                    </span>
                     {s.href ? (
                       <Link
                         href={s.href}
                         className="text-sm text-[hsl(var(--primary))] hover:underline"
                       >
-                        Connect →
+                        {t("step2.connect_link")}
                       </Link>
                     ) : (
                       <Link
                         href="/app/settings/connections#ical"
                         className="text-sm text-[hsl(var(--primary))] hover:underline"
                       >
-                        Add URL →
+                        {t("step2.add_url_link")}
                       </Link>
                     )}
                   </div>
                   <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                    {s.oneLine}
+                    {t(`step2.sources.${s.id}.one_line`)}
                   </p>
                 </li>
               ))}
@@ -131,7 +120,7 @@ export default async function OnboardingPage() {
                 type="submit"
                 className="mt-4 inline-flex items-center justify-center rounded-md border border-[hsl(var(--border))] bg-transparent px-3.5 py-2 text-body text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))]"
               >
-                Skip for now
+                {t("step2.skip")}
               </button>
             </form>
           </StepPane>
