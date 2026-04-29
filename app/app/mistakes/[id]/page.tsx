@@ -43,7 +43,7 @@ export default async function MistakeDetailPage({
     .limit(200);
 
   return (
-    <div className="mx-auto max-w-4xl py-6">
+    <div className="mx-auto max-w-4xl py-2 md:py-6">
       <MistakeMarkdownEditor
         mistakeId={row.id}
         initialTitle={row.title}

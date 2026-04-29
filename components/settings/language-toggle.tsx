@@ -51,7 +51,7 @@ export function LanguageToggle({
             disabled={isPending}
             onClick={() => apply(loc)}
             className={cn(
-              "inline-flex min-w-[72px] items-center justify-center whitespace-nowrap rounded-[6px] px-3 py-1 text-small font-medium transition-hover",
+              "inline-flex h-8 min-w-[72px] items-center justify-center whitespace-nowrap rounded-[6px] px-3 text-small font-medium transition-hover",
               isActive
                 ? "bg-[hsl(var(--surface-raised))] text-[hsl(var(--foreground))]"
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"

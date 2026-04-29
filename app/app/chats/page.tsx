@@ -29,11 +29,11 @@ export default async function ChatsListPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <header className="mb-6 flex items-center justify-between">
+      <header className="mb-6 flex items-center justify-between gap-3">
         <h1 className="text-h1 text-[hsl(var(--foreground))]">Chats</h1>
         <Link
           href="/app"
-          className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
         >
           <Plus size={14} strokeWidth={1.5} />
           New chat

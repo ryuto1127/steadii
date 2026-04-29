@@ -42,11 +42,11 @@ export function TimelineStrip({ days }: { days: TimelineDay[] }) {
 function TimelineRow({ day }: { day: TimelineDay }) {
   const [hovered, setHovered] = useState<number | null>(null);
   return (
-    <div className="flex items-center gap-4" role="listitem">
-      <div className="w-20 shrink-0 text-small text-[hsl(var(--muted-foreground))]">
+    <div className="flex items-center gap-3 sm:gap-4" role="listitem">
+      <div className="w-14 shrink-0 text-small text-[hsl(var(--muted-foreground))] sm:w-20">
         {day.label}
       </div>
-      <div className="relative h-6 flex-1 rounded-sm bg-[hsl(var(--surface-raised))]">
+      <div className="relative h-6 min-w-0 flex-1 rounded-sm bg-[hsl(var(--surface-raised))]">
         {day.events.map((ev, i) => {
           const left = positionPct(ev.start);
           const right = positionPct(ev.end);
@@ -63,7 +63,7 @@ function TimelineRow({ day }: { day: TimelineDay }) {
               onFocus={() => setHovered(i)}
               onBlur={() => setHovered(null)}
               className={cn(
-                "absolute top-1 bottom-1 flex items-center overflow-hidden rounded-[3px] px-1.5 text-[11px] font-medium text-white transition-default",
+                "absolute top-1 bottom-1 flex items-center overflow-hidden rounded-[3px] px-1.5 text-[10px] font-medium text-white transition-default sm:text-[11px]",
                 "hover:brightness-110"
               )}
               style={{

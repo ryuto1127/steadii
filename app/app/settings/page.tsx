@@ -124,21 +124,21 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl py-6">
+    <div className="mx-auto max-w-2xl py-2 md:py-6">
       <h1 className="text-h1 text-[hsl(var(--foreground))]">{t("title")}</h1>
 
       <Section title={t("sections.profile")}>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-body">{session.user.name ?? t("no_name")}</p>
-            <p className="text-small text-[hsl(var(--muted-foreground))]">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-body break-words">{session.user.name ?? t("no_name")}</p>
+            <p className="text-small text-[hsl(var(--muted-foreground))] break-all">
               {session.user.email}
             </p>
           </div>
-          <form action={signOutAction}>
+          <form action={signOutAction} className="shrink-0">
             <button
               type="submit"
-              className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+              className="inline-flex h-9 items-center rounded-md text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
             >
               {t("sign_out")}
             </button>
@@ -147,10 +147,10 @@ export default async function SettingsPage() {
       </Section>
 
       <Section title={t("sections.connections")}>
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <p className="text-body">Notion</p>
-            <p className="text-small text-[hsl(var(--muted-foreground))]">
+            <p className="text-small text-[hsl(var(--muted-foreground))] break-words">
               {notionConn
                 ? `${fmt(tConn("connected_to"), {
                     workspaceName:
@@ -164,10 +164,10 @@ export default async function SettingsPage() {
             </p>
           </div>
           {notionConn ? (
-            <form action={disconnectNotionAction}>
+            <form action={disconnectNotionAction} className="shrink-0">
               <button
                 type="submit"
-                className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))]"
+                className="inline-flex h-9 items-center rounded-md text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))]"
               >
                 {tConn("disconnect")}
               </button>
@@ -175,14 +175,14 @@ export default async function SettingsPage() {
           ) : (
             <Link
               href="/api/integrations/notion/connect"
-              className="inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
+              className="inline-flex h-9 shrink-0 items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
             >
               {tConn("connect")}
             </Link>
           )}
         </div>
-        <div className="mt-3 flex items-center justify-between border-t border-[hsl(var(--border))] pt-3">
-          <div>
+        <div className="mt-3 flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <p className="text-body">{tConn("calendar_label")}</p>
             <p className="text-small text-[hsl(var(--muted-foreground))]">
               {calendarConnected
@@ -191,18 +191,18 @@ export default async function SettingsPage() {
             </p>
           </div>
           {!calendarConnected ? (
-            <form action={signOutAction}>
+            <form action={signOutAction} className="shrink-0">
               <button
                 type="submit"
-                className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+                className="inline-flex h-9 items-center rounded-md text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
               >
                 {tConn("sign_out_to_reauth")}
               </button>
             </form>
           ) : null}
         </div>
-        <div className="mt-3 flex items-center justify-between border-t border-[hsl(var(--border))] pt-3">
-          <div>
+        <div className="mt-3 flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <p className="text-body">{tConn("gmail_label")}</p>
             <p className="text-small text-[hsl(var(--muted-foreground))]">
               {gmailConnected
@@ -211,10 +211,10 @@ export default async function SettingsPage() {
             </p>
           </div>
           {gmailConnected ? (
-            <form action={refreshGmailInboxAction}>
+            <form action={refreshGmailInboxAction} className="shrink-0">
               <button
                 type="submit"
-                className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
                 title={tConn("refresh_inbox_title")}
               >
                 <RefreshCw size={14} strokeWidth={1.75} />
@@ -222,10 +222,10 @@ export default async function SettingsPage() {
               </button>
             </form>
           ) : (
-            <form action={signOutAction}>
+            <form action={signOutAction} className="shrink-0">
               <button
                 type="submit"
-                className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+                className="inline-flex h-9 items-center rounded-md text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
               >
                 {tConn("sign_out_to_reauth")}
               </button>
@@ -243,15 +243,15 @@ export default async function SettingsPage() {
             {tRes("not_connected_hint")}
           </p>
         ) : null}
-        <form action={addResourceAction} className="mb-3 flex gap-2">
+        <form action={addResourceAction} className="mb-3 flex flex-col gap-2 sm:flex-row">
           <input
             name="notion_url"
             placeholder={tRes("add_placeholder")}
-            className="flex-1 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small focus:outline-none focus:border-[hsl(var(--ring))]"
+            className="h-9 flex-1 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small focus:border-[hsl(var(--ring))] focus:outline-none"
           />
           <button
             type="submit"
-            className="inline-flex items-center rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
+            className="inline-flex h-9 shrink-0 items-center justify-center rounded-md bg-[hsl(var(--primary))] px-4 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
           >
             {tRes("add_button")}
           </button>
@@ -263,7 +263,7 @@ export default async function SettingsPage() {
         ) : (
           <ul className="flex flex-col divide-y divide-[hsl(var(--border))]">
             {resources.map((r) => (
-              <li key={r.id} className="flex items-center justify-between py-2 text-small">
+              <li key={r.id} className="flex items-center justify-between gap-3 py-2 text-small">
                 <div className="min-w-0">
                   <p className="truncate text-body">{r.title ?? r.notionId}</p>
                   <p className="truncate text-[hsl(var(--muted-foreground))]">
@@ -273,11 +273,11 @@ export default async function SettingsPage() {
                     · {r.resourceType}
                   </p>
                 </div>
-                <form action={removeResourceAction}>
+                <form action={removeResourceAction} className="shrink-0">
                   <input type="hidden" name="id" value={r.id} />
                   <button
                     type="submit"
-                    className="text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))]"
+                    className="inline-flex h-9 items-center text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))]"
                   >
                     {tRes("remove")}
                   </button>
@@ -303,7 +303,7 @@ export default async function SettingsPage() {
         </p>
         <Link
           href="/app/settings/how-your-agent-thinks"
-          className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
+          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
         >
           {tThinks("open")}
           <ExternalLink size={12} strokeWidth={1.5} />
@@ -337,7 +337,7 @@ export default async function SettingsPage() {
         </p>
         <form
           action={setAutonomySendEnabledAction}
-          className="flex items-center justify-between rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2.5"
+          className="flex items-center justify-between gap-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2.5"
         >
           <span className="text-body">{tStaged("toggle_label")}</span>
           <input
@@ -349,7 +349,7 @@ export default async function SettingsPage() {
           />
           <button
             type="submit"
-            className={`inline-flex items-center rounded-md px-3 py-1.5 text-small font-medium transition-hover ${
+            className={`inline-flex h-9 shrink-0 items-center rounded-md px-4 text-small font-medium transition-hover ${
               userPrefs?.autonomySendEnabled
                 ? "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:opacity-90"
                 : "border border-[hsl(var(--border))] hover:bg-[hsl(var(--surface-raised))]"
@@ -385,7 +385,7 @@ export default async function SettingsPage() {
           />
           <button
             type="submit"
-            className="mt-2 inline-flex items-center rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
+            className="mt-2 inline-flex h-9 items-center rounded-md bg-[hsl(var(--primary))] px-4 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
           >
             {tModes("save")}
           </button>
@@ -473,7 +473,7 @@ export default async function SettingsPage() {
       </Section>
 
       <Section title={t("sections.appearance")}>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-small text-[hsl(var(--muted-foreground))]">
             {t("appearance_theme_label")}
           </p>
@@ -482,7 +482,7 @@ export default async function SettingsPage() {
       </Section>
 
       <Section title={t("sections.language")}>
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <p className="text-small text-[hsl(var(--muted-foreground))]">
             {t("language_description")}
           </p>

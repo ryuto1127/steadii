@@ -32,12 +32,17 @@ const ICONS: Record<NavItemKey, LucideIcon> = {
 export function SidebarNav({
   labels,
   badges,
+  expanded = false,
 }: {
   labels: Record<string, string>;
   // Server-fetched per-item counts. Today only `inbox` ships a badge
   // (pending agent_drafts), but the prop is keyed by NavItemKey so we
   // can extend without a new prop. Zero / missing → render no badge.
   badges?: Partial<Record<NavItemKey, number>>;
+  // When true, labels and badge pills render at full width without
+  // waiting for the rail's hover-reveal — used by the mobile drawer
+  // where there is no hover state.
+  expanded?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -127,7 +132,10 @@ export function SidebarNav({
               // what animates from square (collapsed) → full-width (expanded).
               // Keeping the link itself still avoids the icon jitter from
               // animating non-interpolable properties (justify-content, margin).
-              "group/nav relative flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[14px] font-medium",
+              // h-11 keeps the link at the 44px touch-target minimum on mobile
+              // without changing visible spacing on desktop (the icon and
+              // label remain centered).
+              "group/nav relative flex h-11 w-full items-center gap-2.5 rounded-lg px-2.5 text-[14px] font-medium",
               active
                 ? "text-[hsl(var(--foreground))]"
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
@@ -137,7 +145,7 @@ export function SidebarNav({
               aria-hidden
               className={cn(
                 "pointer-events-none absolute inset-y-0 left-0 w-9 rounded-lg transition-[width,background-color,opacity] duration-200",
-                "group-hover/sidebar:w-full",
+                expanded ? "w-full" : "group-hover/sidebar:w-full",
                 active
                   ? "nav-active"
                   : "opacity-0 group-hover/nav:bg-[hsl(var(--surface-raised))] group-hover/nav:opacity-100"
@@ -153,17 +161,28 @@ export function SidebarNav({
                 top-right of the icon. The full count pill is hidden when
                 the rail is collapsed (it lives in the label span below),
                 so the dot keeps the "you have pending items" signal
-                visible at all times.
+                visible at all times. In the expanded mobile drawer the
+                dot is suppressed since the count pill is already shown.
               */}
               {showBadge ? (
                 <span
                   data-nav-badge-dot
                   aria-hidden
-                  className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[hsl(38_92%_50%)] ring-2 ring-[hsl(var(--background))] group-hover/sidebar:hidden"
+                  className={cn(
+                    "absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[hsl(38_92%_50%)] ring-2 ring-[hsl(var(--background))]",
+                    expanded ? "hidden" : "group-hover/sidebar:hidden"
+                  )}
                 />
               ) : null}
             </span>
-            <span className="relative flex max-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 group-hover/sidebar:max-w-[200px] group-hover/sidebar:opacity-100">
+            <span
+              className={cn(
+                "relative flex flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap transition-all duration-200",
+                expanded
+                  ? "max-w-[200px] opacity-100"
+                  : "max-w-0 opacity-0 group-hover/sidebar:max-w-[200px] group-hover/sidebar:opacity-100"
+              )}
+            >
               <span className="truncate">{labels[key] ?? key}</span>
               {showBadge ? (
                 <span
