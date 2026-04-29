@@ -80,7 +80,7 @@ export default async function InboxItemPage({
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
-  const undoWindowSeconds = userRow?.undoWindowSeconds ?? 20;
+  const undoWindowSeconds = userRow?.undoWindowSeconds ?? 10;
 
   // Check if we should show the role picker (first-time sender AND no rule).
   let needsRolePick = false;

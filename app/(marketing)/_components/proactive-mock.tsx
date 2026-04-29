@@ -15,8 +15,8 @@ type Copy = {
   action_dismiss: string;
 };
 
-const STEPS = [1800, 2400, 3600] as const; // dwell per phase
-const PAUSE_MS = 1600;
+const STEPS = [1800, 2400, 5500] as const; // dwell per phase — phase 3 (the multi-action proposal) needs longer to read
+const PAUSE_MS = 2800;
 
 export function ProactiveMock({ copy }: { copy: Copy }) {
   const ref = useRef<HTMLDivElement | null>(null);
