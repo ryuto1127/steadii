@@ -89,14 +89,14 @@ export function WipeDataSection() {
         <button
           type="button"
           disabled
-          className="rounded-md border border-[hsl(var(--border))] px-3 py-1.5 text-small text-[hsl(var(--muted-foreground))] opacity-60"
+          className="inline-flex h-9 items-center rounded-md border border-[hsl(var(--border))] px-3 text-small text-[hsl(var(--muted-foreground))] opacity-60"
         >
           {tDanger("account_button")}
         </button>
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="rounded-md border border-[hsl(var(--destructive)/0.4)] bg-[hsl(var(--destructive)/0.06)] px-3 py-1.5 text-small font-medium text-[hsl(var(--destructive))] transition-hover hover:bg-[hsl(var(--destructive)/0.12)]"
+          className="inline-flex h-9 items-center rounded-md border border-[hsl(var(--destructive)/0.4)] bg-[hsl(var(--destructive)/0.06)] px-3 text-small font-medium text-[hsl(var(--destructive))] transition-hover hover:bg-[hsl(var(--destructive)/0.12)]"
         >
           {tDanger("wipe_data_button")}
         </button>
@@ -205,7 +205,7 @@ export function WipeDataSection() {
                 type="button"
                 disabled={busy}
                 onClick={() => setOpen(false)}
-                className="rounded-md px-3 py-1.5 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))] disabled:opacity-50"
+                className="inline-flex h-9 items-center rounded-md px-3 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))] disabled:opacity-50"
               >
                 {tModal("cancel")}
               </button>
@@ -213,7 +213,7 @@ export function WipeDataSection() {
                 type="button"
                 disabled={busy || confirm !== REQUIRED_PHRASE || counts === null}
                 onClick={submit}
-                className="rounded-md bg-[hsl(var(--destructive))] px-3 py-1.5 text-small font-medium text-white transition-hover hover:opacity-90 disabled:opacity-50"
+                className="inline-flex h-9 items-center rounded-md bg-[hsl(var(--destructive))] px-4 text-small font-medium text-white transition-hover hover:opacity-90 disabled:opacity-50"
               >
                 {busy ? tModal("submitting") : tModal("submit")}
               </button>

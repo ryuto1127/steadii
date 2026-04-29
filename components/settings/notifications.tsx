@@ -68,7 +68,7 @@ export function NotificationSettings({ initial }: Props) {
           max={23}
           value={digestHourLocal}
           onChange={(e) => setDigestHourLocal(Number(e.target.value))}
-          className="w-32"
+          className="h-9 w-32 max-w-full"
         />
         <span className="ml-3 inline-block min-w-[60px] text-right font-mono text-small tabular-nums">
           {digestHourLocal.toString().padStart(2, "0")}:00
@@ -86,7 +86,7 @@ export function NotificationSettings({ initial }: Props) {
           step={5}
           value={undoWindowSeconds}
           onChange={(e) => setUndoWindowSeconds(Number(e.target.value))}
-          className="w-32"
+          className="h-9 w-32 max-w-full"
         />
         <span className="ml-3 inline-block min-w-[60px] text-right font-mono text-small tabular-nums">
           {undoWindowSeconds}s
@@ -113,7 +113,7 @@ export function NotificationSettings({ initial }: Props) {
           type="button"
           onClick={onSave}
           disabled={isPending}
-          className="inline-flex items-center rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-50"
+          className="inline-flex h-9 items-center rounded-md bg-[hsl(var(--primary))] px-4 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-50"
         >
           Save
         </button>
@@ -132,7 +132,7 @@ function Row({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-[hsl(var(--border))] pb-4 last:border-b-0 last:pb-0">
+    <div className="flex flex-col gap-3 border-b border-[hsl(var(--border))] pb-4 last:border-b-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <div className="min-w-0 flex-1">
         <div className="text-body font-medium text-[hsl(var(--foreground))]">
           {label}

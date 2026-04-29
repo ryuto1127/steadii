@@ -67,12 +67,14 @@ export default async function ClassDetailPage({
   const t = await getTranslations("classes");
 
   return (
-    <div className="mx-auto max-w-4xl py-6">
-      <header className="flex items-start gap-4 pb-4">
+    <div className="mx-auto max-w-4xl py-2 md:py-6">
+      <header className="flex items-start gap-3 pb-4 sm:gap-4">
         <ClassDot color={cls.color} size={10} />
-        <div className="flex-1">
-          <div className="flex items-baseline gap-3">
-            <h1 className="text-h1 text-[hsl(var(--foreground))]">{cls.name}</h1>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            <h1 className="text-h1 text-[hsl(var(--foreground))] break-words">
+              {cls.name}
+            </h1>
             {cls.code ? (
               <span className="font-mono text-small text-[hsl(var(--muted-foreground))]">
                 {cls.code}
@@ -96,14 +98,18 @@ export default async function ClassDetailPage({
         />
       </header>
 
-      <nav className="flex items-center gap-1 border-b border-[hsl(var(--border))]">
+      {/* Tabs scroll horizontally on small screens; the underline indicator
+          tracks the active tab. -mx-4 sm:mx-0 lets the strip touch the edges
+          on mobile so the bottom border feels uninterrupted, then the
+          regular content padding resumes. */}
+      <nav className="-mx-4 flex items-center gap-1 overflow-x-auto border-b border-[hsl(var(--border))] px-4 sm:mx-0 sm:px-0">
         {TAB_ORDER.map((tabKey) => (
           <Link
             key={tabKey}
             href={`/app/classes/${id}?tab=${tabKey}`}
             aria-current={tab === tabKey ? "page" : undefined}
             className={cn(
-              "relative px-3 py-2 text-small font-medium transition-hover",
+              "relative inline-flex h-11 shrink-0 items-center px-3 text-small font-medium transition-hover",
               tab === tabKey
                 ? "text-[hsl(var(--foreground))]"
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
@@ -182,11 +188,11 @@ async function SyllabusTab({
       {rows.map((r) => (
         <div
           key={r.id}
-          className="flex items-start gap-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4"
+          className="flex flex-wrap items-start gap-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3 sm:p-4"
         >
           <FileText size={16} strokeWidth={1.5} className="mt-0.5 text-[hsl(var(--muted-foreground))]" />
-          <div className="flex-1">
-            <div className="text-body font-medium">{r.title}</div>
+          <div className="min-w-0 flex-1">
+            <div className="text-body font-medium break-words">{r.title}</div>
             <div className="text-small text-[hsl(var(--muted-foreground))]">
               {[r.term].filter(Boolean).join(" · ") || tClasses("no_term")}
             </div>
@@ -196,7 +202,7 @@ async function SyllabusTab({
               href={r.blobUrl}
               target="_blank"
               rel="noreferrer"
-              className="text-small underline-offset-4 hover:underline"
+              className="inline-flex h-9 items-center text-small underline-offset-4 hover:underline"
             >
               {tSyllabus("open_original")}
             </a>
@@ -205,7 +211,7 @@ async function SyllabusTab({
               href={r.sourceUrl}
               target="_blank"
               rel="noreferrer"
-              className="text-small underline-offset-4 hover:underline"
+              className="inline-flex h-9 items-center text-small underline-offset-4 hover:underline"
             >
               {tSyllabus("source")}
             </a>
