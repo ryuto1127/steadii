@@ -1,15 +1,9 @@
 import { auth } from "@/lib/auth/config";
 import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
 import { db } from "@/lib/db/client";
 import { chats, messages, messageAttachments } from "@/lib/db/schema";
 import { and, asc, eq } from "drizzle-orm";
-import {
-  deleteChatAction,
-  renameChatAction,
-} from "@/lib/agent/chat-actions";
 import { ChatView } from "@/components/chat/chat-view";
-import { Plus } from "lucide-react";
 
 export default async function SingleChatPage({
   params,
@@ -111,38 +105,9 @@ export default async function SingleChatPage({
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col">
-      <header className="flex flex-wrap items-center gap-3 border-b border-[hsl(var(--border))] pb-3">
-        <form action={renameChatAction} className="min-w-0 flex-1">
-          <input type="hidden" name="id" value={chat.id} />
-          <input
-            name="title"
-            defaultValue={chat.title ?? ""}
-            placeholder="Untitled chat"
-            className="w-full bg-transparent text-h2 text-[hsl(var(--foreground))] focus:outline-none"
-          />
-        </form>
-        <div className="flex items-center gap-3">
-          <Link
-            href="/app"
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium text-[hsl(var(--foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))]"
-          >
-            <Plus size={13} strokeWidth={1.5} />
-            New chat
-          </Link>
-          <form action={deleteChatAction}>
-            <input type="hidden" name="id" value={chat.id} />
-            <button
-              type="submit"
-              className="inline-flex h-9 items-center text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))]"
-            >
-              Delete
-            </button>
-          </form>
-        </div>
-      </header>
-
       <ChatView
         chatId={chat.id}
+        initialTitle={chat.title}
         initialMessages={visible}
         blobConfigured={!!process.env.BLOB_READ_WRITE_TOKEN}
         autoStream={stream === "1"}
