@@ -1,22 +1,16 @@
 import Link from "next/link";
 import { auth, signOut } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
-import { ExternalLink, RefreshCw } from "lucide-react";
+import { ChevronRight, ExternalLink, RefreshCw } from "lucide-react";
 import { getLocale, getTranslations } from "next-intl/server";
 import { db } from "@/lib/db/client";
-import {
-  notionConnections,
-  accounts,
-  registeredResources,
-  users,
-} from "@/lib/db/schema";
+import { registeredResources, users, notionConnections } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { AgentRulesSection } from "@/components/settings/agent-rules";
 import { NotificationSettings } from "@/components/settings/notifications";
 import { getUserConfirmationMode, getUserTimezone } from "@/lib/agent/preferences";
 import {
   setConfirmationModeAction,
-  refreshGmailInboxAction,
   setAutonomySendEnabledAction,
 } from "./actions";
 import { getCreditBalance } from "@/lib/billing/credits";
@@ -27,7 +21,6 @@ import {
   addResourceAction,
   removeResourceAction,
   refreshResourcesAction,
-  disconnectNotionAction,
 } from "@/app/(auth)/onboarding/actions";
 import { BillingActions } from "@/components/billing/billing-actions";
 import { priceLabelsFor } from "@/lib/billing/format-price";
@@ -54,7 +47,6 @@ export default async function SettingsPage() {
     storage,
     effective,
     notionConn,
-    googleAcct,
     resources,
     theme,
     timezone,
@@ -68,12 +60,6 @@ export default async function SettingsPage() {
       .select()
       .from(notionConnections)
       .where(eq(notionConnections.userId, userId))
-      .limit(1)
-      .then((rows) => rows[0] ?? null),
-    db
-      .select()
-      .from(accounts)
-      .where(and(eq(accounts.userId, userId), eq(accounts.provider, "google")))
       .limit(1)
       .then((rows) => rows[0] ?? null),
     db
@@ -115,9 +101,6 @@ export default async function SettingsPage() {
       k in vars ? String(vars[k]) : `{${k}}`
     );
 
-  const calendarConnected = googleAcct?.scope?.includes("calendar") ?? false;
-  const gmailConnected = googleAcct?.scope?.includes("gmail") ?? false;
-
   async function signOutAction() {
     "use server";
     await signOut({ redirectTo: "/" });
@@ -147,91 +130,18 @@ export default async function SettingsPage() {
       </Section>
 
       <Section title={t("sections.connections")}>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-body">Notion</p>
-            <p className="text-small text-[hsl(var(--muted-foreground))] break-words">
-              {notionConn
-                ? `${fmt(tConn("connected_to"), {
-                    workspaceName:
-                      notionConn.workspaceName ?? tConn("workspace_fallback"),
-                  })} · ${
-                    notionConn.setupCompletedAt
-                      ? tConn("setup_complete")
-                      : tConn("setup_pending")
-                  }`
-                : tConn("not_connected")}
-            </p>
-          </div>
-          {notionConn ? (
-            <form action={disconnectNotionAction} className="shrink-0">
-              <button
-                type="submit"
-                className="inline-flex h-9 items-center rounded-md text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))]"
-              >
-                {tConn("disconnect")}
-              </button>
-            </form>
-          ) : (
-            <Link
-              href="/api/integrations/notion/connect"
-              className="inline-flex h-9 shrink-0 items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
-            >
-              {tConn("connect")}
-            </Link>
-          )}
-        </div>
-        <div className="mt-3 flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-body">{tConn("calendar_label")}</p>
-            <p className="text-small text-[hsl(var(--muted-foreground))]">
-              {calendarConnected
-                ? tConn("calendar_granted")
-                : tConn("calendar_missing")}
-            </p>
-          </div>
-          {!calendarConnected ? (
-            <form action={signOutAction} className="shrink-0">
-              <button
-                type="submit"
-                className="inline-flex h-9 items-center rounded-md text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
-              >
-                {tConn("sign_out_to_reauth")}
-              </button>
-            </form>
-          ) : null}
-        </div>
-        <div className="mt-3 flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-body">{tConn("gmail_label")}</p>
-            <p className="text-small text-[hsl(var(--muted-foreground))]">
-              {gmailConnected
-                ? tConn("gmail_granted")
-                : tConn("gmail_missing")}
-            </p>
-          </div>
-          {gmailConnected ? (
-            <form action={refreshGmailInboxAction} className="shrink-0">
-              <button
-                type="submit"
-                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
-                title={tConn("refresh_inbox_title")}
-              >
-                <RefreshCw size={14} strokeWidth={1.75} />
-                {tConn("refresh_inbox")}
-              </button>
-            </form>
-          ) : (
-            <form action={signOutAction} className="shrink-0">
-              <button
-                type="submit"
-                className="inline-flex h-9 items-center rounded-md text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
-              >
-                {tConn("sign_out_to_reauth")}
-              </button>
-            </form>
-          )}
-        </div>
+        <Link
+          href="/app/settings/connections"
+          className="-m-2 flex items-center justify-between gap-3 rounded-md p-2 transition-hover hover:bg-[hsl(var(--surface-raised))]"
+        >
+          <p className="text-small text-[hsl(var(--muted-foreground))]">
+            {tConn("manage_summary")}
+          </p>
+          <span className="inline-flex shrink-0 items-center gap-1 text-small font-medium text-[hsl(var(--foreground))]">
+            {tConn("manage_link")}
+            <ChevronRight size={14} strokeWidth={1.75} />
+          </span>
+        </Link>
       </Section>
 
       <Section title={t("sections.resources")}>

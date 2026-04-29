@@ -378,6 +378,8 @@ export const ja: Messages = {
       sign_out_to_reauth: "再認証するにはサインアウト",
       refresh_inbox: "受信箱を再読み込み",
       refresh_inbox_title: "直近 24 時間の Gmail を再取得",
+      manage_summary: "Notion・Google・Microsoft 365・iCal フィード。",
+      manage_link: "連携を管理",
     },
     resources: {
       description:
