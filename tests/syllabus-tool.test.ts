@@ -1,92 +1,88 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const hoist = vi.hoisted(() => {
-  type Block =
-    | { id: string; type: "toggle"; toggle: { rich_text: Array<{ plain_text: string }> } }
-    | {
-        id: string;
-        type: "paragraph";
-        paragraph: { rich_text: Array<{ plain_text: string }> };
-      }
-    | { id: string; type: "heading_2"; heading_2: unknown };
-
-  const blocks: Record<string, Block[]> = {
-    "page-1": [
-      {
-        id: "heading-a",
-        type: "heading_2",
-        heading_2: {},
-      },
-      {
-        id: "toggle-a",
-        type: "toggle",
-        toggle: {
-          rich_text: [{ plain_text: "Full source content" }],
-        },
-      },
-    ],
-    "toggle-a": [
-      {
-        id: "p1",
-        type: "paragraph",
-        paragraph: { rich_text: [{ plain_text: "Paragraph one." }] },
-      },
-      {
-        id: "p2",
-        type: "paragraph",
-        paragraph: { rich_text: [{ plain_text: "Paragraph two." }] },
-      },
-    ],
-    "page-empty": [
-      {
-        id: "h",
-        type: "heading_2",
-        heading_2: {},
-      },
-    ],
-  };
-
-  const client = {
-    blocks: {
-      children: {
-        list: vi.fn(async ({ block_id }: { block_id: string }) => ({
-          results: blocks[block_id] ?? [],
-          next_cursor: null,
-        })),
-      },
-    },
-  };
-
-  return { client };
-});
-
-vi.mock("@/lib/integrations/notion/client", () => ({
-  getNotionClientForUser: async () => ({ client: hoist.client, connection: { id: "c" } }),
+vi.mock("@/lib/env", () => ({
+  env: () => ({
+    AUTH_GOOGLE_ID: "id",
+    AUTH_GOOGLE_SECRET: "sec",
+    OPENAI_API_KEY: "sk-test",
+  }),
 }));
+
+const state: { result: Array<{ fullText: string | null }> } = { result: [] };
+
+vi.mock("@/lib/db/client", () => {
+  const chain: {
+    select: () => typeof chain;
+    from: () => typeof chain;
+    where: () => typeof chain;
+    limit: () => Promise<typeof state.result>;
+  } = {
+    select: () => chain,
+    from: () => chain,
+    where: () => chain,
+    limit: () => Promise.resolve(state.result),
+  };
+  return { db: chain };
+});
 
 import { readSyllabusFullText } from "@/lib/agent/tools/syllabus";
 
 describe("read_syllabus_full_text tool", () => {
-  it("concatenates paragraphs inside the Full source content toggle", async () => {
+  const sid = "c0a801b0-0000-4000-8000-000000000000";
+
+  beforeEach(() => {
+    state.result = [];
+  });
+
+  it("returns the fullText when the row exists and is owned by the user", async () => {
+    state.result = [{ fullText: "Paragraph one.\n\nParagraph two." }];
     const out = await readSyllabusFullText.execute(
       { userId: "u" },
-      { syllabusPageId: "page-1" }
+      { syllabusId: sid }
     );
     expect(out.found).toBe(true);
     expect(out.fullText).toBe("Paragraph one.\n\nParagraph two.");
     expect(out.truncated).toBe(false);
+    expect(out.syllabusId).toBe(sid);
   });
 
-  it("returns found=false when no toggle is present", async () => {
+  it("returns found=false when the SQL filter (userId / deletedAt) yields no row", async () => {
+    state.result = [];
     const out = await readSyllabusFullText.execute(
       { userId: "u" },
-      { syllabusPageId: "page-empty" }
+      { syllabusId: sid }
     );
     expect(out.found).toBe(false);
     expect(out.fullText).toBe("");
+    expect(out.truncated).toBe(false);
+  });
+
+  it("returns found=false when fullText is null", async () => {
+    state.result = [{ fullText: null }];
+    const out = await readSyllabusFullText.execute(
+      { userId: "u" },
+      { syllabusId: sid }
+    );
+    expect(out.found).toBe(false);
+  });
+
+  it("truncates fullText longer than 60_000 chars", async () => {
+    state.result = [{ fullText: "x".repeat(70_000) }];
+    const out = await readSyllabusFullText.execute(
+      { userId: "u" },
+      { syllabusId: sid }
+    );
+    expect(out.truncated).toBe(true);
+    expect(out.fullText.length).toBe(60_000);
   });
 
   it("is classified as a read-mutability tool (no confirmation required)", () => {
     expect(readSyllabusFullText.schema.mutability).toBe("read");
+  });
+
+  it("declares syllabusId as the only required parameter (Postgres uuid, not Notion page id)", () => {
+    expect(readSyllabusFullText.schema.parameters.required).toEqual([
+      "syllabusId",
+    ]);
   });
 });
