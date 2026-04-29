@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 export const dynamic = "force-static";
 
-type SearchParams = Promise<{ "already-submitted"?: string }>;
+type SearchParams = Promise<{ reason?: string }>;
 
 export default async function AccessPendingPage({
   searchParams,
@@ -11,8 +11,8 @@ export default async function AccessPendingPage({
   searchParams: SearchParams;
 }) {
   const t = await getTranslations();
-  const sp = await searchParams;
-  const showAlreadySubmittedHint = "already-submitted" in sp;
+  const { reason } = await searchParams;
+  const showAlreadySubmittedHint = reason === "pending";
 
   return (
     <div className="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
