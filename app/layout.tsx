@@ -21,7 +21,7 @@ const mono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Steadii",
-  description: "Steady through the semester.",
+  description: "AI secretary for your studies.",
 };
 
 export default async function RootLayout({

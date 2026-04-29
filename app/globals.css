@@ -555,3 +555,51 @@
     animation: none;
   }
 }
+
+/* Holographic landing palette. Scoped via the .landing-light wrapper
+   on the (marketing) route group, so it shadows the in-product CSS
+   vars without touching them globally. In-product routes keep D1
+   dark+amber. */
+.landing-light {
+  --background: 60 9% 98%;          /* #FAFAF9 white-warm base */
+  --foreground: 30 12% 9%;          /* #1A1814 deep charcoal */
+  --surface: 0 0% 100%;             /* #FFFFFF cards / popovers */
+  --surface-raised: 0 0% 100%;
+  --border: 0 0% 90%;               /* hairline on white */
+  --muted-foreground: 30 6% 40%;    /* readable on white */
+  --accent: 262 83% 58%;            /* #7C3AED electric violet */
+  --primary: 0 0% 4%;               /* #0A0A0A black CTA */
+  --primary-foreground: 0 0% 100%;
+  --destructive: 0 72% 51%;
+  --ring: 262 83% 58%;
+  color-scheme: light;
+}
+
+/* Holographic mesh drift — slow, almost imperceptible scale + rotate.
+   Applied to the gradient layer in HeroMesh; the white base stays put
+   so text on top remains anchored. */
+@keyframes steadii-mesh-drift {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50%      { transform: scale(1.06) rotate(2deg); }
+}
+.steadii-mesh {
+  animation: steadii-mesh-drift 30s ease-in-out infinite;
+  transform-origin: center;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .steadii-mesh { animation: none; }
+}
+
+/* Thin iridescent strip used as section dividers on landing. */
+.landing-strip {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    rgba(6, 182, 212, 0)    0%,
+    rgba(6, 182, 212, 0.35) 20%,
+    rgba(217, 70, 239, 0.35) 50%,
+    rgba(59, 130, 246, 0.35) 80%,
+    rgba(59, 130, 246, 0)   100%
+  );
+}

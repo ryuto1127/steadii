@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "Steadii — Steady through the semester.";
+export const alt = "Steadii — AI secretary for your studies.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -53,7 +53,7 @@ export default async function OpengraphImage() {
               maxWidth: 960,
             }}
           >
-            Steady through the semester.
+            AI secretary for your studies.
           </div>
           <div
             style={{
