@@ -20,6 +20,7 @@ import {
   removeIcalSubscriptionAction,
   reactivateIcalSubscriptionAction,
 } from "./actions";
+import { refreshGmailInboxAction } from "../actions";
 
 export default async function ConnectionsPage({
   searchParams,
@@ -49,6 +50,7 @@ export default async function ConnectionsPage({
     .limit(1);
 
   const calendarConnected = googleAcct[0]?.scope?.includes("calendar") ?? false;
+  const gmailConnected = googleAcct[0]?.scope?.includes("gmail") ?? false;
 
   const [msAcct] = await db
     .select()
@@ -161,6 +163,26 @@ export default async function ConnectionsPage({
             ? "Calendar scope granted."
             : "Calendar scope missing. Sign out and back in to re-authorize."}
         </p>
+      </section>
+
+      <section className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+        <h2 className="text-lg font-medium">Gmail</h2>
+        <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
+          {gmailConnected
+            ? "Gmail scope granted. The agent can triage and draft replies."
+            : "Gmail scope missing. Sign out and back in to re-authorize."}
+        </p>
+        {gmailConnected && (
+          <form action={refreshGmailInboxAction} className="mt-4">
+            <button
+              type="submit"
+              title="Re-ingest the last 24 hours of Gmail"
+              className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
+            >
+              Refresh inbox
+            </button>
+          </form>
+        )}
       </section>
 
       <section className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
