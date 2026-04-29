@@ -3,12 +3,11 @@ import type { Messages } from "./en";
 export const ja: Messages = {
   brand: {
     name: "Steadii",
-    tagline: "学期を、淡々と乗り切る。",
+    tagline: "学業に、あなただけの AI 秘書を。",
   },
   landing: {
-    headline: "学期を、淡々と乗り切る。",
-    subhead:
-      "Steadii が大学のメールをトリアージし、アプリを開く前に返信案を用意します。すべての理由が見え、いつでも編集でき、送信は必ずあなたが承認します。",
+    headline: "学業に、\nあなただけの AI 秘書を。",
+    subhead: "あなたの代わりに読み、書き、思い出す。",
     cta: "Google で続ける",
     cta_request_access: "α アクセスをリクエスト",
     cta_already_approved: "既に承認済の方: サインイン",
@@ -33,7 +32,7 @@ export const ja: Messages = {
       },
     },
     what_you_do: {
-      title: "話すだけ。あとは Steadii が動く。",
+      title: "話すだけ。\nあとは Steadii。",
       subhead:
         "ボタン探しもメニュー操作も不要。チャット入力だけが Steadii の操作画面。",
       you_type_label: "あなたが入力",
@@ -72,7 +71,7 @@ export const ja: Messages = {
       action_dismiss: "閉じる",
     },
     how_it_works: {
-      title: "使い方",
+      title: "3 ステップで始める。",
       steps: {
         connect: {
           title: "つなぐ",
@@ -85,20 +84,20 @@ export const ja: Messages = {
             "Steadii がメールをトリアージし、衝突を監視し、返信案を準備。すべてが見え、あなたを通さずには何も送られません。",
         },
         trust: {
-          title: "任せる",
+          title: "育てる",
           body:
             "間違っているときは「閉じる」を押す。Steadii はそこから学びます。使うほど、あなたに合っていきます。",
         },
       },
     },
     glass_box: {
-      title: "全部、ガラス箱の中。",
+      title: "思考も判断も、見えるところに。",
       paragraph_reasoning:
-        "判断の理由はすべて見えます。各ドラフトの reasoning パネルを開けば、エージェントが読んだもの、比較したこと、参照した過去のメールが確認できます。",
+        "判断の理由はすべて見えます。各ドラフトの推論パネルを開けば、エージェントが読んだもの、比較したこと、参照した過去のメールが確認できます。",
       paragraph_yours:
         "データはあなたのもの。間違いノート・シラバス・課題はそのまま保管。読む・検索する・書き出す——いつでも自由、囲い込みません。",
       paragraph_confirm:
-        "送信は必ずあなたを通ります。送信は 10 秒の undo と明示的な承認を経て送られます。低リスクのドラフトを自動送信するステージド自律モードはオプトイン、ユーザー単位で切替可能です。",
+        "送信は必ずあなたを通ります。送信は 10 秒の undo と明示的な承認を経て送られます。低リスクのドラフトを自動送信する段階的自動送信モードはオプトイン、ユーザー単位で切替可能です。",
     },
     founding: {
       headline: "α は招待制。",

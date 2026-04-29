@@ -4,6 +4,7 @@ import { Plug, Eye, Sparkles } from "lucide-react";
 import { ChatActionCards } from "./_components/chat-action-cards";
 import { ProactiveMock } from "./_components/proactive-mock";
 import { LocaleToggle } from "./_components/locale-toggle";
+import { HeroMesh } from "./_components/hero-mesh";
 
 export default async function LandingPage() {
   const t = await getTranslations();
@@ -57,84 +58,76 @@ export default async function LandingPage() {
   ];
 
   return (
-    <div className="dark min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
-      {/* Force the landing canvas (html + body) to dark, regardless of the
-          user's app-level theme preference. The Cluely-style aesthetic only
-          works dark; user theme still wins inside /app/*. */}
-      <style>{`
-        html { background-color: hsl(0 5% 10%); color-scheme: dark; }
-        body { background-color: hsl(0 5% 10%); }
-      `}</style>
-      <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-        <span className="text-[15px] font-semibold tracking-tight">
-          Steadii
-        </span>
-        <Link
-          href="/login"
-          className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
-        >
-          {t("landing.sign_in")}
-        </Link>
-      </nav>
+    <>
+      {/* Section 1 — Hero (full-bleed mesh + stacked headline → video) */}
+      <section className="relative overflow-hidden">
+        <HeroMesh />
+        <nav className="relative mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+          <span className="text-[17px] font-semibold tracking-tight text-[#1A1814]">
+            Steadii
+          </span>
+          <Link
+            href="/login"
+            className="text-small text-[#1A1814]/70 transition-hover hover:text-[#7C3AED]"
+          >
+            {t("landing.sign_in")}
+          </Link>
+        </nav>
+
+        <div className="relative mx-auto max-w-5xl px-6 pt-8 pb-10 text-center md:pt-16 md:pb-14 md:text-left">
+          <p className="font-mono text-[11px] uppercase tracking-widest text-[#7C3AED]">
+            {t("landing.alpha")}
+          </p>
+          <h1 className="mt-6 whitespace-pre-line text-[48px] font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[72px] lg:text-[80px]">
+            {t("landing.headline")}
+          </h1>
+          <p className="mx-auto mt-6 max-w-2xl text-[17px] leading-[1.55] text-[#1A1814]/70 md:mx-0 md:text-[18px]">
+            {t("landing.subhead")}
+          </p>
+          <div className="mt-9 flex flex-wrap items-center justify-center gap-4 md:justify-start">
+            <Link
+              href="/request-access"
+              className="landing-cta inline-flex items-center rounded-full bg-[#0A0A0A] px-6 py-3 text-[15px] font-medium text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] transition-hover hover:scale-[1.02]"
+            >
+              {t("landing.cta_request_access")}
+            </Link>
+            <Link
+              href="/login"
+              className="text-small text-[#1A1814]/60 transition-hover hover:text-[#7C3AED]"
+            >
+              {t("landing.cta_already_approved")}
+            </Link>
+          </div>
+        </div>
+
+        <div className="relative mx-auto mt-6 max-w-6xl px-4 pb-20 md:px-6 md:pb-28">
+          <div className="overflow-hidden rounded-[16px] bg-white/40 shadow-[0_30px_80px_-20px_rgba(20,20,40,0.25)] ring-1 ring-black/5 backdrop-blur-sm">
+            <video
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              poster="/demo/hero-poster.png"
+              aria-label="Steadii product demo"
+              className="block aspect-[16/10] w-full object-cover"
+            >
+              <source src="/demo/hero.webm" type="video/webm" />
+              <source src="/demo/hero.mp4" type="video/mp4" />
+            </video>
+          </div>
+        </div>
+      </section>
 
       <main className="mx-auto max-w-6xl px-6">
-        {/* Section 1 — Hero */}
-        <section className="grid items-center gap-10 pt-10 pb-24 md:grid-cols-[3fr_2fr] md:gap-12 md:pt-16 md:pb-32">
-          <div className="order-2 flex flex-col items-start gap-6 md:order-1">
-            <p className="font-mono text-[11px] uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
-              {t("landing.alpha")}
-            </p>
-            <h1 className="font-display text-[40px] leading-[1.05] tracking-tight text-[hsl(var(--foreground))] md:text-[56px]">
-              {t("landing.headline")}
-            </h1>
-            <p className="max-w-xl text-body text-[hsl(var(--muted-foreground))]">
-              {t("landing.subhead")}
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-4">
-              <Link
-                href="/request-access"
-                className="landing-cta inline-flex items-center rounded-md bg-[hsl(var(--primary))] px-4 py-2 text-body font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
-              >
-                {t("landing.cta_request_access")}
-              </Link>
-              <Link
-                href="/login"
-                className="text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
-              >
-                {t("landing.cta_already_approved")}
-              </Link>
-            </div>
-          </div>
-          <div className="relative order-1 md:order-2">
-            <div className="relative overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] shadow-lg">
-              <video
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="auto"
-                poster="/demo/hero-poster.png"
-                aria-label="Steadii product demo"
-                className="block aspect-[4/3] w-full object-cover"
-              >
-                <source src="/demo/hero.webm" type="video/webm" />
-                <source src="/demo/hero.mp4" type="video/mp4" />
-              </video>
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-black/15 via-transparent to-transparent"
-              />
-            </div>
-          </div>
-        </section>
-
         {/* Section 2 — What you do */}
-        <section className="border-t border-[hsl(var(--border))] py-20">
-          <div className="mb-10 max-w-2xl">
-            <h2 className="text-h1 text-[hsl(var(--foreground))] md:text-[32px] md:leading-[1.15]">
+        <section className="py-20 md:py-28">
+          <div className="landing-strip mb-16 w-full" />
+          <div className="mb-12 max-w-2xl">
+            <h2 className="whitespace-pre-line text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[44px]">
               {t("landing.what_you_do.title")}
             </h2>
-            <p className="mt-3 text-body text-[hsl(var(--muted-foreground))]">
+            <p className="mt-4 text-[17px] leading-[1.55] text-[#1A1814]/65 md:text-[18px]">
               {t("landing.what_you_do.subhead")}
             </p>
           </div>
@@ -145,48 +138,50 @@ export default async function LandingPage() {
         </section>
 
         {/* Section 3 — Steadii in motion */}
-        <section className="border-t border-[hsl(var(--border))] py-20">
-          <div className="mb-10 max-w-2xl">
-            <h2 className="text-h1 text-[hsl(var(--foreground))] md:text-[32px] md:leading-[1.15]">
+        <section className="py-20 md:py-28">
+          <div className="landing-strip mb-16 w-full" />
+          <div className="mb-12 max-w-2xl">
+            <h2 className="whitespace-pre-line text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[44px]">
               {t("landing.steadii_in_motion.title")}
             </h2>
-            <p className="mt-3 text-body text-[hsl(var(--muted-foreground))]">
+            <p className="mt-4 text-[17px] leading-[1.55] text-[#1A1814]/65 md:text-[18px]">
               {t("landing.steadii_in_motion.body")}
             </p>
           </div>
           <ProactiveMock copy={proactiveCopy} />
-          <p className="mt-3 font-mono text-[11px] uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+          <p className="mt-4 font-mono text-[11px] uppercase tracking-widest text-[#1A1814]/50">
             {t("landing.steadii_in_motion.real_screen")}
           </p>
         </section>
 
         {/* Section 4 — How it works */}
-        <section className="border-t border-[hsl(var(--border))] py-20">
-          <h2 className="mb-10 text-h1 text-[hsl(var(--foreground))] md:text-[32px] md:leading-[1.15]">
+        <section className="py-20 md:py-28">
+          <div className="landing-strip mb-16 w-full" />
+          <h2 className="mb-12 whitespace-pre-line text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[44px]">
             {t("landing.how_it_works.title")}
           </h2>
-          <ol className="grid gap-6 md:grid-cols-3">
+          <ol className="grid gap-5 md:grid-cols-3">
             {steps.map((step, i) => {
               const Icon = step.icon;
               return (
                 <li
                   key={step.title}
-                  className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-5"
+                  className="rounded-[12px] border border-black/[0.06] bg-white p-6 shadow-[0_4px_20px_-8px_rgba(20,20,40,0.08)]"
                 >
                   <div className="flex items-center gap-2">
                     <Icon
                       size={16}
-                      strokeWidth={1.5}
-                      className="text-[hsl(var(--primary))]"
+                      strokeWidth={1.6}
+                      className="text-[#7C3AED]"
                     />
-                    <span className="font-mono text-[11px] uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+                    <span className="font-mono text-[11px] uppercase tracking-widest text-[#1A1814]/50">
                       0{i + 1}
                     </span>
                   </div>
-                  <h3 className="mt-3 text-h2 text-[hsl(var(--foreground))]">
+                  <h3 className="mt-3 text-[18px] font-semibold tracking-tight text-[#1A1814]">
                     {step.title}
                   </h3>
-                  <p className="mt-1.5 text-small text-[hsl(var(--muted-foreground))]">
+                  <p className="mt-2 text-[14px] leading-[1.5] text-[#1A1814]/65">
                     {step.body}
                   </p>
                 </li>
@@ -196,11 +191,12 @@ export default async function LandingPage() {
         </section>
 
         {/* Section 5 — Glass box */}
-        <section className="border-t border-[hsl(var(--border))] py-20">
-          <h2 className="text-h1 text-[hsl(var(--foreground))] md:text-[32px] md:leading-[1.15]">
+        <section className="py-20 md:py-28">
+          <div className="landing-strip mb-16 w-full" />
+          <h2 className="whitespace-pre-line text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[44px]">
             {t("landing.glass_box.title")}
           </h2>
-          <div className="mt-8 grid max-w-3xl gap-6 text-body text-[hsl(var(--muted-foreground))]">
+          <div className="mt-8 grid max-w-3xl gap-5 text-[17px] leading-[1.6] text-[#1A1814]/75 md:text-[18px]">
             <p>{t("landing.glass_box.paragraph_reasoning")}</p>
             <p>{t("landing.glass_box.paragraph_yours")}</p>
             <p>{t("landing.glass_box.paragraph_confirm")}</p>
@@ -208,42 +204,55 @@ export default async function LandingPage() {
         </section>
 
         {/* Section 6 — Founding member CTA */}
-        <section className="border-t border-[hsl(var(--border))] py-20">
-          <div className="rounded-lg border border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/[0.06] p-6 md:p-8">
-            <p className="font-mono text-[11px] uppercase tracking-widest text-[hsl(var(--primary))]">
-              {t("landing.founding.headline")}
-            </p>
-            <p className="mt-3 max-w-2xl text-body text-[hsl(var(--foreground))]">
-              {t("landing.founding.body")}
-            </p>
-            <div className="mt-6">
-              <Link
-                href="/request-access"
-                className="inline-flex items-center rounded-md bg-[hsl(var(--primary))] px-4 py-2 text-body font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
-              >
-                {t("landing.founding.cta")}
-              </Link>
+        <section className="py-20 md:py-28">
+          <div className="landing-strip mb-16 w-full" />
+          <div className="relative overflow-hidden rounded-[16px] border border-black/[0.06] bg-white p-8 shadow-[0_8px_30px_-12px_rgba(20,20,40,0.12)] md:p-10">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 opacity-70"
+              style={{
+                background: `
+                  radial-gradient(circle at 0% 0%, rgba(124, 58, 237, 0.08) 0%, transparent 45%),
+                  radial-gradient(circle at 100% 100%, rgba(6, 182, 212, 0.08) 0%, transparent 45%)
+                `,
+              }}
+            />
+            <div className="relative">
+              <p className="font-mono text-[11px] uppercase tracking-widest text-[#7C3AED]">
+                {t("landing.founding.headline")}
+              </p>
+              <p className="mt-4 max-w-2xl text-[17px] leading-[1.55] text-[#1A1814] md:text-[18px]">
+                {t("landing.founding.body")}
+              </p>
+              <div className="mt-7">
+                <Link
+                  href="/request-access"
+                  className="inline-flex items-center rounded-full bg-[#0A0A0A] px-6 py-3 text-[15px] font-medium text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] transition-hover hover:scale-[1.02]"
+                >
+                  {t("landing.founding.cta")}
+                </Link>
+              </div>
             </div>
           </div>
         </section>
 
         {/* Section 7 — Footer */}
-        <footer className="flex flex-wrap items-center gap-6 border-t border-[hsl(var(--border))] py-12 text-small text-[hsl(var(--muted-foreground))]">
+        <footer className="flex flex-wrap items-center gap-6 border-t border-black/[0.06] py-12 text-small text-[#1A1814]/60">
           <Link
             href="/privacy"
-            className="transition-hover hover:text-[hsl(var(--foreground))]"
+            className="transition-hover hover:text-[#7C3AED]"
           >
             {t("landing.footer.privacy")}
           </Link>
           <Link
             href="/terms"
-            className="transition-hover hover:text-[hsl(var(--foreground))]"
+            className="transition-hover hover:text-[#7C3AED]"
           >
             {t("landing.footer.terms")}
           </Link>
           <a
             href="mailto:hello@mysteadii.xyz"
-            className="transition-hover hover:text-[hsl(var(--foreground))]"
+            className="transition-hover hover:text-[#7C3AED]"
           >
             {t("landing.footer.contact")}
           </a>
@@ -256,12 +265,12 @@ export default async function LandingPage() {
               }}
               ariaLabel={t("landing.locale_toggle.aria_label")}
             />
-            <span className="font-mono text-[11px]">
+            <span className="font-mono text-[11px] text-[#7C3AED]">
               {t("landing.footer.subject_to_change")}
             </span>
           </div>
         </footer>
       </main>
-    </div>
+    </>
   );
 }

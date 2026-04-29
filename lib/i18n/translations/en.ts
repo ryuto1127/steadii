@@ -459,12 +459,11 @@ type MessagesShape = {
 export const en: MessagesShape = {
   brand: {
     name: "Steadii",
-    tagline: "Steady through the semester.",
+    tagline: "AI secretary for your studies.",
   },
   landing: {
-    headline: "Steady through the semester.",
-    subhead:
-      "Steadii triages your university inbox and prepares replies before you open the app. You see every reason, edit anything, and approve every send.",
+    headline: "AI secretary\nfor your studies.",
+    subhead: "Reads, writes, and remembers — for you.",
     cta: "Continue with Google",
     cta_request_access: "Request α access",
     cta_already_approved: "Already approved? Sign in",
@@ -489,7 +488,7 @@ export const en: MessagesShape = {
       },
     },
     what_you_do: {
-      title: "Just chat. Steadii does the rest.",
+      title: "Just chat.\nSteadii does the rest.",
       subhead:
         "No buttons to find, no menus to navigate. The chat input is the entire app.",
       you_type_label: "You type",
@@ -528,7 +527,7 @@ export const en: MessagesShape = {
       action_dismiss: "Dismiss",
     },
     how_it_works: {
-      title: "How it works",
+      title: "Get started in three steps.",
       steps: {
         connect: {
           title: "Connect",
@@ -545,7 +544,7 @@ export const en: MessagesShape = {
       },
     },
     glass_box: {
-      title: "Glass box, all the way down.",
+      title: "All reasoning, all decisions — visible.",
       paragraph_reasoning:
         "Every reason behind every decision is visible. Click the reasoning panel under any draft and you see what the agent read, what it weighed, and which past emails it cited.",
       paragraph_yours:
