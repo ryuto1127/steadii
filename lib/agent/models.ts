@@ -27,7 +27,12 @@ export type TaskType =
   // Phase 8 — proactive proposal generation. Picks GPT-5.4 Mini for
   // routine issues; the scanner can override to "complex" via the
   // selectModel env when an issue is high-stakes. Meters credits.
-  | "proactive_proposal";
+  | "proactive_proposal"
+  // Voice input cleanup. GPT-5.4 Mini post-processes the raw Whisper
+  // transcript (filler removal, self-correction, JP/EN code-switch
+  // preservation). Logged for analytics; treated as 0 credit — voice is
+  // a UX accelerator, like chat_title / tag_suggest.
+  | "voice_cleanup";
 
 // Canonical model defaults. These are the target IDs; the operator can
 // override them at runtime with OPENAI_CHAT_MODEL / OPENAI_COMPLEX_MODEL /
@@ -91,6 +96,7 @@ export function selectModel(
     case "tool_call":
     case "email_classify_risk":
     case "proactive_proposal":
+    case "voice_cleanup":
       return env.OPENAI_CHAT_MODEL?.trim() || DEFAULTS.chat;
     case "mistake_explain":
     case "syllabus_extract":
@@ -166,6 +172,7 @@ export function taskTypeMetersCredits(t: TaskType): boolean {
     case "tool_call":
     case "chat_title":
     case "tag_suggest":
+    case "voice_cleanup":
       return false;
   }
 }
