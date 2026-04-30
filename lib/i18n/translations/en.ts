@@ -294,6 +294,11 @@ type MessagesShape = {
     error_transcribe_failed: string;
     error_rate_limited: string;
     warning_cleanup_skipped: string;
+    choice_label: string;
+    choice_full_words: string;
+    choice_full_chars: string;
+    choice_short_words: string;
+    choice_short_chars: string;
   };
   settings: {
     title: string;
@@ -894,6 +899,11 @@ export const en: MessagesShape = {
     error_transcribe_failed: "Couldn't read that. Try again.",
     error_rate_limited: "Too many voice requests. Wait a moment.",
     warning_cleanup_skipped: "Used raw transcript (cleanup skipped).",
+    choice_label: "Pick voice message length",
+    choice_full_words: "Send full (~{n}w)",
+    choice_full_chars: "Send full (~{n}字)",
+    choice_short_words: "Send short (~{n}w)",
+    choice_short_chars: "Send short (~{n}字)",
   },
   settings: {
     title: "Settings",

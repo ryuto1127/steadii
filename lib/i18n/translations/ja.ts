@@ -393,6 +393,11 @@ export const ja: Messages = {
     error_transcribe_failed: "うまく読み取れませんでした。もう一度どうぞ。",
     error_rate_limited: "音声入力の回数が多すぎます。少し待ってから再試行してください。",
     warning_cleanup_skipped: "整形をスキップして生の文字起こしを使用しました。",
+    choice_label: "音声メッセージの長さを選択",
+    choice_full_words: "そのまま送る（~{n}語）",
+    choice_full_chars: "そのまま送る（~{n}字）",
+    choice_short_words: "短くして送る（~{n}語）",
+    choice_short_chars: "短くして送る（~{n}字）",
   },
   settings: {
     title: "設定",
