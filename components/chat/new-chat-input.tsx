@@ -281,6 +281,7 @@ export function NewChatInput({
         ref={formRef}
         onSubmit={onSubmit}
         suppressHydrationWarning
+        data-voice-composer="true"
         className={cn(
           "steadii-input-shadow group/input relative flex w-full items-end gap-1 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] p-2 transition-default",
           isFocused &&
