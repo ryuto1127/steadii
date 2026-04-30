@@ -1,0 +1,138 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { auth } from "@/lib/auth/config";
+import {
+  BUCKETS,
+  RateLimitError,
+  enforceRateLimit,
+  rateLimitResponse,
+} from "@/lib/utils/rate-limit";
+import { openai } from "@/lib/integrations/openai/client";
+import { cleanupTranscript } from "@/lib/voice/cleanup";
+
+// Whisper hard cap. Anything bigger gets rejected before we touch OpenAI.
+const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+// A 25MB cap doubles as a runtime safety net; we also gate on duration in
+// the client. Voice clips at α scale are sub-30s so this is huge headroom.
+const ACCEPTED_MIME_PREFIX = "audio/";
+
+export const runtime = "nodejs";
+
+export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
+  const userId = session.user.id;
+
+  try {
+    enforceRateLimit(userId, "voice", BUCKETS.voice);
+  } catch (err) {
+    if (err instanceof RateLimitError) return rateLimitResponse(err);
+    throw err;
+  }
+
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return NextResponse.json(
+      { error: "invalid multipart payload" },
+      { status: 400 }
+    );
+  }
+
+  const audio = form.get("audio");
+  if (!(audio instanceof Blob)) {
+    return NextResponse.json(
+      { error: "missing audio blob" },
+      { status: 400 }
+    );
+  }
+  if (audio.size === 0) {
+    return NextResponse.json({ error: "empty audio" }, { status: 400 });
+  }
+  if (audio.size > MAX_AUDIO_BYTES) {
+    return NextResponse.json(
+      { error: "audio too large (25MB max)" },
+      { status: 413 }
+    );
+  }
+  if (audio.type && !audio.type.startsWith(ACCEPTED_MIME_PREFIX)) {
+    return NextResponse.json(
+      { error: "unsupported audio type" },
+      { status: 415 }
+    );
+  }
+
+  const chatIdRaw = form.get("chatId");
+  const chatId =
+    typeof chatIdRaw === "string" && chatIdRaw.length > 0 ? chatIdRaw : null;
+
+  // The Whisper SDK accepts a File-like; the multipart File from FormData
+  // already satisfies the contract, but we re-wrap so the upstream filename
+  // hint is consistent (some browsers emit "blob" with no extension).
+  const filename =
+    audio instanceof File && audio.name && audio.name !== "blob"
+      ? audio.name
+      : "voice.webm";
+  const file = new File([audio], filename, {
+    type: audio.type || "audio/webm",
+  });
+
+  let transcript: string;
+  try {
+    const tx = await openai().audio.transcriptions.create({
+      file,
+      model: "whisper-1",
+      response_format: "json",
+    });
+    transcript = tx.text ?? "";
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error: "transcription failed",
+        code: "WHISPER_FAILED",
+        message: err instanceof Error ? err.message : "unknown",
+      },
+      { status: 502 }
+    );
+  }
+
+  if (!transcript.trim()) {
+    return NextResponse.json({
+      cleaned: "",
+      transcript: "",
+      durationSec: estimateDurationSec(audio.size),
+      cleanupSkipped: true,
+    });
+  }
+
+  let cleaned = transcript;
+  let cleanupSkipped = false;
+  try {
+    const result = await cleanupTranscript({
+      userId,
+      transcript,
+      chatId,
+    });
+    cleaned = result.cleaned || transcript;
+  } catch {
+    cleanupSkipped = true;
+  }
+
+  return NextResponse.json({
+    cleaned,
+    transcript,
+    durationSec: estimateDurationSec(audio.size),
+    cleanupSkipped,
+  });
+}
+
+// Rough byte→seconds estimate for opus/webm at typical mic-capture bitrates
+// (~32 kbps mono). Used only for analytics surfacing in the response — the
+// authoritative duration would require decoding the container, and we don't
+// store this in usage_events at α (no metadata column).
+function estimateDurationSec(bytes: number): number {
+  const BITS_PER_SEC = 32_000;
+  return Math.max(0, Math.round((bytes * 8) / BITS_PER_SEC));
+}

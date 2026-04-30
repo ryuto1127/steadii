@@ -62,6 +62,37 @@ export async function setUserTimezoneIfUnset(
   return updated.length > 0;
 }
 
+export type VoiceTriggerKey = "caps_lock" | "alt_right";
+
+export async function getUserVoiceTriggerKey(
+  userId: string
+): Promise<VoiceTriggerKey> {
+  const [row] = await db
+    .select({ preferences: users.preferences })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const key = row?.preferences?.voiceTriggerKey;
+  if (key === "caps_lock" || key === "alt_right") return key;
+  return "caps_lock";
+}
+
+export async function setUserVoiceTriggerKey(
+  userId: string,
+  key: VoiceTriggerKey
+): Promise<void> {
+  const [row] = await db
+    .select({ preferences: users.preferences })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const next = { ...(row?.preferences ?? {}), voiceTriggerKey: key };
+  await db
+    .update(users)
+    .set({ preferences: next, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+}
+
 // Lightweight runtime validation: Intl will throw for unknown IANA zones.
 export function isValidIanaTimezone(tz: string): boolean {
   if (typeof tz !== "string" || tz.length === 0 || tz.length > 64) return false;

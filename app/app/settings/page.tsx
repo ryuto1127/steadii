@@ -8,7 +8,7 @@ import { registeredResources, users, notionConnections } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { AgentRulesSection } from "@/components/settings/agent-rules";
 import { NotificationSettings } from "@/components/settings/notifications";
-import { getUserConfirmationMode, getUserTimezone } from "@/lib/agent/preferences";
+import { getUserConfirmationMode, getUserTimezone, getUserVoiceTriggerKey } from "@/lib/agent/preferences";
 import {
   setConfirmationModeAction,
   setAutonomySendEnabledAction,
@@ -27,6 +27,7 @@ import { priceLabelsFor } from "@/lib/billing/format-price";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { LanguageToggle } from "@/components/settings/language-toggle";
 import { TimezoneInput } from "@/components/settings/timezone-input";
+import { VoiceSettings } from "@/components/settings/voice-settings";
 import { WipeDataSection } from "@/components/settings/wipe-data-section";
 import { getUserThemePreference } from "@/lib/theme/get-preference";
 import { isLocale } from "@/lib/i18n/config";
@@ -51,6 +52,7 @@ export default async function SettingsPage() {
     theme,
     timezone,
     userPrefs,
+    voiceTriggerKey,
   ] = await Promise.all([
     getUserConfirmationMode(userId),
     getCreditBalance(userId),
@@ -86,6 +88,7 @@ export default async function SettingsPage() {
       .where(eq(users.id, userId))
       .limit(1)
       .then((rows) => rows[0] ?? null),
+    getUserVoiceTriggerKey(userId),
   ]);
   const tBilling = await getTranslations("billing");
   const tConn = await getTranslations("settings.connections");
@@ -389,6 +392,19 @@ export default async function SettingsPage() {
           </p>
           <ThemeToggle initial={theme} />
         </div>
+      </Section>
+
+      <Section title={t("sections.voice")}>
+        <VoiceSettings
+          initial={voiceTriggerKey}
+          labels={{
+            description: t("voice.description"),
+            trigger_label: t("voice.trigger_label"),
+            trigger_caps: t("voice.trigger_caps"),
+            trigger_alt: t("voice.trigger_alt"),
+            saved: t("voice.saved"),
+          }}
+        />
       </Section>
 
       <Section title={t("sections.language")}>
