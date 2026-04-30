@@ -559,6 +559,14 @@ export type SenderRole =
   // W2 addition — alias for supervisor/PI/lab-director. Mapped to AUTO_HIGH
   // in L1 rules alongside 'admin'. UI picker lands in W3.
   | "supervisor"
+  // 2026-04-29 broadening (pre-α dogfood): Career covers recruiters /
+  // internship coordinators / interviewers — these are AUTO_HIGH because
+  // a missed reply costs an opportunity. Personal covers family / friends
+  // / clubs — AUTO_LOW so they don't paginate the inbox triage queue.
+  // Splitting them out of the old "Other" catch-all preserves signal that
+  // was being dropped at LLM-only classification time.
+  | "career"
+  | "personal"
   | "other";
 
 // One entry in the provenance chain. `source` is 'global' for hard-coded

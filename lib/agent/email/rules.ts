@@ -108,18 +108,30 @@ export function classifyEmail(
   const highMatches = collectKeywordMatches(haystack, AUTO_HIGH_KEYWORDS);
   for (const m of highMatches) provenance.push(globalProv(m));
 
-  // "admin" and "supervisor" both escalate to AUTO_HIGH. Professors and TAs
-  // stay AUTO_MEDIUM (checked below). W2 addition: "supervisor" is a
-  // future-proof alias for PI/lab-director — the UI role picker doesn't
-  // yet write it (Settings → Agent Rules role picker lands in W3), but the
-  // mapping is in place so chat-side rule creation can use it now.
-  const supervisorRole =
-    senderRole === "admin" || senderRole === "supervisor" ? senderRole : null;
-  if (supervisorRole) {
+  // Roles that escalate to AUTO_HIGH:
+  //   admin / supervisor — institutional authority, time-sensitive responses.
+  //   career — recruiters / interviewers / internship coordinators; missed
+  //     reply costs an opportunity (added 2026-04-29).
+  // Professors and TAs stay AUTO_MEDIUM (checked below). Personal /
+  // classmate / other don't escalate by role alone.
+  const escalatedRole =
+    senderRole === "admin" ||
+    senderRole === "supervisor" ||
+    senderRole === "career"
+      ? senderRole
+      : null;
+  if (escalatedRole) {
+    const why =
+      escalatedRole === "career"
+        ? "Learned career (recruiter / internship / interview) for this sender/domain."
+        : `Learned ${escalatedRole} (supervisor/PI/lab director) for this sender/domain.`;
     provenance.push({
-      ruleId: "USER_AUTO_HIGH_SUPERVISOR",
+      ruleId:
+        escalatedRole === "career"
+          ? "USER_AUTO_HIGH_CAREER"
+          : "USER_AUTO_HIGH_SUPERVISOR",
       source: "learned",
-      why: `Learned ${supervisorRole} (supervisor/PI/lab director) for this sender/domain.`,
+      why,
     });
   }
 
@@ -131,7 +143,7 @@ export function classifyEmail(
     });
   }
 
-  if (highMatches.length > 0 || supervisorRole || firstTimeSender) {
+  if (highMatches.length > 0 || escalatedRole || firstTimeSender) {
     return {
       bucket: "auto_high",
       senderRole,
@@ -181,7 +193,7 @@ export function classifyEmail(
   }
 
   // ---------------------------------------------------------------------
-  // AUTO_LOW — RSVPs, short acknowledgments.
+  // AUTO_LOW — RSVPs, short acknowledgments, personal contacts.
   // ---------------------------------------------------------------------
   const lowMatches = collectKeywordMatches(haystack, AUTO_LOW_KEYWORDS);
   for (const m of lowMatches) provenance.push(globalProv(m));
@@ -195,7 +207,17 @@ export function classifyEmail(
     });
   }
 
-  if (lowMatches.length > 0 || isShortAck) {
+  // 2026-04-29 — `personal` (family / friends / clubs / social) keeps mail
+  // out of the triage queue so the user only paginates academic items.
+  if (senderRole === "personal") {
+    provenance.push({
+      ruleId: "USER_AUTO_LOW_PERSONAL",
+      source: "learned",
+      why: "Learned personal (family / friends / club) for this sender/domain.",
+    });
+  }
+
+  if (lowMatches.length > 0 || isShortAck || senderRole === "personal") {
     return {
       bucket: "auto_low",
       senderRole,
