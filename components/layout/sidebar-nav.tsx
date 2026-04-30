@@ -135,7 +135,7 @@ export function SidebarNav({
               // h-11 keeps the link at the 44px touch-target minimum on mobile
               // without changing visible spacing on desktop (the icon and
               // label remain centered).
-              "group/nav relative flex h-11 w-full items-center gap-2.5 px-2.5 text-[14px] font-medium",
+              "group/nav relative flex h-11 w-full items-center gap-2.5 rounded-lg px-2.5 text-[14px] font-medium",
               active
                 ? "text-[hsl(var(--foreground))]"
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
@@ -144,7 +144,7 @@ export function SidebarNav({
             <span
               aria-hidden
               className={cn(
-                "pointer-events-none absolute inset-y-0 left-0 w-9 transition-[width,background-color,opacity] duration-200",
+                "pointer-events-none absolute inset-y-0 left-0 w-9 rounded-lg transition-[width,background-color,opacity] duration-200",
                 expanded ? "w-full" : "group-hover/sidebar:w-full",
                 active
                   ? "nav-active"
