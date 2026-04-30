@@ -12,6 +12,11 @@ import { INTEGRATION_SOURCES } from "@/lib/integrations/suggestions/sources";
 import { recordSuggestionImpression } from "@/lib/integrations/suggestions/impressions";
 import { skipIntegrationsStepAction } from "./actions";
 
+// Symmetric with /app/layout — both endpoints branch on
+// getOnboardingStatus and redirect at each other. Static optimization
+// here can deadlock the bounce.
+export const dynamic = "force-dynamic";
+
 const TOTAL_STEPS = 2;
 
 export default async function OnboardingPage() {
