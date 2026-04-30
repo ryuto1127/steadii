@@ -6,10 +6,12 @@ import { ArrowLeft, Mail, Pause } from "lucide-react";
 import { and, eq } from "drizzle-orm";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
+import { isNull, asc } from "drizzle-orm";
 import {
   agentDrafts,
   agentRules,
   chats,
+  classes,
   inboxItems,
   messages as messagesTable,
   users,
@@ -17,7 +19,7 @@ import {
 import { ThinkingBar } from "@/components/agent/thinking-bar";
 import { ReasoningPanel } from "@/components/agent/reasoning-panel";
 import { DraftActions } from "@/components/agent/draft-actions";
-import { RolePickerDialog } from "@/components/agent/role-picker-dialog";
+import { InlineRolePicker } from "@/components/agent/inline-role-picker";
 import { ContextualSuggestion } from "@/components/suggestions/contextual-suggestion";
 import { EmailBody } from "@/components/agent/email-body";
 import { NextActionBanner } from "@/components/agent/next-action-banner";
@@ -83,9 +85,12 @@ export default async function InboxItemPage({
     .limit(1);
   const undoWindowSeconds = userRow?.undoWindowSeconds ?? 10;
 
-  // Check if we should show the role picker (first-time sender AND no rule).
+  // Check if we should show the inline role picker (first-time sender
+  // AND no rule yet AND inbox row hasn't already been classified). Once
+  // a senderRole exists on the row OR an agent_rules entry covers the
+  // sender's email, the picker stays hidden so the user isn't re-asked.
   let needsRolePick = false;
-  if (row.inbox.firstTimeSender) {
+  if (row.inbox.firstTimeSender && !row.inbox.senderRole) {
     const existingRule = await db
       .select({ id: agentRules.id })
       .from(agentRules)
@@ -102,6 +107,16 @@ export default async function InboxItemPage({
       .limit(1);
     needsRolePick = existingRule.length === 0;
   }
+
+  // Class options for the inline picker's dropdown. Same shape the
+  // syllabus auto-import uses — code + name when available.
+  const classRows = needsRolePick
+    ? await db
+        .select({ id: classes.id, name: classes.name, code: classes.code })
+        .from(classes)
+        .where(and(eq(classes.userId, userId), isNull(classes.deletedAt)))
+        .orderBy(asc(classes.name))
+    : [];
 
   const { draft, inbox } = row;
   const paused = draft.status === "paused";
@@ -196,6 +211,15 @@ export default async function InboxItemPage({
           Inbox
         </Link>
       </div>
+
+      {needsRolePick ? (
+        <InlineRolePicker
+          inboxItemId={inbox.id}
+          senderEmail={inbox.senderEmail}
+          senderName={inbox.senderName}
+          classes={classRows}
+        />
+      ) : null}
 
       <header className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3 sm:p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -311,13 +335,6 @@ export default async function InboxItemPage({
         />
       ) : null}
 
-      {needsRolePick ? (
-        <RolePickerDialog
-          inboxItemId={inbox.id}
-          senderEmail={inbox.senderEmail}
-          senderName={inbox.senderName}
-        />
-      ) : null}
     </div>
   );
 }

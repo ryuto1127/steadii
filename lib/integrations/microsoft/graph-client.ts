@@ -8,6 +8,7 @@ import {
   decryptOAuthToken,
   encryptOAuthToken,
 } from "@/lib/auth/oauth-tokens";
+import { withTokenRefreshLock } from "@/lib/auth/token-refresh-lock";
 
 const PROVIDER_ID = "microsoft-entra-id";
 const TOKEN_ENDPOINT = (tenantId: string) =>
@@ -100,6 +101,61 @@ async function refreshAccessToken(row: AccountRow): Promise<string> {
   return json.access_token;
 }
 
+// Serialise the refresh path per-user via a Postgres advisory lock. Without
+// this, two concurrent invocations (Vercel serverless) can both POST to MS
+// with the same refresh_token — MS rotates RTs, so the loser's stored RT
+// is now dead and the next refresh fails with invalid_grant. Inside the
+// lock we re-read the row in case another caller already refreshed; only
+// hit the network if still expired.
+async function refreshWithMutex(row: AccountRow): Promise<string> {
+  return await withTokenRefreshLock(
+    `ms-token:${row.userId}:${row.providerAccountId}`,
+    async () => {
+      const [fresh] = await db
+        .select()
+        .from(accounts)
+        .where(
+          and(
+            eq(accounts.provider, PROVIDER_ID),
+            eq(accounts.providerAccountId, row.providerAccountId)
+          )
+        )
+        .limit(1);
+      if (!fresh) throw new MsNotConnectedError();
+
+      const cachedAccess = decryptOAuthToken(fresh.access_token);
+      if (cachedAccess && !isExpired(fresh.expires_at)) {
+        // Another caller refreshed while we waited on the lock — adopt.
+        row.access_token = fresh.access_token;
+        row.refresh_token = fresh.refresh_token;
+        row.expires_at = fresh.expires_at;
+        row.scope = fresh.scope;
+        return cachedAccess;
+      }
+      const access = await refreshAccessToken(fresh);
+      // Reload the post-refresh state into the caller's in-memory row so
+      // subsequent Graph calls in the same request don't see stale fields.
+      const [post] = await db
+        .select()
+        .from(accounts)
+        .where(
+          and(
+            eq(accounts.provider, PROVIDER_ID),
+            eq(accounts.providerAccountId, row.providerAccountId)
+          )
+        )
+        .limit(1);
+      if (post) {
+        row.access_token = post.access_token;
+        row.refresh_token = post.refresh_token;
+        row.expires_at = post.expires_at;
+        row.scope = post.scope;
+      }
+      return access;
+    }
+  );
+}
+
 // Returns a Microsoft Graph SDK Client whose auth provider lazily refreshes
 // the access token on every request. The SDK calls `getAccessToken` per
 // request, so even long-lived clients stay valid across multiple Graph
@@ -112,12 +168,7 @@ export async function getMsGraphForUser(userId: string): Promise<Client> {
       try {
         let access = decryptOAuthToken(row.access_token);
         if (!access || isExpired(row.expires_at)) {
-          access = await refreshAccessToken(row);
-          // Mutate the in-memory row so subsequent calls in the same
-          // request reuse the freshly-rotated token without re-reading
-          // the DB. The persisted update lives in refreshAccessToken.
-          row.access_token = encryptOAuthToken(access);
-          row.expires_at = Math.floor(Date.now() / 1000) + 3600;
+          access = await refreshWithMutex(row);
         }
         done(null, access);
       } catch (err) {
