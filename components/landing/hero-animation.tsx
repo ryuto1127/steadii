@@ -183,7 +183,7 @@ function Sidebar({ phase }: { phase: Phase }) {
       {SIDEBAR_ICONS.map((Icon, i) => (
         <span
           key={i}
-          className={`flex h-7 w-7 items-center justify-center transition-colors duration-200 ${
+          className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors duration-200 ${
             i === activeIdx
               ? "bg-black/[0.05] text-[#1A1814]"
               : "text-[#1A1814]/40"
