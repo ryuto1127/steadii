@@ -6,6 +6,10 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
 import { accounts, icalSubscriptions, events } from "@/lib/db/schema";
 import { importNotionWorkspace } from "@/lib/integrations/notion/import-to-postgres";
+import {
+  IcalSubscribeError,
+  subscribeToIcal,
+} from "@/lib/integrations/ical/subscribe";
 
 export async function importNotionAction() {
   const session = await auth();
@@ -64,28 +68,18 @@ export async function addIcalSubscriptionAction(formData: FormData) {
   if (typeof rawUrl !== "string" || rawUrl.trim().length === 0)
     throw new Error("URL is required");
 
-  // Normalise webcal → https for storage so the cron doesn't have to
-  // re-do this on every tick. Validate the result is parseable.
-  const candidate = rawUrl
-    .trim()
-    .replace(/^webcal:\/\//i, "https://")
-    .replace(/^webcals:\/\//i, "https://");
   try {
-    const parsed = new URL(candidate);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
-      throw new Error("Only HTTP(S) iCal URLs are supported.");
-  } catch {
-    throw new Error("That doesn't look like a valid URL.");
+    await subscribeToIcal({
+      userId,
+      rawUrl,
+      label: typeof label === "string" ? label : null,
+    });
+  } catch (err) {
+    if (err instanceof IcalSubscribeError) {
+      throw new Error(err.message);
+    }
+    throw err;
   }
-
-  await db.insert(icalSubscriptions).values({
-    userId,
-    url: candidate,
-    label:
-      typeof label === "string" && label.trim().length > 0
-        ? label.trim()
-        : null,
-  });
 
   redirect("/app/settings/connections?ical=added#ical");
 }

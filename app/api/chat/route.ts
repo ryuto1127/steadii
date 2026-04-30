@@ -127,11 +127,16 @@ export async function GET(request: NextRequest) {
           send(ev);
         }
 
-        if (!chat.title && assistantId && fullText) {
+        // Generate a title even when the assistant turn was tool-calls only
+        // (no text deltas) — fall back to the user message as the seed so
+        // chats like "5/16 学校休む" still get titled rather than staying
+        // "(no title)".
+        if (!chat.title && assistantId) {
           const firstUser = await firstUserMessage(chatId);
           if (firstUser) {
             try {
-              const title = await generateChatTitle(userId, chatId, firstUser, fullText);
+              const titleSeed = fullText || firstUser;
+              const title = await generateChatTitle(userId, chatId, firstUser, titleSeed);
               send({ type: "title", title });
             } catch (err) {
               console.error("Title generation failed", err);

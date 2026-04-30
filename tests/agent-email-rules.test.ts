@@ -175,6 +175,40 @@ describe("classifyEmail — AUTO_HIGH bucket", () => {
     );
   });
 
+  it("escalates to AUTO_HIGH when the sender is a learned 'career' contact", () => {
+    // Recruiters / interviewers / internship coordinators: missed reply
+    // costs an opportunity, so role alone escalates regardless of subject.
+    const input: ClassifyInput = {
+      ...baseInput,
+      fromEmail: "recruiter@somecorp.com",
+      fromDomain: "somecorp.com",
+      subject: "Quick chat next week?",
+      snippet: "Wanted to follow up on your application.",
+      bodySnippet: "Wanted to follow up on your application.",
+    };
+    const learnedSenders = new Map([
+      [
+        "recruiter@somecorp.com",
+        { senderRole: "career" as const, riskTier: null },
+      ],
+    ]);
+    const res = classifyEmail(
+      input,
+      makeCtx({
+        seenDomains: new Set([
+          "somecorp.com",
+          "known.edu",
+          "example.com",
+        ]),
+        learnedSenders,
+      })
+    );
+    expect(res.bucket).toBe("auto_high");
+    expect(res.ruleProvenance.map((p) => p.ruleId)).toContain(
+      "USER_AUTO_HIGH_CAREER"
+    );
+  });
+
   it("does NOT escalate to AUTO_HIGH when the domain is already known and nothing else matches", () => {
     // Negative: this is a plain message from a known domain with no
     // HIGH keywords. It should NOT land in auto_high.
@@ -225,6 +259,39 @@ describe("classifyEmail — AUTO_MEDIUM bucket", () => {
     ]);
     const res = classifyEmail(input, makeCtx({ learnedSenders }));
     expect(res.bucket).toBe("auto_medium");
+  });
+
+  it("demotes a learned 'personal' sender to AUTO_LOW", () => {
+    // Family / friends / club mail shouldn't paginate the triage queue.
+    const input: ClassifyInput = {
+      ...baseInput,
+      fromEmail: "mom@family.example",
+      fromDomain: "family.example",
+      subject: "Sunday dinner?",
+      snippet: "Are you free Sunday at 6?",
+      bodySnippet: "Are you free Sunday at 6?",
+    };
+    const learnedSenders = new Map([
+      [
+        "mom@family.example",
+        { senderRole: "personal" as const, riskTier: null },
+      ],
+    ]);
+    const res = classifyEmail(
+      input,
+      makeCtx({
+        seenDomains: new Set([
+          "family.example",
+          "known.edu",
+          "example.com",
+        ]),
+        learnedSenders,
+      })
+    );
+    expect(res.bucket).toBe("auto_low");
+    expect(res.ruleProvenance.map((p) => p.ruleId)).toContain(
+      "USER_AUTO_LOW_PERSONAL"
+    );
   });
 
   it("does NOT match AUTO_MEDIUM when subject has a question mark but sender is not from a .edu", () => {

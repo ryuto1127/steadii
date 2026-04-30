@@ -176,12 +176,11 @@ export default async function InboxPage() {
     .sort(compareInboxRows)
     .slice(0, 50);
 
-  // Phase 8 — proactive proposals. Surfaced in their own "Steadii
-  // noticed" section above the email-driven inbox per the locked
-  // sectioned-list approach. Show pending first, then recently
-  // resolved/dismissed muted (≤7d). Wrapped in try/catch so that a
-  // missing agent_proposals table (migration drift between Postgres
-  // and the deployed schema) degrades to "no proposals" instead of
+  // Phase 8 — proactive proposals (ambiguity / capacity / etc.). Inbox
+  // surfaces ONLY user-actionable rows; passive `auto_action_log` rows
+  // (Steadii silently did X) move to the bell + digest per Fix 5
+  // (2026-04-29 sparring). Wrapped in try/catch so that a missing
+  // agent_proposals table degrades to "no proposals" instead of
   // crashing the email inbox.
   let proposals: Array<{
     id: string;
@@ -207,6 +206,7 @@ export default async function InboxPage() {
       .where(
         and(
           eq(agentProposals.userId, userId),
+          ne(agentProposals.issueType, "auto_action_log"),
           or(
             eq(agentProposals.status, "pending"),
             eq(agentProposals.status, "resolved"),
