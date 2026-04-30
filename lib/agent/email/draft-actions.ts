@@ -16,6 +16,7 @@ import { logEmailAudit } from "./audit";
 import { deleteGmailDraft } from "@/lib/agent/tools/gmail";
 import { enqueueSendForDraft } from "./send-enqueue";
 import { recordSenderFeedback } from "./feedback";
+import { createClass } from "@/lib/classes/save";
 
 async function getUserId(): Promise<string> {
   const session = await auth();
@@ -208,17 +209,30 @@ export async function saveDraftEditsAction(args: {
   revalidatePath(`/app/inbox/${draft.id}`);
 }
 
-// Role-picker dialog writes here. Upserts into agent_rules for the
-// sender's email (not the domain — picker is specifically "who is this
-// one person"). Domain-level learning can come post-α.
+// Role-picker writes here. Upserts into agent_rules for the sender's
+// email (not the domain — picker is specifically "who is this one
+// person"). When `classId` is supplied, also binds the inbox item to
+// that class. When `newClassName` is supplied, creates the class first
+// then binds — same path the syllabus auto-create uses.
 export async function setSenderRoleAction(args: {
   senderEmail: string;
   role: SenderRole;
-  inboxItemId?: string; // when called from the inbox detail page, update that item too
+  inboxItemId?: string;
+  classId?: string | null;
+  newClassName?: string | null;
 }): Promise<void> {
   const userId = await getUserId();
   const normalized = args.senderEmail.trim().toLowerCase();
   const now = new Date();
+
+  let resolvedClassId: string | null = args.classId ?? null;
+  if (!resolvedClassId && args.newClassName?.trim()) {
+    const created = await createClass({
+      userId,
+      input: { name: args.newClassName.trim() },
+    });
+    resolvedClassId = created.id;
+  }
 
   await db
     .insert(agentRules)
@@ -248,9 +262,14 @@ export async function setSenderRoleAction(args: {
     });
 
   if (args.inboxItemId) {
+    const update: Partial<typeof inboxItems.$inferInsert> = {
+      senderRole: args.role,
+      updatedAt: now,
+    };
+    if (resolvedClassId) update.classId = resolvedClassId;
     await db
       .update(inboxItems)
-      .set({ senderRole: args.role, updatedAt: now })
+      .set(update)
       .where(
         and(
           eq(inboxItems.id, args.inboxItemId),
@@ -267,6 +286,7 @@ export async function setSenderRoleAction(args: {
       subAction: "role_picker",
       senderEmail: normalized,
       role: args.role,
+      classId: resolvedClassId,
     },
   });
   revalidatePath("/app/inbox");
