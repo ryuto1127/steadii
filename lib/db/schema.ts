@@ -1706,7 +1706,11 @@ export type AgentProposalIssueType =
   | "syllabus_calendar_ambiguity"
   // D11 — informational "Steadii did X" log entry. status='resolved' on
   // creation; surfaces in inbox as a muted row until viewed.
-  | "auto_action_log";
+  | "auto_action_log"
+  // Admin-targeted: a new waitlist request landed and needs human
+  // approve/deny. One row per (admin_user, waitlist_request); cleared
+  // to status='dismissed' when the matching request flips status.
+  | "admin_waitlist_pending";
 
 export type AgentProposalStatus =
   | "pending"
@@ -1748,7 +1752,8 @@ export type ProposalSourceRef = {
     | "syllabus_event"
     | "class"
     | "mistake"
-    | "inbox_item";
+    | "inbox_item"
+    | "waitlist_request";
   id: string;
   label: string;
 };

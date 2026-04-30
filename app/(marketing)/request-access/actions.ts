@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
 import { waitlistRequests } from "@/lib/db/schema";
 import { tryConsume, BUCKETS } from "@/lib/utils/rate-limit";
+import { recordWaitlistAdminNotification } from "@/lib/waitlist/admin-bell";
 import { sendAdminNewRequestEmail } from "@/lib/waitlist/email";
 
 // Public form handler. No auth — anyone can request access. Defends
@@ -71,6 +72,21 @@ export async function requestAccessAction(formData: FormData): Promise<void> {
       // through.
       Sentry.captureException(err, {
         tags: { feature: "waitlist_admin_notify" },
+      });
+    }
+
+    try {
+      await recordWaitlistAdminNotification({
+        waitlistRequestId: inserted[0].id,
+        email: rawEmail,
+        name: rawName,
+        requestedAt: inserted[0].requestedAt,
+      });
+    } catch (err) {
+      // Bell is best-effort — never block the user-facing request flow
+      // on a notification write.
+      Sentry.captureException(err, {
+        tags: { feature: "waitlist_admin_bell" },
       });
     }
   }
