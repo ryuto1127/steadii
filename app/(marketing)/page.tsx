@@ -6,6 +6,7 @@ import { ProactiveMock } from "./_components/proactive-mock";
 import { LocaleToggle } from "./_components/locale-toggle";
 import { HeroMesh } from "./_components/hero-mesh";
 import HeroAnimation from "@/components/landing/hero-animation";
+import { VoiceDemo } from "@/components/landing/voice-demo";
 
 export default async function LandingPage() {
   const t = await getTranslations();
@@ -100,6 +101,12 @@ export default async function LandingPage() {
             </Link>
           </div>
         </div>
+
+        {/* Voice scene — visual loop of hold-to-talk. Sits between the hero
+            CTA and the HeroAnimation panel so first-visit readers grasp the
+            "type or talk" positioning before they hit the typing demo. No
+            mic permission prompt — the demo is purely a visual loop. */}
+        <VoiceDemo />
 
         <div className="relative mx-auto mt-6 max-w-6xl px-4 pb-20 md:px-6 md:pb-28">
           <div className="overflow-hidden rounded-[16px] bg-white/40 shadow-[0_30px_80px_-20px_rgba(20,20,40,0.25)] ring-1 ring-black/5 backdrop-blur-sm">
