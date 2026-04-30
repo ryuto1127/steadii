@@ -10,6 +10,7 @@ import {
   Plus,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { MistakeNoteDialog } from "./mistake-note-dialog";
 import { MarkdownMessage } from "./markdown-message";
 import { ToolCallCard, type ToolCallStatus } from "./tool-call-card";
@@ -21,6 +22,7 @@ import {
   deleteChatAction,
   renameChatAction,
 } from "@/lib/agent/chat-actions";
+import { useVoiceInput, type VoiceTriggerKey } from "./use-voice-input";
 
 type Attachment = {
   id: string;
@@ -56,14 +58,17 @@ export function ChatView({
   initialMessages,
   blobConfigured = true,
   autoStream = false,
+  voiceTriggerKey = "caps_lock",
 }: {
   chatId: string;
   initialTitle: string | null;
   initialMessages: Message[];
   blobConfigured?: boolean;
   autoStream?: boolean;
+  voiceTriggerKey?: VoiceTriggerKey;
 }) {
   const t = useTranslations();
+  const tVoice = useTranslations("voice");
   const [title, setTitle] = useState<string>(initialTitle ?? "");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -87,6 +92,33 @@ export function ChatView({
   const router = useRouter();
   const didAutoStream = useRef(false);
   const sendingRef = useRef(false);
+  const composerRef = useRef<HTMLFormElement>(null);
+  const [voiceFlashKey, setVoiceFlashKey] = useState(0);
+
+  const voice = useVoiceInput({
+    triggerKey: voiceTriggerKey,
+    containerRef: composerRef,
+    chatId,
+    onResult: (cleaned) => {
+      setInput((prev) => {
+        const sep = prev.length > 0 && !/\s$/.test(prev) ? " " : "";
+        return `${prev}${sep}${cleaned}`;
+      });
+      setVoiceFlashKey((k) => k + 1);
+    },
+    onError: (kind) => {
+      if (kind === "mic_denied") toast.error(tVoice("error_mic_denied"));
+      else if (kind === "transcribe_failed")
+        toast.error(tVoice("error_transcribe_failed"));
+      else if (kind === "cleanup_failed")
+        toast(tVoice("warning_cleanup_skipped"));
+      else if (kind === "rate_limited")
+        toast.error(tVoice("error_rate_limited"));
+    },
+  });
+  const voiceListening = voice.state === "listening";
+  const voiceProcessing = voice.state === "processing";
+  const voiceActive = voiceListening || voiceProcessing;
 
   useEffect(() => {
     scrollAnchor.current?.scrollIntoView({ behavior: "smooth" });
@@ -578,14 +610,28 @@ export function ChatView({
             </span>
           </div>
         )}
+        {voiceActive ? (
+          <span
+            aria-hidden
+            className={cn(
+              "steadii-voice-listening pointer-events-none absolute -inset-2 rounded-md",
+              voiceProcessing && "steadii-voice-processing"
+            )}
+          />
+        ) : null}
         <form
+          ref={composerRef}
           onSubmit={(e) => {
             e.preventDefault();
             send();
           }}
-          className="relative w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-2 transition-default focus-within:border-[hsl(var(--ring))] focus-within:shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]"
+          className={cn(
+            "relative w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-2 transition-default focus-within:border-[hsl(var(--ring))] focus-within:shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]",
+            voiceActive && "steadii-voice-active-ring"
+          )}
         >
           <textarea
+            key={voiceFlashKey}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -597,9 +643,19 @@ export function ChatView({
                 send();
               }
             }}
-            placeholder={t("chat_input.placeholder")}
+            placeholder={
+              voiceActive
+                ? tVoice("listening_placeholder")
+                : t("chat_input.placeholder")
+            }
             rows={2}
-            className="block w-full resize-none bg-transparent px-3 py-2 text-body text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none"
+            className={cn(
+              "block w-full resize-none bg-transparent px-3 py-2 text-body text-[hsl(var(--foreground))] focus:outline-none",
+              voiceActive
+                ? "placeholder:italic placeholder:text-[hsl(var(--muted-foreground))]"
+                : "placeholder:text-[hsl(var(--muted-foreground))]",
+              voiceFlashKey > 0 && "steadii-voice-text-fade-in"
+            )}
             disabled={streaming}
           />
           {attachment && !uploading && (
@@ -661,6 +717,13 @@ export function ChatView({
             </button>
           </div>
         </form>
+        {voice.hintVisible && voice.state === "idle" ? (
+          <p className="mt-1.5 px-1 text-[11px] text-[hsl(var(--muted-foreground))]">
+            {voice.effectiveKey === "alt_right"
+              ? tVoice("hint_alt")
+              : tVoice("hint_caps")}
+          </p>
+        ) : null}
       </div>
 
       <MistakeNoteDialog

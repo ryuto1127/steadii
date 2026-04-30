@@ -4,6 +4,7 @@ import { db } from "@/lib/db/client";
 import { chats, messages, messageAttachments } from "@/lib/db/schema";
 import { and, asc, eq } from "drizzle-orm";
 import { ChatView } from "@/components/chat/chat-view";
+import { getUserVoiceTriggerKey } from "@/lib/agent/preferences";
 
 export default async function SingleChatPage({
   params,
@@ -103,6 +104,8 @@ export default async function SingleChatPage({
       };
     });
 
+  const voiceTriggerKey = await getUserVoiceTriggerKey(userId);
+
   return (
     <div className="mx-auto flex max-w-3xl flex-col">
       <ChatView
@@ -111,6 +114,7 @@ export default async function SingleChatPage({
         initialMessages={visible}
         blobConfigured={!!process.env.BLOB_READ_WRITE_TOKEN}
         autoStream={stream === "1"}
+        voiceTriggerKey={voiceTriggerKey}
       />
     </div>
   );
