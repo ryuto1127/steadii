@@ -94,7 +94,31 @@ export function ChatView({
   const didAutoStream = useRef(false);
   const sendingRef = useRef(false);
   const composerRef = useRef<HTMLFormElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [voiceFlashKey, setVoiceFlashKey] = useState(0);
+
+  // Auto-focus the composer on mount + whenever streaming ends so the user
+  // doesn't have to click into the textarea on every conversational turn.
+  // The textarea is `disabled` while streaming; React enables it on the
+  // false transition, but focus has to be re-acquired explicitly.
+  useEffect(() => {
+    if (streaming) return;
+    const el = textareaRef.current;
+    if (!el) return;
+    // Skip when another input/textarea/contenteditable already has focus —
+    // user may be typing somewhere else (search, etc.); don't steal.
+    const active = document.activeElement;
+    if (
+      active &&
+      active !== document.body &&
+      (active.tagName === "INPUT" ||
+        active.tagName === "TEXTAREA" ||
+        (active as HTMLElement).isContentEditable)
+    ) {
+      return;
+    }
+    el.focus();
+  }, [streaming]);
 
   const voice = useVoiceInput({
     triggerKey: voiceTriggerKey,
@@ -679,6 +703,7 @@ export function ChatView({
           )}
         >
           <textarea
+            ref={textareaRef}
             key={voiceFlashKey}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -768,7 +793,7 @@ export function ChatView({
           </div>
         </form>
         {voice.hintVisible && voice.state === "idle" && !voice.pendingChoice ? (
-          <p className="mt-1.5 px-1 text-[11px] text-[hsl(var(--muted-foreground))]">
+          <p className="mt-1.5 px-1 text-center text-[11px] text-[hsl(var(--muted-foreground))]">
             {voice.effectiveKey === "alt_right"
               ? tVoice("hint_alt")
               : tVoice("hint_caps")}
