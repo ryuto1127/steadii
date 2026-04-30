@@ -371,11 +371,12 @@ export function VoiceAppProvider({
       // useVoiceInput also calls preventDefault and the call is idempotent.
       if (effectiveKey === "caps_lock") e.preventDefault();
       if (e.repeat) return;
-      // Composer focused → defer entirely to Phase 1 useVoiceInput. Per spec:
-      // "Tap Caps Lock on /app (chat input focused) → no overlay (no-op when
-      // already in chat input)" + hold inside chat composer is Phase 1 voice.
-      if (isComposerFocused()) return;
       if (armedRef.current) return;
+      // NOTE: tap arming runs regardless of composer focus so Caps Lock tap
+      // can summon the overlay from anywhere, including from a focused chat
+      // composer (Ryuto verified bug 2026-04-30). Composer-focus only gates
+      // the HOLD path (global voice recording) — Phase 1 useVoiceInput owns
+      // hold-to-talk inside the composer and would race with global recording.
       armedRef.current = true;
       keydownAtRef.current = Date.now();
       // Defer mic acquisition until we cross the tap-vs-hold threshold so a
@@ -384,6 +385,9 @@ export function VoiceAppProvider({
       // hold-to-talk users naturally pause briefly before speaking.
       recordTimerRef.current = window.setTimeout(() => {
         recordTimerRef.current = null;
+        // Composer focused → Phase 1 useVoiceInput owns hold-to-talk; skip
+        // the global recording path so we don't double-fire.
+        if (isComposerFocused()) return;
         void beginRecording();
       }, HOLD_RECORD_DELAY_MS);
     };
