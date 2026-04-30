@@ -19,6 +19,9 @@ import {
 import { getCreditBalance } from "@/lib/billing/credits";
 import { getEffectivePlan } from "@/lib/billing/effective-plan";
 import { maybeTriggerAutoIngest } from "@/lib/agent/email/auto-ingest";
+import { getUserVoiceTriggerKey } from "@/lib/agent/preferences";
+import { VoiceAppProvider } from "@/components/voice/voice-app-provider";
+import { VoiceHint } from "@/components/voice/voice-hint";
 import { db } from "@/lib/db/client";
 import { subscriptions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -44,7 +47,7 @@ export default async function AppLayout({
     redirect("/onboarding");
   }
 
-  const [balance, effective, subRow] = await Promise.all([
+  const [balance, effective, subRow, voiceTriggerKey] = await Promise.all([
     getCreditBalance(session.user.id),
     getEffectivePlan(session.user.id),
     db
@@ -53,6 +56,7 @@ export default async function AppLayout({
       .where(eq(subscriptions.userId, session.user.id))
       .limit(1)
       .then((rows) => rows[0] ?? null),
+    getUserVoiceTriggerKey(session.user.id),
   ]);
   // Pre-Gmail users: they completed onboarding under the old scope set
   // (Calendar only). isOnboardingComplete now requires Gmail, so in
@@ -86,6 +90,7 @@ export default async function AppLayout({
   // since there's no canvas around it on small screens.
   return (
     <MobileNavProvider>
+     <VoiceAppProvider voiceTriggerKey={voiceTriggerKey}>
       <div className="flex h-[100dvh] flex-col bg-[hsl(var(--background))] md:h-screen md:flex-row md:gap-3 md:p-3">
         {/* Mobile top bar — md:hidden. Sticky-on-canvas above the main
             island. Holds the hamburger, the brand mark, and the bell. */}
@@ -187,6 +192,8 @@ export default async function AppLayout({
           </div>
         </main>
       </div>
+      <VoiceHint />
+     </VoiceAppProvider>
     </MobileNavProvider>
   );
 }

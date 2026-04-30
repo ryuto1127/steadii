@@ -73,6 +73,13 @@ export async function POST(request: NextRequest) {
   const chatIdRaw = form.get("chatId");
   const chatId =
     typeof chatIdRaw === "string" && chatIdRaw.length > 0 ? chatIdRaw : null;
+  // Phase 3: clients tag the surface that triggered the recording so server
+  // analytics can later split chat-input vs global-hotkey usage. Cleanup
+  // behavior is identical regardless — `surface` is purely a routing hint.
+  // Read here so the param is observable during request inspection; no
+  // schema column persists it yet.
+  const _surface = form.get("surface");
+  void _surface;
 
   // The Whisper SDK accepts a File-like; the multipart File from FormData
   // already satisfies the contract, but we re-wrap so the upstream filename
