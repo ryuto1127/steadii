@@ -203,7 +203,15 @@ export async function* streamChatResponse(
       })),
     });
 
-    // Execute each tool, possibly pausing for confirmation
+    // Execute each tool, possibly pausing for confirmation. We process
+    // ALL toolCalls in the batch (rather than breaking on the first
+    // pending) so multi-delete asks like "delete events X, Y, Z" yield
+    // every pending row instead of dropping calls 2..N. Once we've
+    // paused for at least one confirmation, subsequent NON-destructive
+    // tools are deferred (synthetic result row inserted) so the next
+    // turn's conversation has a matching response for every tool_call_id
+    // — without leaking results that might have depended on the pending
+    // destructive(s) committing first.
     let pausedForConfirmation = false;
     for (const call of toolCalls) {
       const tool = getToolByName(call.name);
@@ -244,7 +252,32 @@ export async function* streamChatResponse(
           args: parsedArgs,
         };
         pausedForConfirmation = true;
-        break;
+        continue;
+      }
+
+      if (pausedForConfirmation) {
+        // A prior call in this same batch is awaiting confirmation. Skip
+        // execution and insert a synthetic "deferred" result so OpenAI
+        // sees a matching tool response for this tool_call_id when the
+        // next iteration resumes. The agent can re-emit the call if the
+        // result is still relevant.
+        const deferred = JSON.stringify({
+          error: "deferred",
+          message:
+            "Tool execution skipped — another action in the same turn is awaiting user confirmation. Re-issue this call in the next turn if still relevant.",
+        });
+        conversation.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: deferred,
+        });
+        await db.insert(messagesTable).values({
+          chatId: req.chatId,
+          role: "tool",
+          content: deferred,
+          toolCallId: call.id,
+        });
+        continue;
       }
 
       yield {

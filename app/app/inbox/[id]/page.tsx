@@ -1,9 +1,8 @@
 import { notFound, redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
-import { after } from "next/server";
 import Link from "next/link";
 import { ArrowLeft, Mail, Pause } from "lucide-react";
 import { and, eq } from "drizzle-orm";
+import { MarkReviewedOnMount } from "./_mark-reviewed-on-mount";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
 import { isNull, asc } from "drizzle-orm";
@@ -122,26 +121,14 @@ export default async function InboxItemPage({
   const paused = draft.status === "paused";
   const sent = draft.status === "sent";
 
-  // polish-7 — Gmail-style "read" tracking. The detail page open is the
-  // signal; we mirror it onto inbox_items.reviewed_at so the inbox list
-  // can demote the row from unread (bold) to read (muted). Idempotent
-  // — subsequent opens skip the write. We don't await this in a way
-  // that blocks render: the user shouldn't wait on a UI metadata write.
-  if (!inbox.reviewedAt) {
-    const now = new Date();
-    await db
-      .update(inboxItems)
-      .set({ reviewedAt: now, updatedAt: now })
-      .where(eq(inboxItems.id, inbox.id));
-    // Refresh the sidebar Inbox badge + the inbox list page. revalidatePath
-    // can't be called directly from a server component's render path
-    // (Next.js 15+ throws: cache invalidation is not allowed mid-render).
-    // Defer to `after()` so the revalidation runs once the response is sent.
-    after(() => {
-      revalidatePath("/app", "layout");
-      revalidatePath("/app/inbox");
-    });
-  }
+  // polish-7 — Gmail-style "read" tracking. Detail page open is the
+  // signal. The DB write + cache invalidation happen in a client-side
+  // server action (mounted via <MarkReviewedOnMount> below) so the
+  // layout's countPendingDrafts call doesn't race the inline mutation.
+  // The "Inbox badge stuck on stale count" bug (2026-04-30) traced to
+  // exactly that race; tag-based revalidation + post-render server
+  // action is the canonical fix.
+  const needsMarkReviewed = !inbox.reviewedAt;
 
   // Live-fetch the full Gmail body for the detail page. We don't store
   // bodies on `inbox_items` (only the snippet) — the L1/L2 pipeline
@@ -202,6 +189,9 @@ export default async function InboxItemPage({
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 py-2">
+      {needsMarkReviewed ? (
+        <MarkReviewedOnMount inboxItemId={inbox.id} />
+      ) : null}
       <div>
         <Link
           href="/app/inbox"
