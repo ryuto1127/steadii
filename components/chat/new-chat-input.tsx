@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils/cn";
 import { reportDetectedTimezone } from "@/lib/utils/report-timezone";
 import { useVoiceInput, type VoiceTriggerKey } from "./use-voice-input";
+import { VoiceChoice } from "./voice-choice";
 
 // Creates a chat and lands on /app/chat/[id]?stream=1 with the first message
 // already posted. The chat-view on the next page reads `stream=1` to auto-
@@ -269,6 +270,13 @@ export function NewChatInput({
           )}
         />
       ) : null}
+      {voice.pendingChoice ? (
+        <VoiceChoice
+          cleaned={voice.pendingChoice.cleaned}
+          shortened={voice.pendingChoice.shortened}
+          onSelect={voice.selectChoice}
+        />
+      ) : null}
       <form
         ref={formRef}
         onSubmit={onSubmit}
@@ -394,7 +402,11 @@ export function NewChatInput({
           {error}
         </p>
       ) : null}
-      {mounted && voice.hintVisible && voice.state === "idle" && !error ? (
+      {mounted &&
+      voice.hintVisible &&
+      voice.state === "idle" &&
+      !voice.pendingChoice &&
+      !error ? (
         <p className="mt-2 px-1 text-[11px] text-[hsl(var(--muted-foreground))]">
           {voice.effectiveKey === "alt_right"
             ? tVoice("hint_alt")
