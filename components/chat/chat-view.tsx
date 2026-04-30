@@ -23,6 +23,7 @@ import {
   renameChatAction,
 } from "@/lib/agent/chat-actions";
 import { useVoiceInput, type VoiceTriggerKey } from "./use-voice-input";
+import { VoiceChoice } from "./voice-choice";
 
 type Attachment = {
   id: string;
@@ -619,6 +620,13 @@ export function ChatView({
             )}
           />
         ) : null}
+        {voice.pendingChoice ? (
+          <VoiceChoice
+            cleaned={voice.pendingChoice.cleaned}
+            shortened={voice.pendingChoice.shortened}
+            onSelect={voice.selectChoice}
+          />
+        ) : null}
         <form
           ref={composerRef}
           onSubmit={(e) => {
@@ -717,7 +725,7 @@ export function ChatView({
             </button>
           </div>
         </form>
-        {voice.hintVisible && voice.state === "idle" ? (
+        {voice.hintVisible && voice.state === "idle" && !voice.pendingChoice ? (
           <p className="mt-1.5 px-1 text-[11px] text-[hsl(var(--muted-foreground))]">
             {voice.effectiveKey === "alt_right"
               ? tVoice("hint_alt")

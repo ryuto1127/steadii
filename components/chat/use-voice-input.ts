@@ -25,6 +25,17 @@ const HINT_LAST_USE_KEY = "steadii.voice.last_use_at";
 const CAPS_LOCK_HOLD_PROBE_MS = 80;
 const RECORDING_MIN_MS = 500;
 const RECORDING_MAX_MS = 60_000;
+// Two-option chooser auto-dismiss window. After this long, the chooser
+// quietly resolves to "full" — equivalent to clicking Send full. Kept short
+// enough that an inattentive user gets the long version (the safer default
+// — they can always edit) without leaving the chooser hanging.
+const PENDING_CHOICE_AUTO_DISMISS_MS = 8_000;
+
+export type VoicePendingChoice = {
+  cleaned: string;
+  shortened: string;
+};
+export type VoiceChoiceKind = "full" | "short";
 
 export function useVoiceInput(args: {
   triggerKey: VoiceTriggerKey;
@@ -39,6 +50,9 @@ export function useVoiceInput(args: {
   hintVisible: boolean;
   effectiveKey: VoiceTriggerKey;
   registerSuccessfulUse: () => void;
+  pendingChoice: VoicePendingChoice | null;
+  selectChoice: (kind: VoiceChoiceKind) => void;
+  dismissChoice: () => void;
 } {
   const {
     triggerKey,
@@ -52,6 +66,8 @@ export function useVoiceInput(args: {
   const [state, setState] = useState<VoiceState>("idle");
   const [fallbackActive, setFallbackActive] = useState(false);
   const [hintVisible, setHintVisible] = useState(true);
+  const [pendingChoice, setPendingChoice] =
+    useState<VoicePendingChoice | null>(null);
 
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -60,6 +76,15 @@ export function useVoiceInput(args: {
   const isRecordingRef = useRef(false);
   const triggerArmedRef = useRef(false);
   const capsKeydownAtRef = useRef<number | null>(null);
+  const pendingChoiceTimerRef = useRef<number | null>(null);
+  const pendingChoiceRef = useRef<VoicePendingChoice | null>(null);
+  // Latest onResult ref. The chooser auto-dismiss timer captures onResult
+  // at the time the choice was offered; if the parent rerenders with a
+  // new closure, we still want the timer to call the *current* onResult.
+  const onResultRef = useRef(onResult);
+  useEffect(() => {
+    onResultRef.current = onResult;
+  }, [onResult]);
 
   // Hydrate fallback + hint state from localStorage. SSR-safe (we only
   // read inside an effect).
@@ -87,6 +112,51 @@ export function useVoiceInput(args: {
 
   const effectiveKey: VoiceTriggerKey =
     fallbackActive && triggerKey === "caps_lock" ? "alt_right" : triggerKey;
+
+  const clearPendingChoiceTimer = useCallback(() => {
+    if (pendingChoiceTimerRef.current !== null) {
+      window.clearTimeout(pendingChoiceTimerRef.current);
+      pendingChoiceTimerRef.current = null;
+    }
+  }, []);
+
+  const selectChoice = useCallback(
+    (kind: VoiceChoiceKind) => {
+      const choice = pendingChoiceRef.current;
+      if (!choice) return;
+      clearPendingChoiceTimer();
+      pendingChoiceRef.current = null;
+      setPendingChoice(null);
+      const text = kind === "short" ? choice.shortened : choice.cleaned;
+      onResultRef.current(text);
+    },
+    [clearPendingChoiceTimer]
+  );
+
+  const dismissChoice = useCallback(() => {
+    clearPendingChoiceTimer();
+    pendingChoiceRef.current = null;
+    setPendingChoice(null);
+  }, [clearPendingChoiceTimer]);
+
+  const offerPendingChoice = useCallback(
+    (choice: VoicePendingChoice) => {
+      clearPendingChoiceTimer();
+      pendingChoiceRef.current = choice;
+      setPendingChoice(choice);
+      pendingChoiceTimerRef.current = window.setTimeout(() => {
+        // Auto-dismiss → default to full (cleaned). Mirror selectChoice
+        // semantics so registerSuccessfulUse still fires.
+        const current = pendingChoiceRef.current;
+        if (!current) return;
+        pendingChoiceRef.current = null;
+        pendingChoiceTimerRef.current = null;
+        setPendingChoice(null);
+        onResultRef.current(current.cleaned);
+      }, PENDING_CHOICE_AUTO_DISMISS_MS);
+    },
+    [clearPendingChoiceTimer]
+  );
 
   const registerSuccessfulUse = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -190,9 +260,10 @@ export function useVoiceInput(args: {
         cleaned?: string;
         transcript?: string;
         cleanupSkipped?: boolean;
+        shortened?: string;
       };
-      const text = (data.cleaned || data.transcript || "").trim();
-      if (!text) {
+      const cleaned = (data.cleaned || data.transcript || "").trim();
+      if (!cleaned) {
         // No speech captured at all — silently return to idle. Toast on
         // empty would be noisy if user just released early.
         setState("idle");
@@ -201,7 +272,18 @@ export function useVoiceInput(args: {
       if (data.cleanupSkipped) {
         onError("cleanup_failed");
       }
-      onResult(text);
+      const shortened = data.shortened?.trim();
+      if (shortened && shortened !== cleaned) {
+        // Long clip with a meaningful summary — surface the chooser instead
+        // of inserting immediately. Either path counts as a successful use
+        // (the user spoke, they got something back); register here so the
+        // hint fades on schedule even if they auto-dismiss.
+        offerPendingChoice({ cleaned, shortened });
+        registerSuccessfulUse();
+        setState("idle");
+        return;
+      }
+      onResult(cleaned);
       registerSuccessfulUse();
       setState("idle");
     } catch (err) {
@@ -210,7 +292,14 @@ export function useVoiceInput(args: {
     } finally {
       cleanup();
     }
-  }, [cleanup, chatId, onError, onResult, registerSuccessfulUse]);
+  }, [
+    cleanup,
+    chatId,
+    onError,
+    onResult,
+    offerPendingChoice,
+    registerSuccessfulUse,
+  ]);
 
   const startRecording = useCallback(async () => {
     if (isRecordingRef.current) return;
@@ -353,6 +442,9 @@ export function useVoiceInput(args: {
       if (stream) {
         for (const track of stream.getTracks()) track.stop();
       }
+      if (pendingChoiceTimerRef.current !== null) {
+        window.clearTimeout(pendingChoiceTimerRef.current);
+      }
     };
   }, []);
 
@@ -362,5 +454,8 @@ export function useVoiceInput(args: {
     hintVisible,
     effectiveKey,
     registerSuccessfulUse,
+    pendingChoice,
+    selectChoice,
+    dismissChoice,
   };
 }
