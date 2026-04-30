@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bell, Sparkles } from "lucide-react";
+import { Bell, ClipboardList, Sparkles } from "lucide-react";
 import type { HighRiskPendingItem } from "@/lib/agent/email/pending-queries";
 import type { AutoActionFeedItem } from "@/lib/agent/proactive/auto-action-feed";
+import type { WaitlistAdminBellItem } from "@/lib/waitlist/admin-bell";
 
 // localStorage marker for the most recent moment the user opened the
 // notification dropdown. Used to compute the "unseen" red dot client-side
@@ -15,9 +16,13 @@ const STORAGE_KEY = "steadii.notif.lastSeen";
 export function NotificationBellClient({
   items,
   autoActions,
+  adminWaitlist = [],
+  adminWaitlistTotal = 0,
 }: {
   items: HighRiskPendingItem[];
   autoActions: AutoActionFeedItem[];
+  adminWaitlist?: WaitlistAdminBellItem[];
+  adminWaitlistTotal?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [lastSeenIso, setLastSeenIso] = useState<string | null>(null);
@@ -71,13 +76,20 @@ export function NotificationBellClient({
   }
 
   const hasItems = items.length > 0;
+  const hasAdminWaitlist = adminWaitlist.length > 0;
+  const hasNeedsReview = hasItems || hasAdminWaitlist;
   const hasAutoActions = autoActions.length > 0;
-  const hasAnything = hasItems || hasAutoActions;
+  const hasAnything = hasNeedsReview || hasAutoActions;
+  const adminOverflow = Math.max(0, adminWaitlistTotal - adminWaitlist.length);
   const hasUnseen = !mounted
     ? hasAnything
     : items.some((i) => {
         if (!lastSeenIso) return true;
         return new Date(i.receivedAt).getTime() > new Date(lastSeenIso).getTime();
+      }) ||
+      adminWaitlist.some((w) => {
+        if (!lastSeenIso) return true;
+        return new Date(w.createdAt).getTime() > new Date(lastSeenIso).getTime();
       }) ||
       autoActions.some((a) => {
         if (!lastSeenIso) return true;
@@ -110,7 +122,7 @@ export function NotificationBellClient({
           <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
             Needs review
           </div>
-          {!hasItems ? (
+          {!hasNeedsReview ? (
             <div className="px-3 py-2 text-small text-[hsl(var(--muted-foreground))]">
               No high-risk items right now.
             </div>
@@ -145,6 +157,51 @@ export function NotificationBellClient({
                   </Link>
                 </li>
               ))}
+              {adminWaitlist.map((row) => {
+                const ageHours =
+                  (Date.now() - new Date(row.createdAt).getTime()) /
+                  (60 * 60 * 1000);
+                const stamp =
+                  ageHours < 1
+                    ? "now"
+                    : ageHours < 24
+                      ? `${Math.round(ageHours)}h`
+                      : `${Math.round(ageHours / 24)}d`;
+                return (
+                  <li key={row.id}>
+                    <Link
+                      href="/app/admin/waitlist?tab=pending"
+                      onClick={handleItemClick}
+                      className="flex items-start gap-2 rounded-md px-3 py-2 transition-hover hover:bg-[hsl(var(--surface-raised))]"
+                    >
+                      <ClipboardList
+                        size={13}
+                        strokeWidth={1.75}
+                        className="mt-0.5 shrink-0 text-[hsl(var(--muted-foreground))]"
+                      />
+                      <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+                        <span className="line-clamp-2 text-[13px] text-[hsl(var(--foreground))]">
+                          {row.summary}
+                        </span>
+                        <span className="shrink-0 text-[11px] tabular-nums text-[hsl(var(--muted-foreground))]">
+                          {stamp}
+                        </span>
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
+              {adminOverflow > 0 ? (
+                <li>
+                  <Link
+                    href="/app/admin/waitlist?tab=pending"
+                    onClick={handleItemClick}
+                    className="block rounded-md px-3 py-2 text-[12px] text-[hsl(var(--primary))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:underline"
+                  >
+                    +{adminOverflow} more — view all
+                  </Link>
+                </li>
+              ) : null}
             </ul>
           )}
 
