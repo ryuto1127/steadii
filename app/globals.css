@@ -694,3 +694,67 @@
 @media (prefers-reduced-motion: reduce) {
   .hero-amber-pulse { animation: none; }
 }
+
+/* Phase 3 Cmd+K-style overlay. 200ms ease-out fade + scale-up on open,
+   150ms fade on close per handoff §B. The card scales from 96% → 100%
+   so the popup feels like it's stepping toward the user. */
+@keyframes steadii-overlay-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes steadii-overlay-card-enter {
+  from { opacity: 0; transform: scale(0.96) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+.steadii-overlay-backdrop {
+  animation: steadii-overlay-enter 200ms ease-out both;
+}
+.steadii-overlay-card {
+  animation: steadii-overlay-card-enter 200ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .steadii-overlay-backdrop,
+  .steadii-overlay-card { animation: none; }
+}
+
+/* Landing voice scene — pure CSS demo of the hold-to-talk flow. 6s loop,
+   no audio, no JS. Times match the handoff §E spec:
+     0-1s   key fades in
+     1-2s   holographic border wraps the input
+     2-4s   transcript types in (mixed JP+EN)
+     4-5s   brief settled pause
+     5-6s   reset (text fades out, border calms, key fades back to idle)
+   The "input" is a pure DOM element; the typed text is two characters at
+   a time per keyframe step so the rhythm reads as "speech-paced" not
+   robotic-typewriter. */
+@keyframes voice-demo-key {
+  0%, 5%   { opacity: 0.35; transform: scale(0.96); }
+  16%, 75% { opacity: 1;    transform: scale(1);    }
+  85%,100% { opacity: 0.35; transform: scale(0.96); }
+}
+@keyframes voice-demo-border {
+  0%, 18%   { opacity: 0;    background-position: 0% 50%;   }
+  25%, 75%  { opacity: 0.85; background-position: 100% 50%; }
+  85%, 100% { opacity: 0;    background-position: 0% 50%;   }
+}
+@keyframes voice-demo-text {
+  0%, 32%   { width: 0%; }
+  62%, 80%  { width: 100%; }
+  92%, 100% { width: 0%; }
+}
+@keyframes voice-demo-cursor {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+.voice-demo-key      { animation: voice-demo-key      6s ease-in-out infinite; }
+.voice-demo-border   { animation: voice-demo-border   6s ease-in-out infinite; }
+.voice-demo-text     { animation: voice-demo-text     6s steps(36, end) infinite; }
+.voice-demo-cursor   { animation: voice-demo-cursor   1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .voice-demo-key,
+  .voice-demo-border,
+  .voice-demo-text,
+  .voice-demo-cursor { animation: none; }
+  .voice-demo-text   { width: 100%; }
+  .voice-demo-border { opacity: 0.6; }
+}

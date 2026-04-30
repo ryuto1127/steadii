@@ -293,12 +293,23 @@ type MessagesShape = {
     error_mic_denied: string;
     error_transcribe_failed: string;
     error_rate_limited: string;
+    error_agent_failed: string;
+    error_operation_partial: string;
     warning_cleanup_skipped: string;
+    confirmation_handoff: string;
     choice_label: string;
     choice_full_words: string;
     choice_full_chars: string;
     choice_short_words: string;
     choice_short_chars: string;
+    global_listening: string;
+    global_processing: string;
+    global_hint_caps: string;
+    global_hint_alt: string;
+    overlay_label: string;
+    overlay_placeholder: string;
+    overlay_hint_caps: string;
+    overlay_hint_alt: string;
   };
   settings: {
     title: string;
@@ -514,7 +525,7 @@ export const en: MessagesShape = {
   },
   landing: {
     headline: "AI secretary\nfor your studies.",
-    subhead: "Reads, writes, and remembers — for you.",
+    subhead: "Type or talk — Steadii reads, writes, and remembers for you.",
     cta: "Continue with Google",
     cta_request_access: "Request α access",
     cta_already_approved: "Already approved? Sign in",
@@ -892,18 +903,29 @@ export const en: MessagesShape = {
     remove_attachment: "Remove",
   },
   voice: {
-    hint_caps: "Hold Caps Lock to talk",
-    hint_alt: "Hold ⌥ to talk",
+    hint_caps: "Hold Caps Lock to talk · Tap to chat from any page",
+    hint_alt: "Hold ⌥ to talk · Tap to chat from any page",
     listening_placeholder: "Listening…",
     error_mic_denied: "Mic blocked. Allow microphone access in browser settings.",
     error_transcribe_failed: "Couldn't read that. Try again.",
     error_rate_limited: "Too many voice requests. Wait a moment.",
+    error_agent_failed: "Steadii couldn't understand — try rephrasing.",
+    error_operation_partial: "Some actions didn't complete — please retry in the UI.",
     warning_cleanup_skipped: "Used raw transcript (cleanup skipped).",
+    confirmation_handoff: "Action needs your confirmation — opening chat.",
     choice_label: "Pick voice message length",
     choice_full_words: "Send full (~{n}w)",
     choice_full_chars: "Send full (~{n}字)",
     choice_short_words: "Send short (~{n}w)",
     choice_short_chars: "Send short (~{n}字)",
+    global_listening: "Listening to Steadii…",
+    global_processing: "Working on it…",
+    global_hint_caps: "Tap Caps Lock to chat · Hold to talk",
+    global_hint_alt: "Tap ⌥ to chat · Hold to talk",
+    overlay_label: "Steadii chat",
+    overlay_placeholder: "Ask Steadii anything…",
+    overlay_hint_caps: "Tap Caps Lock again to close · Hold to talk",
+    overlay_hint_alt: "Tap ⌥ again to close · Hold to talk",
   },
   settings: {
     title: "Settings",
