@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   VOICE_CLEANUP_SYSTEM_PROMPT,
+  VOICE_SHORTEN_SYSTEM_PROMPT,
   buildCleanupUserMessage,
+  buildShortenUserMessage,
 } from "@/lib/voice/cleanup-prompt";
 
 // The cleanup pipeline is two parts:
@@ -80,5 +82,52 @@ describe("buildCleanupUserMessage", () => {
   it("does not modify the input transcript", () => {
     const raw = "MAT223 のレポート due tomorrow";
     expect(buildCleanupUserMessage(raw)).toContain(raw);
+  });
+});
+
+describe("VOICE_CLEANUP_SYSTEM_PROMPT (Phase 2: USER ACADEMIC CONTEXT awareness)", () => {
+  it("rule #6 references the per-user USER ACADEMIC CONTEXT block", () => {
+    // Phase 2 extends rule #6 — the universal prompt now points at the
+    // follow-up system message that holds the user's classes / topics.
+    expect(VOICE_CLEANUP_SYSTEM_PROMPT).toMatch(/USER ACADEMIC CONTEXT/);
+  });
+});
+
+describe("VOICE_SHORTEN_SYSTEM_PROMPT (Phase 2 — long voice msg summary)", () => {
+  it("preserves all 5 numbered rules from the locked spec", () => {
+    for (let n = 1; n <= 5; n++) {
+      expect(VOICE_SHORTEN_SYSTEM_PROMPT).toMatch(
+        new RegExp(`(^|\\n)${n}\\.`)
+      );
+    }
+  });
+
+  it("instructs the model to preserve the actionable core", () => {
+    expect(VOICE_SHORTEN_SYSTEM_PROMPT).toMatch(
+      /Preserve the actionable core/i
+    );
+  });
+
+  it("forbids translation or register shifts", () => {
+    expect(VOICE_SHORTEN_SYSTEM_PROMPT).toMatch(/Same language and tone/i);
+    expect(VOICE_SHORTEN_SYSTEM_PROMPT).toMatch(/Do not translate/i);
+  });
+
+  it("targets ~30-50% of input length and returns input unchanged when already concise", () => {
+    expect(VOICE_SHORTEN_SYSTEM_PROMPT).toMatch(/30-50%/);
+    expect(VOICE_SHORTEN_SYSTEM_PROMPT).toMatch(/already concise/i);
+  });
+
+  it("constrains output to ONLY the shortened text (no preamble)", () => {
+    expect(VOICE_SHORTEN_SYSTEM_PROMPT).toMatch(
+      /Output ONLY the shortened text/i
+    );
+  });
+});
+
+describe("buildShortenUserMessage", () => {
+  it("frames the cleaned transcript with INPUT/OUTPUT delimiters", () => {
+    const out = buildShortenUserMessage("today I want to discuss many things");
+    expect(out).toBe("INPUT:\ntoday I want to discuss many things\n\nOUTPUT:");
   });
 });

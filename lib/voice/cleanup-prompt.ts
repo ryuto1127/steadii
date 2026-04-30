@@ -15,7 +15,7 @@ RULES (priority order):
 3. Remove fillers when meaningless at sentence start or mid-sentence: えー / あの / その / なんか / まぁ / そう / みたいな / ほら / um / uh / like / you know / so
 4. Repair disfluencies: false starts, repeated phrases. Output what they intended.
 5. Preserve code-switching exactly. "MAT223 のレポート due tomorrow" stays as written — do NOT translate to pure JP or pure EN.
-6. Preserve proper nouns / course codes / professor names verbatim. If STT clearly garbled a known pattern (e.g. "マット223" → "MAT223", "シーエスワンテン" → "CS110"), correct to canonical form. If uncertain, leave as-is.
+6. Preserve proper nouns / course codes / professor names verbatim. If STT clearly garbled a known pattern (e.g. "マット223" → "MAT223", "シーエスワンテン" → "CS110"), correct to canonical form. If uncertain, leave as-is. When a USER ACADEMIC CONTEXT block is provided in a follow-up system message, use it as the canonical-form reference for the user's classes / professors / topics.
 7. Preserve tone. Casual stays casual ("明日休もうかな"). Formal stays formal ("欠席させていただきます"). Don't shift register.
 8. Add punctuation appropriate to the language: 「、」「。」「？」「！」for JP; comma / period / ? / ! for EN. Use ? for clear questions only — declarative sentences with rising intonation aren't automatically interrogative.
 9. Length: same as input minus fillers and false starts. Do not expand.
@@ -35,4 +35,22 @@ Output: 5/17に変更したい。`;
 
 export function buildCleanupUserMessage(transcript: string): string {
   return `INPUT:\n${transcript}\n\nOUTPUT:`;
+}
+
+// Shorten pass for >30s recordings. Runs as a SECOND Mini call after the
+// main cleanup. The cleaned transcript becomes the input here. UX intent:
+// for rambly clips ("explain everything that happened today"), surface a
+// two-option chooser so the user can pick the long form or a tighter
+// summary. Locked in handoff `feat-voice-input-phase2.md`.
+export const VOICE_SHORTEN_SYSTEM_PROMPT = `You receive a clean voice transcript from a university student. Produce a shorter version that preserves the request / question / decision exactly but cuts elaboration, repetition, and tangential context.
+
+RULES:
+1. Preserve the actionable core: the question, request, decision, or commitment.
+2. Drop background narration, tangents, and repeated points.
+3. Same language and tone as input. Do not translate or shift register.
+4. Target ~30-50% of input length. If the input has no fluff (already concise), return it unchanged.
+5. Output ONLY the shortened text. No explanation, no preamble.`;
+
+export function buildShortenUserMessage(cleaned: string): string {
+  return `INPUT:\n${cleaned}\n\nOUTPUT:`;
 }
