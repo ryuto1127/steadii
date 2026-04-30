@@ -4,10 +4,12 @@ import { stripe } from "@/lib/billing/stripe";
 import { env } from "@/lib/env";
 
 // Generate a single-use Stripe Promotion Code under the
-// STEADII_FRIEND_3MO coupon. Code shape: STEADII-α-{SLUG}, where SLUG is
+// STEADII_FRIEND_3MO coupon. Code shape: STEADII-{SLUG}, where SLUG is
 // derived from the user's name (preferred) or email local-part. Pure
-// ASCII upper-case + digits + hyphens to keep the code typeable on
-// physical keyboards even though invitees normally just click the URL.
+// ASCII upper-case + digits + hyphens — Stripe rejects anything else
+// (we previously shipped a Greek "α" in the literal which 400'd every
+// create call; see Layer 2 below for the detector hardening that
+// caught it).
 //
 // Stripe rejects duplicate Promotion Code strings, so on collision we
 // retry with a numeric suffix until a free slot opens up.
@@ -29,7 +31,7 @@ export async function createWaitlistPromotionCode(args: {
   }
 
   const baseSlug = slugFor(args.name, args.email);
-  const baseCode = `STEADII-α-${baseSlug}`;
+  const baseCode = `STEADII-${baseSlug}`;
 
   // Try the bare code, then -2, -3, … up to a small ceiling. The
   // collision rate at α scale is ~0; the loop just keeps the action
@@ -69,18 +71,23 @@ function slugFor(name: string | null, email: string): string {
   return ascii || "FRIEND";
 }
 
-// Stripe surfaces "code already exists" as a generic StripeInvalidRequestError
-// with `param: 'code'`. Match on both fields to avoid swallowing unrelated
-// 400s.
+// Stripe surfaces "code already exists" as a StripeInvalidRequestError
+// whose message text contains "already exists" / "already in use" /
+// "duplicate". Match on the message — NOT on `param: 'code'` — because
+// character-validation errors (e.g. a non-ASCII char snuck into the
+// literal) also carry `param: 'code'` and would otherwise be swallowed
+// as collisions, looping the suffix retry until the 50-attempt ceiling
+// blew up. Real-prod incident 2026-04-29.
 function isPromotionCodeCollision(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const e = err as {
     type?: string;
-    param?: string;
     code?: string;
     message?: string;
   };
   if (e.type !== "StripeInvalidRequestError") return false;
-  if (e.param === "code") return true;
-  return typeof e.message === "string" && /already/i.test(e.message);
+  return (
+    typeof e.message === "string" &&
+    /already exist|already in use|duplicate/i.test(e.message)
+  );
 }
