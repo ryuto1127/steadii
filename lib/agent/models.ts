@@ -28,10 +28,13 @@ export type TaskType =
   // routine issues; the scanner can override to "complex" via the
   // selectModel env when an issue is high-stakes. Meters credits.
   | "proactive_proposal"
-  // Voice input cleanup. GPT-5.4 Mini post-processes the raw Whisper
+  // Voice input cleanup. GPT-5.4 Nano post-processes the raw Whisper
   // transcript (filler removal, self-correction, JP/EN code-switch
   // preservation). Logged for analytics; treated as 0 credit — voice is
   // a UX accelerator, like chat_title / tag_suggest.
+  // 2026-04-30: switched from Mini to Nano for first-character latency
+  // (Mini was ~700ms cold; Nano is ~200-300ms). Phase 2's locked prompt
+  // + few-shot examples mitigate the smaller-model quality risk.
   | "voice_cleanup";
 
 // Canonical model defaults. These are the target IDs; the operator can
@@ -96,7 +99,6 @@ export function selectModel(
     case "tool_call":
     case "email_classify_risk":
     case "proactive_proposal":
-    case "voice_cleanup":
       return env.OPENAI_CHAT_MODEL?.trim() || DEFAULTS.chat;
     case "mistake_explain":
     case "syllabus_extract":
@@ -106,6 +108,7 @@ export function selectModel(
       return env.OPENAI_COMPLEX_MODEL?.trim() || DEFAULTS.complex;
     case "chat_title":
     case "tag_suggest":
+    case "voice_cleanup":
       return env.OPENAI_NANO_MODEL?.trim() || DEFAULTS.nano;
     case "email_embed":
       return env.OPENAI_EMBEDDING_MODEL?.trim() || DEFAULTS.embedding;

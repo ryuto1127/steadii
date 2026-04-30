@@ -123,14 +123,14 @@ export default async function LandingPage() {
             <h2 className="whitespace-pre-line text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[44px]">
               {t("landing.what_you_do.title")}
             </h2>
+            <p className="mt-3 text-[14px] text-[#1A1814]/55">
+              {t("landing.what_you_do.voice_or_type")}
+            </p>
             <p className="mt-4 text-[17px] leading-[1.55] text-[#1A1814]/65 md:text-[18px]">
               {t("landing.what_you_do.subhead")}
             </p>
           </div>
-          <ChatActionCards
-            cards={cards}
-            youTypeLabel={t("landing.what_you_do.you_type_label")}
-          />
+          <ChatActionCards cards={cards} />
         </section>
 
         {/* Section 3 — Steadii in motion */}

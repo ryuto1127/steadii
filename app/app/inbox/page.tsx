@@ -2,8 +2,6 @@ import {
   Inbox as InboxIcon,
   HelpCircle,
   Star,
-  AlertCircle,
-  Sparkles,
 } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -21,6 +19,7 @@ import {
   compareInboxRows,
   isPendingDraft,
 } from "@/lib/agent/email/pending-queries";
+import { SteadiiNoticedToggle } from "./_components/steadii-noticed-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -238,62 +237,15 @@ export default async function InboxPage() {
         </div>
       </header>
 
-      {sortedProposals.length > 0 ? (
-        <section className="mb-6">
-          <h2 className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-            <Sparkles size={11} strokeWidth={2.5} />
-            Steadii noticed
-          </h2>
-          <ul className="divide-y divide-[hsl(var(--border))] overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
-            {sortedProposals.map((p) => {
-              const isPending = p.status === "pending";
-              const isAuto = p.issueType === "auto_action_log";
-              return (
-                <li key={p.id}>
-                  <Link
-                    href={`/app/inbox/proposals/${p.id}`}
-                    className="flex items-start gap-3 px-4 py-3 transition-hover hover:bg-[hsl(var(--surface-raised))]"
-                    data-pending={isPending ? "true" : undefined}
-                  >
-                    <span
-                      className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                        isAuto
-                          ? "text-[hsl(var(--muted-foreground))] bg-[hsl(var(--surface-raised))]"
-                          : "text-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.08)]"
-                      }`}
-                    >
-                      {isAuto ? "Action" : "Proposal"}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div
-                        className={`truncate text-[14px] ${
-                          isPending
-                            ? "font-semibold text-[hsl(var(--foreground))]"
-                            : "font-normal text-[hsl(var(--muted-foreground))]"
-                        }`}
-                      >
-                        <AlertCircle
-                          size={11}
-                          strokeWidth={2.5}
-                          className="mr-1 inline align-text-top"
-                        />
-                        {p.issueSummary}
-                      </div>
-                      <div className="text-[12px] text-[hsl(var(--muted-foreground))]">
-                        {p.status === "pending"
-                          ? "Pending — pick an action"
-                          : p.status === "resolved"
-                          ? "Resolved"
-                          : "Dismissed"}
-                      </div>
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
+      <SteadiiNoticedToggle
+        proposals={sortedProposals.map((p) => ({
+          id: p.id,
+          issueType: p.issueType,
+          issueSummary: p.issueSummary,
+          status: p.status,
+          createdAt: p.createdAt.toISOString(),
+        }))}
+      />
 
       {!gmailConnected ? (
         <EmptyState

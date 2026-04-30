@@ -718,43 +718,96 @@
 }
 
 /* Landing voice scene — pure CSS demo of the hold-to-talk flow. 6s loop,
-   no audio, no JS. Times match the handoff §E spec:
-     0-1s   key fades in
-     1-2s   holographic border wraps the input
-     2-4s   transcript types in (mixed JP+EN)
-     4-5s   brief settled pause
-     5-6s   reset (text fades out, border calms, key fades back to idle)
-   The "input" is a pure DOM element; the typed text is two characters at
-   a time per keyframe step so the rhythm reads as "speech-paced" not
-   robotic-typewriter. */
+   no audio, no JS. Stages:
+     0-1s   Caps key idle, border calm
+     1-3s   Caps pressed, holographic border, "Listening…" pulses
+     3-4s   Border tints amber, "Processing…" briefly visible
+     4-5s   Characters snake in from outside-left along a wavy path
+     5-6s   Settled (cursor blinks), then reset
+   Each character animates independently with a staggered delay derived
+   from --i, producing a snake-like wavy entrance inspired by voiceos.com.
+   The text container uses width: max-content so there is no trailing
+   whitespace after the final glyph. */
 @keyframes voice-demo-key {
   0%, 5%   { opacity: 0.35; transform: scale(0.96); }
-  16%, 75% { opacity: 1;    transform: scale(1);    }
-  85%,100% { opacity: 0.35; transform: scale(0.96); }
+  16%, 80% { opacity: 1;    transform: scale(1);    }
+  90%,100% { opacity: 0.35; transform: scale(0.96); }
 }
 @keyframes voice-demo-border {
-  0%, 18%   { opacity: 0;    background-position: 0% 50%;   }
-  25%, 75%  { opacity: 0.85; background-position: 100% 50%; }
-  85%, 100% { opacity: 0;    background-position: 0% 50%;   }
+  0%, 14%   { opacity: 0;    background-position: 0% 50%;   }
+  20%, 50%  { opacity: 0.85; background-position: 100% 50%; }
+  60%, 100% { opacity: 0;    background-position: 0% 50%;   }
 }
-@keyframes voice-demo-text {
-  0%, 32%   { width: 0%; }
-  62%, 80%  { width: 100%; }
-  92%, 100% { width: 0%; }
+@keyframes voice-demo-border-amber {
+  0%, 50%   { opacity: 0;    background-position: 0% 50%;   }
+  56%, 65%  { opacity: 0.65; background-position: 100% 50%; }
+  72%, 100% { opacity: 0;    background-position: 0% 50%;   }
+}
+@keyframes voice-demo-listening {
+  0%, 14%   { opacity: 0; }
+  20%, 50%  { opacity: 1; }
+  56%, 100% { opacity: 0; }
+}
+@keyframes voice-demo-processing {
+  0%, 50%   { opacity: 0; }
+  56%, 65%  { opacity: 1; }
+  72%, 100% { opacity: 0; }
+}
+@keyframes voice-demo-dot {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  50%      { opacity: 1;    transform: translateY(-1px); }
+}
+/* Snake motion — characters enter from outside-left of the input along a
+   curved path. translateY uses sin(--i) for a wavy shape; the staggered
+   delay (var(--i) * 30ms) plus a 6s loop period gives the visceral
+   "voice → text" feel. */
+@keyframes voice-demo-char-snake {
+  0%, 65%   { opacity: 0; transform: translate(-60px, 8px); }
+  72%       { opacity: 0.7; transform: translate(-30px, -4px); }
+  78%, 90%  { opacity: 1;   transform: translate(0, 0); }
+  96%, 100% { opacity: 0;   transform: translate(0, 0); }
 }
 @keyframes voice-demo-cursor {
+  0%, 100% { opacity: 0; }
+  78%, 90% { opacity: 1; }
+}
+@keyframes voice-demo-cursor-blink {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0; }
 }
-.voice-demo-key      { animation: voice-demo-key      6s ease-in-out infinite; }
-.voice-demo-border   { animation: voice-demo-border   6s ease-in-out infinite; }
-.voice-demo-text     { animation: voice-demo-text     6s steps(36, end) infinite; }
-.voice-demo-cursor   { animation: voice-demo-cursor   1s ease-in-out infinite; }
+.voice-demo-key                { animation: voice-demo-key      6s ease-in-out infinite; }
+.voice-demo-border             { animation: voice-demo-border   6s ease-in-out infinite; }
+.voice-demo-border-amber       { animation: voice-demo-border-amber 6s ease-in-out infinite; }
+.voice-demo-listening          { animation: voice-demo-listening   6s ease-in-out infinite; }
+.voice-demo-processing         { animation: voice-demo-processing  6s ease-in-out infinite; }
+.voice-demo-dots > span        { animation: voice-demo-dot         1.2s ease-in-out infinite; }
+.voice-demo-dots > span:nth-child(2) { animation-delay: 0.15s; }
+.voice-demo-dots > span:nth-child(3) { animation-delay: 0.30s; }
+.voice-demo-text-wrap          {
+  width: max-content;
+  max-width: 100%;
+  overflow: hidden;
+  animation: voice-demo-cursor 6s ease-in-out infinite;
+}
+.voice-demo-char {
+  opacity: 0;
+  animation: voice-demo-char-snake 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation-delay: calc(var(--i, 0) * 30ms);
+  white-space: pre;
+}
+.voice-demo-cursor             { animation: voice-demo-cursor-blink 1s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
   .voice-demo-key,
   .voice-demo-border,
-  .voice-demo-text,
+  .voice-demo-border-amber,
+  .voice-demo-listening,
+  .voice-demo-processing,
+  .voice-demo-dots > span,
+  .voice-demo-text-wrap,
+  .voice-demo-char,
   .voice-demo-cursor { animation: none; }
-  .voice-demo-text   { width: 100%; }
-  .voice-demo-border { opacity: 0.6; }
+  .voice-demo-listening,
+  .voice-demo-processing { opacity: 0; }
+  .voice-demo-char       { opacity: 1; }
+  .voice-demo-border     { opacity: 0.6; }
 }
