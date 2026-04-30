@@ -17,6 +17,7 @@ type MessagesShape = {
     what_you_do: {
       title: string;
       subhead: string;
+      voice_or_type: string;
       you_type_label: string;
       cards: {
         calendar: { input: string; action: string };
@@ -290,6 +291,7 @@ type MessagesShape = {
     hint_caps: string;
     hint_alt: string;
     listening_placeholder: string;
+    processing_placeholder: string;
     error_mic_denied: string;
     error_transcribe_failed: string;
     error_rate_limited: string;
@@ -553,6 +555,7 @@ export const en: MessagesShape = {
       title: "Just chat.\nSteadii does the rest.",
       subhead:
         "No buttons to find, no menus to navigate. The chat input is the entire app.",
+      voice_or_type: "Say or type — both feel native.",
       you_type_label: "You type",
       cards: {
         calendar: {
@@ -906,6 +909,7 @@ export const en: MessagesShape = {
     hint_caps: "Hold Caps Lock to talk · Tap to chat from any page",
     hint_alt: "Hold ⌥ to talk · Tap to chat from any page",
     listening_placeholder: "Listening…",
+    processing_placeholder: "Processing…",
     error_mic_denied: "Mic blocked. Allow microphone access in browser settings.",
     error_transcribe_failed: "Couldn't read that. Try again.",
     error_rate_limited: "Too many voice requests. Wait a moment.",

@@ -35,6 +35,7 @@ export const ja: Messages = {
       title: "話すだけ。\nあとは Steadii。",
       subhead:
         "ボタン探しもメニュー操作も不要。チャット入力だけが Steadii の操作画面。",
+      voice_or_type: "話しても、書いても — どちらも自然。",
       you_type_label: "あなたが入力",
       cards: {
         calendar: {
@@ -389,6 +390,7 @@ export const ja: Messages = {
     hint_caps: "Caps Lock を長押しで話す・タップでチャットを開く",
     hint_alt: "右 ⌥ を長押しで話す・タップでチャットを開く",
     listening_placeholder: "聞いてます…",
+    processing_placeholder: "整えています…",
     error_mic_denied: "マイクが許可されていません。ブラウザ設定で許可してください。",
     error_transcribe_failed: "うまく読み取れませんでした。もう一度どうぞ。",
     error_rate_limited: "音声入力の回数が多すぎます。少し待ってから再試行してください。",

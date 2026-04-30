@@ -107,10 +107,10 @@ describe("cleanupTranscript (voice cleanup pass)", () => {
     expect(user).toContain("MAT223 のレポート due tomorrow");
   });
 
-  it("uses GPT-5.4 Mini (chat-tier model) — voice_cleanup routes alongside chat", async () => {
+  it("uses GPT-5.4 Nano (nano-tier model) — voice_cleanup migrated 2026-04-30 for first-token latency", async () => {
     const { cleanupTranscript } = await import("@/lib/voice/cleanup");
     await cleanupTranscript({ userId: "u1", transcript: "hello" });
-    expect(openaiCalls[0].model).toMatch(/mini/);
+    expect(openaiCalls[0].model).toMatch(/nano/);
   });
 
   it("short-circuits empty transcripts without calling OpenAI", async () => {
@@ -284,9 +284,9 @@ describe("voice cleanup credit accounting", () => {
     expect(taskTypeMetersCredits("voice_cleanup")).toBe(false);
   });
 
-  it("routes voice_cleanup to the chat (Mini) model tier by default", async () => {
+  it("routes voice_cleanup to the Nano model tier by default", async () => {
     const { selectModel } = await import("@/lib/agent/models");
     const env = {} as NodeJS.ProcessEnv;
-    expect(selectModel("voice_cleanup", env)).toMatch(/mini/);
+    expect(selectModel("voice_cleanup", env)).toMatch(/nano/);
   });
 });

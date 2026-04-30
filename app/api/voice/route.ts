@@ -7,9 +7,9 @@ import {
   rateLimitResponse,
 } from "@/lib/utils/rate-limit";
 import { openai } from "@/lib/integrations/openai/client";
-import { cleanupTranscript, shortenTranscript } from "@/lib/voice/cleanup";
+import { shortenTranscript, streamCleanupTranscript } from "@/lib/voice/cleanup";
 
-// Recordings at or above this threshold get a second Mini pass that
+// Recordings at or above this threshold get a second Nano pass that
 // produces a shorter version. The client surfaces a two-option chooser
 // (full vs short). Below the threshold we skip the extra call — short
 // clips don't need summarizing.
@@ -20,6 +20,11 @@ const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 // A 25MB cap doubles as a runtime safety net; we also gate on duration in
 // the client. Voice clips at α scale are sub-30s so this is huge headroom.
 const ACCEPTED_MIME_PREFIX = "audio/";
+
+// Skip the cleanup model entirely for transcripts under this many
+// non-whitespace characters. "うん", "はい", "OK" round-trip in ~Whisper
+// time only — cleanup has nothing to add to a 2-character transcript.
+const CLEANUP_SKIP_NONWS_CHARS = 10;
 
 export const runtime = "nodejs";
 
@@ -76,8 +81,6 @@ export async function POST(request: NextRequest) {
   // Phase 3: clients tag the surface that triggered the recording so server
   // analytics can later split chat-input vs global-hotkey usage. Cleanup
   // behavior is identical regardless — `surface` is purely a routing hint.
-  // Read here so the param is observable during request inspection; no
-  // schema column persists it yet.
   const _surface = form.get("surface");
   void _surface;
 
@@ -113,59 +116,114 @@ export async function POST(request: NextRequest) {
 
   const durationSec = estimateDurationSec(audio.size);
 
-  if (!transcript.trim()) {
-    return NextResponse.json({
-      cleaned: "",
-      transcript: "",
-      durationSec,
-      cleanupSkipped: true,
-    });
-  }
+  // SSE response — the client reads `delta`, then `shortened` (optional),
+  // then `done`. Order is guaranteed.
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event: Record<string, unknown>) => {
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify(event)}\n\n`)
+        );
+      };
 
-  let cleaned = transcript;
-  let cleanupSkipped = false;
-  try {
-    const result = await cleanupTranscript({
-      userId,
-      transcript,
-      chatId,
-    });
-    cleaned = result.cleaned || transcript;
-  } catch {
-    cleanupSkipped = true;
-  }
+      try {
+        if (!transcript.trim()) {
+          send({
+            type: "done",
+            cleaned: "",
+            transcript: "",
+            durationSec,
+            cleanupSkipped: true,
+          });
+          controller.close();
+          return;
+        }
 
-  // Second pass for long clips: produce a tighter summary the client can
-  // offer alongside the full version. Soft-fail — if this errors we just
-  // omit `shortened` and the client falls through to the normal "insert
-  // cleaned text" path.
-  let shortened: string | undefined;
-  if (durationSec >= SHORTEN_DURATION_THRESHOLD_SEC && cleaned.trim()) {
-    try {
-      const result = await shortenTranscript({
-        userId,
-        cleaned,
-        chatId,
-      });
-      const candidate = result.shortened.trim();
-      // Only surface the chooser if the model actually condensed something.
-      // If the shorten pass returned the same text (rule #4: "already
-      // concise → return unchanged"), drop it so the client doesn't show
-      // a useless two-option pill.
-      if (candidate && candidate !== cleaned.trim()) {
-        shortened = candidate;
+        // Short-transcript skip path — instant return for 1-2 word answers
+        // so "うん" / "はい" / "OK" don't pay the Nano round trip.
+        const nonWs = transcript.replace(/\s/g, "").length;
+        if (nonWs < CLEANUP_SKIP_NONWS_CHARS) {
+          send({
+            type: "done",
+            cleaned: transcript,
+            transcript,
+            durationSec,
+            cleanupSkipped: true,
+          });
+          controller.close();
+          return;
+        }
+
+        let cleaned = transcript;
+        let cleanupSkipped = false;
+        try {
+          for await (const ev of streamCleanupTranscript({
+            userId,
+            transcript,
+            chatId,
+          })) {
+            if (ev.type === "delta") {
+              send({ type: "delta", delta: ev.delta });
+            } else if (ev.type === "done") {
+              cleaned = ev.cleaned || transcript;
+            }
+          }
+        } catch (err) {
+          cleanupSkipped = true;
+          console.warn("voice cleanup stream failed", err);
+          // Fall through with raw transcript so the chooser/insertion still
+          // works with the user's actual words.
+          send({ type: "delta", delta: transcript });
+        }
+
+        // Second pass for long clips: produce a tighter summary the client
+        // can offer alongside the full version. Soft-fail — if this errors
+        // we just omit `shortened`.
+        let shortened: string | undefined;
+        if (durationSec >= SHORTEN_DURATION_THRESHOLD_SEC && cleaned.trim()) {
+          try {
+            const result = await shortenTranscript({
+              userId,
+              cleaned,
+              chatId,
+            });
+            const candidate = result.shortened.trim();
+            if (candidate && candidate !== cleaned.trim()) {
+              shortened = candidate;
+              send({ type: "shortened", shortened });
+            }
+          } catch (err) {
+            console.warn("voice shorten pass failed", err);
+          }
+        }
+
+        send({
+          type: "done",
+          cleaned,
+          transcript,
+          durationSec,
+          cleanupSkipped,
+          ...(shortened ? { shortened } : {}),
+        });
+        controller.close();
+      } catch (err) {
+        send({
+          type: "error",
+          code: "STREAM_FAILED",
+          message: err instanceof Error ? err.message : "Unknown error",
+        });
+        controller.close();
       }
-    } catch (err) {
-      console.warn("voice shorten pass failed", err);
-    }
-  }
+    },
+  });
 
-  return NextResponse.json({
-    cleaned,
-    transcript,
-    durationSec,
-    cleanupSkipped,
-    ...(shortened ? { shortened } : {}),
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    },
   });
 }
 
