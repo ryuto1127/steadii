@@ -16,6 +16,7 @@ import {
 } from "@/lib/integrations/notion/discovery";
 import { ensureNotionSetup } from "@/lib/integrations/notion/ensure-setup";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 
 export async function runSetupAction() {
   const session = await auth();
@@ -30,6 +31,7 @@ export async function runSetupAction() {
     console.error("Initial discovery failed", err);
   }
 
+  revalidatePath("/app/settings/connections");
   redirect("/app/settings/connections");
 }
 
@@ -46,6 +48,7 @@ export async function repairSetupAction() {
     console.error("Discovery after repair failed", err);
   }
 
+  revalidatePath("/app/settings/connections");
   redirect("/app/settings/connections?repaired=1");
 }
 
@@ -53,6 +56,7 @@ export async function refreshResourcesAction() {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthenticated");
   await discoverResources(session.user.id, { force: true });
+  revalidatePath("/app/settings");
   redirect("/app/settings");
 }
 
@@ -67,6 +71,12 @@ export async function disconnectNotionAction() {
     action: "notion.disconnected",
     result: "success",
   });
+
+  // Notion is one of the optional integrations that can satisfy
+  // integrationsStepCompleted in getOnboardingStatus. Bust the layout
+  // cache so /app/layout re-evaluates onboarding state on the next render.
+  revalidatePath("/app", "layout");
+  revalidatePath("/app/settings/connections");
   redirect("/app/settings/connections");
 }
 
@@ -97,6 +107,7 @@ export async function addResourceAction(formData: FormData) {
     autoRegistered: 0,
   });
 
+  revalidatePath("/app/settings");
   redirect("/app/settings");
 }
 
@@ -117,6 +128,15 @@ export async function skipIntegrationsStepAction() {
     .update(users)
     .set({ onboardingIntegrationsSkippedAt: new Date() })
     .where(eq(users.id, session.user.id));
+
+  // The post-skip redirect lands on /app, whose layout re-runs
+  // getOnboardingStatus and decides whether to bounce back to /onboarding.
+  // Without invalidating the cache here, /app/layout can serve a stale
+  // render where integrationsStepCompleted is still false → infinite
+  // /app ↔ /onboarding loop.
+  revalidatePath("/app", "layout");
+  revalidatePath("/onboarding");
+
   redirect("/app");
 }
 
@@ -130,5 +150,6 @@ export async function removeResourceAction(formData: FormData) {
     .delete(registeredResources)
     .where(eq(registeredResources.id, id));
 
+  revalidatePath("/app/settings");
   redirect("/app/settings");
 }

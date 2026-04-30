@@ -23,6 +23,12 @@ import { db } from "@/lib/db/client";
 import { subscriptions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
+// Onboarding redirects gate every /app/* route on getOnboardingStatus, so
+// any static optimization of this layout risks serving a stale redirect
+// after a state-changing server action (e.g. the Step 2 skip). Pin to
+// dynamic so each request re-evaluates against the live DB.
+export const dynamic = "force-dynamic";
+
 export default async function AppLayout({
   children,
 }: {
