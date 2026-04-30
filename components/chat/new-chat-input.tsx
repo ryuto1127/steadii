@@ -412,7 +412,7 @@ export function NewChatInput({
       voice.state === "idle" &&
       !voice.pendingChoice &&
       !error ? (
-        <p className="mt-2 px-1 text-[11px] text-[hsl(var(--muted-foreground))]">
+        <p className="mt-2 px-1 text-center text-[11px] text-[hsl(var(--muted-foreground))]">
           {voice.effectiveKey === "alt_right"
             ? tVoice("hint_alt")
             : tVoice("hint_caps")}
