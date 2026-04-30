@@ -218,3 +218,18 @@ If no memory entries are affected, write `**Memory entries to update**: none`.
 Why: memory captures intent at decision time; engineer ships async; without this contract the loop never closes and the next sparring session opens stale memory and re-litigates settled decisions. The engineer side does not edit memory directly (role split — see `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/feedback_role_split.md`); it only flags the delta. The sparring side applies the changes after merge.
 
 Memory locations are listed at the top of this file (`project_*.md`, `feedback_*.md`, etc.). When in doubt about which entry is affected, list the file and let sparring narrow it.
+
+---
+
+## 13. Verification screenshots — capture them yourself
+
+When a task affects something visible in the browser (UI change, layout, animation, color, copy), you take the verification screenshot via the Claude_Preview MCP — do **not** ask Ryuto to capture it.
+
+- Use `preview_resize` to set a real desktop viewport (default: **1440 × 900**, or 1920 × 1080 if a wider canvas is needed) before screenshotting. The default Claude Desktop preview window is split-narrow and produces broken-looking captures otherwise.
+- Use `preview_screenshot` for the verification image. Pair with `preview_console_logs` / `preview_network` for runtime sanity.
+- For interactive flows, drive `preview_click` / `preview_fill` / `preview_eval` to reach the state you need before capturing.
+- Auth-gated paths: use `preview_eval` to set the session cookie, or sign in via `preview_fill` against the dev login form.
+
+Why: Ryuto runs split sessions in Claude Desktop — his own view is super-narrow and ill-suited for verification. Manual screenshots are friction he should never have to spend time on. The default loop is **engineer makes the change → engineer captures the screenshot → engineer attaches it in the report or PR comment**.
+
+This applies equally to sparring when sparring is doing inline visual fixes.
