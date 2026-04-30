@@ -150,6 +150,8 @@ function issueTypeLabel(t: AgentProposalIssueType): string {
       return "Confirm import";
     case "auto_action_log":
       return "Steadii action log";
+    case "admin_waitlist_pending":
+      return "Waitlist request";
   }
 }
 

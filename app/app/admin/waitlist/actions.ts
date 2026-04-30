@@ -8,6 +8,7 @@ import { db } from "@/lib/db/client";
 import { waitlistRequests } from "@/lib/db/schema";
 import { isUnlimitedPlan } from "@/lib/billing/effective-plan";
 import { env } from "@/lib/env";
+import { dismissWaitlistAdminNotifications } from "@/lib/waitlist/admin-bell";
 import { createWaitlistPromotionCode } from "@/lib/waitlist/promotion-code";
 import { sendAccessApprovedEmail } from "@/lib/waitlist/email";
 
@@ -72,6 +73,8 @@ export async function approveWaitlistAction(
         })
         .where(eq(waitlistRequests.id, row.id));
 
+      await dismissWaitlistAdminNotifications([row.id]);
+
       results.push({ id: row.id, ok: true });
     } catch (err) {
       Sentry.captureException(err, {
@@ -97,6 +100,7 @@ export async function denyWaitlistAction(ids: string[]): Promise<void> {
     .update(waitlistRequests)
     .set({ status: "denied", approvedAt: null })
     .where(inArray(waitlistRequests.id, ids));
+  await dismissWaitlistAdminNotifications(ids);
   revalidatePath("/app/admin/waitlist");
 }
 
