@@ -140,10 +140,27 @@ export function ChatView({
     setStreamError(null);
     setStreaming(true);
     const assistantTempId = "assistant-" + Date.now();
-    setMessages((m) => [
-      ...m,
-      { id: assistantTempId, role: "assistant", content: "", attachments: [] },
-    ]);
+    setMessages((m) => {
+      // Defensive dedup: if the trailing message is already an empty
+      // streaming-temp assistant row (a stray runStream call landed here
+      // before the previous one resolved), reuse it instead of stacking
+      // two empty bubbles. The "double-render" report 2026-04-30 traced
+      // to a path where this skip wasn't enforced.
+      const last = m[m.length - 1];
+      if (
+        last &&
+        last.role === "assistant" &&
+        last.id.startsWith("assistant-") &&
+        !last.content &&
+        !last.items?.length
+      ) {
+        return m;
+      }
+      return [
+        ...m,
+        { id: assistantTempId, role: "assistant", content: "", attachments: [] },
+      ];
+    });
     try {
       const sse = await fetch(`/api/chat?chatId=${encodeURIComponent(chatId)}`, {
         headers: { Accept: "text/event-stream" },
@@ -166,11 +183,19 @@ export function ChatView({
             const payload = JSON.parse(line.slice(5).trim());
             if (payload.type === "message_start" && payload.assistantMessageId) {
               currentAssistantId = payload.assistantMessageId;
-              setMessages((m) =>
-                m.map((x) =>
+              setMessages((m) => {
+                // If the persisted ID is already in the list (e.g. an
+                // earlier render seeded it from initialMessages), drop
+                // the temp instead of renaming so we don't end up with
+                // two rows holding the same id.
+                const alreadyHas = m.some((x) => x.id === currentAssistantId);
+                if (alreadyHas) {
+                  return m.filter((x) => x.id !== assistantTempId);
+                }
+                return m.map((x) =>
                   x.id === assistantTempId ? { ...x, id: currentAssistantId } : x
-                )
-              );
+                );
+              });
             } else if (payload.type === "text_delta") {
               setMessages((m) =>
                 m.map((x) =>
@@ -262,22 +287,36 @@ export function ChatView({
       setStreamError(`Confirmation failed: ${await res.text()}`);
       return;
     }
-    setMessages((m) =>
-      m.map((msg) => ({
-        ...msg,
-        items: msg.items?.map((it) =>
-          it.kind === "tool" && it.event.pendingId === pendingId
-            ? {
-                ...it,
-                event: {
-                  ...it.event,
-                  status: decision === "approve" ? "done" : "denied",
-                },
-              }
-            : it
-        ),
-      }))
+    // Apply the local update on a snapshot so we can reason about the
+    // post-update state synchronously — needed to decide whether more
+    // pendings remain (multi-delete batch) before resuming the stream.
+    const next = messages.map((msg) => ({
+      ...msg,
+      items: msg.items?.map((it) =>
+        it.kind === "tool" && it.event.pendingId === pendingId
+          ? {
+              ...it,
+              event: {
+                ...it.event,
+                status: decision === "approve" ? ("done" as const) : ("denied" as const),
+              },
+            }
+          : it
+      ),
+    }));
+    setMessages(next);
+
+    const stillPending = next.some((msg) =>
+      msg.items?.some(
+        (it) => it.kind === "tool" && it.event.status === "pending"
+      )
     );
+    // Multi-tool batches yield N pending rows at once — wait until the
+    // user has resolved every one before the orchestrator resumes,
+    // otherwise the second confirm fires a stream that loadHistory has
+    // not yet been told about, and the agent reports phantom failures.
+    if (stillPending) return;
+
     await runStream();
   }
 
@@ -653,9 +692,11 @@ export function ChatView({
               }
             }}
             placeholder={
-              voiceActive
-                ? tVoice("listening_placeholder")
-                : t("chat_input.placeholder")
+              voiceProcessing
+                ? tVoice("processing_placeholder")
+                : voiceListening
+                  ? tVoice("listening_placeholder")
+                  : t("chat_input.placeholder")
             }
             rows={2}
             className={cn(
