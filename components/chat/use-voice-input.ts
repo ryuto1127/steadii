@@ -251,41 +251,95 @@ export function useVoiceInput(args: {
         setState("idle");
         return;
       }
-      if (!resp.ok) {
+      if (!resp.ok || !resp.body) {
         onError("transcribe_failed");
         setState("idle");
         return;
       }
-      const data = (await resp.json()) as {
-        cleaned?: string;
-        transcript?: string;
-        cleanupSkipped?: boolean;
-        shortened?: string;
-      };
-      const cleaned = (data.cleaned || data.transcript || "").trim();
-      if (!cleaned) {
-        // No speech captured at all — silently return to idle. Toast on
-        // empty would be noisy if user just released early.
-        setState("idle");
-        return;
-      }
-      if (data.cleanupSkipped) {
-        onError("cleanup_failed");
-      }
-      const shortened = data.shortened?.trim();
-      if (shortened && shortened !== cleaned) {
-        // Long clip with a meaningful summary — surface the chooser instead
-        // of inserting immediately. Either path counts as a successful use
-        // (the user spoke, they got something back); register here so the
-        // hint fades on schedule even if they auto-dismiss.
-        offerPendingChoice({ cleaned, shortened });
+
+      // SSE: the route streams `delta` events, then optionally `shortened`,
+      // then a final `done` event. We buffer deltas internally and emit the
+      // cleaned text once at the end (matching the non-streaming UX) so the
+      // chooser flow + voiceFlashKey animation still work cleanly.
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let cleaned = "";
+      let cleanedFinal: string | null = null;
+      let transcriptFallback = "";
+      let shortened: string | null = null;
+      let cleanupSkipped = false;
+      let streamErrored = false;
+
+      // Deferred callback fired once the chooser overlay has been resolved,
+      // OR immediately if no chooser is needed. Centralizing here prevents
+      // double-firing onResult when the stream parser sees both a `delta`
+      // accumulator and the final `done` cleaned text.
+      const finalize = () => {
+        const text = (cleanedFinal ?? cleaned ?? transcriptFallback).trim();
+        if (!text) {
+          setState("idle");
+          return;
+        }
+        if (cleanupSkipped) onError("cleanup_failed");
+        if (shortened && shortened !== text) {
+          offerPendingChoice({ cleaned: text, shortened });
+          registerSuccessfulUse();
+          setState("idle");
+          return;
+        }
+        onResult(text);
         registerSuccessfulUse();
         setState("idle");
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split("\n\n");
+        buf = parts.pop() ?? "";
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith("data:")) continue;
+          try {
+            const payload = JSON.parse(line.slice(5).trim()) as {
+              type: string;
+              delta?: string;
+              cleaned?: string;
+              transcript?: string;
+              shortened?: string;
+              cleanupSkipped?: boolean;
+              code?: string;
+              message?: string;
+            };
+            if (payload.type === "delta" && typeof payload.delta === "string") {
+              cleaned += payload.delta;
+            } else if (
+              payload.type === "shortened" &&
+              typeof payload.shortened === "string"
+            ) {
+              shortened = payload.shortened;
+            } else if (payload.type === "done") {
+              cleanedFinal =
+                payload.cleaned ?? cleaned ?? payload.transcript ?? "";
+              transcriptFallback = payload.transcript ?? "";
+              cleanupSkipped = !!payload.cleanupSkipped;
+            } else if (payload.type === "error") {
+              streamErrored = true;
+            }
+          } catch {
+            // ignore malformed event
+          }
+        }
+      }
+
+      if (streamErrored) {
+        onError("transcribe_failed");
+        setState("idle");
         return;
       }
-      onResult(cleaned);
-      registerSuccessfulUse();
-      setState("idle");
+      finalize();
     } catch (err) {
       onError("transcribe_failed", err instanceof Error ? err.message : "");
       setState("idle");

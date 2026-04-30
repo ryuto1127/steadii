@@ -251,9 +251,11 @@ export function VoiceOverlay() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={
-                voiceActive
-                  ? tVoice("listening_placeholder")
-                  : tVoice("overlay_placeholder")
+                voiceProcessing
+                  ? tVoice("processing_placeholder")
+                  : voiceListening
+                    ? tVoice("listening_placeholder")
+                    : tVoice("overlay_placeholder")
               }
               rows={1}
               onKeyDown={(e) => {
