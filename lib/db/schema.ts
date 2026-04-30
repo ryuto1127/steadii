@@ -53,6 +53,10 @@ export const users = pgTable("users", {
     theme?: "light" | "dark" | "system";
     locale?: "en" | "ja";
     agentConfirmationMode?: "destructive_only" | "all" | "none";
+    // Voice input hold-to-talk trigger. Caps Lock is the primary; Right
+    // Option is a fallback for keyboards/OSes where Caps Lock events are
+    // unreliable. Stored only when the user changes it from the default.
+    voiceTriggerKey?: "caps_lock" | "alt_right";
   }>().default({}),
   timezone: text("timezone"),
   onboardingStep: integer("onboarding_step").notNull().default(0),

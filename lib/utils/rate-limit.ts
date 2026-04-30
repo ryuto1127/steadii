@@ -76,6 +76,10 @@ export const BUCKETS = {
   // capacity is the full hour's quota) so legit retries don't trip on the
   // first refill tick.
   waitlistRequest: { capacity: 10, refillPerSec: 10 / 3600 },
+  // Voice input pipeline (Whisper + GPT mini cleanup). 60 calls/hour =
+  // ~1/min average — voice is cheap (~$0.0004/call) but we cap to prevent
+  // runaway loops or scripted spam.
+  voice: { capacity: 60, refillPerSec: 60 / 3600 },
 } as const satisfies Record<string, BucketConfig>;
 
 // Per-plan chat caps from project_decisions.md. Hourly + daily enforced

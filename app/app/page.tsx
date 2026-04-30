@@ -12,7 +12,7 @@ import {
   type TodayEvent,
   type DueSoonAssignment,
 } from "@/lib/dashboard/today";
-import { getUserTimezone } from "@/lib/agent/preferences";
+import { getUserTimezone, getUserVoiceTriggerKey } from "@/lib/agent/preferences";
 import { FALLBACK_TZ } from "@/lib/calendar/tz-utils";
 import { countPendingDrafts } from "@/lib/agent/email/pending-queries";
 import { cn } from "@/lib/utils/cn";
@@ -96,12 +96,13 @@ export default async function HomePage() {
   // Phase 6: Notion is optional. The dashboard always renders its three
   // cards; each card handles its own empty state (Today uses Calendar so
   // it works without Notion; Due soon and Past week degrade to empty).
-  const [events, dueSoon, weekSummary, tzPref, pendingCount] = await Promise.all([
+  const [events, dueSoon, weekSummary, tzPref, pendingCount, voiceTriggerKey] = await Promise.all([
     getTodaysEvents(userId),
     getDueSoonAssignments(userId),
     computeWeekSummary(userId),
     getUserTimezone(userId),
     countPendingDrafts(userId),
+    getUserVoiceTriggerKey(userId),
   ]);
   const tz = tzPref ?? FALLBACK_TZ;
 
@@ -179,7 +180,7 @@ export default async function HomePage() {
       </div>
 
       <div className="mx-auto mt-auto w-full max-w-3xl pt-10 md:pt-16">
-        <NewChatInput autoFocus />
+        <NewChatInput autoFocus voiceTriggerKey={voiceTriggerKey} />
       </div>
       </div>
     </div>
