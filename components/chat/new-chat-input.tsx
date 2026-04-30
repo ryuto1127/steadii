@@ -320,7 +320,11 @@ export function NewChatInput({
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
                 placeholder={
-                  voiceActive ? tVoice("listening_placeholder") : nativePlaceholder
+                  voiceProcessing
+                    ? tVoice("processing_placeholder")
+                    : voiceListening
+                      ? tVoice("listening_placeholder")
+                      : nativePlaceholder
                 }
                 autoFocus={autoFocus}
                 rows={1}
