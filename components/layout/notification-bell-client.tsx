@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bell } from "lucide-react";
+import { Bell, Sparkles } from "lucide-react";
 import type { HighRiskPendingItem } from "@/lib/agent/email/pending-queries";
+import type { AutoActionFeedItem } from "@/lib/agent/proactive/auto-action-feed";
 
 // localStorage marker for the most recent moment the user opened the
 // notification dropdown. Used to compute the "unseen" red dot client-side
@@ -13,8 +14,10 @@ const STORAGE_KEY = "steadii.notif.lastSeen";
 
 export function NotificationBellClient({
   items,
+  autoActions,
 }: {
   items: HighRiskPendingItem[];
+  autoActions: AutoActionFeedItem[];
 }) {
   const [open, setOpen] = useState(false);
   const [lastSeenIso, setLastSeenIso] = useState<string | null>(null);
@@ -68,11 +71,17 @@ export function NotificationBellClient({
   }
 
   const hasItems = items.length > 0;
+  const hasAutoActions = autoActions.length > 0;
+  const hasAnything = hasItems || hasAutoActions;
   const hasUnseen = !mounted
-    ? hasItems
+    ? hasAnything
     : items.some((i) => {
         if (!lastSeenIso) return true;
         return new Date(i.receivedAt).getTime() > new Date(lastSeenIso).getTime();
+      }) ||
+      autoActions.some((a) => {
+        if (!lastSeenIso) return true;
+        return new Date(a.createdAt).getTime() > new Date(lastSeenIso).getTime();
       });
 
   return (
@@ -97,9 +106,9 @@ export function NotificationBellClient({
         ) : null}
       </button>
       {open ? (
-        <div className="absolute right-0 top-full z-20 mt-1 w-[340px] rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-1 shadow-lg">
+        <div className="absolute right-0 top-full z-20 mt-1 w-[360px] rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-1 shadow-lg">
           <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-            Needs attention
+            Needs review
           </div>
           {!hasItems ? (
             <div className="px-3 py-2 text-small text-[hsl(var(--muted-foreground))]">
@@ -138,6 +147,48 @@ export function NotificationBellClient({
               ))}
             </ul>
           )}
+
+          {hasAutoActions ? (
+            <>
+              <div className="mt-1 border-t border-[hsl(var(--border))]" />
+              <div className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                <Sparkles size={11} strokeWidth={2.5} />
+                Steadii noticed
+              </div>
+              <ul className="flex flex-col">
+                {autoActions.map((row) => {
+                  const ageHours =
+                    (Date.now() - new Date(row.createdAt).getTime()) /
+                    (60 * 60 * 1000);
+                  const stamp =
+                    ageHours < 1
+                      ? "now"
+                      : ageHours < 24
+                        ? `${Math.round(ageHours)}h`
+                        : `${Math.round(ageHours / 24)}d`;
+                  return (
+                    <li key={row.id}>
+                      <Link
+                        href={`/app/inbox/proposals/${row.id}`}
+                        onClick={handleItemClick}
+                        className="flex flex-col gap-0.5 rounded-md px-3 py-2 transition-hover hover:bg-[hsl(var(--surface-raised))]"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="line-clamp-2 text-[13px] text-[hsl(var(--foreground))]">
+                            {row.summary}
+                          </span>
+                          <span className="shrink-0 text-[11px] tabular-nums text-[hsl(var(--muted-foreground))]">
+                            {stamp}
+                          </span>
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          ) : null}
+
           <div className="mt-1 border-t border-[hsl(var(--border))] px-3 py-2">
             <Link
               href="/app/inbox"

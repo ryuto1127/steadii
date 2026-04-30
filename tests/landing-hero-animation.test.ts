@@ -22,7 +22,10 @@ describe("HeroAnimation source contract", () => {
     expect(SRC).toContain("Extracting syllabus");
     expect(SRC).toContain("Math II");
     expect(SRC).toContain("Linear Algebra");
-    expect(SRC).toContain("[Steadii]");
+    // Fix 4 (2026-04-29) dropped the visible "[Steadii]" prefix from
+    // syllabus-imported events; the demo mirrors that. Provenance still
+    // lives in event.description ("Imported from Steadii syllabus …").
+    expect(SRC).not.toContain("[Steadii]");
   });
 
   it("uses the locked class color taxonomy (#3B82F6) and amber accent", () => {

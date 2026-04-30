@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   agentDrafts,
@@ -100,34 +100,36 @@ export async function loadPendingDigestItems(
   }));
 }
 
-// Phase 8 — load unresolved proactive proposals for the digest's
-// "Steadii noticed" subsection. Capped at 5 per D3.
+// Fix 5 (2026-04-29): the digest's "Steadii noticed" subsection now
+// pulls passive auto-action records from the last 24h (the same
+// `agent_proposals issue_type='auto_action_log'` rows the bell shows).
+// Pre-Fix-5 this loaded pending ambiguity proposals; those moved to the
+// inbox where the user can act on them. Cap stays at 5 per D3.
 export async function loadPendingProposals(
   userId: string,
   limit: number = 5
 ): Promise<DigestProposal[]> {
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const rows = await db
     .select({
       id: agentProposals.id,
       issueSummary: agentProposals.issueSummary,
-      issueType: agentProposals.issueType,
       createdAt: agentProposals.createdAt,
     })
     .from(agentProposals)
     .where(
       and(
         eq(agentProposals.userId, userId),
-        eq(agentProposals.status, "pending")
+        eq(agentProposals.issueType, "auto_action_log"),
+        gt(agentProposals.createdAt, cutoff)
       )
     )
     .orderBy(desc(agentProposals.createdAt))
     .limit(limit);
-  return rows
-    .filter((r) => r.issueType !== "auto_action_log")
-    .map((r) => ({
-      proposalId: r.id,
-      issueSummary: r.issueSummary,
-    }));
+  return rows.map((r) => ({
+    proposalId: r.id,
+    issueSummary: r.issueSummary,
+  }));
 }
 
 export type DigestLocale = "en" | "ja";
