@@ -13,6 +13,7 @@ import { useTranslations } from "next-intl";
 import { MistakeNoteDialog } from "./mistake-note-dialog";
 import { MarkdownMessage } from "./markdown-message";
 import { ToolCallCard, type ToolCallStatus } from "./tool-call-card";
+import { parseProposedActions } from "./proposed-actions";
 import { ActionPill } from "@/components/ui/action-pill";
 import { cn } from "@/lib/utils/cn";
 import { reportDetectedTimezone } from "@/lib/utils/report-timezone";
@@ -69,6 +70,12 @@ export function ChatView({
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [mistakeFor, setMistakeFor] = useState<string | null>(null);
+  // Per-message-id set of "consumed" proposed-action pill rows. Once the
+  // user clicks any pill on a message, the pills hide so they can't fire
+  // twice and the chat reads as a normal continuation.
+  const [consumedActions, setConsumedActions] = useState<Set<string>>(
+    () => new Set()
+  );
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [uploading, setUploading] = useState<{
@@ -241,6 +248,49 @@ export function ChatView({
     await runStream();
   }
 
+  // Click handler for "Proposed actions" pills. Posts the action's label as
+  // a user message — the LLM has the prior turn (including its own
+  // proposed-actions block) in context and constructs the tool call from
+  // there. Write tools still flow through pending_tool_calls confirmation,
+  // so safety isn't bypassed; this is a typing shortcut, not a back door.
+  async function runProposedAction(messageId: string, label: string) {
+    if (sendingRef.current || streaming) return;
+    if (consumedActions.has(messageId)) return;
+    sendingRef.current = true;
+    setConsumedActions((s) => {
+      const next = new Set(s);
+      next.add(messageId);
+      return next;
+    });
+    const userMsg: Message = {
+      id: "temp-" + Date.now(),
+      role: "user",
+      content: label,
+      attachments: [],
+    };
+    setMessages((m) => [...m, userMsg]);
+    try {
+      const res = await fetch(`/api/chat/message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId, content: label }),
+      });
+      if (!res.ok) {
+        setStreamError("Failed to send action.");
+        return;
+      }
+      const { messageId: persistedId } = (await res.json()) as {
+        messageId: string;
+      };
+      setMessages((m) =>
+        m.map((x) => (x.id === userMsg.id ? { ...x, id: persistedId } : x))
+      );
+      await runStream();
+    } finally {
+      sendingRef.current = false;
+    }
+  }
+
   async function send() {
     // Guard against double-submit: a rapid second Enter press can re-enter
     // `send` before React flushes the `setInput("")` from the first call,
@@ -361,6 +411,19 @@ export function ChatView({
               m.role === "assistant" && idx === messages.length - 1;
             const showCursor = streaming && isLastAssistant && !hasAnyPending;
             const isUserMsg = m.role === "user";
+            // Pull "Proposed actions:" out of assistant content so we can
+            // render it as pills (Fix 6) instead of leaking the raw
+            // [tool_name] markup. Falls through unchanged when the block
+            // isn't present.
+            const parsed =
+              m.role === "assistant"
+                ? parseProposedActions(m.content)
+                : { body: m.content, actions: [] as { toolName: string; label: string }[] };
+            const renderBody = parsed.body;
+            const proposedActions =
+              !consumedActions.has(m.id) && !m.id.startsWith("assistant-")
+                ? parsed.actions
+                : [];
             return (
               <li
                 key={m.id}
@@ -433,13 +496,13 @@ export function ChatView({
                       )}
                     </div>
                   )}
-                  {m.content ? (
+                  {renderBody ? (
                     m.role === "assistant" ? (
                       <div className={cn(showCursor && "streaming-cursor")}>
-                        <MarkdownMessage content={m.content} />
+                        <MarkdownMessage content={renderBody} />
                       </div>
                     ) : (
-                      <span className="whitespace-pre-wrap">{m.content}</span>
+                      <span className="whitespace-pre-wrap">{renderBody}</span>
                     )
                   ) : m.role === "assistant" && streaming && !hasAnyPending ? (
                     <span className="streaming-cursor" aria-label="Thinking" />
@@ -450,6 +513,16 @@ export function ChatView({
                     m.content &&
                     !m.id.startsWith("assistant-") && (
                       <div className="mt-2 flex flex-wrap gap-1.5">
+                        {proposedActions.map((a, i) => (
+                          <ActionPill
+                            key={`${m.id}-action-${i}`}
+                            tone="primary"
+                            disabled={streaming}
+                            onClick={() => runProposedAction(m.id, a.label)}
+                          >
+                            {a.label}
+                          </ActionPill>
+                        ))}
                         <ActionPill onClick={() => setMistakeFor(m.id)} tone="primary">
                           {t("chat.actions.add_to_mistakes")}
                         </ActionPill>

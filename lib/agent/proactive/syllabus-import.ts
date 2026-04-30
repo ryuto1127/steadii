@@ -44,7 +44,6 @@ import {
 // originating syllabus row id in the description so the user can
 // trace back.
 
-const STEADII_PREFIX = "[Steadii]";
 const EXAM_KEYWORDS =
   /\b(exam|midterm|final|quiz|試験|期末|中間|テスト)\b/i;
 
@@ -211,7 +210,7 @@ async function createAndMirror(args: {
   extracted: ExtractedSyllabusEvent;
 }): Promise<boolean> {
   const evt = args.extracted;
-  const title = `${STEADII_PREFIX} ${evt.classCode ? evt.classCode + " " : ""}${evt.label}`.trim();
+  const title = `${evt.classCode ? evt.classCode + " " : ""}${evt.label}`.trim();
   const description = `Imported from Steadii syllabus ${args.syllabusId}.`;
   const providers = await getConnectedCalendarProviders(args.userId);
 

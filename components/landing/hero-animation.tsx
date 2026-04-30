@@ -78,13 +78,13 @@ const EXISTING_CLASSES = [
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const CALENDAR_EVENTS: Array<{ day: number; top: number; label: string }> = [
-  { day: 0, top: 14, label: "[Steadii] Math II — Lec" },
-  { day: 1, top: 50, label: "[Steadii] Math II — Tut" },
-  { day: 2, top: 14, label: "[Steadii] Math II — Lec" },
-  { day: 3, top: 50, label: "[Steadii] Math II — Tut" },
-  { day: 4, top: 14, label: "[Steadii] Math II — Lec" },
-  { day: 4, top: 64, label: "[Steadii] Math II Quiz" },
-  { day: 0, top: 84, label: "[Steadii] HW1 due" },
+  { day: 0, top: 14, label: "Math II — Lec" },
+  { day: 1, top: 50, label: "Math II — Tut" },
+  { day: 2, top: 14, label: "Math II — Lec" },
+  { day: 3, top: 50, label: "Math II — Tut" },
+  { day: 4, top: 14, label: "Math II — Lec" },
+  { day: 4, top: 64, label: "Math II Quiz" },
+  { day: 0, top: 84, label: "HW1 due" },
 ];
 
 export default function HeroAnimation() {
@@ -183,7 +183,7 @@ function Sidebar({ phase }: { phase: Phase }) {
       {SIDEBAR_ICONS.map((Icon, i) => (
         <span
           key={i}
-          className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors duration-200 ${
+          className={`flex h-7 w-7 items-center justify-center transition-colors duration-200 ${
             i === activeIdx
               ? "bg-black/[0.05] text-[#1A1814]"
               : "text-[#1A1814]/40"
