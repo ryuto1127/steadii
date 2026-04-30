@@ -7,7 +7,13 @@ import {
   rateLimitResponse,
 } from "@/lib/utils/rate-limit";
 import { openai } from "@/lib/integrations/openai/client";
-import { cleanupTranscript } from "@/lib/voice/cleanup";
+import { cleanupTranscript, shortenTranscript } from "@/lib/voice/cleanup";
+
+// Recordings at or above this threshold get a second Mini pass that
+// produces a shorter version. The client surfaces a two-option chooser
+// (full vs short). Below the threshold we skip the extra call — short
+// clips don't need summarizing.
+const SHORTEN_DURATION_THRESHOLD_SEC = 30;
 
 // Whisper hard cap. Anything bigger gets rejected before we touch OpenAI.
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
@@ -98,11 +104,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const durationSec = estimateDurationSec(audio.size);
+
   if (!transcript.trim()) {
     return NextResponse.json({
       cleaned: "",
       transcript: "",
-      durationSec: estimateDurationSec(audio.size),
+      durationSec,
       cleanupSkipped: true,
     });
   }
@@ -120,11 +128,37 @@ export async function POST(request: NextRequest) {
     cleanupSkipped = true;
   }
 
+  // Second pass for long clips: produce a tighter summary the client can
+  // offer alongside the full version. Soft-fail — if this errors we just
+  // omit `shortened` and the client falls through to the normal "insert
+  // cleaned text" path.
+  let shortened: string | undefined;
+  if (durationSec >= SHORTEN_DURATION_THRESHOLD_SEC && cleaned.trim()) {
+    try {
+      const result = await shortenTranscript({
+        userId,
+        cleaned,
+        chatId,
+      });
+      const candidate = result.shortened.trim();
+      // Only surface the chooser if the model actually condensed something.
+      // If the shorten pass returned the same text (rule #4: "already
+      // concise → return unchanged"), drop it so the client doesn't show
+      // a useless two-option pill.
+      if (candidate && candidate !== cleaned.trim()) {
+        shortened = candidate;
+      }
+    } catch (err) {
+      console.warn("voice shorten pass failed", err);
+    }
+  }
+
   return NextResponse.json({
     cleaned,
     transcript,
-    durationSec: estimateDurationSec(audio.size),
+    durationSec,
     cleanupSkipped,
+    ...(shortened ? { shortened } : {}),
   });
 }
 
