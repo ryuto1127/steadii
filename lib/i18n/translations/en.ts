@@ -286,6 +286,15 @@ type MessagesShape = {
     dismiss: string;
     remove_attachment: string;
   };
+  voice: {
+    hint_caps: string;
+    hint_alt: string;
+    listening_placeholder: string;
+    error_mic_denied: string;
+    error_transcribe_failed: string;
+    error_rate_limited: string;
+    warning_cleanup_skipped: string;
+  };
   settings: {
     title: string;
     sign_out: string;
@@ -299,7 +308,17 @@ type MessagesShape = {
       appearance: string;
       language: string;
       timezone: string;
+      voice: string;
       danger: string;
+    };
+    voice: {
+      description: string;
+      trigger_label: string;
+      trigger_caps: string;
+      trigger_alt: string;
+      saved: string;
+      hint_caps: string;
+      hint_alt: string;
     };
     connections: {
       workspace_fallback: string;
@@ -867,6 +886,15 @@ export const en: MessagesShape = {
     dismiss: "Dismiss",
     remove_attachment: "Remove",
   },
+  voice: {
+    hint_caps: "Hold Caps Lock to talk",
+    hint_alt: "Hold ⌥ to talk",
+    listening_placeholder: "Listening…",
+    error_mic_denied: "Mic blocked. Allow microphone access in browser settings.",
+    error_transcribe_failed: "Couldn't read that. Try again.",
+    error_rate_limited: "Too many voice requests. Wait a moment.",
+    warning_cleanup_skipped: "Used raw transcript (cleanup skipped).",
+  },
   settings: {
     title: "Settings",
     sign_out: "Sign out",
@@ -880,7 +908,18 @@ export const en: MessagesShape = {
       appearance: "Appearance",
       language: "Language",
       timezone: "Time zone",
+      voice: "Voice input",
       danger: "Danger zone",
+    },
+    voice: {
+      description:
+        "Hold a key to talk to Steadii — release to send. Caps Lock is the default; switch to the Right Option (⌥) key if your browser doesn't release Caps Lock cleanly.",
+      trigger_label: "Trigger key",
+      trigger_caps: "Caps Lock (default)",
+      trigger_alt: "Right Option (⌥)",
+      saved: "Saved",
+      hint_caps: "Hold Caps Lock to talk",
+      hint_alt: "Hold ⌥ to talk",
     },
     connections: {
       workspace_fallback: "workspace",

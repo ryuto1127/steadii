@@ -10,8 +10,10 @@ import {
 import { useRouter } from "next/navigation";
 import { Paperclip, SendHorizontal } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils/cn";
 import { reportDetectedTimezone } from "@/lib/utils/report-timezone";
+import { useVoiceInput, type VoiceTriggerKey } from "./use-voice-input";
 
 // Creates a chat and lands on /app/chat/[id]?stream=1 with the first message
 // already posted. The chat-view on the next page reads `stream=1` to auto-
@@ -107,12 +109,15 @@ const MAX_HEIGHT_PX = 200;
 export function NewChatInput({
   placeholder,
   autoFocus = false,
+  voiceTriggerKey = "caps_lock",
 }: {
   placeholder?: string;
   autoFocus?: boolean;
+  voiceTriggerKey?: VoiceTriggerKey;
 }) {
   const t = useTranslations("chat_input");
   const tChat = useTranslations("chat");
+  const tVoice = useTranslations("voice");
   const router = useRouter();
   const [value, setValue] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -121,8 +126,43 @@ export function NewChatInput({
   const [isPending, startTransition] = useTransition();
   const [exampleIdx, setExampleIdx] = useState(0);
   const [fadeIn, setFadeIn] = useState(true);
+  const [voiceFlashKey, setVoiceFlashKey] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const voice = useVoiceInput({
+    triggerKey: voiceTriggerKey,
+    containerRef: formRef,
+    onResult: (cleaned) => {
+      setValue((prev) => {
+        const sep = prev.length > 0 && !/\s$/.test(prev) ? " " : "";
+        return `${prev}${sep}${cleaned}`;
+      });
+      setVoiceFlashKey((k) => k + 1);
+      // Re-focus the textarea so the cursor sits at the end of the inserted
+      // text, ready for either send or follow-on typing.
+      window.requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.focus();
+        el.selectionStart = el.value.length;
+        el.selectionEnd = el.value.length;
+      });
+    },
+    onError: (kind) => {
+      if (kind === "mic_denied") toast.error(tVoice("error_mic_denied"));
+      else if (kind === "transcribe_failed")
+        toast.error(tVoice("error_transcribe_failed"));
+      else if (kind === "cleanup_failed")
+        toast(tVoice("warning_cleanup_skipped"));
+      else if (kind === "rate_limited")
+        toast.error(tVoice("error_rate_limited"));
+    },
+  });
+  const voiceListening = voice.state === "listening";
+  const voiceProcessing = voice.state === "processing";
+  const voiceActive = voiceListening || voiceProcessing;
 
   // Rotate through example prompts when the input is idle (no caller-supplied
   // placeholder, no focus, no content). Helps new users discover what they
@@ -216,17 +256,28 @@ export function NewChatInput({
         aria-hidden
         className={cn(
           "steadii-input-aura",
-          auraActive && "is-active",
-          isFocused && "is-focused"
+          auraActive && !voiceActive && "is-active",
+          isFocused && !voiceActive && "is-focused"
         )}
       />
+      {voiceActive ? (
+        <span
+          aria-hidden
+          className={cn(
+            "steadii-voice-listening",
+            voiceProcessing && "steadii-voice-processing"
+          )}
+        />
+      ) : null}
       <form
+        ref={formRef}
         onSubmit={onSubmit}
         suppressHydrationWarning
         className={cn(
           "steadii-input-shadow group/input relative flex w-full items-end gap-1 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] p-2 transition-default",
           isFocused &&
-            "is-focused bg-[hsl(var(--surface))] ring-1 ring-[rgba(167,139,250,0.30)]"
+            "is-focused bg-[hsl(var(--surface))] ring-1 ring-[rgba(167,139,250,0.30)]",
+          voiceActive && "steadii-voice-active-ring bg-[hsl(var(--surface))]"
         )}
       >
         {!mounted ? (
@@ -252,13 +303,16 @@ export function NewChatInput({
             </button>
             <div className="relative flex min-h-11 flex-1 items-center">
               <textarea
+                key={voiceFlashKey}
                 ref={textareaRef}
                 id="new-chat-textarea"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
-                placeholder={nativePlaceholder}
+                placeholder={
+                  voiceActive ? tVoice("listening_placeholder") : nativePlaceholder
+                }
                 autoFocus={autoFocus}
                 rows={1}
                 onKeyDown={(e) => {
@@ -272,12 +326,15 @@ export function NewChatInput({
                 }}
                 className={cn(
                   "block w-full resize-none bg-transparent px-3 text-[15px] leading-[1.4] text-[hsl(var(--foreground))] focus:outline-none",
-                  useRotation
+                  voiceActive
+                    ? "placeholder:italic placeholder:text-[hsl(var(--muted-foreground))]"
+                    : useRotation
                     ? "placeholder:text-transparent"
-                    : "placeholder:text-[hsl(var(--muted-foreground))]"
+                    : "placeholder:text-[hsl(var(--muted-foreground))]",
+                  voiceFlashKey > 0 && "steadii-voice-text-fade-in"
                 )}
               />
-              {useRotation ? (
+              {useRotation && !voiceActive ? (
                 <span
                   aria-hidden
                   className={cn(
@@ -335,6 +392,13 @@ export function NewChatInput({
       {error ? (
         <p className="mt-2 rounded-lg border border-[hsl(var(--destructive)/0.3)] px-3 py-1.5 text-[11px] text-[hsl(var(--destructive))]">
           {error}
+        </p>
+      ) : null}
+      {mounted && voice.hintVisible && voice.state === "idle" && !error ? (
+        <p className="mt-2 px-1 text-[11px] text-[hsl(var(--muted-foreground))]">
+          {voice.effectiveKey === "alt_right"
+            ? tVoice("hint_alt")
+            : tVoice("hint_caps")}
         </p>
       ) : null}
     </div>

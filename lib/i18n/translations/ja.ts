@@ -385,6 +385,15 @@ export const ja: Messages = {
     dismiss: "閉じる",
     remove_attachment: "削除",
   },
+  voice: {
+    hint_caps: "Caps Lock を長押しで話す",
+    hint_alt: "右 ⌥ を長押しで話す",
+    listening_placeholder: "聞いてます…",
+    error_mic_denied: "マイクが許可されていません。ブラウザ設定で許可してください。",
+    error_transcribe_failed: "うまく読み取れませんでした。もう一度どうぞ。",
+    error_rate_limited: "音声入力の回数が多すぎます。少し待ってから再試行してください。",
+    warning_cleanup_skipped: "整形をスキップして生の文字起こしを使用しました。",
+  },
   settings: {
     title: "設定",
     sign_out: "サインアウト",
@@ -398,7 +407,18 @@ export const ja: Messages = {
       appearance: "外観",
       language: "言語",
       timezone: "タイムゾーン",
+      voice: "音声入力",
       danger: "危険な操作",
+    },
+    voice: {
+      description:
+        "キーを長押ししている間、Steadii が音声を聞いています。離すと送信。デフォルトは Caps Lock、もしブラウザの挙動が不安定なら右 ⌥ キーに切り替えられます。",
+      trigger_label: "トリガーキー",
+      trigger_caps: "Caps Lock（デフォルト）",
+      trigger_alt: "右 Option（⌥）",
+      saved: "保存しました",
+      hint_caps: "Caps Lock を長押しで話す",
+      hint_alt: "右 ⌥ を長押しで話す",
     },
     connections: {
       workspace_fallback: "ワークスペース",
