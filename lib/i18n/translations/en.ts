@@ -501,6 +501,49 @@ type MessagesShape = {
       toast_saved: string;
       toast_save_failed: string;
     };
+    next_action_banner: {
+      draft_reply_title: string;
+      draft_reply_body: string;
+      ask_clarifying_title: string;
+      ask_clarifying_body: string;
+      archive_title: string;
+      archive_body: string;
+      snooze_title: string;
+      snooze_body: string;
+      no_op_title: string;
+      no_op_body: string;
+      notify_only_title: string;
+      notify_only_body: string;
+      paused_title: string;
+      paused_body: string;
+    };
+    reasoning_panel: {
+      header_draft_reply: string;
+      header_ask_clarifying: string;
+      header_archive: string;
+      header_snooze: string;
+      header_no_op: string;
+      header_notify_only: string;
+      header_paused: string;
+      header_default: string;
+      collapse: string;
+      expand: string;
+    };
+    thinking_bar: {
+      thinking_complete: string;
+      bound_to: string;
+      this_class: string;
+      fanout_mistake: string;
+      fanout_syllabus: string;
+      fanout_calendar: string;
+      fanout_email: string;
+      fanout_none: string;
+      legacy_emails_surfaced: string;
+    };
+    proposal_detail: {
+      why_flagged: string;
+      sources: string;
+    };
   };
   app_layout: {
     sidebar_brand_aria: string;
@@ -1466,6 +1509,52 @@ export const en: MessagesShape = {
       role_other_hint: "Skip-able catch-all",
       toast_saved: "Saved: {sender} → {role}",
       toast_save_failed: "Save failed",
+    },
+    next_action_banner: {
+      draft_reply_title: "Steadii drafted a reply.",
+      draft_reply_body: "Review the draft below. Edit if needed, then Send.",
+      ask_clarifying_title: "Steadii needs more info from you.",
+      ask_clarifying_body:
+        "Provide the missing context below. Once you reply, Steadii drafts the response.",
+      archive_title: "No reply needed.",
+      archive_body: "Steadii recommends archiving this. Dismiss when you've handled it.",
+      snooze_title: "Steadii suggests revisiting later.",
+      snooze_body: "Dismiss for now; the item will resurface when relevant.",
+      no_op_title: "No action proposed.",
+      no_op_body: "Steadii didn't see anything that needs you. Dismiss to clear it.",
+      notify_only_title: "Important — no reply needed.",
+      notify_only_body:
+        "Steadii flagged this so you don't miss it. Read and dismiss.",
+      paused_title: "Paused — credits exhausted.",
+      paused_body:
+        "Top up to resume draft generation. Classification continues for free.",
+    },
+    reasoning_panel: {
+      header_draft_reply: "Why this draft",
+      header_ask_clarifying: "Why Steadii is asking",
+      header_archive: "Why archive",
+      header_snooze: "Why snooze",
+      header_no_op: "Why no action",
+      header_notify_only: "Why this is important",
+      header_paused: "Why paused",
+      header_default: "Steadii's reasoning",
+      collapse: "Collapse",
+      expand: "Expand",
+    },
+    thinking_bar: {
+      thinking_complete: "Thinking · complete",
+      bound_to: "Bound to",
+      this_class: "this class",
+      fanout_mistake: "{n} mistake",
+      fanout_syllabus: "{n} syllabus",
+      fanout_calendar: "{n} calendar",
+      fanout_email: "{n} email",
+      fanout_none: "no fanout context",
+      legacy_emails_surfaced: "{returned} of {total} emails surfaced",
+    },
+    proposal_detail: {
+      why_flagged: "Why Steadii flagged this",
+      sources: "Sources",
     },
   },
   app_layout: {

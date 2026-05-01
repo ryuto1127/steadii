@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, AlertCircle, BellRing, Sparkles } from "lucide-react";
 import { and, eq } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
 import {
@@ -23,6 +24,7 @@ export default async function ProposalDetailPage({
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
+  const t = await getTranslations("agent.proposal_detail");
 
   const [row] = await db
     .select()
@@ -86,7 +88,7 @@ export default async function ProposalDetailPage({
 
       <section className="mb-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
         <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-          Why Steadii flagged this
+          {t("why_flagged")}
         </h2>
         <p className="text-small leading-relaxed text-[hsl(var(--foreground))] whitespace-pre-wrap">
           {row.reasoning}
@@ -96,7 +98,7 @@ export default async function ProposalDetailPage({
       {sourceRefs.length > 0 ? (
         <section className="mb-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
           <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-            Sources
+            {t("sources")}
           </h2>
           <ul className="space-y-1 text-small">
             {sourceRefs.map((ref, i) => (

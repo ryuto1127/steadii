@@ -6,6 +6,7 @@ import {
   Calendar as CalendarIcon,
   GraduationCap,
 } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import type {
   RetrievalProvenance,
   RetrievalProvenanceSource,
@@ -41,37 +42,39 @@ function normalizeSources(
   );
 }
 
-export function ThinkingBar({
+export async function ThinkingBar({
   provenance,
   riskTier,
 }: {
   provenance: RetrievalProvenance | null;
   riskTier: "low" | "medium" | "high" | null;
 }) {
+  const t = await getTranslations("agent.thinking_bar");
+  const tInbox = await getTranslations("inbox");
   const sources = normalizeSources(provenance?.sources);
   const counts = provenance?.fanoutCounts ?? null;
   const binding = provenance?.classBinding ?? null;
 
   const tierLabel =
     riskTier === "high"
-      ? "High risk"
+      ? tInbox("tier_high")
       : riskTier === "medium"
-      ? "Medium risk"
+      ? tInbox("tier_medium")
       : riskTier === "low"
-      ? "Low risk"
-      : "Classifying";
+      ? tInbox("tier_low")
+      : tInbox("tier_classifying");
 
   // Headline counts. Prefer the richer fanout breakdown when present,
   // fall back to the legacy "N of M emails" line on pre-W1 rows.
   const headline = counts
-    ? buildFanoutHeadline(counts)
-    : buildLegacyHeadline(provenance);
+    ? buildFanoutHeadline(counts, t)
+    : buildLegacyHeadline(provenance, t);
 
   return (
     <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-4 py-3">
       <div className="flex flex-wrap items-center gap-2 text-small text-[hsl(var(--foreground))]">
         <Sparkles size={14} strokeWidth={1.75} className="text-[hsl(var(--primary))]" />
-        <span className="font-medium">Thinking · complete</span>
+        <span className="font-medium">{t("thinking_complete")}</span>
         <span className="text-[hsl(var(--muted-foreground))]">·</span>
         <span className="text-[hsl(var(--muted-foreground))]">{tierLabel}</span>
         {headline ? (
@@ -89,12 +92,12 @@ export function ThinkingBar({
             strokeWidth={1.75}
             className="text-[hsl(var(--primary))]"
           />
-          <span className="text-[hsl(var(--muted-foreground))]">Bound to</span>
+          <span className="text-[hsl(var(--muted-foreground))]">{t("bound_to")}</span>
           <span
             className="font-medium text-[hsl(var(--foreground))]"
             title={formatBindingTitle(binding)}
           >
-            {binding.className ?? "this class"}
+            {binding.className ?? t("this_class")}
             {binding.classCode ? ` (${binding.classCode})` : ""}
           </span>
         </div>
@@ -219,22 +222,26 @@ function formatBindingTitle(
   return `${method} (confidence ${conf})`;
 }
 
-function buildFanoutHeadline(counts: NonNullable<RetrievalProvenance["fanoutCounts"]>): string {
+function buildFanoutHeadline(
+  counts: NonNullable<RetrievalProvenance["fanoutCounts"]>,
+  t: (key: string, values?: Record<string, string | number>) => string
+): string {
   const parts: string[] = [];
-  if (counts.mistakes > 0) parts.push(`${counts.mistakes} mistake`);
-  if (counts.syllabus > 0) parts.push(`${counts.syllabus} syllabus`);
-  if (counts.calendar > 0) parts.push(`${counts.calendar} calendar`);
-  if (counts.emails > 0) parts.push(`${counts.emails} email`);
-  if (parts.length === 0) return "no fanout context";
+  if (counts.mistakes > 0) parts.push(t("fanout_mistake", { n: counts.mistakes }));
+  if (counts.syllabus > 0) parts.push(t("fanout_syllabus", { n: counts.syllabus }));
+  if (counts.calendar > 0) parts.push(t("fanout_calendar", { n: counts.calendar }));
+  if (counts.emails > 0) parts.push(t("fanout_email", { n: counts.emails }));
+  if (parts.length === 0) return t("fanout_none");
   return parts.join(" · ");
 }
 
 function buildLegacyHeadline(
-  provenance: RetrievalProvenance | null
+  provenance: RetrievalProvenance | null,
+  t: (key: string, values?: Record<string, string | number>) => string
 ): string | null {
   if (!provenance) return null;
   const returned = provenance.returned;
   const total = provenance.total_candidates;
   if (returned === 0) return null;
-  return `${returned} of ${total} emails surfaced`;
+  return t("legacy_emails_surfaced", { returned, total });
 }
