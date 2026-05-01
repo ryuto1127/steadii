@@ -717,52 +717,49 @@
   .steadii-overlay-card { animation: none; }
 }
 
-/* Landing voice scene v3 — pure CSS demo of the hold-to-talk flow. 6s
-   chat-box loop (Listening to Processing to settled phrase 1), plus a
-   single decorative SVG textPath below carrying all 3 sample phrases
-   joined by a bullet on one curving baseline. Replaces the v2 cascade
-   that overlapped phrases on some viewports and read as visual mess
-   vs the voiceos.com reference.
+/* Landing voice scene v4 — single chat box, raw to cleaned cross-fade.
+   6s loop visualizing Steadii's voice cleanup pipeline (Whisper raw to
+   GPT-5.4-nano cleanup) without an external wave decoration. Voice is
+   a sub-feature so this demo lives in a secondary section, not the
+   page lead.
 
-     0-1.8s    Caps idle, border calm, chat box empty.
-     1.8-3.0s  Caps pressed, holographic border, Listening with dots.
-     3.0-3.8s  Border tints amber, Processing briefly visible.
-     3.8-5.4s  Settled — phrase 1 fades in, cursor blinks.
-     5.4-6.0s  Fade out, reset.
-
-   The wavy textPath gets a 30s gentle horizontal drift so the line
-   doesn't look frozen, but the period is far enough above the chat
-   box loop that the two never compete for attention.
+     0-1.0s    Caps idle, border calm, chat box empty.
+     1.0-2.5s  Caps pressed, holographic border, Listening with dots.
+     2.5-3.3s  Border tints amber, Processing briefly visible.
+     3.3-4.4s  Raw noisy transcript fades in (italic, muted).
+     4.4-5.4s  Cross-fade — raw fades out, cleaned fades in. Cursor
+               blinks at end of cleaned text.
+     5.4-6.0s  Cleaned fades out, reset.
 */
 @keyframes voice-demo-key {
-  0%, 25%   { opacity: 0.35; transform: scale(0.96); }
-  30%, 90%  { opacity: 1;    transform: scale(1);    }
+  0%, 12%   { opacity: 0.35; transform: scale(0.96); }
+  17%, 90%  { opacity: 1;    transform: scale(1);    }
   95%, 100% { opacity: 0.35; transform: scale(0.96); }
 }
 @keyframes voice-demo-border {
-  0%, 25%   { opacity: 0;    background-position: 0% 50%;   }
-  30%, 60%  { opacity: 0.85; background-position: 100% 50%; }
-  68%, 100% { opacity: 0;    background-position: 0% 50%;   }
+  0%, 12%   { opacity: 0;    background-position: 0% 50%;   }
+  17%, 42%  { opacity: 0.85; background-position: 100% 50%; }
+  47%, 100% { opacity: 0;    background-position: 0% 50%;   }
 }
 @keyframes voice-demo-border-amber {
-  0%, 60%   { opacity: 0;    background-position: 0% 50%;   }
-  64%, 76%  { opacity: 0.65; background-position: 100% 50%; }
-  82%, 100% { opacity: 0;    background-position: 0% 50%;   }
+  0%, 42%   { opacity: 0;    background-position: 0% 50%;   }
+  47%, 55%  { opacity: 0.65; background-position: 100% 50%; }
+  60%, 100% { opacity: 0;    background-position: 0% 50%;   }
 }
 @keyframes voice-demo-listening {
-  0%, 25%   { opacity: 0; }
-  30%, 60%  { opacity: 1; }
-  64%, 100% { opacity: 0; }
+  0%, 12%   { opacity: 0; }
+  17%, 42%  { opacity: 1; }
+  47%, 100% { opacity: 0; }
 }
 @keyframes voice-demo-processing {
-  0%, 60%   { opacity: 0; }
-  64%, 76%  { opacity: 1; }
-  82%, 100% { opacity: 0; }
+  0%, 42%   { opacity: 0; }
+  47%, 55%  { opacity: 1; }
+  60%, 100% { opacity: 0; }
 }
-@keyframes voice-demo-settled {
-  0%, 76%   { opacity: 0; transform: translateY(2px); }
-  82%, 90%  { opacity: 1; transform: translateY(0);   }
-  95%, 100% { opacity: 0; transform: translateY(-1px); }
+@keyframes voice-demo-cleaned {
+  0%, 60%   { opacity: 0; transform: translateY(2px); }
+  68%, 92%  { opacity: 1; transform: translateY(0);   }
+  97%, 100% { opacity: 0; transform: translateY(-1px); }
 }
 @keyframes voice-demo-dot {
   0%, 100% { opacity: 0.25; transform: translateY(0); }
@@ -772,24 +769,19 @@
   0%, 100% { opacity: 1; }
   50%      { opacity: 0; }
 }
-@keyframes voice-demo-wave-drift {
-  0%, 100% { transform: translateX(0);     }
-  50%      { transform: translateX(-2.5%); }
-}
 .voice-demo-key                { animation: voice-demo-key       6s ease-in-out infinite; }
 .voice-demo-border             { animation: voice-demo-border    6s ease-in-out infinite; }
 .voice-demo-border-amber       { animation: voice-demo-border-amber 6s ease-in-out infinite; }
 .voice-demo-listening          { animation: voice-demo-listening 6s ease-in-out infinite; }
 .voice-demo-processing         { animation: voice-demo-processing 6s ease-in-out infinite; }
-.voice-demo-settled            {
+.voice-demo-cleaned            {
   opacity: 0;
-  animation: voice-demo-settled 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation: voice-demo-cleaned 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 .voice-demo-dots > span        { animation: voice-demo-dot       1.2s ease-in-out infinite; }
 .voice-demo-dots > span:nth-child(2) { animation-delay: 0.15s; }
 .voice-demo-dots > span:nth-child(3) { animation-delay: 0.30s; }
 .voice-demo-cursor             { animation: voice-demo-cursor-blink 1s ease-in-out infinite; }
-.voice-demo-wave-text          { animation: voice-demo-wave-drift 30s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   .voice-demo-key,
@@ -797,13 +789,12 @@
   .voice-demo-border-amber,
   .voice-demo-listening,
   .voice-demo-processing,
-  .voice-demo-settled,
+  .voice-demo-cleaned,
   .voice-demo-dots > span,
-  .voice-demo-cursor,
-  .voice-demo-wave-text { animation: none; }
+  .voice-demo-cursor { animation: none; }
   .voice-demo-listening,
   .voice-demo-processing { opacity: 0; }
-  /* Static fallback — settled phrase 1 visible, border calm. */
-  .voice-demo-settled { opacity: 1; transform: none; }
+  /* Static fallback — cleaned phrase visible, raw and others hidden. */
+  .voice-demo-cleaned { opacity: 1; transform: none; }
   .voice-demo-cursor  { opacity: 1; }
 }
