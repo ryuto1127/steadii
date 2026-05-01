@@ -23,7 +23,7 @@ export async function sendAccessApprovedEmail(args: {
     inviteUrl: args.inviteUrl,
   });
   try {
-    await resend().emails.send({
+    const result = await resend().emails.send({
       from: tpl.from,
       to: args.to,
       replyTo: tpl.replyTo,
@@ -31,6 +31,11 @@ export async function sendAccessApprovedEmail(args: {
       html: tpl.html,
       text: tpl.text,
     });
+    if (result.error) {
+      throw new Error(
+        `Resend rejected approved-email send: ${result.error.name} — ${result.error.message}`
+      );
+    }
     return true;
   } catch (err) {
     if (err instanceof ResendNotConfiguredError) {
@@ -55,7 +60,7 @@ export async function sendAdminNewRequestEmail(args: {
       ...args,
       appUrl: env().APP_URL,
     });
-    await resend().emails.send({
+    const result = await resend().emails.send({
       from: tpl.from,
       to: env().ADMIN_EMAIL,
       replyTo: tpl.replyTo,
@@ -63,6 +68,11 @@ export async function sendAdminNewRequestEmail(args: {
       html: tpl.html,
       text: tpl.text,
     });
+    if (result.error) {
+      throw new Error(
+        `Resend rejected admin notify: ${result.error.name} — ${result.error.message}`
+      );
+    }
   } catch (err) {
     if (err instanceof ResendNotConfiguredError) {
       console.warn("[waitlist] RESEND_API_KEY not set; skipping admin notify");
