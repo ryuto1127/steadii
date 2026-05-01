@@ -150,7 +150,7 @@ export const ja: Messages = {
       raw_phrase_1: "えーと、MAT223 のレポート、明日だっけ、あ、Smith 先生にもメール送らなきゃ",
       raw_phrase_2: "微積中間のー、あー、そう、金曜日に動かしたいな、いや来週のやつね",
       raw_phrase_3: "えーと、タスク追加、第 5 章を読む、あと §3.4 も",
-      cleaned_phrase: "MAT223 のレポート明日提出、Smith 先生にメール下書き",
+      cleaned_phrase: "完了 — MAT223 のレポートをタスクに追加、Smith 先生にメール下書き",
       listening: "認識中",
       processing: "整えています…",
       hold_to_talk: "Caps Lock を押しっぱなしで話す",

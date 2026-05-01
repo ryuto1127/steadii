@@ -703,7 +703,7 @@ export const en: MessagesShape = {
       raw_phrase_1: "uh, MAT223 report, like, it's due tomorrow, oh and email Prof Smith",
       raw_phrase_2: "the calculus midterm, um, I want to move it to Friday, no wait, the one next week",
       raw_phrase_3: "uh, add task, like, read chapter 5 — actually section 3.4 too",
-      cleaned_phrase: "MAT223 report due tomorrow — draft email to Prof Smith",
+      cleaned_phrase: "Done — added MAT223 report to tasks, drafted email to Prof Smith",
       listening: "Listening",
       processing: "Processing…",
       hold_to_talk: "Hold Caps Lock to talk",
