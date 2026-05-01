@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { auth } from "@/lib/auth/config";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db/client";
@@ -27,6 +28,7 @@ export default async function AdminPage() {
 
   const isAdmin = await isUnlimitedPlan(session.user.id);
   if (!isAdmin) notFound();
+  const t = await getTranslations("admin");
 
   const [userCountRow] = await db
     .select({ n: count(users.id) })
@@ -68,29 +70,29 @@ export default async function AdminPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h1 className="text-h1 text-[hsl(var(--foreground))]">Admin</h1>
+      <h1 className="text-h1 text-[hsl(var(--foreground))]">{t("title")}</h1>
       <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-        Visible only while your user row has is_admin=true.
+        {t("subtitle")}
       </p>
 
       <section className="mt-8 grid gap-4 md:grid-cols-4">
-        <Stat label="Users" value={String(userCountRow?.n ?? 0)} />
+        <Stat label={t("stat_users")} value={String(userCountRow?.n ?? 0)} />
         <Stat
-          label="Credits (this month)"
+          label={t("stat_credits_month")}
           value={String(usageRow?.credits ?? 0)}
         />
         <Stat
-          label="Input tokens (this month)"
+          label={t("stat_input_tokens_month")}
           value={String(usageRow?.input ?? 0)}
         />
-        <Stat label="Active Stripe subs" value={String(activeSubs[0]?.n ?? 0)} />
+        <Stat label={t("stat_active_subs")} value={String(activeSubs[0]?.n ?? 0)} />
       </section>
 
       <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
-        <h2 className="text-lg font-medium">Top users by credits (this month)</h2>
+        <h2 className="text-lg font-medium">{t("top_users_heading")}</h2>
         {topUsers.length === 0 ? (
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-            No usage this month yet.
+            {t("no_usage_yet")}
           </p>
         ) : (
           <ul className="mt-4 divide-y divide-[hsl(var(--border))] text-sm">
@@ -293,11 +295,10 @@ export default async function AdminPage() {
         >
           <div>
             <h2 className="text-lg font-medium group-hover:underline">
-              α access waitlist
+              {t("waitlist_heading")}
             </h2>
             <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
-              Approve requests, generate Stripe Promotion Codes, send invite
-              emails.
+              {t("waitlist_body")}
             </p>
           </div>
           <span
@@ -306,22 +307,17 @@ export default async function AdminPage() {
                 ? "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
                 : "bg-[hsl(var(--surface-raised))] text-[hsl(var(--muted-foreground))]"
             }`}
-            aria-label={`${pendingWaitlist} pending`}
+            aria-label={t("waitlist_pending", { n: pendingWaitlist })}
           >
-            {pendingWaitlist} pending
+            {t("waitlist_pending", { n: pendingWaitlist })}
           </span>
         </Link>
       </section>
 
       <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
-        <h2 className="text-lg font-medium">Invite codes</h2>
+        <h2 className="text-lg font-medium">{t("invite_codes_heading")}</h2>
         <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-          Friend invites are now Stripe Promotion Codes backed by the
-          <code className="mx-1 rounded bg-[hsl(var(--surface-raised))] px-1 font-mono text-xs">
-            FRIEND_3MO
-          </code>
-          coupon (100% off for 3 months). Create individual single-use
-          codes in the Stripe Dashboard — no in-app issuance UI.
+          {t("invite_codes_body")}
         </p>
         <a
           href="https://dashboard.stripe.com/test/coupons/STEADII_FRIEND_3MO"
@@ -329,7 +325,7 @@ export default async function AdminPage() {
           rel="noopener noreferrer"
           className="mt-3 inline-flex items-center gap-1 text-sm text-[hsl(var(--primary))] hover:underline"
         >
-          Open coupon in Stripe Dashboard →
+          {t("open_dashboard")}
         </a>
       </section>
     </div>

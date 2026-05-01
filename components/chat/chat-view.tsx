@@ -70,6 +70,7 @@ export function ChatView({
 }) {
   const t = useTranslations();
   const tVoice = useTranslations("voice");
+  const tChat = useTranslations("chat_view");
   const [title, setTitle] = useState<string>(initialTitle ?? "");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -372,7 +373,7 @@ export function ChatView({
         body: JSON.stringify({ chatId, content: label }),
       });
       if (!res.ok) {
-        setStreamError("Failed to send action.");
+        setStreamError(tChat("set_stream_action_failed"));
         return;
       }
       const { messageId: persistedId } = (await res.json()) as {
@@ -415,7 +416,7 @@ export function ChatView({
         body: JSON.stringify({ chatId, content: text }),
       });
       if (!res.ok) {
-        setStreamError("Failed to send message.");
+        setStreamError(tChat("set_stream_send_failed"));
         return;
       }
       const { messageId } = (await res.json()) as { messageId: string };
@@ -445,7 +446,7 @@ export function ChatView({
         body: fd,
       });
       if (!res.ok) {
-        let friendly = `Upload failed (HTTP ${res.status}).`;
+        let friendly = tChat("upload_failed_http", { status: res.status });
         try {
           const body = await res.json();
           if (typeof body?.error === "string") friendly = body.error;
@@ -475,7 +476,7 @@ export function ChatView({
             name="title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Untitled chat"
+            placeholder={tChat("title_placeholder")}
             className="w-full bg-transparent text-h2 text-[hsl(var(--foreground))] focus:outline-none"
           />
         </form>
@@ -485,7 +486,7 @@ export function ChatView({
             className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium text-[hsl(var(--foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))]"
           >
             <Plus size={13} strokeWidth={1.5} />
-            New chat
+            {tChat("new_chat")}
           </Link>
           <form action={deleteChatAction}>
             <input type="hidden" name="id" value={chatId} />
@@ -493,7 +494,7 @@ export function ChatView({
               type="submit"
               className="inline-flex h-9 items-center text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))]"
             >
-              Delete
+              {tChat("delete")}
             </button>
           </form>
         </div>
@@ -601,7 +602,7 @@ export function ChatView({
                       <span className="whitespace-pre-wrap">{renderBody}</span>
                     )
                   ) : m.role === "assistant" && streaming && !hasAnyPending ? (
-                    <span className="streaming-cursor" aria-label="Thinking" />
+                    <span className="streaming-cursor" aria-label={tChat("thinking_aria")} />
                   ) : m.role === "assistant" && !m.items?.length ? (
                     <span className="text-[hsl(var(--muted-foreground))]">…</span>
                   ) : null}
@@ -636,11 +637,11 @@ export function ChatView({
       <div className="border-t border-[hsl(var(--border))] py-3">
         {!blobConfigured && (
           <div className="mb-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-small text-[hsl(var(--muted-foreground))]">
-            Image and PDF uploads are disabled until
+            {tChat("blob_disabled_prefix")}
             <code className="mx-1 font-mono text-[hsl(var(--foreground))]">
               BLOB_READ_WRITE_TOKEN
             </code>
-            is set. Ask the administrator.
+            {tChat("blob_disabled_suffix")}
           </div>
         )}
         {uploadError && (
@@ -669,7 +670,7 @@ export function ChatView({
               style={{ animation: "steadii-pulse 1.2s ease-in-out infinite" }}
             />
             <span>
-              Uploading {uploading.filename}
+              {tChat("uploading", { filename: uploading.filename })}
               <span className="text-[hsl(var(--muted-foreground))]">…</span>
             </span>
           </div>
@@ -761,12 +762,8 @@ export function ChatView({
                     ? "cursor-pointer text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
                     : "cursor-not-allowed text-[hsl(var(--muted-foreground)/0.5)]"
                 )}
-                title={
-                  blobConfigured
-                    ? undefined
-                    : "Image uploads require Vercel Blob. Ask the administrator to configure BLOB_READ_WRITE_TOKEN."
-                }
-                aria-label="Attach"
+                title={blobConfigured ? undefined : tChat("attach_disabled_title")}
+                aria-label={tChat("attach_aria")}
               >
                 <Paperclip size={16} strokeWidth={1.5} />
                 <input
@@ -785,7 +782,7 @@ export function ChatView({
             <button
               type="submit"
               disabled={streaming || (!input.trim() && !attachment)}
-              aria-label="Send"
+              aria-label={tChat("send_aria")}
               className="flex h-10 w-10 items-center justify-center rounded-md bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] transition-hover disabled:opacity-40"
             >
               <ArrowUp size={16} strokeWidth={1.75} />

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { WEEKDAYS, type RecurrenceKind, type Weekday } from "@/lib/calendar/events";
 
 type Props = {
@@ -19,6 +20,7 @@ function toPreset(v: RecurrenceKind): Preset | "advanced" {
 }
 
 export function RecurrencePicker({ value, onChange }: Props) {
+  const t = useTranslations("calendar.recurrence");
   const preset = toPreset(value);
   const advanced = preset === "advanced";
 
@@ -34,14 +36,13 @@ export function RecurrencePicker({ value, onChange }: Props) {
     return (
       <div className="space-y-1.5">
         <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2">
-          <div className="text-small text-[hsl(var(--foreground))]">Custom (advanced)</div>
+          <div className="text-small text-[hsl(var(--foreground))]">{t("custom_advanced")}</div>
           <div className="mt-1 break-all font-mono text-[11px] text-[hsl(var(--muted-foreground))]">
             {value.raw.join("\n")}
           </div>
         </div>
         <p className="text-[11px] text-[hsl(var(--muted-foreground))]">
-          Editing this rule isn&apos;t supported in the UI yet — other fields are
-          still editable.
+          {t("advanced_note")}
         </p>
       </div>
     );
@@ -54,11 +55,11 @@ export function RecurrencePicker({ value, onChange }: Props) {
         onChange={(e) => handlePresetChange(e.target.value as Preset)}
         className="block w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-small text-[hsl(var(--foreground))] outline-none focus:border-[hsl(var(--primary))]"
       >
-        <option value="none">Does not repeat</option>
-        <option value="daily">Daily</option>
-        <option value="weekly">Weekly</option>
-        <option value="monthly">Monthly</option>
-        <option value="custom">Custom weekly…</option>
+        <option value="none">{t("preset_none")}</option>
+        <option value="daily">{t("preset_daily")}</option>
+        <option value="weekly">{t("preset_weekly")}</option>
+        <option value="monthly">{t("preset_monthly")}</option>
+        <option value="custom">{t("preset_custom")}</option>
       </select>
 
       {value.kind === "custom" && (
@@ -75,6 +76,7 @@ function CustomEditor({
   value: Extract<RecurrenceKind, { kind: "custom" }>;
   onChange: (v: RecurrenceKind) => void;
 }) {
+  const t = useTranslations("calendar.recurrence");
   const toggleDay = (d: Weekday) => {
     const next = value.byDay.includes(d)
       ? value.byDay.filter((x) => x !== d)
@@ -126,9 +128,9 @@ function CustomEditor({
           onChange={(e) => setEndKind(e.target.value as "never" | "until" | "count")}
           className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 py-1 text-[12px]"
         >
-          <option value="never">No end</option>
-          <option value="until">Ends on</option>
-          <option value="count">Ends after</option>
+          <option value="never">{t("end_never")}</option>
+          <option value="until">{t("end_until")}</option>
+          <option value="count">{t("end_count")}</option>
         </select>
         {value.end.kind === "until" && (
           <input
@@ -156,7 +158,7 @@ function CustomEditor({
               className="w-16 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 py-1 text-[12px]"
             />
             <span className="text-[12px] text-[hsl(var(--muted-foreground))]">
-              occurrences
+              {t("occurrences")}
             </span>
           </>
         )}

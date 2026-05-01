@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { saveNotificationSettingsAction } from "@/app/app/settings/notification-actions";
 
 type Props = {
@@ -16,6 +17,7 @@ type Props = {
 
 export function NotificationSettings({ initial }: Props) {
   const router = useRouter();
+  const t = useTranslations("notifications");
   const [digestEnabled, setDigestEnabled] = useState(initial.digestEnabled);
   const [digestHourLocal, setDigestHourLocal] = useState(initial.digestHourLocal);
   const [undoWindowSeconds, setUndoWindowSeconds] = useState(initial.undoWindowSeconds);
@@ -33,10 +35,10 @@ export function NotificationSettings({ initial }: Props) {
           undoWindowSeconds,
           highRiskNotifyImmediate,
         });
-        toast.success("Notification settings saved");
+        toast.success(t("saved_toast"));
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Save failed");
+        toast.error(err instanceof Error ? err.message : t("save_failed"));
       }
     });
   };
@@ -44,8 +46,8 @@ export function NotificationSettings({ initial }: Props) {
   return (
     <div className="flex flex-col gap-4">
       <Row
-        label="Morning digest"
-        hint="One summary email per day with pending drafts. No body previews — you confirm in Steadii."
+        label={t("morning_digest_label")}
+        hint={t("morning_digest_hint")}
       >
         <label className="inline-flex items-center gap-2 text-small">
           <input
@@ -54,13 +56,13 @@ export function NotificationSettings({ initial }: Props) {
             onChange={(e) => setDigestEnabled(e.target.checked)}
             className="h-4 w-4"
           />
-          <span>Enabled</span>
+          <span>{t("enabled")}</span>
         </label>
       </Row>
 
       <Row
-        label="Digest hour (local)"
-        hint="What time in your timezone to send the digest. Memory-locked default is 7am."
+        label={t("digest_hour_label")}
+        hint={t("digest_hour_hint")}
       >
         <input
           type="range"
@@ -76,8 +78,8 @@ export function NotificationSettings({ initial }: Props) {
       </Row>
 
       <Row
-        label="Undo window"
-        hint="Seconds between Send and actual Gmail delivery. 10 feels fast; 60 is forgiving."
+        label={t("undo_window_label")}
+        hint={t("undo_window_hint")}
       >
         <input
           type="range"
@@ -94,8 +96,8 @@ export function NotificationSettings({ initial }: Props) {
       </Row>
 
       <Row
-        label="High-risk push"
-        hint="Immediate notification when a high-risk draft lands. Pushes arrive once mobile ships — toggle is saved for later."
+        label={t("high_risk_push_label")}
+        hint={t("high_risk_push_hint")}
       >
         <label className="inline-flex items-center gap-2 text-small">
           <input
@@ -104,7 +106,7 @@ export function NotificationSettings({ initial }: Props) {
             onChange={(e) => setHighRiskNotifyImmediate(e.target.checked)}
             className="h-4 w-4"
           />
-          <span>Notify me immediately</span>
+          <span>{t("notify_immediately")}</span>
         </label>
       </Row>
 
@@ -115,7 +117,7 @@ export function NotificationSettings({ initial }: Props) {
           disabled={isPending}
           className="inline-flex h-9 items-center rounded-md bg-[hsl(var(--primary))] px-4 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-50"
         >
-          Save
+          {t("save")}
         </button>
       </div>
     </div>

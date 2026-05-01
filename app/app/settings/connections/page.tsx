@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
@@ -36,6 +37,7 @@ export default async function ConnectionsPage({
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
   const { repaired, imported, ms, ical } = await searchParams;
+  const tConn = await getTranslations("settings.connections");
 
   const [notionConn] = await db
     .select()
@@ -176,10 +178,10 @@ export default async function ConnectionsPage({
           <form action={refreshGmailInboxAction} className="mt-4">
             <button
               type="submit"
-              title="Re-ingest the last 24 hours of Gmail"
+              title={tConn("refresh_inbox_title")}
               className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
             >
-              Refresh inbox
+              {tConn("refresh_inbox")}
             </button>
           </form>
         )}

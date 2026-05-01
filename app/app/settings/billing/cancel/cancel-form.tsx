@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 type Reason =
   | "too_expensive"
@@ -28,6 +29,7 @@ export function CancelForm({
   currentPeriodEnd: string | null;
 }) {
   const router = useRouter();
+  const tCancel = useTranslations("cancel_form");
   const [step, setStep] = useState<"reason" | "confirm" | "done">("reason");
   const [reason, setReason] = useState<Reason>("skipped");
   const [note, setNote] = useState("");
@@ -163,8 +165,8 @@ export function CancelForm({
               : "the end of the current billing period"}
             .
           </li>
-          <li>After that, your account downgrades to Free.</li>
-          <li>Your data is preserved for 120 days — resubscribe any time during that window and pick up where you left off.</li>
+          <li>{tCancel("bullet_downgrade")}</li>
+          <li>{tCancel("bullet_data_preserved")}</li>
         </ul>
       </div>
 

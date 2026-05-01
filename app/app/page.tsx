@@ -152,7 +152,14 @@ export default async function HomePage() {
       </header>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
-        <PendingCard count={pendingCount} />
+        <PendingCard
+          count={pendingCount}
+          pendingLabel={t("pending_label")}
+          youreClear={t("youre_clear")}
+          itemSingular={t("item_singular")}
+          itemPlural={t("item_plural")}
+          openInbox={t("open_inbox")}
+        />
         <TodayCard
           events={events}
           tz={tz}
@@ -240,19 +247,30 @@ function BentoCard({
   );
 }
 
-function PendingCard({ count }: { count: number }) {
-  // Agent queue summary. Links through to /app/inbox so the user can
-  // review everything that needs a human tap. Empty state is deliberately
-  // terse — "You're clear." matches the redesign memo's tone.
+function PendingCard({
+  count,
+  pendingLabel,
+  youreClear,
+  itemSingular,
+  itemPlural,
+  openInbox,
+}: {
+  count: number;
+  pendingLabel: string;
+  youreClear: string;
+  itemSingular: string;
+  itemPlural: string;
+  openInbox: string;
+}) {
   return (
     <BentoCard
       icon={<InboxIcon size={18} strokeWidth={1.75} />}
       iconTint="amber"
-      label="Pending"
+      label={pendingLabel}
     >
       {count === 0 ? (
         <p className="fade-in text-[13px] text-[hsl(var(--muted-foreground))]">
-          You&apos;re clear.
+          {youreClear}
         </p>
       ) : (
         <div className="flex items-baseline gap-2">
@@ -260,7 +278,7 @@ function PendingCard({ count }: { count: number }) {
             {count}
           </span>
           <span className="text-[12px] font-medium lowercase text-[hsl(var(--muted-foreground))]">
-            {count === 1 ? "item" : "items"}
+            {count === 1 ? itemSingular : itemPlural}
           </span>
         </div>
       )}
@@ -268,7 +286,7 @@ function PendingCard({ count }: { count: number }) {
         href="/app/inbox"
         className="group/btn mt-auto inline-flex items-center gap-1 pt-4 text-[12px] font-medium text-[hsl(var(--foreground))] transition-hover hover:opacity-70"
       >
-        Open inbox
+        {openInbox}
         <ChevronRight
           size={14}
           strokeWidth={1.75}

@@ -3,28 +3,29 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { setSenderRoleAction } from "@/lib/agent/email/draft-actions";
 import type { SenderRole } from "@/lib/db/schema";
 import { cn } from "@/lib/utils/cn";
 
 // 7-category taxonomy (broadened 2026-04-29). Order matches the row in
 // the inline section: academic-roles first, then career, then personal,
-// then catch-all. Each entry's hint is a short subtitle the user sees
+// then catch-all. Each entry's hint key is a short subtitle the user sees
 // inline; the value is what gets persisted to inbox_items.sender_role.
 type RoleOption = {
   value: SenderRole;
-  label: string;
-  hint: string;
+  labelKey: string;
+  hintKey: string;
 };
 
 const ROLE_OPTIONS: RoleOption[] = [
-  { value: "professor", label: "Professor", hint: "Course instructor" },
-  { value: "ta", label: "TA", hint: "Teaching assistant / tutor" },
-  { value: "classmate", label: "Classmate", hint: "Fellow student" },
-  { value: "admin", label: "Admin", hint: "Registrar, advising, IT" },
-  { value: "career", label: "Career", hint: "Recruiter, interviewer" },
-  { value: "personal", label: "Personal", hint: "Family, friends, club" },
-  { value: "other", label: "Other", hint: "Skip-able catch-all" },
+  { value: "professor", labelKey: "role_professor_label", hintKey: "role_professor_hint" },
+  { value: "ta", labelKey: "role_ta_label", hintKey: "role_ta_hint" },
+  { value: "classmate", labelKey: "role_classmate_label", hintKey: "role_classmate_hint" },
+  { value: "admin", labelKey: "role_admin_label", hintKey: "role_admin_hint" },
+  { value: "career", labelKey: "role_career_label", hintKey: "role_career_hint" },
+  { value: "personal", labelKey: "role_personal_label", hintKey: "role_personal_hint" },
+  { value: "other", labelKey: "role_other_label", hintKey: "role_other_hint" },
 ];
 
 type ClassOption = { id: string; name: string; code: string | null };
@@ -41,6 +42,7 @@ export function InlineRolePicker({
   classes: ClassOption[];
 }) {
   const router = useRouter();
+  const t = useTranslations("agent.role_picker");
   const [collapsed, setCollapsed] = useState(false);
   const [classId, setClassId] = useState<string>("");
   const [newClassName, setNewClassName] = useState("");
@@ -59,11 +61,13 @@ export function InlineRolePicker({
           classId: classId || null,
           newClassName: showNewClassInput ? newClassName.trim() || null : null,
         });
-        toast.success(`Saved: ${senderName ?? senderEmail} → ${role}`);
+        toast.success(
+          t("toast_saved", { sender: senderName ?? senderEmail, role })
+        );
         setCollapsed(true);
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Save failed");
+        toast.error(err instanceof Error ? err.message : t("toast_save_failed"));
       }
     });
   };
@@ -77,13 +81,13 @@ export function InlineRolePicker({
 
   return (
     <section
-      aria-label="Classify sender"
+      aria-label={t("aria")}
       className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-small font-medium text-[hsl(var(--foreground))]">
-            New sender — help Steadii classify (optional)
+            {t("title")}
           </h3>
           <p className="mt-0.5 truncate text-[12px] text-[hsl(var(--muted-foreground))]">
             <strong className="text-[hsl(var(--foreground))]">
@@ -97,7 +101,7 @@ export function InlineRolePicker({
           disabled={isPending}
           className="shrink-0 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))] disabled:opacity-50"
         >
-          Skip
+          {t("skip")}
         </button>
       </div>
 
@@ -108,20 +112,20 @@ export function InlineRolePicker({
             type="button"
             disabled={isPending}
             onClick={() => commit(r.value)}
-            title={r.hint}
+            title={t(r.hintKey)}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-small font-medium transition-hover disabled:cursor-not-allowed disabled:opacity-50",
               "border-[hsl(var(--border)/0.6)] bg-transparent text-[hsl(var(--foreground))] hover:bg-[hsl(var(--surface-raised))]"
             )}
           >
-            {r.label}
+            {t(r.labelKey)}
           </button>
         ))}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <label className="text-[12px] text-[hsl(var(--muted-foreground))]">
-          Class (optional):
+          {t("class_label")}
         </label>
         {!showNewClassInput ? (
           <>
@@ -131,7 +135,7 @@ export function InlineRolePicker({
               disabled={isPending}
               className="h-8 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 text-small text-[hsl(var(--foreground))] focus:border-[hsl(var(--ring))] focus:outline-none disabled:opacity-50"
             >
-              <option value="">— none —</option>
+              <option value="">{t("class_none")}</option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.code ? `${c.code} · ${c.name}` : c.name}
@@ -147,7 +151,7 @@ export function InlineRolePicker({
               disabled={isPending}
               className="text-[12px] text-[hsl(var(--primary))] transition-hover hover:underline disabled:opacity-50"
             >
-              + Type new class name
+              {t("new_class_link")}
             </button>
           </>
         ) : (
@@ -156,7 +160,7 @@ export function InlineRolePicker({
               type="text"
               value={newClassName}
               onChange={(e) => setNewClassName(e.target.value)}
-              placeholder="e.g. MAT235"
+              placeholder={t("new_class_placeholder")}
               disabled={isPending}
               autoFocus
               className="h-8 w-44 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 text-small text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--ring))] focus:outline-none disabled:opacity-50"
@@ -170,7 +174,7 @@ export function InlineRolePicker({
               disabled={isPending}
               className="text-[12px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))] disabled:opacity-50"
             >
-              Cancel
+              {t("cancel")}
             </button>
           </>
         )}

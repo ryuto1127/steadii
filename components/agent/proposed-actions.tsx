@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import type { ActionOption } from "@/lib/db/schema";
 
 // Shared button row for proposed actions. Used by:
@@ -19,6 +20,7 @@ export function ProposedActions({
   disabled?: boolean;
 }) {
   const router = useRouter();
+  const t = useTranslations("agent.proposed_actions");
   const [pending, startTransition] = useTransition();
   const [activeKey, setActiveKey] = useState<string | null>(null);
 
@@ -40,11 +42,11 @@ export function ProposedActions({
         });
         if (!resp.ok) {
           const text = await resp.text();
-          toast.error(`Action failed: ${text}`);
+          toast.error(t("toast_action_failed", { text }));
           return;
         }
         if (option.tool === "dismiss") {
-          toast.success("Dismissed");
+          toast.success(t("toast_dismissed"));
         } else if (option.tool === "chat_followup") {
           // The resolve endpoint returns a chat URL when the action
           // creates a chat seeded with the issue context. Navigate.
@@ -54,7 +56,7 @@ export function ProposedActions({
             return;
           }
         } else {
-          toast.success(`${option.label} — done`);
+          toast.success(t("toast_done", { label: option.label }));
         }
         router.refresh();
       } finally {
