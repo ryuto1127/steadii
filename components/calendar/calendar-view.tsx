@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { MonthView } from "./month-view";
 import { WeekView } from "./week-view";
@@ -54,6 +55,7 @@ export function CalendarView({
   tasksScopeMissing,
 }: Props) {
   const router = useRouter();
+  const t = useTranslations("calendar");
   const [view, setView] = useState<ViewType>(initialView);
   const [anchor, setAnchor] = useState<Date>(() => new Date(initialAnchorIso));
   const [items, setItems] = useState<CalendarItem[]>(initialItems);
@@ -160,7 +162,7 @@ export function CalendarView({
       startTransition(() => router.refresh());
     } catch (e) {
       setItems((prev) => prev.filter((i) => i.id !== tempId));
-      setErr(e instanceof Error ? e.message : "Failed to create event");
+      setErr(e instanceof Error ? e.message : t("error_create_event"));
     }
   };
 
@@ -195,7 +197,7 @@ export function CalendarView({
           prev.map((i) => (i.kind === "event" && i.id === prior.id ? prior : i)),
         );
       }
-      setErr(e instanceof Error ? e.message : "Failed to update event");
+      setErr(e instanceof Error ? e.message : t("error_update_event"));
     }
   };
 
@@ -210,7 +212,7 @@ export function CalendarView({
       startTransition(() => router.refresh());
     } catch (e) {
       if (prior) setItems((prev) => [...prev, prior]);
-      setErr(e instanceof Error ? e.message : "Failed to delete event");
+      setErr(e instanceof Error ? e.message : t("error_delete_event"));
     }
   };
 
@@ -234,7 +236,7 @@ export function CalendarView({
       startTransition(() => router.refresh());
     } catch (e) {
       setItems((prev) => prev.filter((i) => i.id !== tempId));
-      setErr(e instanceof Error ? e.message : "Failed to create task");
+      setErr(e instanceof Error ? e.message : t("error_create_task"));
     }
   };
 
@@ -261,7 +263,7 @@ export function CalendarView({
           prev.map((i) => (i.kind === "task" && i.id === prior.id ? prior : i)),
         );
       }
-      setErr(e instanceof Error ? e.message : "Failed to update task");
+      setErr(e instanceof Error ? e.message : t("error_update_task"));
     }
   };
 
@@ -288,7 +290,7 @@ export function CalendarView({
             : i,
         ),
       );
-      setErr(e instanceof Error ? e.message : "Failed to update task");
+      setErr(e instanceof Error ? e.message : t("error_update_task"));
     }
   };
 
@@ -303,7 +305,7 @@ export function CalendarView({
       startTransition(() => router.refresh());
     } catch (e) {
       setItems((prev) => [...prev, prior]);
-      setErr(e instanceof Error ? e.message : "Failed to delete task");
+      setErr(e instanceof Error ? e.message : t("error_delete_task"));
     }
   };
 
@@ -378,19 +380,19 @@ export function CalendarView({
     <div className="flex h-[calc(100dvh-7rem)] flex-col md:h-[calc(100vh-4rem)]">
       <header className="flex flex-col gap-3 pb-4 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="text-h1 text-[hsl(var(--foreground))]">Calendar</h1>
+          <h1 className="text-h1 text-[hsl(var(--foreground))]">{t("title")}</h1>
           <span className="text-small text-[hsl(var(--muted-foreground))] tabular-nums">
             {heading}
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" size="sm" onClick={goToday}>
-            Today
+            {t("today")}
           </Button>
           <div className="flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
             <button
               onClick={goPrev}
-              aria-label="Previous"
+              aria-label={t("prev_aria")}
               className="flex h-9 w-9 items-center justify-center text-small text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
             >
               ←
@@ -398,7 +400,7 @@ export function CalendarView({
             <span className="h-5 w-px bg-[hsl(var(--border))]" />
             <button
               onClick={goNext}
-              aria-label="Next"
+              aria-label={t("next_aria")}
               className="flex h-9 w-9 items-center justify-center text-small text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
             >
               →
@@ -410,21 +412,19 @@ export function CalendarView({
               userPickedView.current = true;
               setView(v);
             }}
+            labels={{ month: t("view_month"), week: t("view_week"), day: t("view_day") }}
           />
           <Button size="sm" onClick={openNewEmpty} className="ml-auto md:ml-0">
-            New event
+            {t("new_event")}
           </Button>
         </div>
       </header>
 
       {tasksScopeMissing && (
         <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-4 py-2 text-small text-[hsl(var(--foreground))]">
-          <span>
-            Reconnect Google to enable Tasks — your current sign-in doesn&apos;t
-            include task access.
-          </span>
+          <span>{t("reconnect_for_tasks")}</span>
           <Button size="sm" variant="secondary" onClick={handleReconnectTasks}>
-            Reconnect
+            {t("reconnect_button")}
           </Button>
         </div>
       )}
@@ -506,9 +506,11 @@ export function CalendarView({
 function ViewToggle({
   view,
   onChange,
+  labels,
 }: {
   view: ViewType;
   onChange: (v: ViewType) => void;
+  labels: { month: string; week: string; day: string };
 }) {
   const options: ViewType[] = ["month", "week", "day"];
   return (
@@ -524,7 +526,7 @@ function ViewToggle({
               : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]")
           }
         >
-          {opt}
+          {labels[opt]}
         </button>
       ))}
     </div>

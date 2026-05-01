@@ -69,12 +69,13 @@ export async function Sidebar({
       ? "bg-[hsl(38_92%_50%)]"
       : "bg-[hsl(var(--primary))]";
   const t = await getTranslations("nav");
+  const tLayout = await getTranslations("app_layout");
   const labels: Record<string, string> = {};
   for (const key of NAV_ITEM_KEYS) labels[key] = t(key);
 
   const session = await auth();
   const user = session?.user;
-  const displayName = user?.name?.trim() || user?.email?.split("@")[0] || "You";
+  const displayName = user?.name?.trim() || user?.email?.split("@")[0] || tLayout("you_fallback");
   const initial = initials(user?.name, user?.email);
   const avatarUrl = user?.image ?? null;
 
@@ -99,15 +100,17 @@ export async function Sidebar({
   }
 
   const creditsLabel =
-    plan === "admin" ? "∞ credits" : `${creditsRemaining.toLocaleString()} credits left`;
+    plan === "admin"
+      ? tLayout("credits_unlimited_short")
+      : tLayout("credits_remaining", { n: creditsRemaining.toLocaleString() });
   const planLabel =
     plan === "admin"
-      ? "Admin"
+      ? tLayout("plan_admin")
       : plan === "pro"
-      ? "Pro"
+      ? tLayout("plan_pro")
       : plan === "student"
-      ? "Student"
-      : "Free";
+      ? tLayout("plan_student")
+      : tLayout("plan_free");
   const planColorClass =
     plan === "pro" || plan === "student"
       ? "text-[hsl(var(--primary))]"
@@ -129,10 +132,10 @@ export async function Sidebar({
 
   return (
     <div className={outerClass}>
-      <aside aria-label="Primary" className={asideClass}>
+      <aside aria-label={tLayout("primary_aria")} className={asideClass}>
         <Link
           href="/app"
-          aria-label="Steadii home"
+          aria-label={tLayout("sidebar_brand_aria")}
           className="flex h-9 items-center gap-2.5 rounded-lg px-1.5 transition-hover"
         >
           <Logo size={26} />
@@ -160,7 +163,7 @@ export async function Sidebar({
         {recent.length > 0 ? (
           <div className={`mt-5 flex flex-col gap-0.5 ${labelRevealClass}`}>
             <span className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-              Recent chats
+              {tLayout("recent_chats")}
             </span>
             {recent.map((c) => (
               <Link
@@ -169,7 +172,7 @@ export async function Sidebar({
                 className="flex h-8 items-center gap-2 rounded-lg px-2 text-[14px] text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
               >
                 <span className="min-w-0 flex-1 truncate">
-                  {c.title ?? "Untitled"}
+                  {c.title ?? tLayout("untitled")}
                 </span>
                 <span className="shrink-0 text-[12px] tabular-nums opacity-60">
                   {shortTime(c.updatedAt)}
@@ -193,8 +196,11 @@ export async function Sidebar({
             href="/app/settings/billing"
             aria-label={
               plan === "admin"
-                ? "Credits: unlimited (admin)"
-                : `Credits: ${creditsUsed} of ${creditsLimit} used`
+                ? tLayout("credits_unlimited_aria")
+                : tLayout("credits_used_aria", {
+                    used: creditsUsed,
+                    limit: creditsLimit,
+                  })
             }
             className="block"
           >

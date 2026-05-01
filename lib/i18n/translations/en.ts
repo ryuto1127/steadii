@@ -310,6 +310,319 @@ type MessagesShape = {
     study_sessions: string;
     focus_summary: string;
     focus_summary_empty: string;
+    pending_label: string;
+    youre_clear: string;
+    item_singular: string;
+    item_plural: string;
+    open_inbox: string;
+  };
+  inbox: {
+    title: string;
+    subhead: string;
+    empty_no_gmail_title: string;
+    empty_no_gmail_description: string;
+    empty_no_gmail_action: string;
+    empty_clear_title: string;
+    empty_clear_description: string;
+    pending_review_sr: string;
+    tier_high: string;
+    tier_medium: string;
+    tier_low: string;
+    tier_classifying: string;
+    tier_ignore: string;
+    new_sender_pill: string;
+    question_pill: string;
+    question_pill_title: string;
+    important_pill: string;
+    important_pill_title: string;
+    no_subject: string;
+    noticed: string;
+    proposal_pill: string;
+    action_pill: string;
+    status_pending: string;
+    status_resolved: string;
+    status_dismissed: string;
+  };
+  calendar: {
+    title: string;
+    today: string;
+    prev_aria: string;
+    next_aria: string;
+    new_event: string;
+    reconnect_for_tasks: string;
+    reconnect_button: string;
+    error_create_event: string;
+    error_update_event: string;
+    error_delete_event: string;
+    error_create_task: string;
+    error_update_task: string;
+    error_delete_task: string;
+    view_month: string;
+    view_week: string;
+    view_day: string;
+    event_panel: {
+      edit_event: string;
+      new_event: string;
+      edit_task: string;
+      new_task: string;
+      close: string;
+      field_title: string;
+      field_all_day: string;
+      field_start: string;
+      field_end: string;
+      field_recurrence: string;
+      field_location: string;
+      field_description: string;
+      field_reminder: string;
+      field_due: string;
+      field_notes: string;
+      field_completed: string;
+      placeholder_title: string;
+      placeholder_location: string;
+      placeholder_description: string;
+      placeholder_notes: string;
+      series_instance_note: string;
+      minutes_before: string;
+      cancel: string;
+      confirm: string;
+      delete: string;
+      save: string;
+      create: string;
+      all_day_aria: string;
+      completed_aria: string;
+    };
+    recurrence: {
+      preset_none: string;
+      preset_daily: string;
+      preset_weekly: string;
+      preset_monthly: string;
+      preset_custom: string;
+      end_never: string;
+      end_until: string;
+      end_count: string;
+      custom_advanced: string;
+      advanced_note: string;
+      occurrences: string;
+    };
+  };
+  tasks: {
+    title: string;
+    pending_count: string;
+    empty_title: string;
+    empty_description: string;
+    empty_browse_classes: string;
+    source_steadii: string;
+    source_google: string;
+    source_microsoft: string;
+    aria_pending_tasks: string;
+    no_due_date: string;
+    in_progress: string;
+    high_priority: string;
+    overdue_days: string;
+    due_today: string;
+    due_tomorrow: string;
+    due_in_days: string;
+    due_short_date: string;
+  };
+  chats_list: {
+    title: string;
+    new_chat: string;
+    empty_title: string;
+    empty_description: string;
+    empty_action: string;
+    aria: string;
+  };
+  chat_view: {
+    title_placeholder: string;
+    new_chat: string;
+    delete: string;
+    blob_disabled_prefix: string;
+    blob_disabled_suffix: string;
+    uploading: string;
+    upload_failed_http: string;
+    attach_aria: string;
+    send_aria: string;
+    thinking_aria: string;
+    attach_disabled_title: string;
+    set_stream_send_failed: string;
+    set_stream_action_failed: string;
+  };
+  agent: {
+    draft_actions: {
+      header_draft: string;
+      to: string;
+      cc: string;
+      save_edits: string;
+      cancel: string;
+      send: string;
+      edit: string;
+      dismiss: string;
+      sent_dispatching: string;
+      undo: string;
+      sent_automatically: string;
+      sent: string;
+      toast_sent: string;
+      toast_send_failed: string;
+      toast_send_cancelled: string;
+      toast_undo_failed: string;
+      toast_dismissed: string;
+      toast_dismiss_failed: string;
+      toast_draft_updated: string;
+      toast_save_failed: string;
+    };
+    proposed_actions: {
+      toast_action_failed: string;
+      toast_dismissed: string;
+      toast_done: string;
+    };
+    role_picker: {
+      aria: string;
+      title: string;
+      skip: string;
+      class_label: string;
+      class_none: string;
+      new_class_link: string;
+      new_class_placeholder: string;
+      cancel: string;
+      role_professor_label: string;
+      role_professor_hint: string;
+      role_ta_label: string;
+      role_ta_hint: string;
+      role_classmate_label: string;
+      role_classmate_hint: string;
+      role_admin_label: string;
+      role_admin_hint: string;
+      role_career_label: string;
+      role_career_hint: string;
+      role_personal_label: string;
+      role_personal_hint: string;
+      role_other_label: string;
+      role_other_hint: string;
+      toast_saved: string;
+      toast_save_failed: string;
+    };
+  };
+  app_layout: {
+    sidebar_brand_aria: string;
+    past_due_message: string;
+    past_due_button: string;
+    credits_exceeded: string;
+    credits_used_pct: string;
+    upgrade: string;
+    top_up: string;
+    manage: string;
+    recent_chats: string;
+    untitled: string;
+    credits_unlimited_short: string;
+    credits_remaining: string;
+    credits_unlimited_aria: string;
+    credits_used_aria: string;
+    plan_admin: string;
+    plan_pro: string;
+    plan_student: string;
+    plan_free: string;
+    you_fallback: string;
+    primary_aria: string;
+  };
+  offline_strip: {
+    message: string;
+  };
+  views: {
+    dead_db_banner: {
+      heading_not_connected: string;
+      heading_not_set_up: string;
+      heading_deleted: string;
+      message_not_connected: string;
+      message_not_set_up: string;
+      message_deleted: string;
+      data_safe: string;
+      reconnect_notion: string;
+      resetup_notion: string;
+    };
+  };
+  markdown_editor: {
+    placeholder_title: string;
+    placeholder_body: string;
+    aria_bold: string;
+    aria_italic: string;
+    aria_inline_code: string;
+    aria_bullet_list: string;
+    aria_numbered_list: string;
+    aria_inline_math: string;
+    aria_block_math: string;
+    aria_heading: string;
+  };
+  classes_list: {
+    new_class_button: string;
+    add_class_button: string;
+    empty_title: string;
+    empty_description: string;
+    aria_classes: string;
+    metadata_due: string;
+    metadata_mistakes: string;
+  };
+  notifications: {
+    saved_toast: string;
+    save_failed: string;
+    save: string;
+    enabled: string;
+    notify_immediately: string;
+    morning_digest_label: string;
+    morning_digest_hint: string;
+    digest_hour_label: string;
+    digest_hour_hint: string;
+    undo_window_label: string;
+    undo_window_hint: string;
+    high_risk_push_label: string;
+    high_risk_push_hint: string;
+  };
+  agent_rules_section: {
+    global_rules: string;
+    global_rules_caption: string;
+    global_high: string;
+    global_medium: string;
+    global_low: string;
+    global_ignore: string;
+    global_ignore_why: string;
+    learned_contacts: string;
+    learned_contacts_caption: string;
+    learned_empty: string;
+    recent_feedback: string;
+    recent_feedback_caption: string;
+    feedback_empty: string;
+    feedback_proposed: string;
+    custom_overrides: string;
+    custom_overrides_caption: string;
+    custom_overrides_empty: string;
+    reset: string;
+    source_learned_title: string;
+    source_manual_title: string;
+    source_chat_title: string;
+  };
+  delete_rule_button: {
+    toast_removed: string;
+    toast_failed: string;
+    aria: string;
+  };
+  cancel_form: {
+    bullet_downgrade: string;
+    bullet_data_preserved: string;
+  };
+  admin: {
+    title: string;
+    subtitle: string;
+    stat_users: string;
+    stat_credits_month: string;
+    stat_input_tokens_month: string;
+    stat_active_subs: string;
+    top_users_heading: string;
+    no_usage_yet: string;
+    waitlist_heading: string;
+    waitlist_body: string;
+    waitlist_pending: string;
+    invite_codes_heading: string;
+    invite_codes_body: string;
+    open_dashboard: string;
   };
   chat_input: {
     placeholder: string;
@@ -731,7 +1044,7 @@ export const en: MessagesShape = {
     },
     no_assignments_title: "No tasks yet.",
     no_assignments_desc:
-      "Ask Steadii to add one from chat, e.g. '物理の課題を追加して'.",
+      "Ask Steadii to add one from chat, e.g. 'Add a physics assignment'.",
     no_term: "(no term)",
     no_term_set: "No term set",
     chats_for_class_aria: "Chats for this class",
@@ -957,6 +1270,344 @@ export const en: MessagesShape = {
     study_sessions: "study sessions",
     focus_summary: "You focused for {hours} hours this week. Great momentum!",
     focus_summary_empty: "Not enough sessions yet — a few more and we’ll have a trend.",
+    pending_label: "Pending",
+    youre_clear: "You're clear.",
+    item_singular: "item",
+    item_plural: "items",
+    open_inbox: "Open inbox",
+  },
+  inbox: {
+    title: "Inbox",
+    subhead: "What the agent is looking at right now.",
+    empty_no_gmail_title: "Connect Gmail to start triage.",
+    empty_no_gmail_description:
+      "Sign in again with Google to grant the Gmail scope. The agent triages, you confirm.",
+    empty_no_gmail_action: "Reconnect in Settings",
+    empty_clear_title: "You're clear.",
+    empty_clear_description:
+      "Nothing pending. The agent will surface new items as they arrive.",
+    pending_review_sr: "Pending review.",
+    tier_high: "High",
+    tier_medium: "Medium",
+    tier_low: "Low",
+    tier_classifying: "Classifying",
+    tier_ignore: "Ignore",
+    new_sender_pill: "New sender",
+    question_pill: "Question",
+    question_pill_title: "Steadii needs you to clarify before drafting.",
+    important_pill: "Important",
+    important_pill_title: "Steadii flagged this as important. No reply needed.",
+    no_subject: "(no subject)",
+    noticed: "Steadii noticed",
+    proposal_pill: "Proposal",
+    action_pill: "Action",
+    status_pending: "Pending — pick an action",
+    status_resolved: "Resolved",
+    status_dismissed: "Dismissed",
+  },
+  calendar: {
+    title: "Calendar",
+    today: "Today",
+    prev_aria: "Previous",
+    next_aria: "Next",
+    new_event: "New event",
+    reconnect_for_tasks:
+      "Reconnect Google to enable Tasks — your current sign-in doesn't include task access.",
+    reconnect_button: "Reconnect",
+    error_create_event: "Failed to create event",
+    error_update_event: "Failed to update event",
+    error_delete_event: "Failed to delete event",
+    error_create_task: "Failed to create task",
+    error_update_task: "Failed to update task",
+    error_delete_task: "Failed to delete task",
+    view_month: "month",
+    view_week: "week",
+    view_day: "day",
+    event_panel: {
+      edit_event: "Edit event",
+      new_event: "New event",
+      edit_task: "Edit task",
+      new_task: "New task",
+      close: "Close",
+      field_title: "Title",
+      field_all_day: "All-day",
+      field_start: "Start",
+      field_end: "End",
+      field_recurrence: "Recurrence",
+      field_location: "Location",
+      field_description: "Description",
+      field_reminder: "Reminder",
+      field_due: "Due",
+      field_notes: "Notes",
+      field_completed: "Completed",
+      placeholder_title: "Add a title",
+      placeholder_location: "Add location",
+      placeholder_description: "Notes, links, agenda…",
+      placeholder_notes: "Notes, links…",
+      series_instance_note: "Part of a series — editing this instance only.",
+      minutes_before: "minutes before",
+      cancel: "Cancel",
+      confirm: "Confirm",
+      delete: "Delete",
+      save: "Save",
+      create: "Create",
+      all_day_aria: "All-day",
+      completed_aria: "Completed",
+    },
+    recurrence: {
+      preset_none: "Does not repeat",
+      preset_daily: "Daily",
+      preset_weekly: "Weekly",
+      preset_monthly: "Monthly",
+      preset_custom: "Custom weekly…",
+      end_never: "No end",
+      end_until: "Ends on",
+      end_count: "Ends after",
+      custom_advanced: "Custom (advanced)",
+      advanced_note:
+        "Editing this rule isn't supported in the UI yet — other fields are still editable.",
+      occurrences: "occurrences",
+    },
+  },
+  tasks: {
+    title: "Tasks",
+    pending_count: "{count} pending",
+    empty_title: "No tasks pending.",
+    empty_description:
+      "Add an assignment to a class, or connect Google Tasks / Microsoft To Do, and they'll show up here. The agent surfaces deadline-during-travel and workload spikes proactively.",
+    empty_browse_classes: "Browse classes",
+    source_steadii: "Steadii",
+    source_google: "Google",
+    source_microsoft: "Microsoft",
+    aria_pending_tasks: "Pending tasks",
+    no_due_date: "No due date",
+    in_progress: "in progress",
+    high_priority: "high priority",
+    overdue_days: "Overdue {n}d",
+    due_today: "Due today",
+    due_tomorrow: "Due tomorrow",
+    due_in_days: "Due in {n}d",
+    due_short_date: "Due {date}",
+  },
+  chats_list: {
+    title: "Chats",
+    new_chat: "New chat",
+    empty_title: "No chats yet.",
+    empty_description: "Start a conversation from Home.",
+    empty_action: "Start a conversation",
+    aria: "Chats",
+  },
+  chat_view: {
+    title_placeholder: "Untitled chat",
+    new_chat: "New chat",
+    delete: "Delete",
+    blob_disabled_prefix: "Image and PDF uploads are disabled until",
+    blob_disabled_suffix: "is set. Ask the administrator.",
+    uploading: "Uploading {filename}",
+    upload_failed_http: "Upload failed (HTTP {status}).",
+    attach_aria: "Attach",
+    send_aria: "Send",
+    thinking_aria: "Thinking",
+    attach_disabled_title:
+      "Image uploads require Vercel Blob. Ask the administrator to configure BLOB_READ_WRITE_TOKEN.",
+    set_stream_send_failed: "Failed to send message.",
+    set_stream_action_failed: "Failed to send action.",
+  },
+  agent: {
+    draft_actions: {
+      header_draft: "Draft",
+      to: "To:",
+      cc: "Cc:",
+      save_edits: "Save edits",
+      cancel: "Cancel",
+      send: "Send",
+      edit: "Edit",
+      dismiss: "Dismiss",
+      sent_dispatching: "Sent — dispatches in {n}s.",
+      undo: "Undo",
+      sent_automatically: "Sent automatically",
+      sent: "Sent",
+      toast_sent: "Sent · undo in {n}s",
+      toast_send_failed: "Send failed",
+      toast_send_cancelled: "Send cancelled",
+      toast_undo_failed: "Undo failed",
+      toast_dismissed: "Dismissed",
+      toast_dismiss_failed: "Dismiss failed",
+      toast_draft_updated: "Draft updated",
+      toast_save_failed: "Save failed",
+    },
+    proposed_actions: {
+      toast_action_failed: "Action failed: {text}",
+      toast_dismissed: "Dismissed",
+      toast_done: "{label} — done",
+    },
+    role_picker: {
+      aria: "Classify sender",
+      title: "New sender — help Steadii classify (optional)",
+      skip: "Skip",
+      class_label: "Class (optional):",
+      class_none: "— none —",
+      new_class_link: "+ Type new class name",
+      new_class_placeholder: "e.g. MAT235",
+      cancel: "Cancel",
+      role_professor_label: "Professor",
+      role_professor_hint: "Course instructor",
+      role_ta_label: "TA",
+      role_ta_hint: "Teaching assistant / tutor",
+      role_classmate_label: "Classmate",
+      role_classmate_hint: "Fellow student",
+      role_admin_label: "Admin",
+      role_admin_hint: "Registrar, advising, IT",
+      role_career_label: "Career",
+      role_career_hint: "Recruiter, interviewer",
+      role_personal_label: "Personal",
+      role_personal_hint: "Family, friends, club",
+      role_other_label: "Other",
+      role_other_hint: "Skip-able catch-all",
+      toast_saved: "Saved: {sender} → {role}",
+      toast_save_failed: "Save failed",
+    },
+  },
+  app_layout: {
+    sidebar_brand_aria: "Steadii home",
+    past_due_message:
+      "Your last payment failed. Update your card to keep Pro access — Stripe will retry automatically over the next two weeks before we downgrade to Free.",
+    past_due_button: "Update payment",
+    credits_exceeded:
+      "Out of credits this cycle ({used} / {limit}). Chat continues; agent drafts and other metered features pause until reset or top-up.",
+    credits_used_pct:
+      "You've used {pct}% of your cycle credits ({used} / {limit}).",
+    upgrade: "Upgrade",
+    top_up: "Top up",
+    manage: "Manage",
+    recent_chats: "Recent chats",
+    untitled: "Untitled",
+    credits_unlimited_short: "∞ credits",
+    credits_remaining: "{n} credits left",
+    credits_unlimited_aria: "Credits: unlimited (admin)",
+    credits_used_aria: "Credits: {used} of {limit} used",
+    plan_admin: "Admin",
+    plan_pro: "Pro",
+    plan_student: "Student",
+    plan_free: "Free",
+    you_fallback: "You",
+    primary_aria: "Primary",
+  },
+  offline_strip: {
+    message: "Offline — changes will sync when reconnected.",
+  },
+  views: {
+    dead_db_banner: {
+      heading_not_connected: "Notion connection expired.",
+      heading_not_set_up: "Setup hasn't run yet.",
+      heading_deleted: "Steadii workspace missing.",
+      message_not_connected: "Notion isn't connected yet. Connect it in Settings.",
+      message_not_set_up:
+        "Your Steadii workspace in Notion hasn't been set up. Run setup to continue.",
+      message_deleted:
+        "The Steadii workspace in Notion looks gone. Click below to recreate it — existing Notion pages outside the workspace aren't touched.",
+      data_safe: "Your data is safe.",
+      reconnect_notion: "Reconnect Notion",
+      resetup_notion: "Re-setup Notion",
+    },
+  },
+  markdown_editor: {
+    placeholder_title: "Mistake title",
+    placeholder_body:
+      "Markdown body. Math via $...$ inline or $$...$$ block. Images: ![](url).",
+    aria_bold: "Bold",
+    aria_italic: "Italic",
+    aria_inline_code: "Inline code",
+    aria_bullet_list: "Bullet list",
+    aria_numbered_list: "Numbered list",
+    aria_inline_math: "Inline math",
+    aria_block_math: "Block math",
+    aria_heading: "Heading",
+  },
+  classes_list: {
+    new_class_button: "+ New class",
+    add_class_button: "+ Add class",
+    empty_title: "No classes yet.",
+    empty_description:
+      "Classes are Steadii's core unit. Add one to start tracking assignments, mistakes, and syllabi.",
+    aria_classes: "Classes",
+    metadata_due: "{n} due",
+    metadata_mistakes: "{n} mistakes",
+  },
+  notifications: {
+    saved_toast: "Notification settings saved",
+    save_failed: "Save failed",
+    save: "Save",
+    enabled: "Enabled",
+    notify_immediately: "Notify me immediately",
+    morning_digest_label: "Morning digest",
+    morning_digest_hint:
+      "One summary email per day with pending drafts. No body previews — you confirm in Steadii.",
+    digest_hour_label: "Digest hour (local)",
+    digest_hour_hint:
+      "What time in your timezone to send the digest. Memory-locked default is 7am.",
+    undo_window_label: "Undo window",
+    undo_window_hint:
+      "Seconds between Send and actual Gmail delivery. 10 feels fast; 60 is forgiving.",
+    high_risk_push_label: "High-risk push",
+    high_risk_push_hint:
+      "Immediate notification when a high-risk draft lands. Pushes arrive once mobile ships — toggle is saved for later.",
+  },
+  agent_rules_section: {
+    global_rules: "Global rules",
+    global_rules_caption: "— operator-maintained, read-only",
+    global_high: "AUTO-HIGH keywords",
+    global_medium: "AUTO-MEDIUM keywords",
+    global_low: "AUTO-LOW keywords",
+    global_ignore: "IGNORE — promo sender hints",
+    global_ignore_why:
+      "List-Unsubscribe header + promo-domain substring = ignore bucket.",
+    learned_contacts: "Learned contacts",
+    learned_contacts_caption: "— grows from the role picker + future chat feedback",
+    learned_empty:
+      "No learned rules yet. The agent will add rows here as you confirm first-time senders and correct its triage.",
+    recent_feedback: "Recent feedback",
+    recent_feedback_caption:
+      "— last 30 days, per sender. Bias the agent toward the choices you've actually been making.",
+    feedback_empty:
+      "No feedback recorded yet. Each time you Send, Edit, or Dismiss a draft, Steadii records the choice here so the classifier can learn your preferences for that sender.",
+    feedback_proposed: "proposed",
+    custom_overrides: "Custom overrides",
+    custom_overrides_caption: "— coming after α",
+    custom_overrides_empty:
+      "Natural-language rules (\"Only ask me for explicit confirm on professor emails about grading\") land in a later update — they route through the agent and save as a structured rule here.",
+    reset: "Reset",
+    source_learned_title: "Learned from prior interactions",
+    source_manual_title: "Manually set via role picker",
+    source_chat_title: "Set via chat",
+  },
+  delete_rule_button: {
+    toast_removed: "Rule removed",
+    toast_failed: "Delete failed",
+    aria: "Remove rule",
+  },
+  cancel_form: {
+    bullet_downgrade: "After that, your account downgrades to Free.",
+    bullet_data_preserved:
+      "Your data is preserved for 120 days — resubscribe any time during that window and pick up where you left off.",
+  },
+  admin: {
+    title: "Admin",
+    subtitle: "Visible only while your user row has is_admin=true.",
+    stat_users: "Users",
+    stat_credits_month: "Credits (this month)",
+    stat_input_tokens_month: "Input tokens (this month)",
+    stat_active_subs: "Active Stripe subs",
+    top_users_heading: "Top users by credits (this month)",
+    no_usage_yet: "No usage this month yet.",
+    waitlist_heading: "α access waitlist",
+    waitlist_body:
+      "Approve requests, generate Stripe Promotion Codes, send invite emails.",
+    waitlist_pending: "{n} pending",
+    invite_codes_heading: "Invite codes",
+    invite_codes_body:
+      "Friend invites are now Stripe Promotion Codes backed by the FRIEND_3MO coupon (100% off for 3 months). Create individual single-use codes in the Stripe Dashboard — no in-app issuance UI.",
+    open_dashboard: "Open coupon in Stripe Dashboard →",
   },
   chat_input: {
     placeholder: "Ask Steadii…",

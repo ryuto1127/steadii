@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import * as Sentry from "@sentry/nextjs";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/lib/db/client";
 import {
   assignments,
@@ -47,11 +48,12 @@ export default async function TasksPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
+  const t = await getTranslations("tasks");
 
   const [steadiiRes, googleRes, msRes] = await Promise.all([
-    safelyFetchSteadii(userId),
-    safelyFetchGoogleTasks(userId),
-    safelyFetchMsTasks(userId),
+    safelyFetchSteadii(userId, t),
+    safelyFetchGoogleTasks(userId, t),
+    safelyFetchMsTasks(userId, t),
   ]);
 
   const bySource: Record<Source, AdapterResult<UnifiedRow>> = {
@@ -69,13 +71,13 @@ export default async function TasksPage() {
   if (rows.length === 0) {
     return (
       <div className="mx-auto max-w-3xl py-2 md:py-6">
-        <h1 className="text-h1 text-[hsl(var(--foreground))]">Tasks</h1>
+        <h1 className="text-h1 text-[hsl(var(--foreground))]">{t("title")}</h1>
         <div className="mt-8">
           <EmptyState
             icon={<ListChecks size={18} strokeWidth={1.5} />}
-            title="No tasks pending."
-            description="Add an assignment to a class, or connect Google Tasks / Microsoft To Do, and they'll show up here. The agent surfaces deadline-during-travel and workload spikes proactively."
-            actions={[{ label: "Browse classes", href: "/app/classes" }]}
+            title={t("empty_title")}
+            description={t("empty_description")}
+            actions={[{ label: t("empty_browse_classes"), href: "/app/classes" }]}
           />
         </div>
       </div>
@@ -85,14 +87,14 @@ export default async function TasksPage() {
   return (
     <div className="mx-auto max-w-4xl py-2 md:py-6">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-h1 text-[hsl(var(--foreground))]">Tasks</h1>
+        <h1 className="text-h1 text-[hsl(var(--foreground))]">{t("title")}</h1>
         <span className="text-small text-[hsl(var(--muted-foreground))]">
-          {rows.length} pending
+          {t("pending_count", { count: rows.length })}
         </span>
       </div>
 
       <section className="mt-6">
-        <DenseList ariaLabel="Pending tasks">
+        <DenseList ariaLabel={t("aria_pending_tasks")}>
           {rows.map((r) =>
             r.href ? (
               <DenseRowLink
@@ -102,7 +104,7 @@ export default async function TasksPage() {
                 title={r.title}
                 secondary={r.secondary}
                 metadata={r.metadata}
-                rightContent={<SourceBadge source={r.source} />}
+                rightContent={<SourceBadge source={r.source} t={t} />}
               />
             ) : (
               <DenseRow
@@ -111,7 +113,7 @@ export default async function TasksPage() {
                 title={r.title}
                 secondary={r.secondary}
                 metadata={r.metadata}
-                rightContent={<SourceBadge source={r.source} />}
+                rightContent={<SourceBadge source={r.source} t={t} />}
               />
             )
           )}
@@ -121,13 +123,19 @@ export default async function TasksPage() {
   );
 }
 
-const SOURCE_LABELS: Record<Source, string> = {
-  steadii: "Steadii",
-  google_tasks: "Google",
-  microsoft_todo: "Microsoft",
-};
-
-function SourceBadge({ source }: { source: Source }) {
+function SourceBadge({
+  source,
+  t,
+}: {
+  source: Source;
+  t: (key: string) => string;
+}) {
+  const label =
+    source === "steadii"
+      ? t("source_steadii")
+      : source === "google_tasks"
+        ? t("source_google")
+        : t("source_microsoft");
   return (
     <span
       className={cn(
@@ -135,13 +143,16 @@ function SourceBadge({ source }: { source: Source }) {
         "px-1.5 py-0.5 text-small text-[hsl(var(--muted-foreground))]"
       )}
     >
-      {SOURCE_LABELS[source]}
+      {label}
     </span>
   );
 }
 
+type Translator = (key: string, vars?: Record<string, string | number>) => string;
+
 async function safelyFetchSteadii(
-  userId: string
+  userId: string,
+  t: Translator
 ): Promise<AdapterResult<UnifiedRow>> {
   try {
     const rows = await db
@@ -179,11 +190,14 @@ async function safelyFetchSteadii(
         ? `/app/classes/${r.classId}?tab=assignments`
         : "/app/classes",
       secondary: r.classCode ?? r.className ?? null,
-      metadata: buildSteadiiMetadata({
-        dueAt: r.dueAt,
-        status: r.status,
-        priority: r.priority,
-      }),
+      metadata: buildSteadiiMetadata(
+        {
+          dueAt: r.dueAt,
+          status: r.status,
+          priority: r.priority,
+        },
+        t
+      ),
       leadingDot: r.classColor ?? null,
     }));
     return { ok: true, items };
@@ -197,13 +211,14 @@ async function safelyFetchSteadii(
 }
 
 async function safelyFetchGoogleTasks(
-  userId: string
+  userId: string,
+  t: Translator
 ): Promise<AdapterResult<UnifiedRow>> {
   try {
     const tasks = await fetchUpcomingTasks(userId, { days: 30, max: 50 });
     return {
       ok: true,
-      items: tasks.map((t, i) => projectExternalTask(t, "google_tasks", i)),
+      items: tasks.map((task, i) => projectExternalTask(task, "google_tasks", i, t)),
     };
   } catch (err) {
     Sentry.captureException(err, {
@@ -215,13 +230,16 @@ async function safelyFetchGoogleTasks(
 }
 
 async function safelyFetchMsTasks(
-  userId: string
+  userId: string,
+  t: Translator
 ): Promise<AdapterResult<UnifiedRow>> {
   try {
     const tasks = await fetchMsUpcomingTasks(userId, { days: 30, max: 50 });
     return {
       ok: true,
-      items: tasks.map((t, i) => projectExternalTask(t, "microsoft_todo", i)),
+      items: tasks.map((task, i) =>
+        projectExternalTask(task, "microsoft_todo", i, t)
+      ),
     };
   } catch (err) {
     Sentry.captureException(err, {
@@ -233,27 +251,28 @@ async function safelyFetchMsTasks(
 }
 
 function projectExternalTask(
-  t: DraftCalendarTask,
+  task: DraftCalendarTask,
   source: Exclude<Source, "steadii">,
-  index: number
+  index: number,
+  t: Translator
 ): UnifiedRow {
   // YYYY-MM-DD parsed as local-midnight so sort comparisons line up
   // with Steadii's local-tz `dueAt` Dates.
-  const [y, m, d] = t.due.split("-").map(Number);
+  const [y, m, d] = task.due.split("-").map(Number);
   const dueAt =
     Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d)
       ? new Date(y, m - 1, d)
       : null;
   return {
-    key: `${source}:${t.due}:${index}:${t.title}`,
+    key: `${source}:${task.due}:${index}:${task.title}`,
     source,
-    title: t.title,
+    title: task.title,
     dueAt,
     // External tasks are read-only here; clicking through to the
     // source app would need per-provider deep-links we don't track.
     href: null,
     secondary: null,
-    metadata: dueAt ? [formatDueAt(dueAt)] : [t.due],
+    metadata: dueAt ? [formatDueAt(dueAt, t)] : [task.due],
     leadingDot: null,
   };
 }
@@ -265,28 +284,31 @@ function compareByDue(a: UnifiedRow, b: UnifiedRow): number {
   return a.title.localeCompare(b.title);
 }
 
-function buildSteadiiMetadata(args: {
-  dueAt: Date | null;
-  status: AssignmentStatus;
-  priority: "low" | "medium" | "high" | null;
-}): string[] {
+function buildSteadiiMetadata(
+  args: {
+    dueAt: Date | null;
+    status: AssignmentStatus;
+    priority: "low" | "medium" | "high" | null;
+  },
+  t: Translator
+): string[] {
   const parts: string[] = [];
-  parts.push(args.dueAt ? formatDueAt(args.dueAt) : "No due date");
-  if (args.status === "in_progress") parts.push("in progress");
-  if (args.priority === "high") parts.push("high priority");
+  parts.push(args.dueAt ? formatDueAt(args.dueAt, t) : t("no_due_date"));
+  if (args.status === "in_progress") parts.push(t("in_progress"));
+  if (args.priority === "high") parts.push(t("high_priority"));
   return parts;
 }
 
-function formatDueAt(d: Date): string {
+function formatDueAt(d: Date, t: Translator): string {
   const now = new Date();
   const diffDays = Math.round(
     (d.getTime() - now.getTime()) / (24 * 3600 * 1000)
   );
-  if (diffDays < 0) return `Overdue ${-diffDays}d`;
-  if (diffDays === 0) return "Due today";
-  if (diffDays === 1) return "Due tomorrow";
-  if (diffDays < 7) return `Due in ${diffDays}d`;
-  return `Due ${d.getMonth() + 1}/${d.getDate()}`;
+  if (diffDays < 0) return t("overdue_days", { n: -diffDays });
+  if (diffDays === 0) return t("due_today");
+  if (diffDays === 1) return t("due_tomorrow");
+  if (diffDays < 7) return t("due_in_days", { n: diffDays });
+  return t("due_short_date", { date: `${d.getMonth() + 1}/${d.getDate()}` });
 }
 
 function errMsg(err: unknown): string {
