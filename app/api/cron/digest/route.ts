@@ -48,13 +48,18 @@ export async function POST(req: Request) {
             continue;
           }
           try {
-            await resend().emails.send({
+            const result = await resend().emails.send({
               from: getFromAddress(),
               to: payload.userEmail,
               subject: payload.subject,
               html: payload.html,
               text: payload.text,
             });
+            if (result.error) {
+              throw new Error(
+                `Resend rejected digest send: ${result.error.name} — ${result.error.message}`
+              );
+            }
           } catch (err) {
             if (err instanceof ResendNotConfiguredError) {
               // In dev without the key, log but don't error — cron still
