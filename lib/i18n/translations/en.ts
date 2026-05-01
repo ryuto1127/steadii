@@ -98,6 +98,10 @@ type MessagesShape = {
       phrase_1: string;
       phrase_2: string;
       phrase_3: string;
+      raw_phrase_1: string;
+      raw_phrase_2: string;
+      raw_phrase_3: string;
+      cleaned_phrase: string;
       listening: string;
       processing: string;
       hold_to_talk: string;
@@ -696,6 +700,10 @@ export const en: MessagesShape = {
       phrase_1: "MAT223 report due tomorrow",
       phrase_2: "Move calculus midterm to Friday",
       phrase_3: "Add task: read Chapter 5",
+      raw_phrase_1: "uh, MAT223 report, like, it's due tomorrow, oh and email Prof Smith",
+      raw_phrase_2: "the calculus midterm, um, I want to move it to Friday, no wait, the one next week",
+      raw_phrase_3: "uh, add task, like, read chapter 5 — actually section 3.4 too",
+      cleaned_phrase: "MAT223 report due tomorrow — draft email to Prof Smith",
       listening: "Listening",
       processing: "Processing…",
       hold_to_talk: "Hold Caps Lock to talk",
