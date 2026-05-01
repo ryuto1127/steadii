@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 // Phase 7 W1 — splits the reasoning string into bullet lines (when the
 // model emitted bullet markers), and within each line/paragraph turns
@@ -26,24 +27,36 @@ type ReasoningAction =
   | "notify_only"
   | "paused";
 
-function reasoningHeader(action: ReasoningAction | null | undefined): string {
+type ReasoningHeaderKey =
+  | "header_draft_reply"
+  | "header_ask_clarifying"
+  | "header_archive"
+  | "header_snooze"
+  | "header_no_op"
+  | "header_notify_only"
+  | "header_paused"
+  | "header_default";
+
+function reasoningHeaderKey(
+  action: ReasoningAction | null | undefined
+): ReasoningHeaderKey {
   switch (action) {
     case "draft_reply":
-      return "Why this draft";
+      return "header_draft_reply";
     case "ask_clarifying":
-      return "Why Steadii is asking";
+      return "header_ask_clarifying";
     case "archive":
-      return "Why archive";
+      return "header_archive";
     case "snooze":
-      return "Why snooze";
+      return "header_snooze";
     case "no_op":
-      return "Why no action";
+      return "header_no_op";
     case "notify_only":
-      return "Why this is important";
+      return "header_notify_only";
     case "paused":
-      return "Why paused";
+      return "header_paused";
     default:
-      return "Steadii's reasoning";
+      return "header_default";
   }
 }
 
@@ -54,6 +67,7 @@ export function ReasoningPanel({
   reasoning: string | null;
   action?: ReasoningAction | null;
 }) {
+  const t = useTranslations("agent.reasoning_panel");
   const [expanded, setExpanded] = useState(false);
   if (!reasoning || reasoning.trim().length === 0) return null;
 
@@ -65,7 +79,7 @@ export function ReasoningPanel({
   return (
     <section className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
       <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-        {reasoningHeader(action)}
+        {t(reasoningHeaderKey(action))}
       </h2>
       {bullets.length > 0 ? (
         <ul className="flex list-disc flex-col gap-1 pl-5 text-small text-[hsl(var(--foreground))]">
@@ -87,12 +101,12 @@ export function ReasoningPanel({
           {expanded ? (
             <>
               <ChevronUp size={12} strokeWidth={1.75} />
-              Collapse
+              {t("collapse")}
             </>
           ) : (
             <>
               <ChevronDown size={12} strokeWidth={1.75} />
-              Expand
+              {t("expand")}
             </>
           )}
         </button>
