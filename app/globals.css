@@ -756,14 +756,9 @@
   47%, 55%  { opacity: 1; }
   60%, 100% { opacity: 0; }
 }
-@keyframes voice-demo-raw {
-  0%, 55%   { opacity: 0; }
-  62%, 73%  { opacity: 1; }
-  78%, 100% { opacity: 0; }
-}
 @keyframes voice-demo-cleaned {
-  0%, 73%   { opacity: 0; transform: translateY(2px); }
-  78%, 92%  { opacity: 1; transform: translateY(0);   }
+  0%, 60%   { opacity: 0; transform: translateY(2px); }
+  68%, 92%  { opacity: 1; transform: translateY(0);   }
   97%, 100% { opacity: 0; transform: translateY(-1px); }
 }
 @keyframes voice-demo-dot {
@@ -779,10 +774,6 @@
 .voice-demo-border-amber       { animation: voice-demo-border-amber 6s ease-in-out infinite; }
 .voice-demo-listening          { animation: voice-demo-listening 6s ease-in-out infinite; }
 .voice-demo-processing         { animation: voice-demo-processing 6s ease-in-out infinite; }
-.voice-demo-raw                {
-  opacity: 0;
-  animation: voice-demo-raw 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
 .voice-demo-cleaned            {
   opacity: 0;
   animation: voice-demo-cleaned 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
@@ -798,13 +789,11 @@
   .voice-demo-border-amber,
   .voice-demo-listening,
   .voice-demo-processing,
-  .voice-demo-raw,
   .voice-demo-cleaned,
   .voice-demo-dots > span,
   .voice-demo-cursor { animation: none; }
   .voice-demo-listening,
-  .voice-demo-processing,
-  .voice-demo-raw { opacity: 0; }
+  .voice-demo-processing { opacity: 0; }
   /* Static fallback — cleaned phrase visible, raw and others hidden. */
   .voice-demo-cleaned { opacity: 1; transform: none; }
   .voice-demo-cursor  { opacity: 1; }

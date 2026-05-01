@@ -76,14 +76,13 @@ export async function VoiceDemo() {
             <span className="voice-demo-processing col-start-1 row-start-1 flex items-center italic text-[#1A1814]/55">
               {t("processing")}
             </span>
-            {/* Raw noisy transcript — what Whisper would emit. Italic +
-                muted = "this is the raw input, not the final output". */}
-            <span className="voice-demo-raw col-start-1 row-start-1 flex items-center overflow-hidden whitespace-nowrap italic leading-none text-[#1A1814]/50">
-              {t("raw_phrase_1")}
-            </span>
             {/* Cleaned form — what Steadii's GPT-5.4-nano cleanup pass
-                produces. Cross-fades over the raw to visualize the
-                cleanup. */}
+                produces. The chat box only ever shows the cleaned
+                output; the noise-cleanup story is told by the caption
+                subtitle below ("Filler words and false starts cleaned
+                up automatically"). Earlier attempts that stacked raw
+                + cleaned in the same cell read as overlapping mess
+                even with sequential timing. */}
             <span className="voice-demo-cleaned col-start-1 row-start-1 flex items-center overflow-hidden whitespace-nowrap leading-none">
               {t("cleaned_phrase")}
               <span
