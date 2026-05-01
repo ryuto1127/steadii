@@ -70,6 +70,36 @@ type MessagesShape = {
       subject_to_change: string;
     };
     sign_in: string;
+    hero_animation: {
+      chat_header: string;
+      message_placeholder: string;
+      extracting: string;
+      imported_summary: string;
+      classes_heading: string;
+      term_label: string;
+      calendar_heading: string;
+      week_range: string;
+      days: string[];
+      classes: {
+        new: string;
+        eng200: string;
+        bio110: string;
+        psy100: string;
+        hst101: string;
+      };
+      events: {
+        math_lec: string;
+        math_tut: string;
+        math_quiz: string;
+        hw1_due: string;
+      };
+    };
+    voice_demo: {
+      demo_text: string;
+      listening: string;
+      processing: string;
+      hold_to_talk: string;
+    };
   };
   nav: {
     inbox: string;
@@ -635,6 +665,37 @@ export const en: MessagesShape = {
       subject_to_change: "α · subject to change",
     },
     sign_in: "Sign in",
+    hero_animation: {
+      chat_header: "Chat · Steadii",
+      message_placeholder: "Message Steadii…",
+      extracting: "Extracting syllabus…",
+      imported_summary:
+        "Imported. Syllabus: <highlight>Math II (Linear Algebra)</highlight>. <highlight>7</highlight> schedule items.",
+      classes_heading: "Classes",
+      term_label: "Spring 2026",
+      calendar_heading: "Calendar",
+      week_range: "Apr 27 – May 3",
+      days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      classes: {
+        new: "Math II · Linear Algebra",
+        eng200: "ENG 200 · Lit Survey",
+        bio110: "BIO 110 · Cell Biology",
+        psy100: "PSY 100 · Intro Psych",
+        hst101: "HST 101 · World History",
+      },
+      events: {
+        math_lec: "Math II — Lec",
+        math_tut: "Math II — Tut",
+        math_quiz: "Math II Quiz",
+        hw1_due: "HW1 due",
+      },
+    },
+    voice_demo: {
+      demo_text: "MAT223 report due tomorrow",
+      listening: "Listening",
+      processing: "Processing…",
+      hold_to_talk: "Hold Caps Lock to talk",
+    },
   },
   nav: {
     inbox: "Inbox",

@@ -722,12 +722,16 @@
      0-1s   Caps key idle, border calm
      1-3s   Caps pressed, holographic border, "Listening…" pulses
      3-4s   Border tints amber, "Processing…" briefly visible
-     4-5s   Characters snake in from outside-left along a wavy path
+     4-5s   Characters stream in from outside-left of the chat box
+            along a wavy path, crossing INTO the chat box's left edge
      5-6s   Settled (cursor blinks), then reset
    Each character animates independently with a staggered delay derived
-   from --i, producing a snake-like wavy entrance inspired by voiceos.com.
-   The text container uses width: max-content so there is no trailing
-   whitespace after the final glyph. */
+   from --i, producing a left-to-right wave as voice → text. The chars
+   layer lives on a sibling overlay above the chat box (the chat box
+   itself keeps overflow-hidden for its holographic border + state
+   fades), so the entry phase from translateX(-120px) is actually
+   visible — the user can see characters approaching from the left
+   before they cross the box's left edge. */
 @keyframes voice-demo-key {
   0%, 5%   { opacity: 0.35; transform: scale(0.96); }
   16%, 80% { opacity: 1;    transform: scale(1);    }
@@ -757,19 +761,30 @@
   0%, 100% { opacity: 0.25; transform: translateY(0); }
   50%      { opacity: 1;    transform: translateY(-1px); }
 }
-/* Snake motion — characters enter from outside-left of the input along a
-   curved path. translateY uses sin(--i) for a wavy shape; the staggered
-   delay (var(--i) * 30ms) plus a 6s loop period gives the visceral
-   "voice → text" feel. */
+/* Snake motion — characters enter from a position visibly LEFT of the
+   chat box (-120px puts them past the box's left edge, into the bg
+   pill or even outside the wrapper at small viewports). They snake
+   along a curved path with multiple Y bumps before crossing the box's
+   left edge and settling. The staggered delay (var(--i) * 30ms) plus a
+   6s loop produces a left-to-right wave: char[0] enters first, char[N]
+   last, mirroring how voice transcription emits text. */
 @keyframes voice-demo-char-snake {
-  0%, 65%   { opacity: 0; transform: translate(-60px, 8px); }
-  72%       { opacity: 0.7; transform: translate(-30px, -4px); }
-  78%, 90%  { opacity: 1;   transform: translate(0, 0); }
+  0%, 60%   { opacity: 0;   transform: translate(-120px, 6px); }
+  66%       { opacity: 0.4; transform: translate(-80px, -4px); }
+  72%       { opacity: 0.7; transform: translate(-45px, 4px); }
+  78%       { opacity: 0.9; transform: translate(-18px, -2px); }
+  82%, 92%  { opacity: 1;   transform: translate(0, 0); }
   96%, 100% { opacity: 0;   transform: translate(0, 0); }
 }
-@keyframes voice-demo-cursor {
-  0%, 100% { opacity: 0; }
-  78%, 90% { opacity: 1; }
+/* Visibility gate for the cursor only — chars use their own snake
+   keyframes to fade in/out, but the cursor has no fade-in built into
+   its blink, so we gate it with `visibility` so it only appears in the
+   settled window. `visibility` doesn't conflict with the blink's
+   `opacity` so the two animations compose cleanly. */
+@keyframes voice-demo-cursor-show {
+  0%, 78%   { visibility: hidden; }
+  82%, 92%  { visibility: visible; }
+  96%, 100% { visibility: hidden; }
 }
 @keyframes voice-demo-cursor-blink {
   0%, 100% { opacity: 1; }
@@ -786,8 +801,9 @@
 .voice-demo-text-wrap          {
   width: max-content;
   max-width: 100%;
-  overflow: hidden;
-  animation: voice-demo-cursor 6s ease-in-out infinite;
+  /* Chars' individual snake keyframes handle fade-in/out per char;
+     cursor's visibility is gated separately by voice-demo-cursor-show
+     so the wrap itself needs no opacity animation. */
 }
 .voice-demo-char {
   opacity: 0;
@@ -795,7 +811,12 @@
   animation-delay: calc(var(--i, 0) * 30ms);
   white-space: pre;
 }
-.voice-demo-cursor             { animation: voice-demo-cursor-blink 1s ease-in-out infinite; }
+.voice-demo-cursor             {
+  visibility: hidden;
+  animation:
+    voice-demo-cursor-blink 1s ease-in-out infinite,
+    voice-demo-cursor-show 6s linear infinite;
+}
 @media (prefers-reduced-motion: reduce) {
   .voice-demo-key,
   .voice-demo-border,
@@ -808,6 +829,7 @@
   .voice-demo-cursor { animation: none; }
   .voice-demo-listening,
   .voice-demo-processing { opacity: 0; }
-  .voice-demo-char       { opacity: 1; }
+  .voice-demo-char       { opacity: 1; transform: none; }
   .voice-demo-border     { opacity: 0.6; }
+  .voice-demo-cursor     { visibility: visible; opacity: 1; }
 }

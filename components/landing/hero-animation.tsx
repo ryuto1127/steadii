@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Inbox,
   Home,
@@ -68,23 +69,23 @@ const SIDEBAR_ICONS = [
   ListChecks,
 ];
 
-const EXISTING_CLASSES = [
-  { name: "ENG 200 · Lit Survey", color: "#A78BFA" },
-  { name: "BIO 110 · Cell Biology", color: "#34D399" },
-  { name: "PSY 100 · Intro Psych", color: "#F472B6" },
-  { name: "HST 101 · World History", color: "#FACC15" },
+type ExistingClassKey = "eng200" | "bio110" | "psy100" | "hst101";
+const EXISTING_CLASSES: Array<{ key: ExistingClassKey; color: string }> = [
+  { key: "eng200", color: "#A78BFA" },
+  { key: "bio110", color: "#34D399" },
+  { key: "psy100", color: "#F472B6" },
+  { key: "hst101", color: "#FACC15" },
 ];
 
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-const CALENDAR_EVENTS: Array<{ day: number; top: number; label: string }> = [
-  { day: 0, top: 14, label: "Math II — Lec" },
-  { day: 1, top: 50, label: "Math II — Tut" },
-  { day: 2, top: 14, label: "Math II — Lec" },
-  { day: 3, top: 50, label: "Math II — Tut" },
-  { day: 4, top: 14, label: "Math II — Lec" },
-  { day: 4, top: 64, label: "Math II Quiz" },
-  { day: 0, top: 84, label: "HW1 due" },
+type EventKey = "math_lec" | "math_tut" | "math_quiz" | "hw1_due";
+const CALENDAR_EVENTS: Array<{ day: number; top: number; key: EventKey }> = [
+  { day: 0, top: 14, key: "math_lec" },
+  { day: 1, top: 50, key: "math_tut" },
+  { day: 2, top: 14, key: "math_lec" },
+  { day: 3, top: 50, key: "math_tut" },
+  { day: 4, top: 14, key: "math_lec" },
+  { day: 4, top: 64, key: "math_quiz" },
+  { day: 0, top: 84, key: "hw1_due" },
 ];
 
 export default function HeroAnimation() {
@@ -197,6 +198,7 @@ function Sidebar({ phase }: { phase: Phase }) {
 }
 
 function ChatPanel({ phase }: { phase: Phase }) {
+  const t = useTranslations("landing.hero_animation");
   const idx = PHASE_INDEX[phase];
   const showFloatingPdf = phase === "pdfDragging";
   // Pill is visible only during the brief `attached` window — once the
@@ -224,7 +226,7 @@ function ChatPanel({ phase }: { phase: Phase }) {
     <div className="absolute inset-0 flex flex-col">
       <div className="flex items-center justify-between border-b border-black/[0.05] bg-white px-4 py-2.5">
         <span className="font-mono text-[9px] uppercase tracking-widest text-[#1A1814]/40">
-          Chat · Steadii
+          {t("chat_header")}
         </span>
         <span className="font-mono text-[9px] tracking-widest text-[#1A1814]/30">
           ⌘K
@@ -263,6 +265,7 @@ function ChatInput({
   attached: boolean;
   sendPulse: boolean;
 }) {
+  const t = useTranslations("landing.hero_animation");
   return (
     <div className="border-t border-black/[0.05] bg-white px-4 py-3">
       <div className="flex min-h-[40px] items-center gap-2 rounded-[10px] border border-black/[0.08] bg-white px-3 py-2 shadow-[0_2px_8px_-4px_rgba(20,20,40,0.05)]">
@@ -288,7 +291,7 @@ function ChatInput({
           className="flex-1 truncate text-[12px] text-[#1A1814]/30"
           style={{ opacity: attached ? 0 : 1, transition: `opacity 180ms ${EASE}` }}
         >
-          Message Steadii…
+          {t("message_placeholder")}
         </span>
         <span
           className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0A0A0A] text-white"
@@ -328,6 +331,7 @@ function FloatingPdf({ visible }: { visible: boolean }) {
 }
 
 function ToolCard({ state }: { state: "extracting" | "extracted" | null }) {
+  const t = useTranslations("landing.hero_animation");
   const visible = state !== null;
   return (
     <div
@@ -358,7 +362,7 @@ function ToolCard({ state }: { state: "extracting" | "extracted" | null }) {
             }`}
           />
           <span className="font-mono text-[11px] text-[#1A1814]/70">
-            Extracting syllabus…
+            {t("extracting")}
           </span>
         </div>
         <p
@@ -368,9 +372,11 @@ function ToolCard({ state }: { state: "extracting" | "extracted" | null }) {
             transition: `opacity 180ms ${EASE}`,
           }}
         >
-          取り込みました。シラバス:{" "}
-          <span className="text-[#1A1814]">Math II (Linear Algebra)</span>.
-          スケジュール項目: <span className="text-[#1A1814]">7件</span>
+          {t.rich("imported_summary", {
+            highlight: (chunks) => (
+              <span className="text-[#1A1814]">{chunks}</span>
+            ),
+          })}
         </p>
       </div>
     </div>
@@ -378,19 +384,22 @@ function ToolCard({ state }: { state: "extracting" | "extracted" | null }) {
 }
 
 function ClassesView({ showNewRow }: { showNewRow: boolean }) {
+  const t = useTranslations("landing.hero_animation");
+  const tClasses = useTranslations("landing.hero_animation.classes");
   return (
     <div className="absolute inset-0 flex flex-col bg-[#FAFAF9] px-6 py-5">
       <div className="mb-1 flex items-center justify-between">
         <h3 className="text-[15px] font-semibold tracking-tight text-[#1A1814]">
-          Classes
+          {t("classes_heading")}
         </h3>
         <span className="font-mono text-[9px] uppercase tracking-widest text-[#1A1814]/40">
           {showNewRow ? "5" : "4"}
         </span>
       </div>
-      <p className="mb-3 text-[10px] text-[#1A1814]/45">Spring 2026</p>
+      <p className="mb-3 text-[10px] text-[#1A1814]/45">{t("term_label")}</p>
       <ul className="space-y-1.5">
         <li
+          key="new"
           className="overflow-hidden"
           style={{
             maxHeight: showNewRow ? "60px" : "0px",
@@ -400,14 +409,14 @@ function ClassesView({ showNewRow }: { showNewRow: boolean }) {
           }}
         >
           <ClassRow
-            label="Math II · Linear Algebra"
+            label={tClasses("new")}
             color={CLASS_BLUE}
             pulse={showNewRow}
           />
         </li>
         {EXISTING_CLASSES.map((c) => (
-          <li key={c.name}>
-            <ClassRow label={c.name} color={c.color} dim />
+          <li key={c.key}>
+            <ClassRow label={tClasses(c.key)} color={c.color} dim />
           </li>
         ))}
       </ul>
@@ -452,20 +461,23 @@ function ClassRow({
 }
 
 function CalendarView({ startEvents }: { startEvents: boolean }) {
+  const t = useTranslations("landing.hero_animation");
+  const tEvents = useTranslations("landing.hero_animation.events");
+  const days = (t.raw("days") as string[]) ?? [];
   return (
     <div className="absolute inset-0 flex flex-col bg-[#FAFAF9] px-6 py-5">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-[15px] font-semibold tracking-tight text-[#1A1814]">
-          Calendar
+          {t("calendar_heading")}
         </h3>
         <span className="font-mono text-[9px] uppercase tracking-widest text-[#1A1814]/40">
-          Apr 27 – May 3
+          {t("week_range")}
         </span>
       </div>
       <div className="grid grid-cols-7 gap-1 border-b border-black/[0.06] pb-1.5">
-        {DAYS.map((d) => (
+        {days.map((d, i) => (
           <span
-            key={d}
+            key={i}
             className="font-mono text-[9px] uppercase tracking-widest text-[#1A1814]/45"
           >
             {d}
@@ -474,7 +486,7 @@ function CalendarView({ startEvents }: { startEvents: boolean }) {
       </div>
       <div className="relative mt-2 flex-1 overflow-hidden">
         <div aria-hidden className="absolute inset-0 grid grid-cols-7 gap-1">
-          {DAYS.map((d, i) => (
+          {days.map((_d, i) => (
             <div key={i} className="relative">
               {[0.25, 0.5, 0.75].map((p) => (
                 <span
@@ -510,7 +522,7 @@ function CalendarView({ startEvents }: { startEvents: boolean }) {
                 className="h-1.5 w-1.5 shrink-0 rounded-full"
                 style={{ backgroundColor: CLASS_BLUE }}
               />
-              <span className="truncate">{evt.label}</span>
+              <span className="truncate">{tEvents(evt.key)}</span>
             </div>
           </div>
         ))}
