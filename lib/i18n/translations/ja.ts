@@ -144,7 +144,9 @@ export const ja: Messages = {
       },
     },
     voice_demo: {
-      demo_text: "MAT223 のレポート due tomorrow",
+      phrase_1: "MAT223 のレポート明日提出",
+      phrase_2: "微積中間を金曜に動かす",
+      phrase_3: "タスク追加: 第 5 章を読む",
       listening: "認識中",
       processing: "整えています…",
       hold_to_talk: "Caps Lock を押しっぱなしで話す",

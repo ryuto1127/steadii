@@ -95,7 +95,9 @@ type MessagesShape = {
       };
     };
     voice_demo: {
-      demo_text: string;
+      phrase_1: string;
+      phrase_2: string;
+      phrase_3: string;
       listening: string;
       processing: string;
       hold_to_talk: string;
@@ -691,7 +693,9 @@ export const en: MessagesShape = {
       },
     },
     voice_demo: {
-      demo_text: "MAT223 report due tomorrow",
+      phrase_1: "MAT223 report due tomorrow",
+      phrase_2: "Move calculus midterm to Friday",
+      phrase_3: "Add task: read Chapter 5",
       listening: "Listening",
       processing: "Processing…",
       hold_to_talk: "Hold Caps Lock to talk",
