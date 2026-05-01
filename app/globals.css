@@ -717,155 +717,93 @@
   .steadii-overlay-card { animation: none; }
 }
 
-/* Landing voice scene — pure CSS demo of the hold-to-talk flow. 12s loop,
-   no audio, no JS. Three academic sample phrases cascade along distinct
-   page-wide curved paths into the centered chat box. Each curve starts
-   ~500-600px left of the chat box's text origin (visible page bleed in
-   the widened max-w-[1280px] wrapper) and terminates at the char's
-   natural inline position. CSS offset-path on each char span drives
-   the curve traversal; per-char animation-delay produces the
-   "voice → text" left-to-right reveal as offset-distance ramps 0→100%.
+/* Landing voice scene v3 — pure CSS demo of the hold-to-talk flow. 6s
+   chat-box loop (Listening to Processing to settled phrase 1), plus a
+   single decorative SVG textPath below carrying all 3 sample phrases
+   joined by a bullet on one curving baseline. Replaces the v2 cascade
+   that overlapped phrases on some viewports and read as visual mess
+   vs the voiceos.com reference.
 
-     0-1s    Caps key idle, border calm
-     1-2.5s  Caps pressed, holographic border, "Listening…" pulses
-     2.5-3s  Border tints amber, "Processing…" briefly visible
-     0-3s    Phrase 1 chars travel along their (top-left, descending)
-             curve and settle inside the chat box. Cursor blinks during
-             the 2.5-3.5s settled hold.
-     3-4s    Phrase 1 fades.
-     4-7s    Phrase 2 chars travel along their (left-mid wave) curve,
-             settle, fade. Chrome (key/border/listening/processing/cursor)
-             stays idle — fires ONCE per cycle, gated to phrase 1.
-     7-10s   Phrase 3 chars travel along their (bottom-left, rising)
-             curve, settle, fade.
-     10-12s  Pause + reset.
+     0-1.8s    Caps idle, border calm, chat box empty.
+     1.8-3.0s  Caps pressed, holographic border, Listening with dots.
+     3.0-3.8s  Border tints amber, Processing briefly visible.
+     3.8-5.4s  Settled — phrase 1 fades in, cursor blinks.
+     5.4-6.0s  Fade out, reset.
+
+   The wavy textPath gets a 30s gentle horizontal drift so the line
+   doesn't look frozen, but the period is far enough above the chat
+   box loop that the two never compete for attention.
 */
 @keyframes voice-demo-key {
-  0%, 4%    { opacity: 0.35; transform: scale(0.96); }
-  8%, 25%   { opacity: 1;    transform: scale(1);    }
-  30%, 100% { opacity: 0.35; transform: scale(0.96); }
+  0%, 25%   { opacity: 0.35; transform: scale(0.96); }
+  30%, 90%  { opacity: 1;    transform: scale(1);    }
+  95%, 100% { opacity: 0.35; transform: scale(0.96); }
 }
 @keyframes voice-demo-border {
-  0%, 7%    { opacity: 0;    background-position: 0% 50%;   }
-  10%, 20%  { opacity: 0.85; background-position: 100% 50%; }
-  25%, 100% { opacity: 0;    background-position: 0% 50%;   }
+  0%, 25%   { opacity: 0;    background-position: 0% 50%;   }
+  30%, 60%  { opacity: 0.85; background-position: 100% 50%; }
+  68%, 100% { opacity: 0;    background-position: 0% 50%;   }
 }
 @keyframes voice-demo-border-amber {
-  0%, 22%   { opacity: 0;    background-position: 0% 50%;   }
-  24%, 26%  { opacity: 0.65; background-position: 100% 50%; }
-  28%, 100% { opacity: 0;    background-position: 0% 50%;   }
+  0%, 60%   { opacity: 0;    background-position: 0% 50%;   }
+  64%, 76%  { opacity: 0.65; background-position: 100% 50%; }
+  82%, 100% { opacity: 0;    background-position: 0% 50%;   }
 }
 @keyframes voice-demo-listening {
-  0%, 7%    { opacity: 0; }
-  10%, 20%  { opacity: 1; }
-  22%, 100% { opacity: 0; }
+  0%, 25%   { opacity: 0; }
+  30%, 60%  { opacity: 1; }
+  64%, 100% { opacity: 0; }
 }
 @keyframes voice-demo-processing {
-  0%, 22%   { opacity: 0; }
-  24%, 26%  { opacity: 1; }
-  28%, 100% { opacity: 0; }
+  0%, 60%   { opacity: 0; }
+  64%, 76%  { opacity: 1; }
+  82%, 100% { opacity: 0; }
+}
+@keyframes voice-demo-settled {
+  0%, 76%   { opacity: 0; transform: translateY(2px); }
+  82%, 90%  { opacity: 1; transform: translateY(0);   }
+  95%, 100% { opacity: 0; transform: translateY(-1px); }
 }
 @keyframes voice-demo-dot {
   0%, 100% { opacity: 0.25; transform: translateY(0); }
   50%      { opacity: 1;    transform: translateY(-1px); }
 }
-/* Phrase 1 — top-left arc descending into chat box (0-3s reveal,
-   3-4s fade). Curve start at offset (-560, -180) is ~560px left of
-   each char's natural inline position and 180px above the row's
-   vertical center; on a 1440px viewport that places the entry just
-   off the wrapper's left padding edge with a clear arc above. */
-@keyframes voice-demo-phrase-1 {
-  0%        { offset-distance: 0%;   opacity: 0; }
-  21%       { offset-distance: 100%; opacity: 1; }
-  26%       { offset-distance: 100%; opacity: 1; }
-  30%       { offset-distance: 100%; opacity: 0; }
-  100%      { offset-distance: 100%; opacity: 0; }
-}
-/* Phrase 2 — left-mid wave (4-7s). Starts level with the chat box
-   (-600, 0), bumps down then up, settles. Distinct anchor from
-   phrase 1 so the reader registers two separate entries. */
-@keyframes voice-demo-phrase-2 {
-  0%, 33%   { offset-distance: 0%;   opacity: 0; }
-  50%       { offset-distance: 100%; opacity: 1; }
-  54%       { offset-distance: 100%; opacity: 1; }
-  58%       { offset-distance: 100%; opacity: 0; }
-  100%      { offset-distance: 100%; opacity: 0; }
-}
-/* Phrase 3 — bottom-left arc rising into chat box (7-10s). Mirror of
-   phrase 1's vertical anchor (-560, +180) so the cycle closes with
-   the third distinct entry direction (top, mid, bottom). */
-@keyframes voice-demo-phrase-3 {
-  0%, 58%   { offset-distance: 0%;   opacity: 0; }
-  75%       { offset-distance: 100%; opacity: 1; }
-  79%       { offset-distance: 100%; opacity: 1; }
-  83%       { offset-distance: 100%; opacity: 0; }
-  100%      { offset-distance: 100%; opacity: 0; }
-}
-/* Visibility gate for the cursor only — gated to phrase 1's settled
-   window so the chrome (caps/border/listening/processing/cursor)
-   fires once per 12s loop. `visibility` doesn't conflict with the
-   blink's `opacity` so the two animations compose cleanly. */
-@keyframes voice-demo-cursor-show {
-  0%, 21%   { visibility: hidden; }
-  25%, 29%  { visibility: visible; }
-  33%, 100% { visibility: hidden; }
-}
 @keyframes voice-demo-cursor-blink {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0; }
 }
-.voice-demo-key                { animation: voice-demo-key       12s ease-in-out infinite; }
-.voice-demo-border             { animation: voice-demo-border    12s ease-in-out infinite; }
-.voice-demo-border-amber       { animation: voice-demo-border-amber 12s ease-in-out infinite; }
-.voice-demo-listening          { animation: voice-demo-listening 12s ease-in-out infinite; }
-.voice-demo-processing         { animation: voice-demo-processing 12s ease-in-out infinite; }
+@keyframes voice-demo-wave-drift {
+  0%, 100% { transform: translateX(0);     }
+  50%      { transform: translateX(-2.5%); }
+}
+.voice-demo-key                { animation: voice-demo-key       6s ease-in-out infinite; }
+.voice-demo-border             { animation: voice-demo-border    6s ease-in-out infinite; }
+.voice-demo-border-amber       { animation: voice-demo-border-amber 6s ease-in-out infinite; }
+.voice-demo-listening          { animation: voice-demo-listening 6s ease-in-out infinite; }
+.voice-demo-processing         { animation: voice-demo-processing 6s ease-in-out infinite; }
+.voice-demo-settled            {
+  opacity: 0;
+  animation: voice-demo-settled 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
 .voice-demo-dots > span        { animation: voice-demo-dot       1.2s ease-in-out infinite; }
 .voice-demo-dots > span:nth-child(2) { animation-delay: 0.15s; }
 .voice-demo-dots > span:nth-child(3) { animation-delay: 0.30s; }
-.voice-demo-char {
-  opacity: 0;
-  offset-rotate: 0deg;
-  animation-duration: 12s;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  animation-iteration-count: infinite;
-  animation-delay: calc(var(--i, 0) * 18ms);
-  white-space: pre;
-}
-.voice-demo-char-1 {
-  offset-path: path("M -560 -180 Q -440 -220 -320 -130 Q -160 -50 0 0");
-  animation-name: voice-demo-phrase-1;
-}
-.voice-demo-char-2 {
-  offset-path: path("M -600 0 Q -420 100 -240 -50 Q -100 0 0 0");
-  animation-name: voice-demo-phrase-2;
-}
-.voice-demo-char-3 {
-  offset-path: path("M -560 180 Q -440 220 -320 130 Q -160 50 0 0");
-  animation-name: voice-demo-phrase-3;
-}
-.voice-demo-cursor             {
-  visibility: hidden;
-  animation:
-    voice-demo-cursor-blink 1s ease-in-out infinite,
-    voice-demo-cursor-show 12s linear infinite;
-}
+.voice-demo-cursor             { animation: voice-demo-cursor-blink 1s ease-in-out infinite; }
+.voice-demo-wave-text          { animation: voice-demo-wave-drift 30s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   .voice-demo-key,
   .voice-demo-border,
   .voice-demo-border-amber,
   .voice-demo-listening,
   .voice-demo-processing,
+  .voice-demo-settled,
   .voice-demo-dots > span,
-  .voice-demo-char,
-  .voice-demo-cursor { animation: none; }
+  .voice-demo-cursor,
+  .voice-demo-wave-text { animation: none; }
   .voice-demo-listening,
   .voice-demo-processing { opacity: 0; }
-  /* Static fallback shows phrase 1 settled inside the chat box.
-     Phrases 2 + 3 stay invisible so the static frame reads as a
-     single representative state. */
-  .voice-demo-char       { opacity: 1; offset-distance: 100%; }
-  .voice-demo-phrase-2,
-  .voice-demo-phrase-3   { opacity: 0; }
-  .voice-demo-border     { opacity: 0.6; }
-  .voice-demo-cursor     { visibility: visible; opacity: 1; }
+  /* Static fallback — settled phrase 1 visible, border calm. */
+  .voice-demo-settled { opacity: 1; transform: none; }
+  .voice-demo-cursor  { opacity: 1; }
 }
