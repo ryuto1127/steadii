@@ -33,11 +33,23 @@ export async function createWaitlistPromotionCode(args: {
   const baseSlug = slugFor(args.name, args.email);
   const baseCode = `STEADII-${baseSlug}`;
 
-  // Try the bare code, then -2, -3, … up to a small ceiling. The
-  // collision rate at α scale is ~0; the loop just keeps the action
-  // idempotent if Ryuto re-approves an already-coded request manually.
-  for (let suffix = 0; suffix < 50; suffix++) {
-    const code = suffix === 0 ? baseCode : `${baseCode}-${suffix + 1}`;
+  // Try the bare code, then -2, -3, … through -10 first (readable form
+  // for the common case where Ryuto re-approves an already-coded request
+  // manually, hits the same slug a couple times). After numeric suffixes
+  // saturate, fall back to a random 4-char base36 suffix (~36^4 = 1.6M
+  // values) so dev-test churn that fills the human-readable namespace
+  // doesn't leak as a Sentry error. 2026-04-30 incident: ryuty1127@…
+  // hit STEADII-RYUTO-1..50 all colliding from repeated dogfood runs.
+  for (let attempt = 0; attempt < 50; attempt++) {
+    let code: string;
+    if (attempt === 0) {
+      code = baseCode;
+    } else if (attempt < 10) {
+      code = `${baseCode}-${attempt + 1}`;
+    } else {
+      const random = Math.random().toString(36).slice(2, 6).toUpperCase();
+      code = `${baseCode}-${random}`;
+    }
     try {
       const created = await stripe().promotionCodes.create({
         promotion: { type: "coupon", coupon: couponId },
