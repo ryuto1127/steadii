@@ -44,10 +44,14 @@ export async function VoiceDemo() {
 
   return (
     <div className="voice-demo-wrap relative mx-auto mt-10 w-full max-w-[1280px] px-4 py-12 md:mt-12 md:py-16">
-      {/* Decorative wavy textPath BEHIND the chat box. The chat box's
-          opaque card visually obscures the segment of the wave that
-          passes behind it, creating the "noisy voice flows in, clean
-          text settles inside" story. */}
+      {/* Decorative wavy textPath — starts off the LEFT page edge,
+          curves through multiple humps, and TERMINATES inside the
+          chat box's left edge (hidden by the box's opaque card).
+          Right side of the demo stays clear — visual story is "noisy
+          voice flows in from the left, gets absorbed into the box,
+          clean text settles inside". Per voiceos.com reference: the
+          wave is asymmetric (left only), the chat box is the
+          terminus. */}
       <div
         aria-hidden
         className="voice-demo-wave-wrap pointer-events-none absolute inset-x-0 top-1/2 z-0 h-[160px] -translate-y-1/2 select-none"
@@ -60,13 +64,13 @@ export async function VoiceDemo() {
           <defs>
             <path
               id="voice-demo-wave-path"
-              d="M -60 90 C 200 0 400 170 640 80 C 880 -10 1080 170 1340 70"
+              d="M -120 70 C 0 -10 80 140 180 60 C 260 0 320 140 420 70 Q 480 100 540 78"
               fill="none"
             />
           </defs>
           <text
             className="voice-demo-wave-text fill-[#1A1814]"
-            fillOpacity="0.34"
+            fillOpacity="0.36"
             fontFamily="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
             fontSize="11"
             letterSpacing="0.06em"
