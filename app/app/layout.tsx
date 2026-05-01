@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { auth } from "@/lib/auth/config";
 import { Sidebar } from "@/components/layout/sidebar";
 import { OfflineStrip } from "@/components/layout/offline-strip";
@@ -77,6 +78,7 @@ export default async function AppLayout({
   const showBanner =
     pastDue || (effective.plan !== "admin" && balance.nearLimit);
   const pct = Math.min(100, Math.round((balance.used / balance.limit) * 100));
+  const t = await getTranslations("app_layout");
 
   // Arc-style island: body bg = warm canvas (--background); 12px padding
   // on every edge shows the canvas; main content floats as a surface-
@@ -99,7 +101,7 @@ export default async function AppLayout({
           <Link
             href="/app"
             className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-[hsl(var(--foreground))]"
-            aria-label="Steadii home"
+            aria-label={t("sidebar_brand_aria")}
           >
             <Logo size={24} />
             <span>Steadii</span>
@@ -147,16 +149,12 @@ export default async function AppLayout({
             {pastDue && (
               <div className="mx-auto mb-5 max-w-4xl rounded-lg bg-[hsl(var(--destructive)/0.08)] px-4 py-2.5 text-small text-[hsl(var(--destructive))]">
                 <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                  <span>
-                    Your last payment failed. Update your card to keep Pro
-                    access — Stripe will retry automatically over the next two
-                    weeks before we downgrade to Free.
-                  </span>
+                  <span>{t("past_due_message")}</span>
                   <Link
                     href="/app/settings/billing"
                     className="shrink-0 rounded-md px-3 py-1 text-small transition-hover hover:bg-[hsl(var(--surface))]"
                   >
-                    Update payment
+                    {t("past_due_button")}
                   </Link>
                 </div>
               </div>
@@ -172,18 +170,25 @@ export default async function AppLayout({
                 <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                   <span>
                     {balance.exceeded
-                      ? `Out of credits this cycle (${balance.used.toLocaleString()} / ${balance.limit.toLocaleString()}). Chat continues; agent drafts and other metered features pause until reset or top-up.`
-                      : `You've used ${pct}% of your cycle credits (${balance.used.toLocaleString()} / ${balance.limit.toLocaleString()}).`}
+                      ? t("credits_exceeded", {
+                          used: balance.used.toLocaleString(),
+                          limit: balance.limit.toLocaleString(),
+                        })
+                      : t("credits_used_pct", {
+                          pct,
+                          used: balance.used.toLocaleString(),
+                          limit: balance.limit.toLocaleString(),
+                        })}
                   </span>
                   <Link
                     href="/app/settings/billing"
                     className="shrink-0 rounded-md px-3 py-1 text-small transition-hover hover:bg-[hsl(var(--surface))]"
                   >
                     {effective.plan === "free"
-                      ? "Upgrade"
+                      ? t("upgrade")
                       : balance.exceeded
-                      ? "Top up"
-                      : "Manage"}
+                      ? t("top_up")
+                      : t("manage")}
                   </Link>
                 </div>
               </div>

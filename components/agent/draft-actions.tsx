@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { Check, CheckCircle2, Pencil, Archive, X } from "lucide-react";
 import {
   approveAgentDraftAction,
@@ -64,6 +65,7 @@ export function DraftActions({
   autoSent: boolean;
 }) {
   const router = useRouter();
+  const t = useTranslations("agent.draft_actions");
   const [editMode, setEditMode] = useState(false);
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState(initialBody);
@@ -85,9 +87,9 @@ export function DraftActions({
         const { sendAt, undoWindowSeconds: ws } =
           await approveAgentDraftAction(draftId);
         setPendingSend({ until: new Date(sendAt).getTime() });
-        toast.success(`Sent · undo in ${ws}s`, { duration: ws * 1000 });
+        toast.success(t("toast_sent", { n: ws }), { duration: ws * 1000 });
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Send failed");
+        toast.error(err instanceof Error ? err.message : t("toast_send_failed"));
       }
     });
   };
@@ -97,10 +99,10 @@ export function DraftActions({
       try {
         await cancelPendingSendAction(draftId);
         setPendingSend(null);
-        toast.success("Send cancelled");
+        toast.success(t("toast_send_cancelled"));
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Undo failed");
+        toast.error(err instanceof Error ? err.message : t("toast_undo_failed"));
       }
     });
   };
@@ -109,10 +111,10 @@ export function DraftActions({
     startTransition(async () => {
       try {
         await dismissAgentDraftAction(draftId);
-        toast.success("Dismissed");
+        toast.success(t("toast_dismissed"));
         router.push("/app/inbox");
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Dismiss failed");
+        toast.error(err instanceof Error ? err.message : t("toast_dismiss_failed"));
       }
     });
   };
@@ -128,10 +130,10 @@ export function DraftActions({
           cc: initialCc,
         });
         setEditMode(false);
-        toast.success("Draft updated");
+        toast.success(t("toast_draft_updated"));
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Save failed");
+        toast.error(err instanceof Error ? err.message : t("toast_save_failed"));
       }
     });
   };
@@ -150,15 +152,15 @@ export function DraftActions({
       {action === "draft_reply" ? (
         <section className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
           <div className="border-b border-[hsl(var(--border))] px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-            Draft
+            {t("header_draft")}
           </div>
           <div className="px-4 py-3">
             <div className="text-small text-[hsl(var(--muted-foreground))]">
-              To: <span className="text-[hsl(var(--foreground))]">{initialTo.join(", ")}</span>
+              {t("to")} <span className="text-[hsl(var(--foreground))]">{initialTo.join(", ")}</span>
             </div>
             {initialCc.length > 0 ? (
               <div className="text-small text-[hsl(var(--muted-foreground))]">
-                Cc: <span className="text-[hsl(var(--foreground))]">{initialCc.join(", ")}</span>
+                {t("cc")} <span className="text-[hsl(var(--foreground))]">{initialCc.join(", ")}</span>
               </div>
             ) : null}
             {editMode ? (
@@ -211,7 +213,7 @@ export function DraftActions({
                 className="inline-flex items-center gap-1.5 rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-50"
               >
                 <Check size={14} strokeWidth={2} />
-                Save edits
+                {t("save_edits")}
               </button>
               <button
                 type="button"
@@ -222,7 +224,7 @@ export function DraftActions({
                 }}
                 className="inline-flex items-center rounded-md border border-[hsl(var(--border))] px-3 py-1.5 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
               >
-                Cancel
+                {t("cancel")}
               </button>
             </>
           ) : (
@@ -235,7 +237,7 @@ export function DraftActions({
                   className="inline-flex items-center gap-1.5 rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-50"
                 >
                   <Check size={14} strokeWidth={2} />
-                  Send
+                  {t("send")}
                 </button>
               ) : null}
               {action === "draft_reply" ? (
@@ -245,7 +247,7 @@ export function DraftActions({
                   className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border))] px-3 py-1.5 text-small transition-hover hover:bg-[hsl(var(--surface-raised))]"
                 >
                   <Pencil size={14} strokeWidth={1.75} />
-                  Edit
+                  {t("edit")}
                 </button>
               ) : null}
               <button
@@ -255,7 +257,7 @@ export function DraftActions({
                 className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))] disabled:opacity-50"
               >
                 <X size={14} strokeWidth={1.75} />
-                Dismiss
+                {t("dismiss")}
               </button>
             </>
           )}
@@ -274,6 +276,7 @@ function UndoBar({
   onUndo: () => void;
   onTimeout: () => void;
 }) {
+  const t = useTranslations("agent.draft_actions");
   const [remaining, setRemaining] = useState(
     Math.max(0, Math.ceil((until - Date.now()) / 1000))
   );
@@ -294,14 +297,14 @@ function UndoBar({
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--primary)/0.06)] px-4 py-2.5 text-small">
       <span className="text-[hsl(var(--foreground))]">
-        Sent — dispatches in <span className="font-mono tabular-nums">{remaining}s</span>.
+        {t("sent_dispatching", { n: remaining })}
       </span>
       <button
         type="button"
         onClick={onUndo}
         className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
       >
-        Undo
+        {t("undo")}
       </button>
     </div>
   );
@@ -319,6 +322,7 @@ function SentBanner({
   sentAt: Date | null;
   autoSent: boolean;
 }) {
+  const t = useTranslations("agent.draft_actions");
   const label = sentAt
     ? new Date(sentAt).toLocaleString(undefined, {
         month: "short",
@@ -331,7 +335,7 @@ function SentBanner({
   // glass-box promise requires the user immediately know which sends
   // went out without their Send click. Same green palette so it still
   // reads as success, just with the autonomy callout.
-  const headline = autoSent ? "Sent automatically" : "Sent";
+  const headline = autoSent ? t("sent_automatically") : t("sent");
   return (
     <div className="flex items-center gap-2 rounded-md border border-[hsl(142_76%_36%/0.3)] bg-[hsl(142_76%_36%/0.06)] px-4 py-2.5 text-small">
       <CheckCircle2

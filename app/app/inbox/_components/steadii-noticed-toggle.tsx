@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, ChevronRight, Sparkles } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 const STORAGE_KEY = "steadii.inbox.proposals_expanded";
 const LAST_SEEN_KEY = "steadii.inbox.proposals_last_seen";
@@ -20,6 +21,7 @@ export function SteadiiNoticedToggle({
 }: {
   proposals: NoticedProposal[];
 }) {
+  const t = useTranslations("inbox");
   // Default collapsed. The toggle persists across reloads via
   // localStorage; if the user has never set a preference, we auto-expand
   // on the FIRST visit where there's at least one pending proposal newer
@@ -88,7 +90,7 @@ export function SteadiiNoticedToggle({
         className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
       >
         <Sparkles size={11} strokeWidth={2.5} />
-        <span>Steadii noticed</span>
+        <span>{t("noticed")}</span>
         <span className="font-mono lowercase tracking-normal">({count})</span>
         <ChevronRight
           size={12}
@@ -117,7 +119,7 @@ export function SteadiiNoticedToggle({
                         : "text-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.08)]"
                     }`}
                   >
-                    {isAuto ? "Action" : "Proposal"}
+                    {isAuto ? t("action_pill") : t("proposal_pill")}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div
@@ -136,10 +138,10 @@ export function SteadiiNoticedToggle({
                     </div>
                     <div className="text-[12px] text-[hsl(var(--muted-foreground))]">
                       {p.status === "pending"
-                        ? "Pending — pick an action"
+                        ? t("status_pending")
                         : p.status === "resolved"
-                          ? "Resolved"
-                          : "Dismissed"}
+                          ? t("status_resolved")
+                          : t("status_dismissed")}
                     </div>
                   </div>
                 </Link>

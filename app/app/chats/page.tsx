@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { MessagesSquare, Plus } from "lucide-react";
 import Link from "next/link";
 import { ContextualSuggestion } from "@/components/suggestions/contextual-suggestion";
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
@@ -26,17 +26,19 @@ export default async function ChatsListPage() {
 
   const locale = await getLocale();
   const dateLocale = locale === "ja" ? "ja-JP" : "en-US";
+  const t = await getTranslations("chats_list");
+  const tChat = await getTranslations("chat_view");
 
   return (
     <div className="mx-auto max-w-3xl">
       <header className="mb-6 flex items-center justify-between gap-3">
-        <h1 className="text-h1 text-[hsl(var(--foreground))]">Chats</h1>
+        <h1 className="text-h1 text-[hsl(var(--foreground))]">{t("title")}</h1>
         <Link
           href="/app"
           className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
         >
           <Plus size={14} strokeWidth={1.5} />
-          New chat
+          {t("new_chat")}
         </Link>
       </header>
 
@@ -50,17 +52,17 @@ export default async function ChatsListPage() {
       {rows.length === 0 ? (
         <EmptyState
           icon={<MessagesSquare size={18} strokeWidth={1.5} />}
-          title="No chats yet."
-          description="Start a conversation from Home."
-          actions={[{ label: "Start a conversation", href: "/app" }]}
+          title={t("empty_title")}
+          description={t("empty_description")}
+          actions={[{ label: t("empty_action"), href: "/app" }]}
         />
       ) : (
-        <DenseList ariaLabel="Chats">
+        <DenseList ariaLabel={t("aria")}>
           {rows.map((chat) => (
             <ChatHistoryRow
               key={chat.id}
               id={chat.id}
-              title={chat.title ?? "Untitled chat"}
+              title={chat.title ?? tChat("title_placeholder")}
               updatedAt={chat.updatedAt.toLocaleDateString(dateLocale)}
             />
           ))}

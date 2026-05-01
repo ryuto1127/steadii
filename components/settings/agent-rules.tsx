@@ -5,6 +5,7 @@ import {
   Settings2,
   Activity,
 } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { agentRules, agentSenderFeedback } from "@/lib/db/schema";
@@ -23,6 +24,7 @@ import { DeleteRuleButton } from "./delete-rule-button";
 // per sender — that exposes the L3 lite signal so users can see what
 // the agent has learned and reset rows if needed.
 export async function AgentRulesSection({ userId }: { userId: string }) {
+  const t = await getTranslations("agent_rules_section");
   const userRules = await db
     .select()
     .from(agentRules)
@@ -96,14 +98,14 @@ export async function AgentRulesSection({ userId }: { userId: string }) {
       <div>
         <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
           <Globe size={12} strokeWidth={1.75} />
-          <span>Global rules</span>
+          <span>{t("global_rules")}</span>
           <span className="text-[10px] font-normal normal-case tracking-normal">
-            — operator-maintained, read-only
+            {t("global_rules_caption")}
           </span>
         </div>
         <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3">
           <GlobalGroup
-            label="AUTO-HIGH keywords"
+            label={t("global_high")}
             tone="high"
             entries={AUTO_HIGH_KEYWORDS.map((g) => ({
               id: g.ruleId,
@@ -112,7 +114,7 @@ export async function AgentRulesSection({ userId }: { userId: string }) {
             }))}
           />
           <GlobalGroup
-            label="AUTO-MEDIUM keywords"
+            label={t("global_medium")}
             tone="medium"
             entries={AUTO_MEDIUM_KEYWORDS.map((g) => ({
               id: g.ruleId,
@@ -121,7 +123,7 @@ export async function AgentRulesSection({ userId }: { userId: string }) {
             }))}
           />
           <GlobalGroup
-            label="AUTO-LOW keywords"
+            label={t("global_low")}
             tone="low"
             entries={AUTO_LOW_KEYWORDS.map((g) => ({
               id: g.ruleId,
@@ -130,13 +132,13 @@ export async function AgentRulesSection({ userId }: { userId: string }) {
             }))}
           />
           <GlobalGroup
-            label="IGNORE — promo sender hints"
+            label={t("global_ignore")}
             tone="ignore"
             entries={[
               {
                 id: "PROMO_DOMAIN_HINTS",
                 label: PROMO_DOMAIN_HINTS.join(", "),
-                why: "List-Unsubscribe header + promo-domain substring = ignore bucket.",
+                why: t("global_ignore_why"),
               },
             ]}
           />
@@ -146,15 +148,14 @@ export async function AgentRulesSection({ userId }: { userId: string }) {
       <div>
         <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
           <Brain size={12} strokeWidth={1.75} />
-          <span>Learned contacts</span>
+          <span>{t("learned_contacts")}</span>
           <span className="text-[10px] font-normal normal-case tracking-normal">
-            — grows from the role picker + future chat feedback
+            {t("learned_contacts_caption")}
           </span>
         </div>
         {userRules.length === 0 ? (
           <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-4 text-small text-[hsl(var(--muted-foreground))]">
-            No learned rules yet. The agent will add rows here as you
-            confirm first-time senders and correct its triage.
+            {t("learned_empty")}
           </div>
         ) : (
           <ul className="divide-y divide-[hsl(var(--border))] overflow-hidden rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
@@ -163,7 +164,14 @@ export async function AgentRulesSection({ userId }: { userId: string }) {
                 key={r.id}
                 className="flex items-center gap-3 px-3 py-2 text-small"
               >
-                <SourceIcon source={r.source} />
+                <SourceIcon
+                  source={r.source}
+                  titles={{
+                    learned: t("source_learned_title"),
+                    manual: t("source_manual_title"),
+                    chat: t("source_chat_title"),
+                  }}
+                />
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium text-[hsl(var(--foreground))]">
                     {r.matchValue}
@@ -185,17 +193,14 @@ export async function AgentRulesSection({ userId }: { userId: string }) {
       <div>
         <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
           <Activity size={12} strokeWidth={1.75} />
-          <span>Recent feedback</span>
+          <span>{t("recent_feedback")}</span>
           <span className="text-[10px] font-normal normal-case tracking-normal">
-            — last 30 days, per sender. Bias the agent toward the
-            choices you've actually been making.
+            {t("recent_feedback_caption")}
           </span>
         </div>
         {senderBuckets.length === 0 ? (
           <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-4 text-small text-[hsl(var(--muted-foreground))]">
-            No feedback recorded yet. Each time you Send, Edit, or
-            Dismiss a draft, Steadii records the choice here so the
-            classifier can learn your preferences for that sender.
+            {t("feedback_empty")}
           </div>
         ) : (
           <ul className="divide-y divide-[hsl(var(--border))] overflow-hidden rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
@@ -217,7 +222,8 @@ export async function AgentRulesSection({ userId }: { userId: string }) {
                     {b.rows.map((r, i) => (
                       <li key={i}>
                         <span className="font-mono">{r.n}×</span>{" "}
-                        proposed <span className="font-mono">{r.proposedAction}</span>{" "}
+                        {t("feedback_proposed")}{" "}
+                        <span className="font-mono">{r.proposedAction}</span>{" "}
                         →{" "}
                         <span className="font-mono">{r.userResponse}</span>
                       </li>
@@ -230,7 +236,7 @@ export async function AgentRulesSection({ userId }: { userId: string }) {
                     type="submit"
                     className="text-[12px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))]"
                   >
-                    Reset
+                    {t("reset")}
                   </button>
                 </form>
               </li>
@@ -242,15 +248,13 @@ export async function AgentRulesSection({ userId }: { userId: string }) {
       <div>
         <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
           <MessageSquare size={12} strokeWidth={1.75} />
-          <span>Custom overrides</span>
+          <span>{t("custom_overrides")}</span>
           <span className="text-[10px] font-normal normal-case tracking-normal">
-            — coming after α
+            {t("custom_overrides_caption")}
           </span>
         </div>
         <div className="rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-4 text-small text-[hsl(var(--muted-foreground))]">
-          Natural-language rules ("Only ask me for explicit confirm on
-          professor emails about grading") land in a later update — they
-          route through the agent and save as a structured rule here.
+          {t("custom_overrides_empty")}
         </div>
       </div>
     </div>
@@ -297,12 +301,18 @@ function GlobalGroup({
   );
 }
 
-function SourceIcon({ source }: { source: "learned" | "manual" | "chat" }) {
+function SourceIcon({
+  source,
+  titles,
+}: {
+  source: "learned" | "manual" | "chat";
+  titles: { learned: string; manual: string; chat: string };
+}) {
   switch (source) {
     case "learned":
       return (
         <span
-          title="Learned from prior interactions"
+          title={titles.learned}
           className="text-[hsl(var(--muted-foreground))]"
         >
           <Brain size={14} strokeWidth={1.75} />
@@ -311,7 +321,7 @@ function SourceIcon({ source }: { source: "learned" | "manual" | "chat" }) {
     case "manual":
       return (
         <span
-          title="Manually set via role picker"
+          title={titles.manual}
           className="text-[hsl(var(--muted-foreground))]"
         >
           <Settings2 size={14} strokeWidth={1.75} />
@@ -320,7 +330,7 @@ function SourceIcon({ source }: { source: "learned" | "manual" | "chat" }) {
     case "chat":
       return (
         <span
-          title="Set via chat"
+          title={titles.chat}
           className="text-[hsl(var(--muted-foreground))]"
         >
           <MessageSquare size={14} strokeWidth={1.75} />
