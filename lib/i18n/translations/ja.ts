@@ -118,6 +118,37 @@ export const ja: Messages = {
       subject_to_change: "α · 変更の可能性あり",
     },
     sign_in: "サインイン",
+    hero_animation: {
+      chat_header: "チャット · Steadii",
+      message_placeholder: "Steadii にメッセージ…",
+      extracting: "シラバスを取り込み中…",
+      imported_summary:
+        "取り込みました。シラバス: <highlight>Math II (Linear Algebra)</highlight>。スケジュール項目: <highlight>7件</highlight>",
+      classes_heading: "授業",
+      term_label: "2026 春",
+      calendar_heading: "カレンダー",
+      week_range: "4/27 – 5/3",
+      days: ["月", "火", "水", "木", "金", "土", "日"],
+      classes: {
+        new: "数学 II · 線形代数学",
+        eng200: "ENG 200 · 文学概説",
+        bio110: "BIO 110 · 細胞生物学",
+        psy100: "PSY 100 · 心理学概論",
+        hst101: "HST 101 · 世界史",
+      },
+      events: {
+        math_lec: "数学 II — 講義",
+        math_tut: "数学 II — 演習",
+        math_quiz: "数学 II 小テスト",
+        hw1_due: "課題 1 提出",
+      },
+    },
+    voice_demo: {
+      demo_text: "MAT223 のレポート due tomorrow",
+      listening: "認識中",
+      processing: "整えています…",
+      hold_to_talk: "Caps Lock を押しっぱなしで話す",
+    },
   },
   nav: {
     inbox: "受信箱",
