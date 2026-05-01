@@ -228,7 +228,7 @@ When a task affects something visible in the browser (UI change, layout, animati
 - Use `preview_resize` to set a real desktop viewport (default: **1440 × 900**, or 1920 × 1080 if a wider canvas is needed) before screenshotting. The default Claude Desktop preview window is split-narrow and produces broken-looking captures otherwise.
 - Use `preview_screenshot` for the verification image. Pair with `preview_console_logs` / `preview_network` for runtime sanity.
 - For interactive flows, drive `preview_click` / `preview_fill` / `preview_eval` to reach the state you need before capturing.
-- Auth-gated paths: use `preview_eval` to set the session cookie, or sign in via `preview_fill` against the dev login form.
+- Auth-gated paths: use `preview_eval` to set the session cookie, or sign in via `preview_fill` against the dev login form. **Cookie name is `authjs.session-token` (Auth.js v5)** — NOT `next-auth.session-token` (the older NextAuth v4 name). On HTTPS the prefix becomes `__Secure-authjs.session-token`. Verify by inspecting `document.cookie` after a real sign-in if uncertain.
 
 Why: Ryuto runs split sessions in Claude Desktop — his own view is super-narrow and ill-suited for verification. Manual screenshots are friction he should never have to spend time on. The default loop is **engineer makes the change → engineer captures the screenshot → engineer attaches it in the report or PR comment**.
 
