@@ -102,12 +102,6 @@ export default async function LandingPage() {
           </div>
         </div>
 
-        {/* Voice scene — visual loop of hold-to-talk. Sits between the hero
-            CTA and the HeroAnimation panel so first-visit readers grasp the
-            "type or talk" positioning before they hit the typing demo. No
-            mic permission prompt — the demo is purely a visual loop. */}
-        <VoiceDemo />
-
         <div className="relative mx-auto mt-6 max-w-6xl px-4 pb-20 md:px-6 md:pb-28">
           <div className="overflow-hidden rounded-[16px] bg-white/40 shadow-[0_30px_80px_-20px_rgba(20,20,40,0.25)] ring-1 ring-black/5 backdrop-blur-sm">
             <HeroAnimation />
@@ -131,6 +125,17 @@ export default async function LandingPage() {
             </p>
           </div>
           <ChatActionCards cards={cards} />
+
+          {/* Voice as a sub-feature — the typing examples in the cards
+              above are the primary "what you do" pitch; this is a
+              compact "or just talk" demo of the noisy-voice → cleaned-text
+              pipeline. Per Ryuto 2026-04-30: voice is a sub-feature and
+              shouldn't lead the page, but it's worth showing the
+              cleanup that makes Steadii's voice meaningfully different
+              from raw STT. */}
+          <div className="mt-16 md:mt-20">
+            <VoiceDemo />
+          </div>
         </section>
 
         {/* Section 3 — Steadii in motion */}
