@@ -1,87 +1,37 @@
-// Pure CSS, no JS, no audio, no `getUserMedia`. Demonstrates the
-// hold-to-talk flow visually so first-visit landing readers grasp the
-// "hold Caps Lock → speak → cleaned text appears" interaction without
-// ever being prompted for mic access. Per project_voice_input.md:
-// landing must NEVER request microphone permission.
+// Pure CSS, no JS, no audio, no `getUserMedia`. Demonstrates the voice
+// cleanup pipeline visually so the reader grasps "noisy speech →
+// AI cleans → clean text" without the demo ever asking for mic access.
+// Per project_voice_input.md: landing must NEVER request mic permission.
 //
-// v3.1 (2026-04-30): repositions the wavy decorative line BEHIND the
-// chat box (vertical center aligned, opaque box obscures the wave it
-// passes through) so the visual story reads as "noisy voice flows
-// IN → AI cleans → final text settles inside the box". Wavy text
-// content was also flipped from cleaned-form phrases to RAW filler-
-// heavy speech transcripts ("えーと、MAT223 のレポート…"); the chat
-// box settles on a longer cleaned form (Smith 教授へのメール下書き
-// 追記) so the cleanup contrast is actually visible. Earlier v3
-// (PR #108) had the wavy line floating below the chat box and used
-// already-cleaned phrases, neither of which sold the cleanup story.
+// v4 (2026-04-30): voice is a SUB-feature of Steadii (per Ryuto's
+// strategic call), so the demo is no longer the lead-of-page block.
+// This component now ships a single chat box that cross-fades a noisy
+// raw transcript into the cleaned form, with a caption that names the
+// cleanup explicitly. Earlier wavy-textPath / cascade decorations
+// (PR #99 → PR #105 → PR #108 → PR #109) all read as visual mess and
+// are removed.
 //
-// 6s loop on the chat box:
-//   0-1.8s    Caps idle, border calm, chat box empty.
-//   1.8-3.0s  Caps pressed, holographic border, "Listening…" with
+// 6s loop:
+//   0-1.0s    Caps idle, border calm, chat box empty.
+//   1.0-2.5s  Caps pressed, holographic border, "Listening…" with
 //             pulsing dots.
-//   3.0-3.8s  Border tints amber, "Processing…" briefly visible.
-//   3.8-5.4s  Settled — long cleaned phrase fades in, cursor blinks.
-//   5.4-6.0s  Fade out, reset.
+//   2.5-3.3s  Border tints amber, "Processing…" briefly visible.
+//   3.3-4.4s  Raw noisy transcript fades in ("uh, MAT223 report,
+//             like, it's due tomorrow") in italic muted style.
+//   4.4-5.4s  Cross-fade: raw fades out, cleaned ("MAT223 report
+//             due tomorrow") fades in. Cursor blinks at end.
+//   5.4-6.0s  Cleaned fades out, reset.
 //
-// The wavy textPath gets a 30s gentle horizontal drift so the line
-// doesn't look frozen. The drift is slow enough that the eye reads
-// the noisy raw phrases as static visual texture rather than active
-// motion; only the chat box cycle competes for attention.
+// The cross-fade IS the cleanup pipeline visualized: noisy in →
+// cleaned out, in the same input field.
 import { getTranslations } from "next-intl/server";
-
-const SEPARATOR = "  ·  ";
 
 export async function VoiceDemo() {
   const t = await getTranslations("landing.voice_demo");
-  const rawPhrases = [
-    t("raw_phrase_1"),
-    t("raw_phrase_2"),
-    t("raw_phrase_3"),
-  ];
-  // Repeat the chain so the path is full even when SVG width exceeds one
-  // chain's typeset length — a half-empty curve reads as a bug.
-  const wavyText = `${rawPhrases.join(SEPARATOR)}${SEPARATOR}${rawPhrases.join(SEPARATOR)}`;
 
   return (
-    <div className="voice-demo-wrap relative mx-auto mt-10 w-full max-w-[1280px] px-4 py-12 md:mt-12 md:py-16">
-      {/* Decorative wavy textPath BEHIND the chat box. The chat box's
-          opaque card visually obscures the segment of the wave that
-          passes behind it, creating the "noisy voice flows in, clean
-          text settles inside" story. */}
-      <div
-        aria-hidden
-        className="voice-demo-wave-wrap pointer-events-none absolute inset-x-0 top-1/2 z-0 h-[160px] -translate-y-1/2 select-none"
-      >
-        <svg
-          viewBox="0 0 1280 160"
-          preserveAspectRatio="none"
-          className="block h-full w-full"
-        >
-          <defs>
-            <path
-              id="voice-demo-wave-path"
-              d="M -60 90 C 200 0 400 170 640 80 C 880 -10 1080 170 1340 70"
-              fill="none"
-            />
-          </defs>
-          <text
-            className="voice-demo-wave-text fill-[#1A1814]"
-            fillOpacity="0.34"
-            fontFamily="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
-            fontSize="11"
-            letterSpacing="0.06em"
-          >
-            <textPath href="#voice-demo-wave-path" startOffset="0">
-              {wavyText}
-            </textPath>
-          </text>
-        </svg>
-      </div>
-
-      {/* Chat box — relative + z-10, opaque card so the wave behind it
-          is hidden in the chat box's footprint (the visual "absorbed
-          into the box" effect). */}
-      <div className="relative z-10 mx-auto flex w-full max-w-xl items-center gap-3 rounded-2xl border border-black/5 bg-white/85 px-4 py-3 shadow-[0_18px_48px_-24px_rgba(20,20,40,0.18)] backdrop-blur-md">
+    <div className="voice-demo-wrap relative mx-auto mt-6 w-full max-w-xl px-4">
+      <div className="relative mx-auto flex w-full items-center gap-3 rounded-2xl border border-black/5 bg-white/85 px-4 py-3 shadow-[0_18px_48px_-24px_rgba(20,20,40,0.18)] backdrop-blur-md">
         <span
           aria-hidden
           className="voice-demo-key flex h-9 w-12 shrink-0 items-center justify-center rounded-md border border-black/10 bg-white font-mono text-[10px] font-medium uppercase tracking-wider text-[#1A1814]/70 shadow-[0_1px_0_rgba(0,0,0,0.06),0_2px_6px_-2px_rgba(20,20,40,0.10)]"
@@ -126,7 +76,15 @@ export async function VoiceDemo() {
             <span className="voice-demo-processing col-start-1 row-start-1 flex items-center italic text-[#1A1814]/55">
               {t("processing")}
             </span>
-            <span className="voice-demo-settled col-start-1 row-start-1 flex items-center overflow-hidden whitespace-nowrap leading-none">
+            {/* Raw noisy transcript — what Whisper would emit. Italic +
+                muted = "this is the raw input, not the final output". */}
+            <span className="voice-demo-raw col-start-1 row-start-1 flex items-center overflow-hidden whitespace-nowrap italic leading-none text-[#1A1814]/50">
+              {t("raw_phrase_1")}
+            </span>
+            {/* Cleaned form — what Steadii's GPT-5.4-nano cleanup pass
+                produces. Cross-fades over the raw to visualize the
+                cleanup. */}
+            <span className="voice-demo-cleaned col-start-1 row-start-1 flex items-center overflow-hidden whitespace-nowrap leading-none">
               {t("cleaned_phrase")}
               <span
                 aria-hidden
@@ -137,13 +95,15 @@ export async function VoiceDemo() {
         </div>
       </div>
 
-      <p className="relative z-10 mt-3 text-center text-[13px] text-[#1A1814]/70">
+      <p className="mt-3 text-center text-[13px] text-[#1A1814]/70">
         {t("hold_to_talk")}
       </p>
+      <p className="mt-1 text-center text-[12px] text-[#1A1814]/45">
+        {t("noise_hint")}
+      </p>
 
-      {/* Accessible plain text — the visual layer is aria-hidden where
-          decorative; the cleaned phrase is what the SR user should
-          hear as the "demo content". */}
+      {/* Accessible plain text — the visual cycle is aria-hidden where
+          decorative; the cleaned phrase is the canonical "demo content". */}
       <span className="sr-only">{t("cleaned_phrase")}</span>
     </div>
   );
