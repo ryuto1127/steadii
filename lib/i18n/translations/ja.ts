@@ -598,6 +598,54 @@ export const ja: Messages = {
       toast_saved: "保存: {sender} → {role}",
       toast_save_failed: "保存に失敗しました",
     },
+    next_action_banner: {
+      draft_reply_title: "Steadii が返信ドラフトを作成しました。",
+      draft_reply_body: "下のドラフトを確認してください。必要なら編集して送信。",
+      ask_clarifying_title: "Steadii が追加情報を必要としています。",
+      ask_clarifying_body:
+        "下に不足している情報を入力してください。返信すると Steadii がドラフトを作成します。",
+      archive_title: "返信不要です。",
+      archive_body:
+        "Steadii はアーカイブを推奨しています。対応が済んだら却下してください。",
+      snooze_title: "Steadii は後で見直すことを提案しています。",
+      snooze_body: "今は却下、関連が出てきたら再表示されます。",
+      no_op_title: "アクションは提案されていません。",
+      no_op_body:
+        "Steadii は対応が必要な内容を見つけませんでした。却下して片付けてください。",
+      notify_only_title: "重要 — 返信不要。",
+      notify_only_body:
+        "見逃さないように Steadii が目印を付けました。確認して却下してください。",
+      paused_title: "一時停止 — クレジット残量切れ。",
+      paused_body:
+        "ドラフト生成を再開するにはトップアップしてください。分類は無料で継続されます。",
+    },
+    reasoning_panel: {
+      header_draft_reply: "なぜこのドラフト",
+      header_ask_clarifying: "なぜ Steadii が確認しているか",
+      header_archive: "なぜアーカイブ",
+      header_snooze: "なぜスヌーズ",
+      header_no_op: "なぜ対応不要",
+      header_notify_only: "なぜ重要",
+      header_paused: "なぜ一時停止",
+      header_default: "Steadii の判断理由",
+      collapse: "折りたたむ",
+      expand: "展開",
+    },
+    thinking_bar: {
+      thinking_complete: "判断 · 完了",
+      bound_to: "リンク先:",
+      this_class: "この授業",
+      fanout_mistake: "ミス {n} 件",
+      fanout_syllabus: "シラバス {n} 件",
+      fanout_calendar: "カレンダー {n} 件",
+      fanout_email: "メール {n} 件",
+      fanout_none: "関連コンテキストなし",
+      legacy_emails_surfaced: "{total} 件中 {returned} 件のメールを参照",
+    },
+    proposal_detail: {
+      why_flagged: "Steadii が目印を付けた理由",
+      sources: "参照元",
+    },
   },
   app_layout: {
     sidebar_brand_aria: "Steadii ホーム",
