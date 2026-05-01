@@ -1,30 +1,29 @@
 import { AlertTriangle } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { repairSetupAction } from "@/app/(auth)/onboarding/actions";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LinkButton } from "@/components/ui/button";
 
-export function DeadDbBanner({
+export async function DeadDbBanner({
   title,
   reason,
 }: {
   title: string;
   reason: "not_connected" | "not_set_up" | "deleted";
 }) {
+  const t = await getTranslations("views.dead_db_banner");
   const messages: Record<typeof reason, string> = {
-    not_connected:
-      "Notion isn't connected yet. Connect it in Settings.",
-    not_set_up:
-      "Your Steadii workspace in Notion hasn't been set up. Run setup to continue.",
-    deleted:
-      "The Steadii workspace in Notion looks gone. Click below to recreate it — existing Notion pages outside the workspace aren't touched.",
+    not_connected: t("message_not_connected"),
+    not_set_up: t("message_not_set_up"),
+    deleted: t("message_deleted"),
   };
 
   const heading =
     reason === "not_connected"
-      ? "Notion connection expired."
+      ? t("heading_not_connected")
       : reason === "not_set_up"
-      ? "Setup hasn't run yet."
-      : "Steadii workspace missing.";
+      ? t("heading_not_set_up")
+      : t("heading_deleted");
 
   return (
     <div className="mx-auto max-w-3xl py-6">
@@ -38,21 +37,21 @@ export function DeadDbBanner({
             <>
               {messages[reason]}
               <div className="mt-1 text-[hsl(var(--muted-foreground))]">
-                Your data is safe.
+                {t("data_safe")}
               </div>
             </>
           }
         />
         <div className="mt-3 flex justify-center">
           {reason === "not_connected" ? (
-            <LinkButton href="/app/settings">Reconnect Notion</LinkButton>
+            <LinkButton href="/app/settings">{t("reconnect_notion")}</LinkButton>
           ) : (
             <form action={repairSetupAction}>
               <button
                 type="submit"
                 className="inline-flex items-center justify-center rounded-md bg-[hsl(var(--primary))] px-3.5 py-2 text-body font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
               >
-                Re-setup Notion
+                {t("resetup_notion")}
               </button>
             </form>
           )}

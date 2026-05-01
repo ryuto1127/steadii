@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { loadClasses, loadTimelineForToday } from "@/lib/classes/loader";
 import { TimelineStrip } from "@/components/ui/timeline-strip";
 import { DenseList } from "@/components/ui/dense-list";
@@ -14,6 +15,8 @@ export default async function ClassesListPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
+  const t = await getTranslations("classes_list");
+  const tNav = await getTranslations("nav");
 
   const [classes, timelineDays] = await Promise.all([
     loadClasses(userId),
@@ -39,13 +42,13 @@ export default async function ClassesListPage() {
   if (active.length === 0) {
     return (
       <div className="mx-auto max-w-3xl py-2 md:py-6">
-        <h1 className="text-h1 text-[hsl(var(--foreground))]">Classes</h1>
+        <h1 className="text-h1 text-[hsl(var(--foreground))]">{tNav("classes")}</h1>
         <div className="mt-8">
           <EmptyState
             icon={<GraduationCap size={18} strokeWidth={1.5} />}
-            title="No classes yet."
-            description="Classes are Steadii's core unit. Add one to start tracking assignments, mistakes, and syllabi."
-            actions={[{ label: "+ Add class", href: "/app/classes/new" }]}
+            title={t("empty_title")}
+            description={t("empty_description")}
+            actions={[{ label: t("add_class_button"), href: "/app/classes/new" }]}
           />
         </div>
       </div>
@@ -58,12 +61,12 @@ export default async function ClassesListPage() {
   return (
     <div className="mx-auto max-w-4xl py-2 md:py-6">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-h1 text-[hsl(var(--foreground))]">Classes</h1>
+        <h1 className="text-h1 text-[hsl(var(--foreground))]">{tNav("classes")}</h1>
         <Link
           href="/app/classes/new"
           className="inline-flex h-9 shrink-0 items-center rounded-md bg-[hsl(var(--primary))] px-3 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
         >
-          + New class
+          {t("new_class_button")}
         </Link>
       </div>
 
@@ -72,7 +75,7 @@ export default async function ClassesListPage() {
       </section>
 
       <section className="mt-6">
-        <DenseList ariaLabel="Classes">
+        <DenseList ariaLabel={t("aria_classes")}>
           {active.map((c) => (
             <DenseRowLink
               key={c.id}
@@ -80,16 +83,22 @@ export default async function ClassesListPage() {
               leadingDot={c.color}
               title={c.code ?? c.name}
               secondary={c.code ? c.name : null}
-              metadata={buildMetadata({
-                term: c.term,
-                professor: c.professor,
-                next:
-                  todaysLabels.get(c.name) ??
-                  tomorrowLabels.get(c.name) ??
-                  null,
-                dueCount: c.dueCount,
-                mistakesCount: c.mistakesCount,
-              })}
+              metadata={buildMetadata(
+                {
+                  term: c.term,
+                  professor: c.professor,
+                  next:
+                    todaysLabels.get(c.name) ??
+                    tomorrowLabels.get(c.name) ??
+                    null,
+                  dueCount: c.dueCount,
+                  mistakesCount: c.mistakesCount,
+                },
+                {
+                  due: t("metadata_due", { n: c.dueCount }),
+                  mistakes: t("metadata_mistakes", { n: c.mistakesCount }),
+                }
+              )}
             />
           ))}
         </DenseList>
@@ -111,18 +120,21 @@ function classesByLabel(events: { title: string; start: Date }[]): Map<string, s
   return m;
 }
 
-function buildMetadata(args: {
-  term: string | null;
-  professor: string | null;
-  next: string | null;
-  dueCount: number;
-  mistakesCount: number;
-}): string[] {
+function buildMetadata(
+  args: {
+    term: string | null;
+    professor: string | null;
+    next: string | null;
+    dueCount: number;
+    mistakesCount: number;
+  },
+  labels: { due: string; mistakes: string }
+): string[] {
   const parts: string[] = [];
   if (args.professor) parts.push(args.professor);
   if (args.term) parts.push(args.term);
   if (args.next) parts.push(args.next);
-  if (args.dueCount > 0) parts.push(`${args.dueCount} due`);
-  if (args.mistakesCount > 0) parts.push(`${args.mistakesCount} mistakes`);
+  if (args.dueCount > 0) parts.push(labels.due);
+  if (args.mistakesCount > 0) parts.push(labels.mistakes);
   return parts;
 }

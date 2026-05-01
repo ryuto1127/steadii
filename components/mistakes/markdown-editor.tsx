@@ -31,6 +31,7 @@ export function MistakeMarkdownEditor({
   const router = useRouter();
   const tMistakes = useTranslations("mistakes");
   const tActions = useTranslations("classes.actions");
+  const tEditor = useTranslations("markdown_editor");
   const [title, setTitle] = useState(initialTitle);
   const [unit, setUnit] = useState(initialUnit ?? "");
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard" | "">(
@@ -139,7 +140,7 @@ export function MistakeMarkdownEditor({
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           className="flex-1 bg-transparent text-h1 text-[hsl(var(--foreground))] focus:outline-none"
-          placeholder="Mistake title"
+          placeholder={tEditor("placeholder_title")}
         />
         <button
           type="button"
@@ -230,28 +231,28 @@ export function MistakeMarkdownEditor({
       </div>
 
       <div className="flex items-center gap-1 border-b border-[hsl(var(--border))] pb-2">
-        <ToolbarButton onClick={() => wrap("**")} aria-label="Bold">
+        <ToolbarButton onClick={() => wrap("**")} aria-label={tEditor("aria_bold")}>
           <span className="font-bold">B</span>
         </ToolbarButton>
-        <ToolbarButton onClick={() => wrap("*")} aria-label="Italic">
+        <ToolbarButton onClick={() => wrap("*")} aria-label={tEditor("aria_italic")}>
           <span className="italic">I</span>
         </ToolbarButton>
-        <ToolbarButton onClick={() => wrap("`")} aria-label="Inline code">
+        <ToolbarButton onClick={() => wrap("`")} aria-label={tEditor("aria_inline_code")}>
           <span className="font-mono">{"<>"}</span>
         </ToolbarButton>
-        <ToolbarButton onClick={() => prefixLines("- ")} aria-label="Bullet list">
+        <ToolbarButton onClick={() => prefixLines("- ")} aria-label={tEditor("aria_bullet_list")}>
           •
         </ToolbarButton>
-        <ToolbarButton onClick={() => prefixLines("1. ")} aria-label="Numbered list">
+        <ToolbarButton onClick={() => prefixLines("1. ")} aria-label={tEditor("aria_numbered_list")}>
           1.
         </ToolbarButton>
-        <ToolbarButton onClick={() => wrap("$")} aria-label="Inline math">
+        <ToolbarButton onClick={() => wrap("$")} aria-label={tEditor("aria_inline_math")}>
           ƒ
         </ToolbarButton>
-        <ToolbarButton onClick={() => wrap("\n$$\n", "\n$$\n")} aria-label="Block math">
+        <ToolbarButton onClick={() => wrap("\n$$\n", "\n$$\n")} aria-label={tEditor("aria_block_math")}>
           ƒ²
         </ToolbarButton>
-        <ToolbarButton onClick={() => prefixLines("## ")} aria-label="Heading">
+        <ToolbarButton onClick={() => prefixLines("## ")} aria-label={tEditor("aria_heading")}>
           H
         </ToolbarButton>
 
@@ -288,7 +289,7 @@ export function MistakeMarkdownEditor({
           onChange={(e) => setBody(e.target.value)}
           rows={24}
           className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 font-mono text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
-          placeholder="Markdown body. Math via $...$ inline or $$...$$ block. Images: ![](url)."
+          placeholder={tEditor("placeholder_body")}
         />
       ) : (
         <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">

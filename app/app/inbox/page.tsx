@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
 import {
@@ -63,18 +64,21 @@ function tierFor(
   }
 }
 
-function tierLabel(tier: ReturnType<typeof tierFor>): string {
+function tierLabel(
+  tier: ReturnType<typeof tierFor>,
+  t: (key: string) => string
+): string {
   switch (tier) {
     case "high":
-      return "High";
+      return t("tier_high");
     case "medium":
-      return "Medium";
+      return t("tier_medium");
     case "low":
-      return "Low";
+      return t("tier_low");
     case "classifying":
-      return "Classifying";
+      return t("tier_classifying");
     case "ignore":
-      return "Ignore";
+      return t("tier_ignore");
     default:
       return "";
   }
@@ -99,6 +103,7 @@ export default async function InboxPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
+  const t = await getTranslations("inbox");
 
   // Gmail connectivity is a per-user signal: if the Google row lacks the
   // gmail scope, we can't triage anything yet. We nudge the user through
@@ -230,9 +235,9 @@ export default async function InboxPage() {
     <div className="mx-auto max-w-4xl">
       <header className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="font-display text-[hsl(var(--foreground))]">Inbox</h1>
+          <h1 className="font-display text-[hsl(var(--foreground))]">{t("title")}</h1>
           <p className="mt-1 text-small text-[hsl(var(--muted-foreground))]">
-            What the agent is looking at right now.
+            {t("subhead")}
           </p>
         </div>
       </header>
@@ -250,15 +255,15 @@ export default async function InboxPage() {
       {!gmailConnected ? (
         <EmptyState
           icon={<InboxIcon size={18} />}
-          title="Connect Gmail to start triage."
-          description="Sign in again with Google to grant the Gmail scope. The agent triages, you confirm."
-          actions={[{ label: "Reconnect in Settings", href: "/app/settings" }]}
+          title={t("empty_no_gmail_title")}
+          description={t("empty_no_gmail_description")}
+          actions={[{ label: t("empty_no_gmail_action"), href: "/app/settings" }]}
         />
       ) : items.length === 0 && sortedProposals.length === 0 ? (
         <EmptyState
           icon={<InboxIcon size={18} />}
-          title="You're clear."
-          description="Nothing pending. The agent will surface new items as they arrive."
+          title={t("empty_clear_title")}
+          description={t("empty_clear_description")}
         />
       ) : items.length === 0 ? null : (
         <ul className="divide-y divide-[hsl(var(--border))] overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
@@ -296,11 +301,11 @@ export default async function InboxPage() {
                 data-pending={pending ? "true" : undefined}
                 data-unread={isUnread ? "true" : undefined}
               >
-                {pending ? <span className="sr-only">Pending review.</span> : null}
+                {pending ? <span className="sr-only">{t("pending_review_sr")}</span> : null}
                 <span
                   className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ${tierTone(tier)}`}
                 >
-                  {tierLabel(tier)}
+                  {tierLabel(tier, t)}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -315,7 +320,7 @@ export default async function InboxPage() {
                     </span>
                     {item.firstTimeSender ? (
                       <span className="shrink-0 text-[11px] uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                        New sender
+                        {t("new_sender_pill")}
                       </span>
                     ) : null}
                     <span className="ml-auto shrink-0 text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]">
@@ -332,23 +337,23 @@ export default async function InboxPage() {
                     {needsClarification ? (
                       <span
                         className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[hsl(var(--primary)/0.4)] bg-[hsl(var(--primary)/0.06)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--primary))]"
-                        title="Steadii needs you to clarify before drafting."
+                        title={t("question_pill_title")}
                       >
                         <HelpCircle size={10} strokeWidth={2} />
-                        Question
+                        {t("question_pill")}
                       </span>
                     ) : null}
                     {isImportantNoReply ? (
                       <span
                         className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[hsl(var(--primary)/0.4)] bg-[hsl(var(--primary)/0.06)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--primary))]"
-                        title="Steadii flagged this as important. No reply needed."
+                        title={t("important_pill_title")}
                       >
                         <Star size={10} strokeWidth={2} fill="currentColor" />
-                        Important
+                        {t("important_pill")}
                       </span>
                     ) : null}
                     <span className="truncate">
-                      {item.subject ?? "(no subject)"}
+                      {item.subject ?? t("no_subject")}
                     </span>
                   </div>
                   {item.snippet ? (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { RecurrencePicker } from "./recurrence-picker";
 import {
@@ -128,6 +129,7 @@ function EventModePanel({
   onUpdateEvent,
   onDeleteEvent,
 }: Props & { state: EventPanelState }) {
+  const t = useTranslations("calendar.event_panel");
   const editing = state.state === "edit";
   const isSeriesInstance =
     state.state === "edit" && Boolean(state.event.recurringEventId);
@@ -243,10 +245,10 @@ function EventModePanel({
   return (
     <aside className="flex w-full shrink-0 flex-col overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] md:w-[360px]">
       <header className="flex items-center justify-between border-b border-[hsl(var(--border))] px-4 py-3">
-        <h2 className="text-h3">{editing ? "Edit event" : "New event"}</h2>
+        <h2 className="text-h3">{editing ? t("edit_event") : t("new_event")}</h2>
         <button
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t("close")}
           className="flex h-9 w-9 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
         >
           ×
@@ -254,27 +256,27 @@ function EventModePanel({
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-        <Field label="Title">
+        <Field label={t("field_title")}>
           <input
             type="text"
             value={form.summary}
             onChange={(e) => setField("summary", e.target.value)}
-            placeholder="Add a title"
+            placeholder={t("placeholder_title")}
             autoFocus
             className={inputCls}
           />
         </Field>
 
         <div className="flex items-center justify-between">
-          <label className="text-small text-[hsl(var(--foreground))]">All-day</label>
+          <label className="text-small text-[hsl(var(--foreground))]">{t("field_all_day")}</label>
           <Toggle
             on={form.allDay}
             onChange={toggleAllDay}
-            ariaLabel="All-day"
+            ariaLabel={t("all_day_aria")}
           />
         </div>
 
-        <Field label="Start">
+        <Field label={t("field_start")}>
           <input
             type={form.allDay ? "date" : "datetime-local"}
             value={form.start}
@@ -282,7 +284,7 @@ function EventModePanel({
             className={inputCls}
           />
         </Field>
-        <Field label="End">
+        <Field label={t("field_end")}>
           <input
             type={form.allDay ? "date" : "datetime-local"}
             value={form.end}
@@ -291,10 +293,10 @@ function EventModePanel({
           />
         </Field>
 
-        <Field label="Recurrence">
+        <Field label={t("field_recurrence")}>
           {isSeriesInstance ? (
             <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-small text-[hsl(var(--muted-foreground))]">
-              Part of a series — editing this instance only.
+              {t("series_instance_note")}
             </div>
           ) : (
             <RecurrencePicker
@@ -304,27 +306,27 @@ function EventModePanel({
           )}
         </Field>
 
-        <Field label="Location">
+        <Field label={t("field_location")}>
           <input
             type="text"
             value={form.location}
             onChange={(e) => setField("location", e.target.value)}
-            placeholder="Add location"
+            placeholder={t("placeholder_location")}
             className={inputCls}
           />
         </Field>
 
-        <Field label="Description">
+        <Field label={t("field_description")}>
           <textarea
             value={form.description}
             onChange={(e) => setField("description", e.target.value)}
-            placeholder="Notes, links, agenda…"
+            placeholder={t("placeholder_description")}
             rows={4}
             className={`${inputCls} resize-y`}
           />
         </Field>
 
-        <Field label="Reminder">
+        <Field label={t("field_reminder")}>
           <div className="flex items-center gap-2">
             <input
               type="number"
@@ -340,7 +342,7 @@ function EventModePanel({
               className={`${inputCls} w-24`}
             />
             <span className="text-small text-[hsl(var(--muted-foreground))]">
-              minutes before
+              {t("minutes_before")}
             </span>
           </div>
         </Field>
@@ -356,7 +358,7 @@ function EventModePanel({
                 onClick={cancelDelete}
                 disabled={submitting}
               >
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 size="sm"
@@ -364,7 +366,7 @@ function EventModePanel({
                 disabled={submitting}
                 className="bg-[hsl(var(--destructive))] text-white hover:bg-[hsl(var(--destructive))]/90"
               >
-                Confirm
+                {t("confirm")}
               </Button>
             </div>
           ) : (
@@ -375,7 +377,7 @@ function EventModePanel({
               disabled={submitting}
               className="text-[hsl(var(--destructive))]"
             >
-              Delete
+              {t("delete")}
             </Button>
           )
         ) : (
@@ -388,14 +390,14 @@ function EventModePanel({
             onClick={onClose}
             disabled={submitting}
           >
-            Cancel
+            {t("cancel")}
           </Button>
           <Button
             size="sm"
             onClick={handleSubmit}
             disabled={submitting || !form.summary.trim() || confirmingDelete}
           >
-            {editing ? "Save" : "Create"}
+            {editing ? t("save") : t("create")}
           </Button>
         </div>
       </footer>
@@ -442,6 +444,7 @@ function TaskModePanel({
   onDeleteTask,
   onToggleTaskComplete,
 }: Props & { state: TaskPanelState }) {
+  const t = useTranslations("calendar.event_panel");
   const editing = state.state === "edit";
   const [form, setForm] = useState<TaskFormState>(() =>
     state.state === "edit"
@@ -544,10 +547,10 @@ function TaskModePanel({
   return (
     <aside className="flex w-full shrink-0 flex-col overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] md:w-[360px]">
       <header className="flex items-center justify-between border-b border-[hsl(var(--border))] px-4 py-3">
-        <h2 className="text-h3">{editing ? "Edit task" : "New task"}</h2>
+        <h2 className="text-h3">{editing ? t("edit_task") : t("new_task")}</h2>
         <button
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t("close")}
           className="flex h-9 w-9 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
         >
           ×
@@ -555,18 +558,18 @@ function TaskModePanel({
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-        <Field label="Title">
+        <Field label={t("field_title")}>
           <input
             type="text"
             value={form.title}
             onChange={(e) => setField("title", e.target.value)}
-            placeholder="Add a title"
+            placeholder={t("placeholder_title")}
             autoFocus
             className={inputCls}
           />
         </Field>
 
-        <Field label="Due">
+        <Field label={t("field_due")}>
           <input
             type="date"
             value={form.due}
@@ -575,11 +578,11 @@ function TaskModePanel({
           />
         </Field>
 
-        <Field label="Notes">
+        <Field label={t("field_notes")}>
           <textarea
             value={form.notes}
             onChange={(e) => setField("notes", e.target.value)}
-            placeholder="Notes, links…"
+            placeholder={t("placeholder_notes")}
             rows={4}
             className={`${inputCls} resize-y`}
           />
@@ -588,12 +591,12 @@ function TaskModePanel({
         {editing && (
           <div className="flex items-center justify-between">
             <label className="text-small text-[hsl(var(--foreground))]">
-              Completed
+              {t("field_completed")}
             </label>
             <Toggle
               on={form.completed}
               onChange={toggleCompleted}
-              ariaLabel="Completed"
+              ariaLabel={t("completed_aria")}
             />
           </div>
         )}
@@ -609,7 +612,7 @@ function TaskModePanel({
                 onClick={cancelDelete}
                 disabled={submitting}
               >
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 size="sm"
@@ -617,7 +620,7 @@ function TaskModePanel({
                 disabled={submitting}
                 className="bg-[hsl(var(--destructive))] text-white hover:bg-[hsl(var(--destructive))]/90"
               >
-                Confirm
+                {t("confirm")}
               </Button>
             </div>
           ) : (
@@ -628,7 +631,7 @@ function TaskModePanel({
               disabled={submitting}
               className="text-[hsl(var(--destructive))]"
             >
-              Delete
+              {t("delete")}
             </Button>
           )
         ) : (
@@ -641,14 +644,14 @@ function TaskModePanel({
             onClick={onClose}
             disabled={submitting}
           >
-            Cancel
+            {t("cancel")}
           </Button>
           <Button
             size="sm"
             onClick={handleSubmit}
             disabled={submitting || !form.title.trim() || confirmingDelete}
           >
-            {editing ? "Save" : "Create"}
+            {editing ? t("save") : t("create")}
           </Button>
         </div>
       </footer>
