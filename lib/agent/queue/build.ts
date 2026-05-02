@@ -181,7 +181,15 @@ async function fetchPendingProposals(userId: string): Promise<AgentProposalRow[]
 }
 
 function proposalToTypeA(p: AgentProposalRow): QueueCardA {
-  const options = (p.actionOptions ?? []).map(actionOptionToQueue);
+  // QueueCardA already renders its own dismiss/snooze button via
+  // queue.card_a.dismiss (locale-aware). The Phase 8 scanner stamps a
+  // synthetic English-labelled "dismiss" fallback option when the LLM
+  // doesn't generate any concrete action options — that fallback would
+  // render as a duplicate "Dismiss" button next to the localized one,
+  // and worse, it leaks English copy into JA users' UI. Strip it here.
+  const options = (p.actionOptions ?? [])
+    .filter((opt) => opt.key !== "dismiss")
+    .map(actionOptionToQueue);
   return {
     id: `proposal:${p.id}`,
     archetype: "A",
