@@ -12,13 +12,13 @@ export function HeroMesh() {
     >
       <div className="absolute inset-0 bg-[#FAFAF9]" />
       <div
-        className="steadii-mesh absolute -inset-[10%] opacity-90"
+        className="steadii-mesh absolute -inset-[10%] opacity-95"
         style={{
           background: `
-            radial-gradient(circle at 16% 26%, rgba(225, 200, 165, 0.62) 0%, transparent 52%),
-            radial-gradient(circle at 84% 18%, rgba(178, 160, 205, 0.58) 0%, transparent 54%),
-            radial-gradient(circle at 50% 92%, rgba(190, 200, 220, 0.45) 0%, transparent 56%),
-            radial-gradient(circle at 92% 76%, rgba(218, 195, 200, 0.40) 0%, transparent 50%)
+            radial-gradient(circle at 16% 26%, rgba(220, 188, 145, 0.85) 0%, transparent 54%),
+            radial-gradient(circle at 84% 18%, rgba(168, 148, 205, 0.80) 0%, transparent 56%),
+            radial-gradient(circle at 50% 92%, rgba(170, 188, 218, 0.65) 0%, transparent 58%),
+            radial-gradient(circle at 92% 76%, rgba(215, 180, 188, 0.60) 0%, transparent 52%)
           `,
         }}
       />
