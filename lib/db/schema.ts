@@ -130,6 +130,32 @@ export const users = pgTable("users", {
     "onboarding_integrations_skipped_at",
     { mode: "date", withTimezone: true }
   ),
+  // Wave 5 — auto-archive low-risk emails. When true, Tier-1 confidence
+  // ≥ 0.95 emails are silently archived at ingest time and never appear
+  // in queue/inbox primary view. Default false during the α 2-week
+  // safety ramp; the env-controlled boolean AUTO_ARCHIVE_DEFAULT_ENABLED
+  // overrides for new signups (flipped to true via tiny follow-up PR
+  // after validation window).
+  autoArchiveEnabled: boolean("auto_archive_enabled").notNull().default(false),
+  // Wave 5 — set when Gmail's OAuth refresh path returns invalid_grant
+  // (user revoked, password reset, etc). The app shell renders a
+  // re-connect banner when this is non-null and clears it on successful
+  // re-auth. Avoids the silent-failure path that buried token loss
+  // under a Sentry exception only.
+  gmailTokenRevokedAt: timestamp("gmail_token_revoked_at", {
+    mode: "date",
+    withTimezone: true,
+  }),
+  // Wave 5 — set when the user dismisses the post-skip integrations
+  // re-prompt banner. The banner renders once per user after they've
+  // skipped Step 2 and had at least one queue interaction; dismissing
+  // suppresses it permanently. Distinct from
+  // onboarding_integrations_skipped_at, which gates the onboarding flow
+  // itself.
+  onboardingSkipRecoveryDismissedAt: timestamp(
+    "onboarding_skip_recovery_dismissed_at",
+    { mode: "date", withTimezone: true }
+  ),
   // Preferred currency for Stripe checkouts and pricing display. Set on first
   // checkout from the user's locale ('ja' → 'jpy', everything else → 'usd')
   // and persisted via the subscription webhook so future top-ups stay in the
@@ -644,6 +670,24 @@ export const inboxItems = pgTable(
     ruleProvenance: jsonb("rule_provenance").$type<RuleProvenance[]>(),
     firstTimeSender: boolean("first_time_sender").notNull().default(false),
 
+    // Wave 5 — classifier confidence in [0..1]. Surfaces in admin metrics
+    // and gates auto-archive (≥ 0.95 + bucket='auto_low' eligible).
+    triageConfidence: real("triage_confidence"),
+    // Wave 5 — true when this row was archived by the Tier-1 auto-archive
+    // rule (not user action). Used to:
+    //   - power the Inbox `Hidden ({n})` filter chip query
+    //   - distinguish Steadii-archive from user-archive in audit + digest
+    //   - drive the Type D card on Home + the weekly digest section
+    autoArchived: boolean("auto_archived").notNull().default(false),
+    // Wave 5 — set when the user manually restores a previously
+    // auto-archived item. Triggers the learning signal (insert
+    // agent_rules row scoped to the sender so similar items don't
+    // auto-archive again).
+    userRestoredAt: timestamp("user_restored_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+
     // Phase 7 W1 — class binding cache. Populated once at ingest by
     // `bindEmailToClass` so the L2 fanout retriever consults a single
     // index probe instead of re-binding per call. Nullable: rows that
@@ -690,6 +734,12 @@ export const inboxItems = pgTable(
     userClassIdx: index("inbox_items_user_class_idx")
       .on(t.userId, t.classId)
       .where(sql`deleted_at IS NULL AND class_id IS NOT NULL`),
+    // Wave 5 — Hidden filter chip query path. Indexed only on rows
+    // currently auto-archived (small fraction of inbox), so the chip
+    // query stays index-only.
+    userAutoArchivedIdx: index("inbox_items_user_auto_archived_idx")
+      .on(t.userId, t.autoArchived, t.receivedAt)
+      .where(sql`deleted_at IS NULL AND auto_archived = true`),
   })
 );
 
@@ -2151,3 +2201,30 @@ export const officeHoursRequests = pgTable(
 export type OfficeHoursRequestRow = typeof officeHoursRequests.$inferSelect;
 export type NewOfficeHoursRequestRow =
   typeof officeHoursRequests.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Wave 5 — cron heartbeats
+// ---------------------------------------------------------------------------
+
+// One row per cron name. Each cron handler upserts on tick start/end so a
+// missed-tick monitor can compare last_tick_at vs the cron's expected
+// cadence. Stays a single small table — no per-tick history; if we need
+// retention later we'll add a sibling table.
+export const cronHeartbeats = pgTable("cron_heartbeats", {
+  name: text("name").primaryKey(),
+  lastTickAt: timestamp("last_tick_at", {
+    mode: "date",
+    withTimezone: true,
+  }).notNull(),
+  lastStatus: text("last_status")
+    .$type<"ok" | "error">()
+    .notNull()
+    .default("ok"),
+  lastDurationMs: integer("last_duration_ms"),
+  lastError: text("last_error"),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type CronHeartbeatRow = typeof cronHeartbeats.$inferSelect;

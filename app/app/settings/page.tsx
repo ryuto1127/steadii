@@ -13,6 +13,7 @@ import { getUserConfirmationMode, getUserTimezone, getUserVoiceTriggerKey } from
 import {
   setConfirmationModeAction,
   setAutonomySendEnabledAction,
+  setAutoArchiveEnabledAction,
 } from "./actions";
 import { getCreditBalance } from "@/lib/billing/credits";
 import { getStorageTotals } from "@/lib/billing/storage";
@@ -83,6 +84,7 @@ export default async function SettingsPage() {
         undoWindowSeconds: users.undoWindowSeconds,
         highRiskNotifyImmediate: users.highRiskNotifyImmediate,
         autonomySendEnabled: users.autonomySendEnabled,
+        autoArchiveEnabled: users.autoArchiveEnabled,
         preferredCurrency: users.preferredCurrency,
         preferences: users.preferences,
       })
@@ -100,6 +102,8 @@ export default async function SettingsPage() {
   const tStaged = await getTranslations("settings.staged_autonomy");
   const tModes = await getTranslations("settings.agent_modes");
   const tUsage = await getTranslations("settings.usage");
+  const tInbox = await getTranslations("settings.inbox_auto_archive");
+  const tProfile = await getTranslations("settings.profile_completion");
   const dateLocale = currentLocale === "ja" ? "ja-JP" : "en-US";
   const fmt = (template: string, vars: Record<string, string | number>) =>
     template.replace(/\{(\w+)\}/g, (_, k) =>
@@ -244,6 +248,47 @@ export default async function SettingsPage() {
           }}
         />
       </Section>
+
+      <Section title={tInbox("section_title")}>
+        <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
+          {tInbox("description")}
+        </p>
+        <form
+          action={setAutoArchiveEnabledAction}
+          className="flex items-center justify-between gap-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2.5"
+        >
+          <span className="text-body">{tInbox("toggle_label")}</span>
+          <input
+            type="hidden"
+            name="enabled"
+            value={userPrefs?.autoArchiveEnabled ? "false" : "true"}
+          />
+          <button
+            type="submit"
+            className={`inline-flex h-9 shrink-0 items-center rounded-md px-4 text-small font-medium transition-hover ${
+              userPrefs?.autoArchiveEnabled
+                ? "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:opacity-90"
+                : "border border-[hsl(var(--border))] hover:bg-[hsl(var(--surface-raised))]"
+            }`}
+          >
+            {userPrefs?.autoArchiveEnabled ? tInbox("on") : tInbox("off")}
+          </button>
+        </form>
+        <p className="mt-2 text-[12px] text-[hsl(var(--muted-foreground))]">
+          {tInbox("safety_ramp_note")}
+        </p>
+      </Section>
+
+      <ProfileCompletionPrompt
+        name={session.user.name}
+        locale={currentLocale}
+        labels={{
+          heading: tProfile("heading"),
+          missing_name: tProfile("missing_name"),
+          missing_locale: tProfile("missing_locale"),
+          all_set: tProfile("all_set"),
+        }}
+      />
 
       <Section title={tStaged("section_title")}>
         <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
@@ -516,6 +561,44 @@ function MeterRow({
         />
       </div>
     </div>
+  );
+}
+
+// Wave 5 — gentle nudge in Settings if name or preferred-language not
+// set on the user row. Renders nothing when both are populated, so
+// users with a complete profile see no extra section. The locale check
+// uses the rendered locale (which falls back to en when unset) and
+// asks the user to confirm via the LanguageToggle below — no separate
+// action wired here.
+function ProfileCompletionPrompt({
+  name,
+  locale,
+  labels,
+}: {
+  name: string | null | undefined;
+  locale: "en" | "ja";
+  labels: {
+    heading: string;
+    missing_name: string;
+    missing_locale: string;
+    all_set: string;
+  };
+}) {
+  const missingName = !name || name.trim().length === 0;
+  // We can't observe an unset preference from the rendered locale alone
+  // (it always resolves), so this surface only flags a missing name in
+  // α. The locale hint text appears alongside as a soft reminder.
+  void locale;
+  if (!missingName) return null;
+  return (
+    <section className="mt-5 rounded-md border border-[hsl(var(--primary)/0.4)] bg-[hsl(var(--primary)/0.04)] p-4">
+      <h2 className="mb-2 text-h3 text-[hsl(var(--foreground))]">
+        {labels.heading}
+      </h2>
+      <ul className="space-y-1 text-small text-[hsl(var(--muted-foreground))]">
+        {missingName ? <li>• {labels.missing_name}</li> : null}
+      </ul>
+    </section>
   );
 }
 

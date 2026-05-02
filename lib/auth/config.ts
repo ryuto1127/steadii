@@ -98,6 +98,29 @@ export const authConfig = {
         if (typeof account.token_type === "string")
           update.token_type = account.token_type;
 
+        // Wave 5 — clear gmail_token_revoked_at on a successful Google
+        // sign-in that includes Gmail scope. The user came back through
+        // the consent flow so the previous invalid_grant condition is
+        // resolved. We do this best-effort alongside the token refresh
+        // (separate UPDATE) to keep the existing retry shape intact.
+        if (
+          account.provider === "google" &&
+          typeof account.scope === "string" &&
+          account.scope.includes("gmail")
+        ) {
+          try {
+            await db
+              .update(users)
+              .set({ gmailTokenRevokedAt: null, updatedAt: new Date() })
+              .where(eq(users.id, user.id));
+          } catch (err) {
+            Sentry.captureException(err, {
+              level: "warning",
+              tags: { context: "signin_clear_gmail_revoked" },
+            });
+          }
+        }
+
         // Neon serverless can hiccup on transient `fetch failed` / cold
         // start / brief disconnect. The token update is best-effort — old
         // tokens stay in DB on failure and the next request that needs a

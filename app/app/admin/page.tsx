@@ -12,6 +12,8 @@ import {
 import { isUnlimitedPlan } from "@/lib/billing/effective-plan";
 import { count, sum, gt, desc, eq, isNull } from "drizzle-orm";
 import { computeAgentMetrics } from "@/lib/agent/dogfood/metrics";
+import { computeActivation } from "@/lib/agent/dogfood/activation";
+import { readCronHealth } from "@/lib/observability/cron-heartbeat";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +69,10 @@ export default async function AdminPage() {
   const pendingWaitlist = pendingWaitlistRow?.n ?? 0;
 
   const metrics = await computeAgentMetrics({ days: 7 });
+  // Wave 5 — first-week activation cohort (last 30 days of signups)
+  // and cron heartbeat health for pre-public observability.
+  const activation = await computeActivation({ cohortDays: 30 });
+  const cronHealth = await readCronHealth();
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -286,6 +292,74 @@ export default async function AdminPage() {
             }
           />
         </div>
+      </section>
+
+      <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-lg font-medium">
+            First-week activation ·{" "}
+            <span className="text-[hsl(var(--muted-foreground))]">
+              last {activation.cohortDays}d cohort
+            </span>
+          </h2>
+          <p className="font-mono text-[11px] text-[hsl(var(--muted-foreground))]">
+            wave 5
+          </p>
+        </div>
+        <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+          % of α users who interact with their first queue card within 3 / 7
+          days of signup. Validates the Wave 2 onboarding wait pattern.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <Stat
+            label="Cohort signups"
+            value={String(activation.totalSignups)}
+          />
+          <Stat
+            label="Day-3 activation"
+            value={`${activation.day3Pct.toFixed(1)}% (${activation.activatedByDay3})`}
+          />
+          <Stat
+            label="Day-7 activation"
+            value={`${activation.day7Pct.toFixed(1)}% (${activation.activatedByDay7})`}
+          />
+        </div>
+      </section>
+
+      <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-lg font-medium">Cron heartbeats</h2>
+          <p className="font-mono text-[11px] text-[hsl(var(--muted-foreground))]">
+            wave 5
+          </p>
+        </div>
+        <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+          Last-tick timing per scheduled job. Stale rows highlighted.
+          Mirror of <span className="font-mono">/api/health</span>.
+        </p>
+        <ul className="mt-4 space-y-1 font-mono text-xs">
+          {cronHealth.map((row) => (
+            <li
+              key={row.name}
+              className={`flex items-baseline justify-between rounded px-2 py-1 ${
+                row.stale
+                  ? "bg-[hsl(var(--destructive)/0.06)] text-[hsl(var(--destructive))]"
+                  : row.lastStatus === "error"
+                    ? "bg-[hsl(38_92%_50%/0.10)] text-[hsl(38_92%_40%)]"
+                    : ""
+              }`}
+            >
+              <span>{row.name}</span>
+              <span className="text-[hsl(var(--muted-foreground))]">
+                {row.lastTickAt
+                  ? `${Math.round((row.ageMs ?? 0) / 1000)}s ago`
+                  : "never"}
+                {row.lastStatus === "error" ? " · error" : ""}
+                {row.stale ? " · stale" : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="mt-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">

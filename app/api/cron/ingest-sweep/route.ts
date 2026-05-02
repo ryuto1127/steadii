@@ -5,6 +5,7 @@ import { db } from "@/lib/db/client";
 import { accounts, users } from "@/lib/db/schema";
 import { ingestLast24h } from "@/lib/agent/email/ingest-recent";
 import { verifyQStashSignature } from "@/lib/integrations/qstash/verify";
+import { withHeartbeat } from "@/lib/observability/cron-heartbeat";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,12 +26,13 @@ export const runtime = "nodejs";
 // fetches; α scale × every-15-min stays well under Gmail's per-project
 // quota. If any one user errors we keep going for the rest.
 export async function POST(req: Request) {
-  return Sentry.startSpan(
-    {
-      name: "cron.ingest_sweep.tick",
-      op: "cron",
-    },
-    async () => {
+  return withHeartbeat("ingest-sweep", () =>
+    Sentry.startSpan(
+      {
+        name: "cron.ingest_sweep.tick",
+        op: "cron",
+      },
+      async () => {
       const rawBody = await req.text();
       if (!(await verifyQStashSignature(req, rawBody))) {
         return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -76,6 +78,7 @@ export async function POST(req: Request) {
         failed,
         ...(failures.length ? { failures } : {}),
       });
-    }
+      }
+    )
   );
 }
