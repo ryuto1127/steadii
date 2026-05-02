@@ -16,6 +16,7 @@ import {
   NAV_HREFS,
   NAV_ITEM_KEYS,
   NAV_SHORTCUTS,
+  SECONDARY_NAV_ITEM_KEYS,
   type NavItemKey,
 } from "./nav-items";
 import { cn } from "@/lib/utils/cn";
@@ -48,8 +49,10 @@ export function SidebarNav({
   const router = useRouter();
   const containerRef = useRef<HTMLElement>(null);
 
-  // Global shortcut: press `g` then one of h/c/l/a/s to jump. Skip when an
-  // input/textarea/contentEditable is focused.
+  // Global shortcut: press `g` then one of the per-item letters
+  // (h/i/c/t/k/j) to jump. Skip when an input/textarea/contentEditable is
+  // focused. The shortcut map covers BOTH the primary and secondary nav
+  // blocks so the demoted 履歴 (j) still has its hotkey.
   useEffect(() => {
     let armed = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -103,6 +106,87 @@ export function SidebarNav({
     links[next]?.focus();
   };
 
+  const renderItem = (key: NavItemKey) => {
+    const Icon = ICONS[key];
+    const href = NAV_HREFS[key];
+    const active = isActive(pathname, href);
+    const badgeCount = badges?.[key] ?? 0;
+    const showBadge = badgeCount > 0;
+    return (
+      <Link
+        key={key}
+        href={href}
+        data-nav-item
+        data-pending-count={showBadge ? badgeCount : undefined}
+        aria-current={active ? "page" : undefined}
+        title={`g${NAV_SHORTCUTS[key]} · ${labels[key] ?? key}${
+          showBadge ? ` (${badgeCount} pending)` : ""
+        }`}
+        className={cn(
+          "group/nav relative flex h-11 w-full items-center gap-2.5 rounded-lg px-2.5 text-[14px] font-medium",
+          active
+            ? "text-[hsl(var(--foreground))]"
+            : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+        )}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute inset-y-0 left-0 w-9 rounded-lg transition-[width,background-color,opacity] duration-200",
+            expanded ? "w-full" : "group-hover/sidebar:w-full",
+            active
+              ? "nav-active"
+              : "opacity-0 group-hover/nav:bg-[hsl(var(--surface-raised))] group-hover/nav:opacity-100"
+          )}
+        />
+        <span
+          className="relative flex h-4 w-4 shrink-0 items-center justify-center"
+          aria-hidden
+        >
+          <Icon size={16} strokeWidth={1.75} />
+          {showBadge ? (
+            <span
+              data-nav-badge-dot
+              aria-hidden
+              className={cn(
+                "absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[hsl(38_92%_50%)] ring-2 ring-[hsl(var(--background))]",
+                expanded ? "hidden" : "group-hover/sidebar:hidden"
+              )}
+            />
+          ) : null}
+        </span>
+        <span
+          className={cn(
+            "relative flex flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap transition-all duration-200",
+            expanded
+              ? "max-w-[200px] opacity-100"
+              : "max-w-0 opacity-0 group-hover/sidebar:max-w-[200px] group-hover/sidebar:opacity-100"
+          )}
+        >
+          <span className="truncate">{labels[key] ?? key}</span>
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            {showBadge ? (
+              <span
+                data-nav-badge-count
+                aria-label={`${badgeCount} pending`}
+                className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[hsl(38_92%_50%)] px-1.5 text-[11px] font-semibold leading-none tabular-nums text-[hsl(var(--foreground))] dark:bg-[hsl(38_92%_55%)] dark:text-[hsl(220_20%_10%)]"
+              >
+                {badgeCount > 99 ? "99+" : badgeCount}
+              </span>
+            ) : null}
+            <kbd
+              data-nav-shortcut
+              aria-hidden
+              className="rounded bg-[hsl(var(--surface))] px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))] opacity-70"
+            >
+              g{NAV_SHORTCUTS[key]}
+            </kbd>
+          </span>
+        </span>
+      </Link>
+    );
+  };
+
   return (
     <nav
       ref={containerRef}
@@ -110,102 +194,17 @@ export function SidebarNav({
       className="flex-1 space-y-0.5"
       aria-label="Primary navigation"
     >
-      {NAV_ITEM_KEYS.map((key) => {
-        const Icon = ICONS[key];
-        const href = NAV_HREFS[key];
-        const active = isActive(pathname, href);
-        const badgeCount = badges?.[key] ?? 0;
-        const showBadge = badgeCount > 0;
-        return (
-          <Link
-            key={key}
-            href={href}
-            data-nav-item
-            data-pending-count={showBadge ? badgeCount : undefined}
-            aria-current={active ? "page" : undefined}
-            title={`g${NAV_SHORTCUTS[key]} · ${labels[key] ?? key}${
-              showBadge ? ` (${badgeCount} pending)` : ""
-            }`}
-            className={cn(
-              // Link geometry is STATIC: always full-width, left-padded,
-              // icon always at the same x. The pill background below is
-              // what animates from square (collapsed) → full-width (expanded).
-              // Keeping the link itself still avoids the icon jitter from
-              // animating non-interpolable properties (justify-content, margin).
-              // h-11 keeps the link at the 44px touch-target minimum on mobile
-              // without changing visible spacing on desktop (the icon and
-              // label remain centered).
-              "group/nav relative flex h-11 w-full items-center gap-2.5 rounded-lg px-2.5 text-[14px] font-medium",
-              active
-                ? "text-[hsl(var(--foreground))]"
-                : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-            )}
-          >
-            <span
-              aria-hidden
-              className={cn(
-                "pointer-events-none absolute inset-y-0 left-0 w-9 rounded-lg transition-[width,background-color,opacity] duration-200",
-                expanded ? "w-full" : "group-hover/sidebar:w-full",
-                active
-                  ? "nav-active"
-                  : "opacity-0 group-hover/nav:bg-[hsl(var(--surface-raised))] group-hover/nav:opacity-100"
-              )}
-            />
-            <span
-              className="relative flex h-4 w-4 shrink-0 items-center justify-center"
-              aria-hidden
-            >
-              <Icon size={16} strokeWidth={1.75} />
-              {/*
-                Collapsed-state indicator: small amber dot pinned to the
-                top-right of the icon. The full count pill is hidden when
-                the rail is collapsed (it lives in the label span below),
-                so the dot keeps the "you have pending items" signal
-                visible at all times. In the expanded mobile drawer the
-                dot is suppressed since the count pill is already shown.
-              */}
-              {showBadge ? (
-                <span
-                  data-nav-badge-dot
-                  aria-hidden
-                  className={cn(
-                    "absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[hsl(38_92%_50%)] ring-2 ring-[hsl(var(--background))]",
-                    expanded ? "hidden" : "group-hover/sidebar:hidden"
-                  )}
-                />
-              ) : null}
-            </span>
-            <span
-              className={cn(
-                "relative flex flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap transition-all duration-200",
-                expanded
-                  ? "max-w-[200px] opacity-100"
-                  : "max-w-0 opacity-0 group-hover/sidebar:max-w-[200px] group-hover/sidebar:opacity-100"
-              )}
-            >
-              <span className="truncate">{labels[key] ?? key}</span>
-              <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                {showBadge ? (
-                  <span
-                    data-nav-badge-count
-                    aria-label={`${badgeCount} pending`}
-                    className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[hsl(38_92%_50%)] px-1.5 text-[11px] font-semibold leading-none tabular-nums text-[hsl(var(--foreground))] dark:bg-[hsl(38_92%_55%)] dark:text-[hsl(220_20%_10%)]"
-                  >
-                    {badgeCount > 99 ? "99+" : badgeCount}
-                  </span>
-                ) : null}
-                <kbd
-                  data-nav-shortcut
-                  aria-hidden
-                  className="rounded bg-[hsl(var(--surface))] px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))] opacity-70"
-                >
-                  g{NAV_SHORTCUTS[key]}
-                </kbd>
-              </span>
-            </span>
-          </Link>
-        );
-      })}
+      {NAV_ITEM_KEYS.map(renderItem)}
+      {SECONDARY_NAV_ITEM_KEYS.length > 0 ? (
+        <div
+          aria-hidden
+          data-nav-separator
+          className={cn(
+            "my-2 h-px bg-[hsl(var(--border)/0.6)] transition-opacity duration-200",
+            expanded ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
+          )}
+        />
+      ) : null}
     </nav>
   );
 }
