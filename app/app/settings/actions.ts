@@ -50,3 +50,19 @@ export async function setAutonomySendEnabledAction(formData: FormData) {
     .where(eq(users.id, session.user.id));
   revalidatePath("/app/settings");
 }
+
+// Wave 5 — flip the auto_archive_enabled toggle. Forward-looking: it
+// gates future ingests, doesn't retroactively un-archive past hidden
+// items (per locked design — the safety ramp depends on stable history
+// during the 2-week window).
+export async function setAutoArchiveEnabledAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  const enabled = formData.get("enabled") === "true";
+  await db
+    .update(users)
+    .set({ autoArchiveEnabled: enabled, updatedAt: new Date() })
+    .where(eq(users.id, session.user.id));
+  revalidatePath("/app/settings");
+  revalidatePath("/app/inbox");
+}

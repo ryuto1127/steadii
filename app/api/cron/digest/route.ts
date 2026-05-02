@@ -9,6 +9,7 @@ import {
 } from "@/lib/integrations/resend/client";
 import { logEmailAudit } from "@/lib/agent/email/audit";
 import { verifyQStashSignature } from "@/lib/integrations/qstash/verify";
+import { withHeartbeat } from "@/lib/observability/cron-heartbeat";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,12 +24,13 @@ export const runtime = "nodejs";
 // dispatch via Resend. Failures are captured per-user — one bad user
 // doesn't block the rest.
 export async function POST(req: Request) {
-  return Sentry.startSpan(
-    {
-      name: "cron.digest.tick",
-      op: "cron",
-    },
-    async () => {
+  return withHeartbeat("digest", () =>
+    Sentry.startSpan(
+      {
+        name: "cron.digest.tick",
+        op: "cron",
+      },
+      async () => {
       const rawBody = await req.text();
       if (!(await verifyQStashSignature(req, rawBody))) {
         return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -116,6 +118,7 @@ export async function POST(req: Request) {
         skipped,
         failed,
       });
-    }
+      }
+    )
   );
 }

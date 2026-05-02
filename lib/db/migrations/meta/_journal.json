@@ -204,6 +204,13 @@
       "when": 1777500000000,
       "tag": "0028_wave_3_secretary_deepening",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1777600000000,
+      "tag": "0029_wave_5_launch_prep",
+      "breakpoints": true
     }
   ]
 }

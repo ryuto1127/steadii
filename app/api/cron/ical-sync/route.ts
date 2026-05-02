@@ -5,6 +5,7 @@ import { db } from "@/lib/db/client";
 import { icalSubscriptions } from "@/lib/db/schema";
 import { syncIcalSubscription } from "@/lib/integrations/ical/sync";
 import { verifyQStashSignature } from "@/lib/integrations/qstash/verify";
+import { withHeartbeat } from "@/lib/observability/cron-heartbeat";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -15,9 +16,10 @@ export const runtime = "nodejs";
 // row auto-deactivates so we stop hammering a broken URL. Settings UI
 // surfaces deactivated rows so the user can fix and reactivate.
 export async function POST(req: Request) {
-  return Sentry.startSpan(
-    { name: "cron.ical_sync.tick", op: "cron" },
-    async () => {
+  return withHeartbeat("ical-sync", () =>
+    Sentry.startSpan(
+      { name: "cron.ical_sync.tick", op: "cron" },
+      async () => {
       const rawBody = await req.text();
       if (!(await verifyQStashSignature(req, rawBody))) {
         return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -58,6 +60,7 @@ export async function POST(req: Request) {
         failed,
         deactivated,
       });
-    }
+      }
+    )
   );
 }

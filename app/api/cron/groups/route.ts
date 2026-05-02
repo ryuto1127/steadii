@@ -6,6 +6,7 @@ import { classes, groupProjectMembers, groupProjects, users } from "@/lib/db/sch
 import { persistGroupDetectionCandidates, persistSilenceProposals } from "@/lib/agent/groups/detect-actions";
 import { runGroupSilenceTick, SILENCE_THRESHOLD_DAYS } from "@/lib/agent/groups/silence";
 import { verifyQStashSignature } from "@/lib/integrations/qstash/verify";
+import { withHeartbeat } from "@/lib/observability/cron-heartbeat";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -19,9 +20,10 @@ export const runtime = "nodejs";
 // is pure SQL. The check-in draft generation that the silence card
 // links to is on-demand from the user clicking through.
 export async function POST(req: Request) {
-  return Sentry.startSpan(
-    { name: "cron.groups.daily", op: "cron" },
-    async () => {
+  return withHeartbeat("groups", () =>
+    Sentry.startSpan(
+      { name: "cron.groups.daily", op: "cron" },
+      async () => {
       const rawBody = await req.text();
       if (!(await verifyQStashSignature(req, rawBody))) {
         return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -141,6 +143,7 @@ export async function POST(req: Request) {
         silenceCardsCreated,
         failed,
       });
-    }
+      }
+    )
   );
 }

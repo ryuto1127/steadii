@@ -5,6 +5,7 @@ import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import { runScanner } from "@/lib/agent/proactive/scanner";
 import { verifyQStashSignature } from "@/lib/integrations/qstash/verify";
+import { withHeartbeat } from "@/lib/observability/cron-heartbeat";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -17,9 +18,10 @@ export const runtime = "nodejs";
 // The cron source is special-cased in scanner.runScanner — it bypasses
 // the per-user 5-minute debounce since its job IS to fire regardless.
 export async function POST(req: Request) {
-  return Sentry.startSpan(
-    { name: "cron.scanner.daily", op: "cron" },
-    async () => {
+  return withHeartbeat("scanner", () =>
+    Sentry.startSpan(
+      { name: "cron.scanner.daily", op: "cron" },
+      async () => {
       const rawBody = await req.text();
       if (!(await verifyQStashSignature(req, rawBody))) {
         return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -60,6 +62,7 @@ export async function POST(req: Request) {
         proposalsCreated,
         failed,
       });
-    }
+      }
+    )
   );
 }
