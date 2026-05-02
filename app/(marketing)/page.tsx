@@ -28,17 +28,28 @@ export default async function LandingPage() {
   ];
 
   const proactiveCopy = {
-    step_calendar: t("landing.steadii_in_motion.step_calendar"),
-    step_calendar_meta: t("landing.steadii_in_motion.step_calendar_meta"),
-    step_notification: t("landing.steadii_in_motion.step_notification"),
-    step_notification_meta: t(
-      "landing.steadii_in_motion.step_notification_meta",
-    ),
-    step_proposal: t("landing.steadii_in_motion.step_proposal"),
-    step_proposal_meta: t("landing.steadii_in_motion.step_proposal_meta"),
-    action_email: t("landing.steadii_in_motion.action_email"),
-    action_reschedule: t("landing.steadii_in_motion.action_reschedule"),
-    action_dismiss: t("landing.steadii_in_motion.action_dismiss"),
+    step1_label: t("landing.steadii_in_motion.step1_label"),
+    step1_sender: t("landing.steadii_in_motion.step1_sender"),
+    step1_subject: t("landing.steadii_in_motion.step1_subject"),
+    step1_chip_tier: t("landing.steadii_in_motion.step1_chip_tier"),
+    step1_chip_time: t("landing.steadii_in_motion.step1_chip_time"),
+    step1_classifying: t("landing.steadii_in_motion.step1_classifying"),
+    step1_outcome: t("landing.steadii_in_motion.step1_outcome"),
+    step1_outcome_meta: t("landing.steadii_in_motion.step1_outcome_meta"),
+    step2_label: t("landing.steadii_in_motion.step2_label"),
+    step2_filter_all: t("landing.steadii_in_motion.step2_filter_all"),
+    step2_filter_hidden: t("landing.steadii_in_motion.step2_filter_hidden", {
+      n: 12,
+    }),
+    step2_restore: t("landing.steadii_in_motion.step2_restore"),
+    step2_meta: t("landing.steadii_in_motion.step2_meta"),
+    step3_label: t("landing.steadii_in_motion.step3_label"),
+    step3_sender: t("landing.steadii_in_motion.step3_sender"),
+    step3_subject: t("landing.steadii_in_motion.step3_subject"),
+    step3_chip_tier: t("landing.steadii_in_motion.step3_chip_tier"),
+    step3_chip_time: t("landing.steadii_in_motion.step3_chip_time"),
+    step3_status: t("landing.steadii_in_motion.step3_status"),
+    step3_meta: t("landing.steadii_in_motion.step3_meta"),
   };
 
   const steps = [

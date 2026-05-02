@@ -10,9 +10,12 @@ import {
   Calendar as CalendarIcon,
   ListChecks,
   ArrowUp,
-  FileText,
-  Loader2,
-  MousePointer2,
+  Mail,
+  AlertTriangle,
+  Sparkles,
+  Settings as SettingsIcon,
+  Clock,
+  X,
 } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
 
@@ -24,27 +27,21 @@ import { Logo } from "@/components/layout/logo";
 
 type Phase =
   | "idle"
-  | "pdfDragging"
-  | "attached"
-  | "extracting"
-  | "extracted"
-  | "classesUp"
-  | "rowAdded"
-  | "calendar"
-  | "eventsFilled"
-  | "hold";
+  | "typing"
+  | "send"
+  | "clear"
+  | "cardIn"
+  | "hold"
+  | "fadeOut";
 
 const STEPS: Array<{ phase: Phase; delay: number }> = [
-  { phase: "idle", delay: 1000 },
-  { phase: "pdfDragging", delay: 1000 },
-  { phase: "attached", delay: 1000 },
-  { phase: "extracting", delay: 2000 },
-  { phase: "extracted", delay: 1000 },
-  { phase: "classesUp", delay: 1000 },
-  { phase: "rowAdded", delay: 1000 },
-  { phase: "calendar", delay: 1000 },
-  { phase: "eventsFilled", delay: 3000 },
-  { phase: "hold", delay: 1000 },
+  { phase: "idle", delay: 1500 },
+  { phase: "typing", delay: 3500 },
+  { phase: "send", delay: 500 },
+  { phase: "clear", delay: 700 },
+  { phase: "cardIn", delay: 1000 },
+  { phase: "hold", delay: 5000 },
+  { phase: "fadeOut", delay: 800 },
 ];
 
 const PHASE_INDEX = STEPS.reduce(
@@ -57,35 +54,17 @@ const PHASE_INDEX = STEPS.reduce(
 
 // D1 ease-out — short Linear/Vercel-style cubic, no overshoot.
 const EASE = "cubic-bezier(0.16,1,0.3,1)";
-const CLASS_BLUE = "#3B82F6";
 const ACCENT_AMBER = "#F59E0B";
+const ACCENT_BLUE = "#3B82F6";
 
 const SIDEBAR_ICONS = [
-  Inbox,
   Home,
-  MessagesSquare,
-  GraduationCap,
+  Inbox,
   CalendarIcon,
   ListChecks,
-];
-
-type ExistingClassKey = "eng200" | "bio110" | "psy100" | "hst101";
-const EXISTING_CLASSES: Array<{ key: ExistingClassKey; color: string }> = [
-  { key: "eng200", color: "#A78BFA" },
-  { key: "bio110", color: "#34D399" },
-  { key: "psy100", color: "#F472B6" },
-  { key: "hst101", color: "#FACC15" },
-];
-
-type EventKey = "math_lec" | "math_tut" | "math_quiz" | "hw1_due";
-const CALENDAR_EVENTS: Array<{ day: number; top: number; key: EventKey }> = [
-  { day: 0, top: 14, key: "math_lec" },
-  { day: 1, top: 50, key: "math_tut" },
-  { day: 2, top: 14, key: "math_lec" },
-  { day: 3, top: 50, key: "math_tut" },
-  { day: 4, top: 14, key: "math_lec" },
-  { day: 4, top: 64, key: "math_quiz" },
-  { day: 0, top: 84, key: "hw1_due" },
+  GraduationCap,
+  MessagesSquare,
+  SettingsIcon,
 ];
 
 export default function HeroAnimation() {
@@ -114,78 +93,52 @@ export default function HeroAnimation() {
   }, [reduced]);
 
   if (reduced) {
+    // Static frame — show the most informative phase (card visible) so the
+    // value of the demo carries even when motion is disabled.
     return (
       <div
         className="relative aspect-[16/10] w-full overflow-hidden bg-[#FAFAF9] font-sans"
         data-testid="hero-animation-static"
       >
         <div className="absolute inset-0 flex">
-          <Sidebar phase="hold" />
-          <div className="relative flex-1 overflow-hidden">
-            <CalendarView startEvents />
-          </div>
+          <Sidebar />
+          <HomeShell phase="hold" />
         </div>
       </div>
     );
   }
 
-  const idx = PHASE_INDEX[phase];
-  const showClasses = idx >= PHASE_INDEX.classesUp && idx < PHASE_INDEX.calendar;
-  const showCalendar = idx >= PHASE_INDEX.calendar;
-  const startEvents = idx >= PHASE_INDEX.eventsFilled;
-
   return (
     <div className="relative aspect-[16/10] w-full overflow-hidden bg-[#FAFAF9] font-sans">
       <div className="absolute inset-0 flex">
-        <Sidebar phase={phase} />
-        <div className="relative flex-1 overflow-hidden">
-          <ChatPanel phase={phase} />
-          {/* Classes overlay — slides up from bottom, slides back down on
-              loop reset. Stays visually behind the calendar overlay during
-              their cross-fade. */}
-          <div
-            aria-hidden={!showClasses}
-            className="absolute inset-0 will-change-transform"
-            style={{
-              transition: `transform 220ms ${EASE}, opacity 180ms ${EASE}`,
-              transform: showClasses ? "translateY(0%)" : "translateY(100%)",
-              opacity: showCalendar ? 0 : 1,
-              pointerEvents: showClasses ? "auto" : "none",
-            }}
-          >
-            <ClassesView showNewRow={idx >= PHASE_INDEX.rowAdded} />
-          </div>
-          {/* Calendar overlay — cross-fades over classes, fades out on loop
-              reset to reveal chat surface again. */}
-          <div
-            aria-hidden={!showCalendar}
-            className="absolute inset-0"
-            style={{
-              transition: `opacity 220ms ${EASE}`,
-              opacity: showCalendar ? 1 : 0,
-              pointerEvents: showCalendar ? "auto" : "none",
-            }}
-          >
-            <CalendarView startEvents={startEvents} />
-          </div>
-        </div>
+        <Sidebar />
+        <HomeShell phase={phase} />
       </div>
     </div>
   );
 }
 
-function Sidebar({ phase }: { phase: Phase }) {
-  const idx = PHASE_INDEX[phase];
-  const activeIdx =
-    idx >= PHASE_INDEX.calendar ? 4 : idx >= PHASE_INDEX.classesUp ? 3 : 1;
+function Sidebar() {
+  const t = useTranslations("landing.hero_animation");
+  const labels = [
+    t("nav_home"),
+    t("nav_inbox"),
+    t("nav_calendar"),
+    t("nav_classes"),
+    t("nav_chats"),
+    t("nav_settings"),
+  ];
+  // Home is index 0 and stays active throughout the loop — the demo never
+  // navigates away from the surface that contains the queue.
   return (
     <div className="flex w-[8%] min-w-[44px] flex-col items-center gap-1.5 border-r border-black/[0.05] bg-white py-4">
       <Logo size={18} className="mb-2" />
       {SIDEBAR_ICONS.map((Icon, i) => (
         <span
           key={i}
+          aria-label={labels[i] ?? ""}
           className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors duration-200 ${
-            i === activeIdx
+            i === 0
               ? "bg-black/[0.05] text-[#1A1814]"
               : "text-[#1A1814]/40"
           }`}
@@ -197,339 +150,284 @@ function Sidebar({ phase }: { phase: Phase }) {
   );
 }
 
-function ChatPanel({ phase }: { phase: Phase }) {
+function HomeShell({ phase }: { phase: Phase }) {
   const t = useTranslations("landing.hero_animation");
   const tExtra = useTranslations("hero_animation_extra");
   const idx = PHASE_INDEX[phase];
-  const showFloatingPdf = phase === "pdfDragging";
-  // Pill is visible only during the brief `attached` window — once the
-  // cursor presses send (which happens at the attached → extracting
-  // boundary), the pill collapses out and the input returns to its
-  // empty/ready state, mirroring the real app.
-  const attached = phase === "attached";
-  const sendPulse = phase === "attached";
-  const toolState: "extracting" | "extracted" | null =
-    idx >= PHASE_INDEX.extracted && idx < PHASE_INDEX.classesUp
-      ? "extracted"
-      : idx >= PHASE_INDEX.extracting && idx < PHASE_INDEX.extracted
-        ? "extracting"
-        : null;
-  const cursorVisible = idx <= PHASE_INDEX.attached;
-
-  const cursorTarget =
-    phase === "idle"
-      ? { left: "50%", top: "48%" }
-      : phase === "pdfDragging"
-        ? { left: "30%", top: "82%" }
-        : { left: "92%", top: "84%" };
+  const showCard = idx >= PHASE_INDEX.cardIn && idx < PHASE_INDEX.fadeOut;
+  const fadingOut = phase === "fadeOut";
+  // Briefing line muted while the card is on screen so the eye lands on the
+  // pre-brief card.
+  const briefingMuted = idx >= PHASE_INDEX.cardIn && idx < PHASE_INDEX.fadeOut;
 
   return (
-    <div className="absolute inset-0 flex flex-col">
+    <div className="absolute inset-0 right-0 left-[8%] flex flex-col">
+      {/* Top app strip — mirrors the production /app shell's chrome. */}
       <div className="flex items-center justify-between border-b border-black/[0.05] bg-white px-4 py-2.5">
         <span className="font-mono text-[9px] uppercase tracking-widest text-[#1A1814]/40">
-          {t("chat_header")}
+          {t("app_header")}
         </span>
         <span className="font-mono text-[9px] tracking-widest text-[#1A1814]/30">
           {tExtra("cmd_k")}
         </span>
       </div>
-      <div className="relative flex-1 px-4 pt-4 pb-2">
-        <ToolCard state={toolState} />
-      </div>
-      <ChatInput attached={attached} sendPulse={sendPulse} />
-      <FloatingPdf visible={showFloatingPdf} />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute z-40"
-        style={{
-          left: cursorTarget.left,
-          top: cursorTarget.top,
-          opacity: cursorVisible ? 1 : 0,
-          transition: `left 380ms ${EASE}, top 380ms ${EASE}, opacity 180ms ${EASE}`,
-        }}
-      >
-        <MousePointer2
-          size={16}
-          strokeWidth={1.4}
-          className="-translate-x-[3px] -translate-y-[2px] text-[#1A1814]/85"
-          fill="white"
-        />
+
+      <div className="relative flex-1 overflow-hidden px-6 pt-5 pb-4 md:px-10">
+        {/* Greeting */}
+        <h2 className="text-[18px] font-semibold tracking-tight text-[#1A1814]">
+          {t("greeting")}
+        </h2>
+        <p className="mt-0.5 text-[11px] text-[#1A1814]/55">
+          {t("summary_ready")}
+        </p>
+
+        {/* Command palette — docked, animated. */}
+        <div className="mt-4">
+          <CommandPalette phase={phase} />
+        </div>
+
+        {/* Today briefing — single-line, ALWAYS visible (mirrors how
+            TodayBriefing sits below the palette on the real Home). Dims when
+            the pre-brief card materializes so the eye lands there. */}
+        <div
+          className="mt-4 transition-opacity duration-300"
+          style={{ opacity: briefingMuted ? 0.5 : 1 }}
+        >
+          <BriefingRow />
+        </div>
+
+        {/* Pre-brief card — slides up from below the palette during cardIn,
+            holds, then fades out before the loop resets. */}
+        <div
+          aria-hidden={!showCard && !fadingOut}
+          className="mt-3 will-change-transform"
+          style={{
+            transition: `opacity 380ms ${EASE}, transform 380ms ${EASE}`,
+            opacity: showCard ? 1 : 0,
+            transform: showCard ? "translateY(0)" : "translateY(8px)",
+          }}
+        >
+          <PreBriefCard />
+        </div>
       </div>
     </div>
   );
 }
 
-function ChatInput({
-  attached,
-  sendPulse,
-}: {
-  attached: boolean;
-  sendPulse: boolean;
-}) {
+function CommandPalette({ phase }: { phase: Phase }) {
   const t = useTranslations("landing.hero_animation");
   const tExtra = useTranslations("hero_animation_extra");
+  const fullQuery = t("palette_typing_query");
+
+  // Phase → (clip-path, transition) for the typed query. The query lives in
+  // a SINGLE element across phases (no React key change) so the browser
+  // sees the clip-path delta and runs the transition. During typing we
+  // open clip-path linearly over 3300ms so characters reveal left-to-right.
+  // The clear phase snaps it shut so the next loop starts clean.
+  const queryClip =
+    phase === "idle" || phase === "fadeOut"
+      ? "inset(0 100% 0 0)" // closed
+      : phase === "clear"
+        ? "inset(0 100% 0 0)" // re-closing
+        : "inset(0 0 0 0)"; // open
+  const queryTransition =
+    phase === "typing"
+      ? `clip-path 3300ms linear, opacity 200ms ${EASE}`
+      : `clip-path 250ms ${EASE}, opacity 200ms ${EASE}`;
+  // Query is visible from the moment typing begins through the send pulse;
+  // clear, idle, cardIn+ all hide it so the input feels reset.
+  const showQueryText = phase === "typing" || phase === "send";
+  const placeholderVisible = !showQueryText;
+  const sendPulse = phase === "send";
+
   return (
-    <div className="border-t border-black/[0.05] bg-white px-4 py-3">
-      <div className="flex min-h-[40px] items-center gap-2 rounded-[10px] border border-black/[0.08] bg-white px-3 py-2 shadow-[0_2px_8px_-4px_rgba(20,20,40,0.05)]">
-        <span
-          className="inline-flex shrink-0 items-center gap-1 overflow-hidden rounded-full border border-black/[0.08] bg-[#FAFAF9] text-[10px] text-[#1A1814]/75"
-          style={{
-            transition: `max-width 220ms ${EASE}, opacity 180ms ${EASE}, padding 180ms ${EASE}, border-color 180ms ${EASE}`,
-            maxWidth: attached ? "240px" : "0px",
-            opacity: attached ? 1 : 0,
-            paddingLeft: attached ? "8px" : "0px",
-            paddingRight: attached ? "8px" : "0px",
-            paddingTop: attached ? "2px" : "0px",
-            paddingBottom: attached ? "2px" : "0px",
-            borderColor: attached ? undefined : "transparent",
-          }}
-        >
-          <FileText size={10} strokeWidth={1.6} />
-          <span className="whitespace-nowrap">
-            {tExtra("syllabus_filename")}
+    <div className="relative">
+      <div className="flex h-10 items-center gap-2 rounded-2xl border border-black/[0.08] bg-white px-3 shadow-[0_2px_8px_-4px_rgba(20,20,40,0.05)]">
+        <span className="font-mono text-[11px] text-[#1A1814]/40">⌘</span>
+        <div className="relative flex h-full min-w-0 flex-1 items-center overflow-hidden">
+          {/* Placeholder — fades when the query starts typing, returns after clear. */}
+          <span
+            className="pointer-events-none absolute inset-y-0 left-0 flex items-center text-[12px] text-[#1A1814]/40"
+            style={{
+              opacity: placeholderVisible ? 1 : 0,
+              transition: `opacity 180ms ${EASE}`,
+            }}
+          >
+            {t("palette_placeholder")}
           </span>
-        </span>
+          {/* Typed query — clip-path reveals characters left-to-right during
+              the typing phase. Stable DOM node across phases so the browser
+              animates the clip-path delta. */}
+          <span
+            className="absolute inset-y-0 left-0 flex items-center whitespace-nowrap text-[12px] text-[#1A1814]"
+            style={{
+              opacity: showQueryText ? 1 : 0,
+              clipPath: queryClip,
+              transition: queryTransition,
+            }}
+          >
+            {fullQuery}
+          </span>
+        </div>
         <span
-          className="flex-1 truncate text-[12px] text-[#1A1814]/30"
-          style={{ opacity: attached ? 0 : 1, transition: `opacity 180ms ${EASE}` }}
+          aria-hidden
+          className="hidden shrink-0 rounded-md border border-black/[0.08] bg-[#FAFAF9] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-[#1A1814]/40 sm:inline-flex"
         >
-          {t("message_placeholder")}
+          {tExtra("cmd_k")}
         </span>
         <span
-          className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0A0A0A] text-white"
+          className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#0A0A0A] text-white"
           style={{
             transform: sendPulse ? "scale(1.18)" : "scale(1)",
             transition: `transform 220ms ${EASE}`,
           }}
         >
-          <ArrowUp size={11} strokeWidth={2} />
+          <ArrowUp size={12} strokeWidth={2} />
         </span>
       </div>
     </div>
   );
 }
 
-function FloatingPdf({ visible }: { visible: boolean }) {
-  const tExtra = useTranslations("hero_animation_extra");
-  return (
-    <div
-      aria-hidden={!visible}
-      className="pointer-events-none absolute z-30"
-      style={{
-        left: visible ? "18%" : "44%",
-        top: visible ? "76%" : "44%",
-        opacity: visible ? 1 : 0,
-        transform: visible ? "scale(1)" : "scale(0.9)",
-        transition: `left 480ms ${EASE}, top 480ms ${EASE}, opacity 180ms ${EASE}, transform 220ms ${EASE}`,
-      }}
-    >
-      <div className="flex items-center gap-1.5 rounded-[8px] border border-black/[0.08] bg-white px-2.5 py-1.5 shadow-[0_8px_22px_-6px_rgba(20,20,40,0.18)]">
-        <FileText size={12} strokeWidth={1.6} className="text-[#1A1814]/55" />
-        <span className="font-mono text-[10px] text-[#1A1814]">
-          {tExtra("syllabus_filename")}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function ToolCard({ state }: { state: "extracting" | "extracted" | null }) {
+function BriefingRow() {
   const t = useTranslations("landing.hero_animation");
-  const visible = state !== null;
   return (
-    <div
-      aria-hidden={!visible}
-      className="rounded-[10px] border border-black/[0.06] bg-white px-3 py-2.5 shadow-[0_2px_12px_-6px_rgba(20,20,40,0.1)]"
-      style={{
-        opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0)" : "translateY(6px)",
-        transition: `opacity 180ms ${EASE}, transform 220ms ${EASE}`,
-      }}
-    >
-      {/* Both states stay mounted; opacity-cross-fade picks one. The card
-          takes the height of the (taller) extracted state, so the morph
-          reads as a content swap rather than a height jump. */}
-      <div className="relative">
-        <div
-          className="flex items-center gap-2"
-          style={{
-            opacity: state === "extracting" ? 1 : 0,
-            transition: `opacity 180ms ${EASE}`,
-          }}
-        >
-          <Loader2
-            size={12}
-            strokeWidth={1.6}
-            className={`text-[#1A1814]/55 ${
-              state === "extracting" ? "animate-spin" : ""
-            }`}
-          />
-          <span className="font-mono text-[11px] text-[#1A1814]/70">
-            {t("extracting")}
-          </span>
-        </div>
-        <p
-          className="absolute inset-0 font-mono text-[11px] leading-[1.55] text-[#1A1814]/85"
-          style={{
-            opacity: state === "extracted" ? 1 : 0,
-            transition: `opacity 180ms ${EASE}`,
-          }}
-        >
-          {t.rich("imported_summary", {
-            highlight: (chunks) => (
-              <span className="text-[#1A1814]">{chunks}</span>
-            ),
-          })}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function ClassesView({ showNewRow }: { showNewRow: boolean }) {
-  const t = useTranslations("landing.hero_animation");
-  const tClasses = useTranslations("landing.hero_animation.classes");
-  return (
-    <div className="absolute inset-0 flex flex-col bg-[#FAFAF9] px-6 py-5">
-      <div className="mb-1 flex items-center justify-between">
-        <h3 className="text-[15px] font-semibold tracking-tight text-[#1A1814]">
-          {t("classes_heading")}
-        </h3>
-        <span className="font-mono text-[9px] uppercase tracking-widest text-[#1A1814]/40">
-          {showNewRow ? "5" : "4"}
-        </span>
-      </div>
-      <p className="mb-3 text-[10px] text-[#1A1814]/45">{t("term_label")}</p>
-      <ul className="space-y-1.5">
-        <li
-          key="new"
-          className="overflow-hidden"
-          style={{
-            maxHeight: showNewRow ? "60px" : "0px",
-            opacity: showNewRow ? 1 : 0,
-            transform: showNewRow ? "translateY(0)" : "translateY(-4px)",
-            transition: `max-height 280ms ${EASE}, opacity 220ms ${EASE}, transform 220ms ${EASE}`,
-          }}
-        >
-          <ClassRow
-            label={tClasses("new")}
-            color={CLASS_BLUE}
-            pulse={showNewRow}
-          />
-        </li>
-        {EXISTING_CLASSES.map((c) => (
-          <li key={c.key}>
-            <ClassRow label={tClasses(c.key)} color={c.color} dim />
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function ClassRow({
-  label,
-  color,
-  pulse = false,
-  dim = false,
-}: {
-  label: string;
-  color: string;
-  pulse?: boolean;
-  dim?: boolean;
-}) {
-  return (
-    <div
-      className={`relative flex items-center gap-2.5 rounded-[8px] border border-black/[0.05] bg-white px-3 py-2 ${
-        dim ? "opacity-70" : ""
-      }`}
-    >
-      <span
-        className="h-2 w-2 shrink-0 rounded-full"
-        style={{ backgroundColor: color }}
-      />
-      <span
-        className={`text-[11px] ${dim ? "text-[#1A1814]/55" : "text-[#1A1814]"}`}
-      >
-        {label}
+    <div className="flex items-center gap-2 rounded-xl border border-black/[0.05] bg-white px-3 py-2">
+      <span className="font-mono text-[9px] uppercase tracking-widest text-[#1A1814]/45">
+        {t("briefing_label")}
       </span>
-      {pulse ? (
+      <span
+        aria-hidden
+        className="h-3 w-px bg-black/[0.08]"
+      />
+      <CalendarIcon size={11} strokeWidth={1.6} className="text-[#1A1814]/45" />
+      <span className="text-[11px] text-[#1A1814]/75">
+        {t("briefing_event")}
+      </span>
+    </div>
+  );
+}
+
+function PreBriefCard() {
+  const t = useTranslations("landing.hero_animation");
+  return (
+    <article
+      data-archetype="B"
+      data-mode="informational"
+      className="rounded-2xl border border-black/[0.08] bg-white p-3.5 shadow-[0_4px_18px_-8px_rgba(20,20,40,0.10)]"
+      style={{ borderLeft: `3px solid ${ACCENT_AMBER}` }}
+    >
+      <header className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            aria-hidden
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#FAFAF9]"
+          >
+            <CalendarIcon
+              size={12}
+              strokeWidth={1.75}
+              style={{ color: ACCENT_BLUE }}
+            />
+          </span>
+          <h3 className="truncate text-[12px] font-semibold text-[#1A1814]">
+            {t("card_title")}
+          </h3>
+        </div>
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-[8px] hero-amber-pulse"
+          className="inline-flex items-center gap-1 font-mono text-[9px] tabular-nums text-[#1A1814]/45"
+        >
+          <Clock size={10} strokeWidth={1.6} />
+          {t("card_eta")}
+        </span>
+      </header>
+      <p className="mt-1 text-[11px] text-[#1A1814]/65">{t("card_body")}</p>
+      <ul className="mt-2 flex flex-col gap-1 rounded-lg border border-black/[0.05] bg-[#FAFAF9] px-2.5 py-2">
+        <BriefBullet text={t("card_bullet_1")} />
+        <BriefBullet text={t("card_bullet_2")} />
+        <BriefBullet text={t("card_bullet_3")} />
+      </ul>
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden
+          className="inline-flex h-7 items-center rounded-full border border-black/[0.08] bg-white px-3 text-[11px] font-medium text-[#1A1814]"
+        >
+          {t("card_action_open_calendar")}
+        </button>
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden
+          className="inline-flex h-7 items-center gap-1 rounded-full bg-[#0A0A0A] px-3 text-[11px] font-medium text-white"
+        >
+          <Sparkles size={10} strokeWidth={2} />
+          {t("card_action_mark_reviewed")}
+        </button>
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden
+          aria-label={t("card_dismiss_aria")}
+          className="ml-auto inline-flex h-7 items-center rounded-full px-1.5 text-[#1A1814]/55"
+        >
+          <X size={11} strokeWidth={1.6} />
+        </button>
+      </div>
+      <footer className="mt-2 flex flex-wrap items-center gap-1 border-t border-black/[0.05] pt-2">
+        <SourceChip
+          icon={Mail}
+          text={t("chip_email")}
+          tone="email"
         />
-      ) : null}
-    </div>
+        <SourceChip
+          icon={AlertTriangle}
+          text={t("chip_mistake")}
+          tone="mistake"
+        />
+        <SourceChip
+          icon={CalendarIcon}
+          text={t("chip_calendar")}
+          tone="calendar"
+        />
+      </footer>
+    </article>
   );
 }
 
-function CalendarView({ startEvents }: { startEvents: boolean }) {
-  const t = useTranslations("landing.hero_animation");
-  const tEvents = useTranslations("landing.hero_animation.events");
-  const days = (t.raw("days") as string[]) ?? [];
+function BriefBullet({ text }: { text: string }) {
   return (
-    <div className="absolute inset-0 flex flex-col bg-[#FAFAF9] px-6 py-5">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-[15px] font-semibold tracking-tight text-[#1A1814]">
-          {t("calendar_heading")}
-        </h3>
-        <span className="font-mono text-[9px] uppercase tracking-widest text-[#1A1814]/40">
-          {t("week_range")}
-        </span>
-      </div>
-      <div className="grid grid-cols-7 gap-1 border-b border-black/[0.06] pb-1.5">
-        {days.map((d, i) => (
-          <span
-            key={i}
-            className="font-mono text-[9px] uppercase tracking-widest text-[#1A1814]/45"
-          >
-            {d}
-          </span>
-        ))}
-      </div>
-      <div className="relative mt-2 flex-1 overflow-hidden">
-        <div aria-hidden className="absolute inset-0 grid grid-cols-7 gap-1">
-          {days.map((_d, i) => (
-            <div key={i} className="relative">
-              {[0.25, 0.5, 0.75].map((p) => (
-                <span
-                  key={p}
-                  className="absolute left-0 right-0 border-t border-dashed border-black/[0.06]"
-                  style={{ top: `${p * 100}%` }}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
-        {CALENDAR_EVENTS.map((evt, i) => (
-          <div
-            key={i}
-            className="absolute"
-            style={{
-              left: `calc(${(evt.day / 7) * 100}% + 2px)`,
-              width: `calc(${(1 / 7) * 100}% - 4px)`,
-              top: `${evt.top}%`,
-              opacity: startEvents ? 1 : 0,
-              transform: startEvents ? "translateY(0)" : "translateY(4px)",
-              transition: `opacity 180ms ${EASE} ${i * 0.4}s, transform 220ms ${EASE} ${i * 0.4}s`,
-            }}
-          >
-            <div
-              className="flex items-center gap-1 rounded-[5px] border-l-2 px-1.5 py-1 text-[9px] leading-tight text-[#1A1814]"
-              style={{
-                borderLeftColor: CLASS_BLUE,
-                backgroundColor: `${CLASS_BLUE}14`,
-              }}
-            >
-              <span
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ backgroundColor: CLASS_BLUE }}
-              />
-              <span className="truncate">{tEvents(evt.key)}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+    <li className="flex gap-1.5 text-[11px] leading-snug text-[#1A1814]">
+      <span
+        aria-hidden
+        className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#1A1814]/40"
+      />
+      <span>{text}</span>
+    </li>
+  );
+}
+
+function SourceChip({
+  icon: Icon,
+  text,
+  tone,
+}: {
+  icon: typeof Mail;
+  text: string;
+  tone: "email" | "mistake" | "calendar";
+}) {
+  const palette = {
+    email: "border-black/[0.08] bg-[#FAFAF9] text-[#1A1814]/65",
+    mistake: "border-amber-400/30 bg-amber-400/10 text-amber-700",
+    calendar: "border-sky-400/30 bg-sky-400/10 text-sky-700",
+  }[tone];
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-mono text-[9px] ${palette}`}
+    >
+      <Icon size={9} strokeWidth={1.75} />
+      {text}
+    </span>
   );
 }
