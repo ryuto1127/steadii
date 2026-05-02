@@ -645,6 +645,7 @@ type MessagesShape = {
     empty_title: string;
     empty_body: string;
     empty_cta: string;
+    toast_sent: string;
     archetype_a_pill: string;
     archetype_b_pill: string;
     archetype_c_pill: string;
@@ -672,6 +673,11 @@ type MessagesShape = {
       send: string;
       skip: string;
       dismiss: string;
+    };
+    card_b_secondary: {
+      open_detail: string;
+      open_calendar: string;
+      mark_reviewed: string;
     };
     card_d: {
       detail: string;
@@ -725,6 +731,47 @@ type MessagesShape = {
     push_permission_prompt: string;
     push_permission_yes: string;
     push_permission_no: string;
+  };
+  pre_brief: {
+    eyebrow: string;
+    back_to_home: string;
+    open_in_calendar: string;
+    at_a_glance: string;
+    full_briefing: string;
+    no_bullets: string;
+    attendees: string;
+  };
+  group_detail: {
+    eyebrow: string;
+    back_to_home: string;
+    deadline_label: string;
+    members_heading: string;
+    tasks_heading: string;
+    tasks_empty: string;
+    source_threads_heading: string;
+    last_reply_label: string;
+    draft_checkin: string;
+    open_in_mail: string;
+    regenerate: string;
+    archive_group: string;
+    confirm_archive: string;
+    add_task: string;
+    task_title_placeholder: string;
+    task_assignee_placeholder: string;
+    aria_mark_done: string;
+    aria_mark_undone: string;
+    aria_remove_task: string;
+    toast_drafted: string;
+    toast_draft_failed: string;
+    toast_archived: string;
+    toast_archive_failed: string;
+    toast_task_added: string;
+    toast_task_failed: string;
+    status: {
+      active: string;
+      silent: string;
+      done: string;
+    };
   };
   agent_rules_section: {
     global_rules: string;
@@ -1097,6 +1144,8 @@ type MessagesShape = {
     issue_syllabus_calendar_ambiguity: string;
     issue_auto_action_log: string;
     issue_admin_waitlist_pending: string;
+    issue_group_project_detected: string;
+    issue_group_member_silent: string;
   };
   class_form: {
     back: string;
@@ -2052,6 +2101,7 @@ export const en: MessagesShape = {
     empty_body:
       "Steadii is watching. New email, deadline, or conflict will land here.",
     empty_cta: "Ask Steadii to do something",
+    toast_sent: "Sent.",
     archetype_a_pill: "Decide",
     archetype_b_pill: "Draft ready",
     archetype_c_pill: "Notice",
@@ -2079,6 +2129,11 @@ export const en: MessagesShape = {
       send: "Send",
       skip: "Skip",
       dismiss: "Dismiss",
+    },
+    card_b_secondary: {
+      open_detail: "Open detail",
+      open_calendar: "Open in Calendar",
+      mark_reviewed: "Mark reviewed",
     },
     card_d: {
       detail: "Detail",
@@ -2156,6 +2211,48 @@ export const en: MessagesShape = {
       "Allow Steadii to send a push when your first proposal is ready?",
     push_permission_yes: "Yes, notify me",
     push_permission_no: "Skip notifications",
+  },
+  pre_brief: {
+    eyebrow: "Meeting pre-brief",
+    back_to_home: "Back to Home",
+    open_in_calendar: "Open in Calendar",
+    at_a_glance: "At a glance",
+    full_briefing: "Full briefing",
+    no_bullets: "Nothing material to share for this meeting.",
+    attendees: "Attendees",
+  },
+  group_detail: {
+    eyebrow: "Group project",
+    back_to_home: "Back to Home",
+    deadline_label: "Deadline:",
+    members_heading: "Members",
+    tasks_heading: "Tasks",
+    tasks_empty: "No tasks yet — add one below.",
+    source_threads_heading: "Source threads",
+    last_reply_label: "Last reply:",
+    draft_checkin: "Draft check-in",
+    open_in_mail: "Open in Mail",
+    regenerate: "Regenerate",
+    archive_group: "Archive group",
+    confirm_archive:
+      "Archive this group project? It will move to Done and stop appearing on Home.",
+    add_task: "Add task",
+    task_title_placeholder: "Task title…",
+    task_assignee_placeholder: "Assignee email (optional)",
+    aria_mark_done: "Mark task done",
+    aria_mark_undone: "Mark task not done",
+    aria_remove_task: "Remove task",
+    toast_drafted: "Draft ready.",
+    toast_draft_failed: "Draft failed.",
+    toast_archived: "Archived.",
+    toast_archive_failed: "Archive failed.",
+    toast_task_added: "Task added.",
+    toast_task_failed: "Task failed.",
+    status: {
+      active: "Active",
+      silent: "Silent",
+      done: "Done",
+    },
   },
   agent_rules_section: {
     global_rules: "Global rules",
@@ -2657,6 +2754,8 @@ export const en: MessagesShape = {
     issue_syllabus_calendar_ambiguity: "Confirm import",
     issue_auto_action_log: "Steadii action log",
     issue_admin_waitlist_pending: "Waitlist request",
+    issue_group_project_detected: "Group project detected",
+    issue_group_member_silent: "Group member silent",
   },
   class_form: {
     back: "Classes",

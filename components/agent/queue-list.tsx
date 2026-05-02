@@ -33,6 +33,14 @@ type ServerActions = {
   dismiss: (cardId: string) => Promise<void>;
   snooze: (cardId: string, hours: number) => Promise<void>;
   permanentDismiss: (cardId: string) => Promise<void>;
+  // Wave 3.1 — Type B informational secondary action handler. The only
+  // inline secondary today is "mark_reviewed" on a meeting pre-brief;
+  // anything else uses href navigation and never lands here.
+  secondaryAction: (cardId: string, actionKey: string) => Promise<void>;
+  // Wave 3.3 — sends an office_hours Type B draft (Gmail draft + send +
+  // provisional calendar event). For non-office-hours B cards the page
+  // routes the user to the existing detail page.
+  sendOfficeHours: (cardId: string) => Promise<void>;
 };
 
 export function QueueList({
@@ -148,11 +156,21 @@ export function QueueList({
             onSend:
               card.archetype === "B"
                 ? async () => {
-                    // Send is multi-step (approve → send-queue → 10s
-                    // undo). For Wave 2 we route the user to the
-                    // existing detail page where the send pipeline is
-                    // already wired — reusing one path is safer than
-                    // duplicating the 10s undo machinery.
+                    // Office hours Type B drafts run their own send
+                    // pipeline (Gmail draft + send + provisional
+                    // calendar event). Other Type B drafts route to
+                    // the existing inbox detail page where the W1
+                    // send + 10s undo machinery is wired.
+                    if (card.id.startsWith("office_hours:")) {
+                      try {
+                        await actions.sendOfficeHours(card.id);
+                        toast.success(t("toast_sent"));
+                      } catch (err) {
+                        toast.error(message(err, "Send failed"));
+                      }
+                      refresh();
+                      return;
+                    }
                     if (card.detailHref) router.push(card.detailHref);
                   }
                 : undefined,
@@ -163,6 +181,17 @@ export function QueueList({
                       await actions.dismiss(card.id);
                     } catch (err) {
                       toast.error(message(err, "Skip failed"));
+                    }
+                    refresh();
+                  }
+                : undefined,
+            onSecondaryAction:
+              card.archetype === "B"
+                ? async (actionKey) => {
+                    try {
+                      await actions.secondaryAction(card.id, actionKey);
+                    } catch (err) {
+                      toast.error(message(err, "Action failed"));
                     }
                     refresh();
                   }
