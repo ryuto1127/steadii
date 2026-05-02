@@ -405,24 +405,29 @@ export default async function SettingsPage() {
                 currency={currency}
                 copy={{
                   adminBypass: tBilling("actions.admin_bypass"),
-                  upgradePro: fmt(tBilling("actions.upgrade_pro"), {
+                  // next-intl auto-substitutes named placeholders; calling
+                  // tBilling("...") and then running our `fmt` helper on the
+                  // result tripped a strict-mode FORMATTING_ERROR (the
+                  // translator demands the var before it returns the
+                  // template). Pass the var to the translator directly.
+                  upgradePro: tBilling("actions.upgrade_pro", {
                     price: labels.pro_monthly,
                   }),
-                  upgradeStudent: fmt(tBilling("actions.upgrade_student"), {
+                  upgradeStudent: tBilling("actions.upgrade_student", {
                     price: labels.student_4mo,
                   }),
                   opening: tBilling("actions.opening"),
                   manageSub: tBilling("actions.manage_sub"),
                   addCredits: tBilling("actions.add_credits"),
-                  topup500: fmt(tBilling("actions.topup_500"), {
+                  topup500: tBilling("actions.topup_500", {
                     price: labels.topup_500,
                   }),
-                  topup2000: fmt(tBilling("actions.topup_2000"), {
+                  topup2000: tBilling("actions.topup_2000", {
                     price: labels.topup_2000,
                   }),
                   topupExpiry: tBilling("actions.topup_expiry"),
                   steppingAway: tBilling("actions.stepping_away"),
-                  extendRetention: fmt(tBilling("actions.extend_retention"), {
+                  extendRetention: tBilling("actions.extend_retention", {
                     price: labels.data_retention,
                   }),
                   extendRetentionHelp: tBilling("actions.extend_retention_help"),

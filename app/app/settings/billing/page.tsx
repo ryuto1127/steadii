@@ -199,24 +199,27 @@ export default async function BillingPage({
             currency={currency}
             copy={{
               adminBypass: t("actions.admin_bypass"),
-              upgradePro: fmt(t("actions.upgrade_pro"), {
+              // next-intl strict-mode trips FORMATTING_ERROR if a placeholder
+              // is in the template but no var is passed at the t() call.
+              // Pass `price` directly instead of via the `fmt` post-process.
+              upgradePro: t("actions.upgrade_pro", {
                 price: labels.pro_monthly,
               }),
-              upgradeStudent: fmt(t("actions.upgrade_student"), {
+              upgradeStudent: t("actions.upgrade_student", {
                 price: labels.student_4mo,
               }),
               opening: t("actions.opening"),
               manageSub: t("actions.manage_sub"),
               addCredits: t("actions.add_credits"),
-              topup500: fmt(t("actions.topup_500"), {
+              topup500: t("actions.topup_500", {
                 price: labels.topup_500,
               }),
-              topup2000: fmt(t("actions.topup_2000"), {
+              topup2000: t("actions.topup_2000", {
                 price: labels.topup_2000,
               }),
               topupExpiry: t("actions.topup_expiry"),
               steppingAway: t("actions.stepping_away"),
-              extendRetention: fmt(t("actions.extend_retention"), {
+              extendRetention: t("actions.extend_retention", {
                 price: labels.data_retention,
               }),
               extendRetentionHelp: t("actions.extend_retention_help"),

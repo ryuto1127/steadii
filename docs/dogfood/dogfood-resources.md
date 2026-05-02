@@ -145,6 +145,116 @@ Use ✓ / ✗ / ⚠ (blocker) / — (skipped). Add 1-line note for any non-✓ r
 |---|---|---|
 | N.x | — | needs Ryuto (production deploy verification + DEPLOY.md §8 cheatsheet items not yet covered) |
 
+### Section W2 — Home rebuild (Wave 2 SHIPPED #118 / #120, polish-25 verifies)
+
+Verifies the post-Wave-2 Home is rendering correctly: 5 queue archetypes (A-E), command palette docked + ⌘K, sidebar Wave 2 order, briefing card data correctness, empty state, recent-activity footer.
+
+| step | status | notes |
+|---|---|---|
+| W2.1 `/app` shell loads with greeting + command palette + queue + briefing + recent activity | | |
+| W2.2 Queue archetypes A-E render with correct visual treatment (border, spacing, confidence tiers) | | |
+| W2.3 Type A (Decision) card shows decision option buttons + dismiss; only ONE dismiss control visible (no synthetic English "Dismiss" duplicate) | | |
+| W2.4 Type B (Draft-ready) card shows embedded draft preview + Review / Send / Skip; ⌘K does not collide | | |
+| W2.5 Type B variant (informational, no primary send) renders secondary actions only (open_detail / open_calendar / mark_reviewed) | | |
+| W2.6 Type C (Soft notice) shows minimal card + single primary action + dismiss | | |
+| W2.7 Type D (FYI / completed) renders chip-style at low contrast | | |
+| W2.8 Type E (Clarifying) shows ❓ icon + radio choices + free-text fallback | | |
+| W2.9 Command palette: docked at top of /app; placeholder rotates examples; Cmd+K focuses input | | |
+| W2.10 Command palette: focused state shows Recent + Examples sections | | |
+| W2.11 Sidebar order matches Wave 2 spec: Home → Inbox → Calendar → Tasks → Classes (5 primary). 履歴 is demoted to inline RECENT CHATS list. Settings is via account footer pill | | |
+| W2.12 Briefing 3-column row (Calendar / Tasks / Deadlines) renders with localized labels in EN + JA | | |
+| W2.13 Empty state: when queue=0, "queue is empty" CTA appears + focuses palette | | |
+| W2.14 Recent activity footer renders below queue with Type D-style chips | | |
+| W2.15 Wave 2 keyboard shortcuts: gh (home), gi (inbox), gc (calendar), gt (tasks), gk (classes), gj (chats demoted) | | |
+| W2.16 Onboarding wait pattern: Step 3 onwards focuses palette ("Steadii に頼む…") rather than feature exploration | | |
+
+### Section W3 — Wave 3: pre-brief / groups / office hours (SHIPPED #121, polish-25 verifies)
+
+Verifies Wave 3 secretary-deepening features render correctly. Behavioral correctness (cron firing 15min before events, member silence detection accuracy) is observability/cron-fired and verified separately via heartbeat panel.
+
+| step | status | notes |
+|---|---|---|
+| W3.1 Meeting pre-brief: detail page `/app/pre-briefs/[id]` renders with attendee context, last-interaction summary, pending topics, deadlines | | |
+| W3.2 Meeting pre-brief: in queue, renders as Type B variant (informational, secondary actions only) — Open detail, Open in Calendar, Mark reviewed; NO primary "Send" button | | |
+| W3.3 Group project: `/app/groups/[id]` route renders members list, tasks, source threads, deadline countdown | | |
+| W3.4 Group project: silence detection surfaces as Type C card ("X silent N days"), click upgrades to Type B (drafted check-in) | | |
+| W3.5 Group project: actions [全員に進捗確認 broadcast] [タスク追加] [メンバー追加] [Archive] visible on detail page | | |
+| W3.6 Office hours scheduler: command palette can trigger flow ("Prof X と office hours") | | |
+| W3.7 Office hours: Type A card shows 3 candidate slots + compiled questions + Pick slot / Edit / Cancel | | |
+| W3.8 Office hours: confirming slot transitions to Type B for email review/send | | |
+| W3.9 group_projects + group_project_members + group_project_tasks tables exist in schema (`pnpm db:studio`) | | |
+| W3.10 class_office_hours table exists OR professors.office_hours JSON column populated for ingested syllabi | | |
+
+### Section W5 — Wave 5: auto-archive + hardening + onboarding edges (SHIPPED #124, polish-25 verifies)
+
+Verifies Wave 5 final-α-wave features. Note 2-week safety ramp window in progress until ~2026-05-16; auto-archive default OFF until then.
+
+| step | status | notes |
+|---|---|---|
+| W5.1 Settings → Inbox: "Hide low-risk emails" toggle visible + persists across reload | | |
+| W5.2 With toggle ON: Inbox filter chip "Hidden (N)" appears at top, click reveals hidden items inline | | |
+| W5.3 Hidden item "Restore" button: moves item back into inbox triage list, removes from hidden | | |
+| W5.4 Search includes hidden items by default (no surprise misses by sender / subject) | | |
+| W5.5 Recent activity footer on Home lists hidden items as Type D chips (low contrast) | | |
+| W5.6 Audit log: every auto-archive event recorded in `audit_log` table with `event_type='auto_action_log'` (verify via `pnpm db:studio`) | | |
+| W5.7 Gmail revoked banner: when `gmail_token_revoked_at IS NOT NULL`, banner appears at top of /app with "Reconnect Gmail" CTA | | |
+| W5.8 Re-consent flow: clicking Reconnect → Google OAuth → returns and clears `gmail_token_revoked_at` | | |
+| W5.9 Onboarding skip recovery banner: if user skipped Step 2 (integrations), `/app` shows "Connect calendar to get more from Steadii" banner with [Connect now] [Dismiss] | | |
+| W5.10 Skip recovery banner: dismissing persists (banner does NOT re-appear on reload) | | |
+| W5.11 `/app/admin` heartbeat panel renders: cron last-run timestamps + green/yellow/red health pill per cron | | |
+| W5.12 `/app/admin` Sentry alert config visible (test errors fire and show in Sentry Issues) | | |
+| W5.13 Soak-test docs exist at `docs/launch/soak-results.md` OR equivalent | | |
+| W5.14 Rollback procedure documented (Vercel "promote previous deployment" tested) | | |
+| W5.15 Migration 0029 (gmail_token_revoked_at + auto_action_events) applied to prod (re: feedback_prod_migration_manual.md) | | |
+| W5.16 Default value: `AUTO_ARCHIVE_DEFAULT_ENABLED=false` for new signups during 2-week ramp window (until ~2026-05-16) | | |
+
+### Cross-cutting C1 — Dark mode parity (5 min)
+
+Engineer toggles `prefers-color-scheme: dark` via DevTools / `preview_resize colorScheme: dark` and verifies every /app surface renders correctly.
+
+| step | status | notes |
+|---|---|---|
+| C1.1 /app Home dark mode renders without contrast / overflow / unstyled-flash artifacts | | |
+| C1.2 /app/inbox dark mode | | |
+| C1.3 /app/chat/[id] dark mode | | |
+| C1.4 /app/settings + sub-routes dark mode | | |
+| C1.5 /app/calendar + /app/tasks dark mode | | |
+
+### Cross-cutting C2 — EN + JA parity (5 min)
+
+Engineer toggles `steadii-locale` cookie and reloads each surface; checks for `MISSING_MESSAGE` in console.
+
+| step | status | notes |
+|---|---|---|
+| C2.1 No `MISSING_MESSAGE` in console for /app in EN | | |
+| C2.2 No `MISSING_MESSAGE` in console for /app in JA | | |
+| C2.3 No raw English leakage on JA queue cards (titles excepted — server-built, deferred to engineer-26+) | | |
+| C2.4 No raw Japanese leakage on EN queue cards | | |
+| C2.5 Command palette placeholder rotates correctly in both locales | | |
+
+### Cross-cutting C3 — Mobile responsive (5 min)
+
+Engineer drives `preview_resize preset: mobile` (375x812) and verifies main screens.
+
+| step | status | notes |
+|---|---|---|
+| C3.1 /app Home renders mobile without horizontal scroll | | |
+| C3.2 /app/inbox triage list renders mobile | | |
+| C3.3 /app/chat/[id] mobile (message bubbles + composer) | | |
+| C3.4 /app/settings mobile (panels stack) | | |
+| C3.5 Sidebar collapses to mobile drawer pattern | | |
+
+### Cross-cutting C4 — Lighthouse (5 min)
+
+Engineer runs `lighthouse` against `/` and `/app` (when feasible against dev). Real production scores are Ryuto's responsibility from Chrome DevTools per handbook M.
+
+| step | status | notes |
+|---|---|---|
+| C4.1 `/` Performance | | dev-mode score is unreliable; Ryuto runs M against prod |
+| C4.1 `/` Accessibility | | |
+| C4.2 `/app` Performance | | |
+| C4.2 `/app` Accessibility | | |
+
 ---
 
 ## Cleanup SQL — run AFTER dogfood (Neon SQL Editor)
