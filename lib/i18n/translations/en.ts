@@ -1006,8 +1006,8 @@ export const en: MessagesShape = {
           body: "Steadii triages your emails, watches for conflicts, drafts replies. You see everything; nothing sends without you.",
         },
         trust: {
-          title: "Trust",
-          body: "Use the dismiss button when Steadii is wrong. It learns. The more you use it, the more it gets you.",
+          title: "Delegate",
+          body: "Dismiss when Steadii is wrong — it learns your style. The more you trust it, the more you can hand off.",
         },
       },
     },
