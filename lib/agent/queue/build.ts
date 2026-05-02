@@ -55,8 +55,9 @@ async function fetchPendingProposals(userId: string): Promise<AgentProposalRow[]
   // Steadii silently did X. Those folks belong in Recent activity, not
   // the queue (per spec: D collapses into Recent activity).
   // admin_waitlist_pending is a different sidebar surface (admin role).
+  let rows: AgentProposalRow[];
   try {
-    return await db
+    rows = await db
       .select()
       .from(agentProposals)
       .where(
@@ -74,6 +75,24 @@ async function fetchPendingProposals(userId: string): Promise<AgentProposalRow[]
     // / test envs) we'd rather degrade to empty than crash Home.
     return [];
   }
+
+  // Dedup at the queue layer. The Phase 8 proactive scanner can fire
+  // multiple times against the same conflict before the user resolves
+  // it (cron re-runs / race on same calendar pair / variant code paths)
+  // and the surface ends up showing 2-3 cards with identical body text.
+  // Rule-based dedup at insert is the long-term fix; for now we collapse
+  // here on (issueType, sourceRefs-as-JSON), keeping the most recent.
+  // Rows already arrive sorted by createdAt DESC so the first occurrence
+  // per key is the newest — safe to filter on first-seen.
+  const seen = new Set<string>();
+  const deduped: AgentProposalRow[] = [];
+  for (const row of rows) {
+    const key = `${row.issueType}:${JSON.stringify(row.sourceRefs ?? [])}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(row);
+  }
+  return deduped;
 }
 
 function proposalToTypeA(p: AgentProposalRow): QueueCardA {

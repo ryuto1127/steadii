@@ -90,6 +90,18 @@ export default async function HomePage() {
         <CommandPalette autoFocus />
       </div>
 
+      {/* Today briefing surfaces ABOVE the queue per Ryuto's lock 2026-05-01:
+          calendar / tasks / deadlines are universal context the user must
+          see at a glance every visit. The queue (decisions / drafts /
+          notices) sits below — it's important but action-oriented, and
+          requires more attention than a quick scan. */}
+      <TodayBriefing
+        events={events}
+        todayTasks={todayTasks}
+        upcomingDeadlines={dueSoon}
+        tz={tz}
+      />
+
       {queueCards.length > 0 ? (
         <QueueList
           cards={queueCards}
@@ -104,13 +116,6 @@ export default async function HomePage() {
       ) : (
         <QueueEmptyState />
       )}
-
-      <TodayBriefing
-        events={events}
-        todayTasks={todayTasks}
-        upcomingDeadlines={dueSoon}
-        tz={tz}
-      />
 
       <RecentActivity userId={userId} />
     </div>
