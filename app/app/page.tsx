@@ -21,6 +21,8 @@ import {
   queueDismissAction,
   queuePermanentDismissAction,
   queueResolveProposalAction,
+  queueSecondaryAction,
+  queueSendOfficeHoursAction,
   queueSnoozeAction,
   queueSubmitClarificationAction,
 } from "./queue-actions";
@@ -111,6 +113,8 @@ export default async function HomePage() {
             dismiss: queueDismissAction,
             snooze: queueSnoozeAction,
             permanentDismiss: queuePermanentDismissAction,
+            secondaryAction: queueSecondaryAction,
+            sendOfficeHours: queueSendOfficeHoursAction,
           }}
         />
       ) : (

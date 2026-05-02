@@ -114,6 +114,14 @@ export const users = pgTable("users", {
   autonomySendEnabled: boolean("autonomy_send_enabled")
     .notNull()
     .default(false),
+  // Wave 3 — meeting pre-brief generator gate. Pre-brief is the most
+  // LLM-heavy Wave-3 feature (~$1.50/user/month at 5-10 events/day with
+  // attendees; heavy users with 30+ daily meetings can exceed $5/month).
+  // Default true so the value lands by default; the cron flips this off
+  // automatically if a user's monthly pre-brief spend climbs past the
+  // hard ceiling, and the Settings → Notifications panel exposes a manual
+  // toggle.
+  preBriefEnabled: boolean("pre_brief_enabled").notNull().default(true),
   // Phase 7 W-Integrations — set when the user clicks "Skip" on the
   // onboarding integrations page (Step 2). Non-null = the page never
   // re-shows. Contextual suggestion prompts (Surface 2) remain active
@@ -1714,7 +1722,13 @@ export type AgentProposalIssueType =
   // Admin-targeted: a new waitlist request landed and needs human
   // approve/deny. One row per (admin_user, waitlist_request); cleared
   // to status='dismissed' when the matching request flips status.
-  | "admin_waitlist_pending";
+  | "admin_waitlist_pending"
+  // Wave 3.2 — group project detection. Surfaces as a Type E clarifying
+  // card; user confirm spawns a `group_projects` row.
+  | "group_project_detected"
+  // Wave 3.2 — silence detection. Surfaces as a Type C card; click
+  // opens the group detail page where Steadii drafts a check-in.
+  | "group_member_silent";
 
 export type AgentProposalStatus =
   | "pending"
@@ -1815,3 +1829,325 @@ export const agentProposals = pgTable(
 
 export type AgentProposalRow = typeof agentProposals.$inferSelect;
 export type NewAgentProposalRow = typeof agentProposals.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Wave 3 — Meeting pre-brief (Wave 3.1)
+// ---------------------------------------------------------------------------
+
+// One row per (user, calendar event) brief generation. The cron generates
+// these 15 min before the event with attendees; the queue surfaces the row
+// as a Type B informational card. Cache invalidation is implicit — the
+// cron checks `expires_at` and the cache-bust signals (last attendee email
+// timestamp, last task added) before re-using a cached row.
+export type PreBriefBullet = {
+  // Short headline ("Last email from Prof Tanaka — extension granted")
+  text: string;
+  // Optional source kind for chip rendering on detail page.
+  kind?: "email" | "task" | "deadline" | "mistake" | "syllabus" | "decision";
+  // Optional href to jump to the underlying record.
+  href?: string;
+};
+
+export const eventPreBriefs = pgTable(
+  "event_pre_briefs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    // Cached LLM output — 4-6 bullets covering the dimensions in the spec.
+    bullets: jsonb("bullets")
+      .$type<PreBriefBullet[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    // Long-form executive briefing rendered on the detail page. Single
+    // paragraph per topic; markdown allowed.
+    detailMarkdown: text("detail_markdown"),
+    attendeeEmails: text("attendee_emails")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    // Cache-bust hash composed of (last attendee email id ∪ last task id ∪
+    // event updated_at). The cron compares this against the live signal
+    // before reusing the cached row; mismatch means regenerate.
+    cacheKey: text("cache_key").notNull(),
+    // Cost analytics — links to the usage_events row that paid for this brief.
+    usageId: uuid("usage_id").references(() => usageEvents.id, {
+      onDelete: "set null",
+    }),
+    // The cron schedules briefs for events in the next 30 min. expires_at is
+    // set to event_starts_at + 1h so post-meeting briefs still appear briefly
+    // for the "what did I just talk about" use case but eventually drop.
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true })
+      .notNull(),
+    viewedAt: timestamp("viewed_at", { mode: "date", withTimezone: true }),
+    dismissedAt: timestamp("dismissed_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userEventIdx: uniqueIndex("event_pre_briefs_user_event_idx").on(
+      t.userId,
+      t.eventId
+    ),
+    userExpiresIdx: index("event_pre_briefs_user_expires_idx").on(
+      t.userId,
+      t.expiresAt
+    ),
+  })
+);
+
+export type EventPreBriefRow = typeof eventPreBriefs.$inferSelect;
+export type NewEventPreBriefRow = typeof eventPreBriefs.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Wave 3 — Group project coordinator (Wave 3.2)
+// ---------------------------------------------------------------------------
+
+export type GroupProjectStatus = "active" | "done" | "abandoned";
+export type GroupProjectDetectionMethod = "auto" | "manual";
+export type GroupProjectMemberStatus = "active" | "silent" | "done";
+
+export const groupProjects = pgTable(
+  "group_projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    classId: uuid("class_id").references(() => classes.id, {
+      onDelete: "set null",
+    }),
+    title: text("title").notNull(),
+    deadline: timestamp("deadline", { mode: "date", withTimezone: true }),
+    sourceThreadIds: text("source_thread_ids")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    detectionMethod: text("detection_method")
+      .$type<GroupProjectDetectionMethod>()
+      .notNull(),
+    status: text("status")
+      .$type<GroupProjectStatus>()
+      .notNull()
+      .default("active"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userStatusIdx: index("group_projects_user_status_idx").on(
+      t.userId,
+      t.status
+    ),
+  })
+);
+
+export type GroupProjectRow = typeof groupProjects.$inferSelect;
+export type NewGroupProjectRow = typeof groupProjects.$inferInsert;
+
+export const groupProjectMembers = pgTable(
+  "group_project_members",
+  {
+    groupProjectId: uuid("group_project_id")
+      .notNull()
+      .references(() => groupProjects.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    name: text("name"),
+    role: text("role"),
+    lastRespondedAt: timestamp("last_responded_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    lastMessageAt: timestamp("last_message_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    status: text("status")
+      .$type<GroupProjectMemberStatus>()
+      .notNull()
+      .default("active"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.groupProjectId, t.email] }),
+  })
+);
+
+export type GroupProjectMemberRow =
+  typeof groupProjectMembers.$inferSelect;
+export type NewGroupProjectMemberRow =
+  typeof groupProjectMembers.$inferInsert;
+
+export const groupProjectTasks = pgTable(
+  "group_project_tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    groupProjectId: uuid("group_project_id")
+      .notNull()
+      .references(() => groupProjects.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    assigneeEmail: text("assignee_email"),
+    due: timestamp("due", { mode: "date", withTimezone: true }),
+    doneAt: timestamp("done_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    groupIdx: index("group_project_tasks_group_idx").on(t.groupProjectId),
+  })
+);
+
+export type GroupProjectTaskRow = typeof groupProjectTasks.$inferSelect;
+export type NewGroupProjectTaskRow = typeof groupProjectTasks.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Wave 3 — Office hours scheduler (Wave 3.3)
+// ---------------------------------------------------------------------------
+
+// Per-class office hours slots, extracted from the syllabus. One row per
+// recurring slot the prof publishes (e.g. "Tue 14:00-16:00 in MP203").
+// The scheduler tool composes specific calendar dates from these slots
+// when the user asks to schedule office hours; the slots themselves are
+// recurring, not date-specific.
+export type OfficeHoursSlot = {
+  // 0 = Sunday, 1 = Monday, ... 6 = Saturday. Aligned with JS Date.getDay().
+  weekday: number;
+  // 24-hour HH:MM format in the prof's local timezone (which we assume
+  // matches the user's timezone — α is single-region per user).
+  startTime: string;
+  endTime: string;
+  // Optional location ("MP203", "Zoom: <url>", "by appointment").
+  location?: string;
+  // Optional notes ("by appointment only", "first-come first-served").
+  notes?: string;
+};
+
+export const classOfficeHours = pgTable(
+  "class_office_hours",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    classId: uuid("class_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    syllabusId: uuid("syllabus_id").references(() => syllabi.id, {
+      onDelete: "set null",
+    }),
+    professorEmail: text("professor_email"),
+    professorName: text("professor_name"),
+    slots: jsonb("slots")
+      .$type<OfficeHoursSlot[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    // Free-form text section that didn't parse into structured slots; shown
+    // verbatim alongside the slot picker as a fallback.
+    rawNote: text("raw_note"),
+    // External booking link if one was extracted (Calendly, Cal.com, etc.).
+    bookingUrl: text("booking_url"),
+    extractedAt: timestamp("extracted_at", {
+      mode: "date",
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userClassIdx: index("class_office_hours_user_class_idx").on(
+      t.userId,
+      t.classId
+    ),
+  })
+);
+
+export type ClassOfficeHoursRow = typeof classOfficeHours.$inferSelect;
+export type NewClassOfficeHoursRow = typeof classOfficeHours.$inferInsert;
+
+// One in-flight office-hours-scheduling request per user. Surfaces to
+// the queue as Type A while pending (slot picker), then upgrades to
+// Type B when the user picks a slot and the email draft is generated.
+// Final transitions: 'sent' (email out + provisional calendar event),
+// 'dismissed' (user backed out).
+export type OfficeHoursRequestStatus =
+  | "pending"
+  | "confirmed"
+  | "sent"
+  | "dismissed";
+
+export type OfficeHoursCandidateSlot = {
+  // ISO datetime — the specific date/time we're proposing.
+  startsAt: string;
+  endsAt: string;
+  location?: string;
+};
+
+export type OfficeHoursCompiledQuestion = {
+  // Display label rendered on the Type A card and the email body.
+  label: string;
+  // Source kind for the chip on the card.
+  source: "mistake" | "email" | "chat" | "task";
+  // Optional href to the underlying record.
+  href?: string;
+};
+
+export const officeHoursRequests = pgTable(
+  "office_hours_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    classId: uuid("class_id").references(() => classes.id, {
+      onDelete: "set null",
+    }),
+    professorEmail: text("professor_email"),
+    professorName: text("professor_name"),
+    topic: text("topic"),
+    candidateSlots: jsonb("candidate_slots")
+      .$type<OfficeHoursCandidateSlot[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    compiledQuestions: jsonb("compiled_questions")
+      .$type<OfficeHoursCompiledQuestion[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    pickedSlotIndex: integer("picked_slot_index"),
+    draftSubject: text("draft_subject"),
+    draftBody: text("draft_body"),
+    draftTo: text("draft_to"),
+    sentMessageId: text("sent_message_id"),
+    sentEventId: uuid("sent_event_id"),
+    status: text("status")
+      .$type<OfficeHoursRequestStatus>()
+      .notNull()
+      .default("pending"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userStatusIdx: index("office_hours_requests_user_status_idx").on(
+      t.userId,
+      t.status
+    ),
+  })
+);
+
+export type OfficeHoursRequestRow = typeof officeHoursRequests.$inferSelect;
+export type NewOfficeHoursRequestRow =
+  typeof officeHoursRequests.$inferInsert;

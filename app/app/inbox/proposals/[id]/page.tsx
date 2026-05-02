@@ -160,6 +160,10 @@ function issueTypeLabelKey(t: AgentProposalIssueType): string {
       return "issue_auto_action_log";
     case "admin_waitlist_pending":
       return "issue_admin_waitlist_pending";
+    case "group_project_detected":
+      return "issue_group_project_detected";
+    case "group_member_silent":
+      return "issue_group_member_silent";
   }
 }
 
