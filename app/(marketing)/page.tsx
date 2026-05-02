@@ -70,14 +70,14 @@ export default async function LandingPage() {
           </span>
           <Link
             href="/login"
-            className="text-small text-[#1A1814]/70 transition-hover hover:text-[#7C3AED]"
+            className="text-small text-[#1A1814]/70 transition-hover hover:text-[#8579A8]"
           >
             {t("landing.sign_in")}
           </Link>
         </nav>
 
         <div className="relative mx-auto max-w-5xl px-6 pt-8 pb-10 text-center md:pt-16 md:pb-14 md:text-left">
-          <p className="font-mono text-[11px] uppercase tracking-widest text-[#7C3AED]">
+          <p className="font-mono text-[11px] uppercase tracking-widest text-[#8579A8]">
             {t("landing.alpha")}
           </p>
           <h1 className="mt-6 whitespace-pre-line text-[48px] font-semibold leading-[1.05] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[72px] lg:text-[80px]">
@@ -95,7 +95,7 @@ export default async function LandingPage() {
             </Link>
             <Link
               href="/login"
-              className="text-small text-[#1A1814]/60 transition-hover hover:text-[#7C3AED]"
+              className="text-small text-[#1A1814]/60 transition-hover hover:text-[#8579A8]"
             >
               {t("landing.cta_already_approved")}
             </Link>
@@ -173,7 +173,7 @@ export default async function LandingPage() {
                     <Icon
                       size={16}
                       strokeWidth={1.6}
-                      className="text-[#7C3AED]"
+                      className="text-[#8579A8]"
                     />
                     <span className="font-mono text-[11px] uppercase tracking-widest text-[#1A1814]/50">
                       0{i + 1}
@@ -213,13 +213,13 @@ export default async function LandingPage() {
               className="pointer-events-none absolute inset-0 opacity-70"
               style={{
                 background: `
-                  radial-gradient(circle at 0% 0%, rgba(124, 58, 237, 0.08) 0%, transparent 45%),
-                  radial-gradient(circle at 100% 100%, rgba(6, 182, 212, 0.08) 0%, transparent 45%)
+                  radial-gradient(circle at 0% 0%, rgba(178, 165, 200, 0.10) 0%, transparent 50%),
+                  radial-gradient(circle at 100% 100%, rgba(220, 200, 170, 0.10) 0%, transparent 50%)
                 `,
               }}
             />
             <div className="relative">
-              <p className="font-mono text-[11px] uppercase tracking-widest text-[#7C3AED]">
+              <p className="font-mono text-[11px] uppercase tracking-widest text-[#8579A8]">
                 {t("landing.founding.headline")}
               </p>
               <p className="mt-4 max-w-2xl text-[17px] leading-[1.55] text-[#1A1814] md:text-[18px]">
@@ -241,19 +241,19 @@ export default async function LandingPage() {
         <footer className="flex flex-wrap items-center gap-6 border-t border-black/[0.06] py-12 text-small text-[#1A1814]/60">
           <Link
             href="/privacy"
-            className="transition-hover hover:text-[#7C3AED]"
+            className="transition-hover hover:text-[#8579A8]"
           >
             {t("landing.footer.privacy")}
           </Link>
           <Link
             href="/terms"
-            className="transition-hover hover:text-[#7C3AED]"
+            className="transition-hover hover:text-[#8579A8]"
           >
             {t("landing.footer.terms")}
           </Link>
           <a
             href="mailto:hello@mysteadii.com"
-            className="transition-hover hover:text-[#7C3AED]"
+            className="transition-hover hover:text-[#8579A8]"
           >
             {t("landing.footer.contact")}
           </a>
@@ -266,7 +266,7 @@ export default async function LandingPage() {
               }}
               ariaLabel={t("landing.locale_toggle.aria_label")}
             />
-            <span className="font-mono text-[11px] text-[#7C3AED]">
+            <span className="font-mono text-[11px] text-[#8579A8]">
               {t("landing.footer.subject_to_change")}
             </span>
           </div>

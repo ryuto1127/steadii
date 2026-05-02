@@ -45,7 +45,7 @@ export function LocaleToggle({
                 "transition-hover",
                 isActive
                   ? "text-[#1A1814]"
-                  : "text-[#1A1814]/50 hover:text-[#7C3AED]",
+                  : "text-[#1A1814]/50 hover:text-[#8579A8]",
               )}
             >
               {labels[value]}

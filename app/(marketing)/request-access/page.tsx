@@ -29,14 +29,14 @@ export default async function RequestAccessPage({
         </Link>
         <Link
           href="/login"
-          className="text-small text-[#1A1814]/70 transition-hover hover:text-[#7C3AED]"
+          className="text-small text-[#1A1814]/70 transition-hover hover:text-[#8579A8]"
         >
           {t("landing.cta_already_approved")}
         </Link>
       </nav>
 
       <main className="mx-auto max-w-lg px-6 pt-8 pb-16">
-        <p className="font-mono text-[11px] uppercase tracking-widest text-[#7C3AED]">
+        <p className="font-mono text-[11px] uppercase tracking-widest text-[#8579A8]">
           {t("landing.alpha")}
         </p>
         <h1 className="mt-4 text-[32px] font-semibold leading-[1.1] tracking-[-0.02em] text-[#1A1814] md:text-[44px]">
@@ -92,7 +92,7 @@ export default async function RequestAccessPage({
         <p className="mt-8 text-small text-[#1A1814]/60">
           <Link
             href="/"
-            className="transition-hover hover:text-[#7C3AED]"
+            className="transition-hover hover:text-[#8579A8]"
           >
             {t("request_access.back_to_landing")}
           </Link>
@@ -124,7 +124,7 @@ function Field({
         required={required}
         autoComplete={autoComplete}
         maxLength={320}
-        className="h-11 rounded-[8px] border border-black/[0.10] bg-white px-3 text-[15px] text-[#1A1814] outline-none transition focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/20"
+        className="h-11 rounded-[8px] border border-black/[0.10] bg-white px-3 text-[15px] text-[#1A1814] outline-none transition focus:border-[#8579A8] focus:ring-2 focus:ring-[#8579A8]/20"
       />
     </label>
   );
@@ -147,7 +147,7 @@ function TextareaField({
         rows={4}
         maxLength={1000}
         placeholder={placeholder}
-        className="rounded-[8px] border border-black/[0.10] bg-white px-3 py-2 text-[15px] text-[#1A1814] outline-none transition focus:border-[#7C3AED] focus:ring-2 focus:ring-[#7C3AED]/20"
+        className="rounded-[8px] border border-black/[0.10] bg-white px-3 py-2 text-[15px] text-[#1A1814] outline-none transition focus:border-[#8579A8] focus:ring-2 focus:ring-[#8579A8]/20"
       />
     </label>
   );

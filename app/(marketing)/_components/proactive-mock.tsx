@@ -83,8 +83,8 @@ export function ProactiveMock({ copy }: { copy: Copy }) {
         className="pointer-events-none absolute inset-0 opacity-60"
         style={{
           background: `
-            radial-gradient(circle at 0% 0%, rgba(6, 182, 212, 0.06) 0%, transparent 40%),
-            radial-gradient(circle at 100% 100%, rgba(124, 58, 237, 0.06) 0%, transparent 40%)
+            radial-gradient(circle at 0% 0%, rgba(220, 200, 170, 0.08) 0%, transparent 50%),
+            radial-gradient(circle at 100% 100%, rgba(178, 165, 200, 0.08) 0%, transparent 50%)
           `,
         }}
       />
@@ -118,9 +118,9 @@ function Phase1({ copy, active }: { copy: Copy; active: boolean }) {
         <p className="text-[13px] text-[#1A1814]">{copy.step_calendar}</p>
       </div>
       <div className="mt-3 flex gap-1">
-        <span className="h-2 flex-1 rounded-sm bg-[#7C3AED]/55" />
-        <span className="h-2 flex-1 rounded-sm bg-[#7C3AED]/55" />
-        <span className="h-2 flex-1 rounded-sm bg-[#7C3AED]/55" />
+        <span className="h-2 flex-1 rounded-sm bg-[#8579A8]/55" />
+        <span className="h-2 flex-1 rounded-sm bg-[#8579A8]/55" />
+        <span className="h-2 flex-1 rounded-sm bg-[#8579A8]/55" />
       </div>
     </div>
   );
@@ -129,14 +129,14 @@ function Phase1({ copy, active }: { copy: Copy; active: boolean }) {
 function Phase2({ copy, active }: { copy: Copy; active: boolean }) {
   return (
     <div
-      className={`flex items-start gap-2.5 rounded-[10px] border border-[#7C3AED]/30 bg-[#7C3AED]/[0.06] p-3.5 transition-all duration-500 ${
+      className={`flex items-start gap-2.5 rounded-[10px] border border-[#8579A8]/30 bg-[#8579A8]/[0.06] p-3.5 transition-all duration-500 ${
         active ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0"
       }`}
     >
       <AlertCircle
         size={14}
         strokeWidth={1.6}
-        className="mt-0.5 shrink-0 text-[#7C3AED]"
+        className="mt-0.5 shrink-0 text-[#8579A8]"
       />
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-medium text-[#1A1814]">
