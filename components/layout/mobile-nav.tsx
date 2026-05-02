@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
@@ -92,6 +93,7 @@ export function MobileNavTrigger({ className }: { className?: string }) {
 
 export function MobileNavDrawer({ children }: { children: ReactNode }) {
   const { open, setOpen } = useMobileNav();
+  const t = useTranslations("primary_nav");
 
   return (
     <div className="md:hidden" aria-hidden={!open}>
@@ -110,7 +112,7 @@ export function MobileNavDrawer({ children }: { children: ReactNode }) {
       <aside
         role="dialog"
         aria-modal={open}
-        aria-label="Primary navigation"
+        aria-label={t("aria_label")}
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-[hsl(var(--background))] shadow-2xl transition-transform duration-200 ease-out",
           open ? "translate-x-0" : "-translate-x-full"

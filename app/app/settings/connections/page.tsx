@@ -38,6 +38,7 @@ export default async function ConnectionsPage({
   const userId = session.user.id;
   const { repaired, imported, ms, ical } = await searchParams;
   const tConn = await getTranslations("settings.connections");
+  const t = await getTranslations("connections_page");
 
   const [notionConn] = await db
     .select()
@@ -73,40 +74,40 @@ export default async function ConnectionsPage({
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-h1">Connections</h1>
+      <h1 className="text-h1">{t("title")}</h1>
 
       {repaired && (
         <div className="mt-6 rounded-lg bg-[hsl(var(--primary)/0.1)] px-4 py-3 text-sm text-[hsl(var(--foreground))]">
-          Setup re-run successfully. Your Steadii workspace has been re-created in Notion.
+          {t("setup_rerun_success")}
         </div>
       )}
       {imported && (
         <div className="mt-6 rounded-lg bg-[hsl(var(--primary)/0.1)] px-4 py-3 text-sm text-[hsl(var(--foreground))]">
-          Imported {imported} rows from Notion into Steadii.
+          {t("imported_prefix")} {imported} {t("imported_suffix")}
         </div>
       )}
       {ms === "connected" && (
         <div className="mt-6 rounded-lg bg-[hsl(var(--primary)/0.1)] px-4 py-3 text-sm text-[hsl(var(--foreground))]">
-          Microsoft 365 connected.
+          {t("microsoft_connected_toast")}
         </div>
       )}
       {ms === "disconnected" && (
         <div className="mt-6 rounded-lg bg-[hsl(var(--surface-raised))] px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">
-          Microsoft 365 disconnected.
+          {t("microsoft_disconnected_toast")}
         </div>
       )}
       {ical && (
         <div className="mt-6 rounded-lg bg-[hsl(var(--surface-raised))] px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">
-          iCal subscription {ical}.
+          {t("ical_subscription_added")} {ical}.
         </div>
       )}
 
       <section className="mt-10 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
-        <h2 className="text-lg font-medium">Notion</h2>
+        <h2 className="text-lg font-medium">{t("notion_label")}</h2>
         {notionConn ? (
           <>
             <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-              Connected to <strong>{notionConn.workspaceName ?? "workspace"}</strong>
+              {t("connected_to")} <strong>{notionConn.workspaceName ?? "workspace"}</strong>
               {notionConn.setupCompletedAt ? " — setup complete." : " — setup pending."}
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
@@ -115,7 +116,7 @@ export default async function ConnectionsPage({
                   type="submit"
                   className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))] transition hover:opacity-90"
                 >
-                  Import from Notion
+                  {t("import_button")}
                 </button>
               </form>
               <form action={repairSetupAction}>
@@ -123,29 +124,26 @@ export default async function ConnectionsPage({
                   type="submit"
                   className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
                 >
-                  Re-run setup
+                  {t("rerun_setup")}
                 </button>
               </form>
               <Link
                 href="/api/integrations/notion/connect"
                 className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
               >
-                Re-connect
+                {t("reconnect")}
               </Link>
               <form action={disconnectNotionAction}>
                 <button
                   type="submit"
                   className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
                 >
-                  Disconnect
+                  {t("disconnect")}
                 </button>
               </form>
             </div>
             <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
-              Import copies your Notion classes, mistakes, syllabi, and assignments
-              into Steadii&rsquo;s Postgres store (idempotent — safe to re-run).
-              Re-run setup if the Steadii page has been deleted from Notion or the
-              four databases are out of sync.
+              {t("notion_blurb")}
             </p>
           </>
         ) : (
@@ -153,13 +151,13 @@ export default async function ConnectionsPage({
             href="/api/integrations/notion/connect"
             className="mt-4 inline-flex rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))]"
           >
-            Connect Notion
+            {t("connect_notion")}
           </Link>
         )}
       </section>
 
       <section className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
-        <h2 className="text-lg font-medium">Google Calendar</h2>
+        <h2 className="text-lg font-medium">{t("google_calendar")}</h2>
         <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
           {calendarConnected
             ? "Calendar scope granted."
@@ -168,7 +166,7 @@ export default async function ConnectionsPage({
       </section>
 
       <section className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
-        <h2 className="text-lg font-medium">Gmail</h2>
+        <h2 className="text-lg font-medium">{t("gmail")}</h2>
         <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
           {gmailConnected
             ? "Gmail scope granted. The agent can triage and draft replies."
@@ -188,11 +186,11 @@ export default async function ConnectionsPage({
       </section>
 
       <section className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
-        <h2 className="text-lg font-medium">Microsoft 365</h2>
+        <h2 className="text-lg font-medium">{t("microsoft_label")}</h2>
         {msAcct ? (
           <>
             <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-              Connected.{" "}
+              {t("connected_simple")}{" "}
               {msCalendar ? "Calendar scope granted." : "Calendar scope missing."}{" "}
               {msTasks ? "Tasks scope granted." : "Tasks scope missing."}
             </p>
@@ -203,7 +201,7 @@ export default async function ConnectionsPage({
                     type="submit"
                     className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
                   >
-                    Re-connect to grant missing scopes
+                    {t("reconnect_missing_scopes")}
                   </button>
                 </form>
               )}
@@ -212,7 +210,7 @@ export default async function ConnectionsPage({
                   type="submit"
                   className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
                 >
-                  Disconnect
+                  {t("disconnect")}
                 </button>
               </form>
             </div>
@@ -220,15 +218,14 @@ export default async function ConnectionsPage({
         ) : (
           <>
             <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-              Pull Outlook calendar events and Microsoft To Do tasks into the
-              same prompt block as Google.
+              {t("microsoft_blurb")}
             </p>
             <form action={connectMicrosoftAction} className="mt-4">
               <button
                 type="submit"
                 className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))]"
               >
-                Connect Microsoft 365
+                {t("connect_microsoft")}
               </button>
             </form>
           </>
@@ -239,10 +236,9 @@ export default async function ConnectionsPage({
         id="ical"
         className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4"
       >
-        <h2 className="text-lg font-medium">iCal subscriptions</h2>
+        <h2 className="text-lg font-medium">{t("ical_heading")}</h2>
         <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-          Paste any read-only iCal feed (school timetable, public calendar) and
-          Steadii will sync it every 6 hours.
+          {t("ical_blurb")}
         </p>
 
         <form
@@ -250,21 +246,21 @@ export default async function ConnectionsPage({
           className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
         >
           <label className="flex flex-1 flex-col gap-1 text-xs text-[hsl(var(--muted-foreground))]">
-            URL
+            {t("url_label")}
             <input
               type="url"
               name="url"
               required
-              placeholder="https://… or webcal://…"
+              placeholder={t("url_placeholder")}
               className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-[hsl(var(--muted-foreground))] sm:w-40">
-            Label (optional)
+            {t("label_optional_label")}
             <input
               type="text"
               name="label"
-              placeholder="e.g. UToronto"
+              placeholder={t("label_placeholder")}
               className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
             />
           </label>
@@ -272,7 +268,7 @@ export default async function ConnectionsPage({
             type="submit"
             className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))]"
           >
-            Add
+            {t("add_button")}
           </button>
         </form>
 
@@ -290,7 +286,7 @@ export default async function ConnectionsPage({
                     </span>
                     {!sub.active && (
                       <span className="rounded bg-[hsl(var(--surface-raised))] px-2 py-0.5 text-xs text-[hsl(var(--muted-foreground))]">
-                        Paused — {sub.consecutiveFailures} failures
+                        {t("paused_prefix")} {sub.consecutiveFailures} failures
                       </span>
                     )}
                   </div>
@@ -299,12 +295,14 @@ export default async function ConnectionsPage({
                   </p>
                   {sub.lastError && (
                     <p className="mt-0.5 text-xs text-[hsl(var(--destructive,red))]">
-                      Last error: {sub.lastError}
+                      {t("last_error_prefix")} {sub.lastError}
                     </p>
                   )}
                   {sub.lastSyncedAt && (
                     <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">
-                      Last synced {sub.lastSyncedAt.toISOString().slice(0, 16)}Z
+                      {t("last_synced_prefix")}{" "}
+                      {sub.lastSyncedAt.toISOString().slice(0, 16)}
+                      {t("last_synced_z_suffix")}
                     </p>
                   )}
                 </div>
@@ -316,7 +314,7 @@ export default async function ConnectionsPage({
                         type="submit"
                         className="rounded border border-[hsl(var(--border))] px-3 py-1 text-xs transition hover:bg-[hsl(var(--surface-raised))]"
                       >
-                        Reactivate
+                        {t("reactivate")}
                       </button>
                     </form>
                   )}
@@ -326,7 +324,7 @@ export default async function ConnectionsPage({
                       type="submit"
                       className="rounded border border-[hsl(var(--border))] px-3 py-1 text-xs transition hover:bg-[hsl(var(--surface-raised))]"
                     >
-                      Remove
+                      {t("remove")}
                     </button>
                   </form>
                 </div>

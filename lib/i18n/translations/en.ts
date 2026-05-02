@@ -286,7 +286,7 @@ type MessagesShape = {
     contact_email: string;
     request_access_cta: string;
   };
-  app: { welcome: string; empty_state: string };
+  app: { welcome: string; empty_state: string; loading_aria: string };
   home: {
     today_schedule: string;
     due_soon: string;
@@ -1025,6 +1025,268 @@ type MessagesShape = {
     review_recent_mistakes: string;
     generate_similar_problems: string;
   };
+  // polish-19 — i18n hardening sweep. New micro-namespaces for surfaces
+  // the audit script flagged but that didn't have a home in the existing
+  // tree. Where a finding fit cleanly into an existing namespace, the key
+  // was added there instead of inflating this section.
+  theme_toggle: {
+    aria: string;
+    option_light: string;
+    option_dark: string;
+    option_system: string;
+  };
+  timeline_strip: {
+    aria_label: string;
+    event_aria: string;
+  };
+  inline_suggestion: {
+    dismiss: string;
+  };
+  primary_nav: {
+    aria_label: string;
+  };
+  notification_bell: {
+    aria_label: string;
+    needs_review: string;
+    no_high_risk: string;
+    overflow_more_view_all: string;
+    steadii_noticed: string;
+    view_all: string;
+  };
+  reauth_banner: {
+    body: string;
+    reconnect: string;
+    dismiss: string;
+    dismiss_aria: string;
+  };
+  error_page: {
+    badge: string;
+    heading: string;
+    body_with_id: string;
+    fallback_id: string;
+    retry: string;
+    back_home: string;
+  };
+  inbox_detail: {
+    back: string;
+    new_sender: string;
+    paused_title: string;
+    paused_body: string;
+    manage_billing: string;
+    risk_high: string;
+    risk_medium: string;
+    risk_low: string;
+    risk_classifying: string;
+    no_subject: string;
+  };
+  proposal_detail: {
+    back: string;
+    what_to_do: string;
+    already_status_pending: string;
+    already_status_resolved: string;
+    already_status_dismissed: string;
+    already_status_with_action: string;
+    status_resolved: string;
+    status_dismissed: string;
+    issue_time_conflict: string;
+    issue_exam_conflict: string;
+    issue_deadline_during_travel: string;
+    issue_exam_under_prepared: string;
+    issue_workload_over_capacity: string;
+    issue_syllabus_calendar_ambiguity: string;
+    issue_auto_action_log: string;
+    issue_admin_waitlist_pending: string;
+  };
+  class_form: {
+    back: string;
+    title: string;
+    name_label: string;
+    name_placeholder: string;
+    code_label: string;
+    code_placeholder: string;
+    term_label: string;
+    term_placeholder: string;
+    color_label: string;
+    color_aria: string;
+    optional_indicator: string;
+    submit: string;
+    cancel: string;
+  };
+  cancel_form_page: {
+    title: string;
+    scheduled_toast: string;
+    back_to_billing: string;
+    why_label: string;
+    optional_indicator: string;
+    continue: string;
+    skip: string;
+    back: string;
+    summary_heading: string;
+    keep_access_until: string;
+  };
+  connections_page: {
+    title: string;
+    setup_rerun_success: string;
+    imported_prefix: string;
+    imported_suffix: string;
+    microsoft_connected_toast: string;
+    microsoft_disconnected_toast: string;
+    ical_subscription_added: string;
+    notion_label: string;
+    connected_to: string;
+    import_button: string;
+    rerun_setup: string;
+    reconnect: string;
+    disconnect: string;
+    notion_blurb: string;
+    connect_notion: string;
+    google_calendar: string;
+    gmail: string;
+    microsoft_label: string;
+    connected_simple: string;
+    reconnect_missing_scopes: string;
+    microsoft_blurb: string;
+    connect_microsoft: string;
+    ical_heading: string;
+    ical_blurb: string;
+    url_label: string;
+    url_placeholder: string;
+    label_optional_label: string;
+    label_placeholder: string;
+    add_button: string;
+    paused_prefix: string;
+    last_error_prefix: string;
+    last_synced_prefix: string;
+    last_synced_z_suffix: string;
+    reactivate: string;
+    remove: string;
+  };
+  agent_thinks_page: {
+    settings_back: string;
+    title: string;
+    description_prefix: string;
+    description_suffix: string;
+    empty: string;
+    from_label: string;
+  };
+  syllabus_new_page: {
+    title: string;
+    subtitle: string;
+  };
+  invite_page: {
+    invalid_title: string;
+    invalid_body: string;
+    back_to_steadii: string;
+    invite_title: string;
+    invite_body: string;
+    today_label: string;
+    after_3mo_label: string;
+    price_after: string;
+    cancel_anytime: string;
+  };
+  clarification_reply: {
+    heading: string;
+    body: string;
+    placeholder: string;
+  };
+  chat_history_row: {
+    confirm: string;
+  };
+  chat_view_v2: {
+    blob_token_const: string;
+  };
+  mistake_note_dialog: {
+    title: string;
+    title_label: string;
+    title_placeholder: string;
+    class_label: string;
+    class_none: string;
+    unit_label: string;
+    difficulty_label: string;
+    tags_label: string;
+    tags_placeholder: string;
+    cancel: string;
+  };
+  new_chat_input: {
+    attach_aria: string;
+    ai_ready: string;
+    send_aria: string;
+  };
+  tool_call_card: {
+    delete_target_label: string;
+    cancel: string;
+    confirm_delete: string;
+  };
+  hero_animation_extra: {
+    cmd_k: string;
+    syllabus_filename: string;
+  };
+  voice_demo_extra: {
+    caps_key_label: string;
+  };
+  markdown_editor_extra: {
+    saved_at_label: string;
+    class_label: string;
+    class_none: string;
+    unit_label: string;
+    difficulty_label: string;
+    tags_label: string;
+    tags_placeholder: string;
+    bold_glyph: string;
+    italic_glyph: string;
+    inline_code_glyph: string;
+    inline_math_glyph: string;
+    block_math_glyph: string;
+    heading_glyph: string;
+    edit_tab: string;
+    preview_tab: string;
+  };
+  notion_connect_panel: {
+    connected: string;
+    one_thing_first: string;
+    permission_screen_prefix: string;
+    permission_screen_quoted: string;
+    permission_screen_suffix: string;
+    bullet_only_steadii: string;
+    bullet_single_page: string;
+    got_it: string;
+    connect_notion: string;
+  };
+  drop_zone: {
+    remove: string;
+    upload_aria: string;
+    drop_prefix: string;
+    drop_separator: string;
+    click_to_browse: string;
+    max_size: string;
+  };
+  syllabus_wizard: {
+    url_label: string;
+    url_placeholder: string;
+    or_a_prefix: string;
+    or_a_pdf_image: string;
+    or_a_pdf: string;
+    blob_warning_prefix: string;
+    blob_token_const: string;
+    blob_warning_suffix: string;
+    preview_heading: string;
+    preview_body: string;
+    field_course_name: string;
+    field_course_code: string;
+    field_term: string;
+    field_instructor: string;
+    field_grading: string;
+    field_attendance: string;
+    field_textbooks: string;
+    field_office_hours: string;
+    class_link_label: string;
+    class_none: string;
+    schedule_heading: string;
+    start_over: string;
+  };
+  voice_overlay_extra: {
+    send_aria: string;
+  };
 };
 
 export const en: MessagesShape = {
@@ -1405,6 +1667,7 @@ export const en: MessagesShape = {
   app: {
     welcome: "Welcome, {name}.",
     empty_state: "Nothing here yet.",
+    loading_aria: "Loading",
   },
   home: {
     today_schedule: "Today's schedule",
@@ -2324,6 +2587,264 @@ export const en: MessagesShape = {
       "What's my biggest backlog right now — emails I haven't replied to, deadlines slipping, or commitments I haven't followed up on?",
     generate_similar_problems:
       "Draft check-in messages to any of my professors I haven't emailed in 3+ weeks but have ongoing topics with.",
+  },
+  theme_toggle: {
+    aria: "Theme",
+    option_light: "Light",
+    option_dark: "Dark",
+    option_system: "System",
+  },
+  timeline_strip: {
+    aria_label: "Timeline",
+    event_aria: "{title}, {start} to {end}",
+  },
+  inline_suggestion: {
+    dismiss: "Dismiss",
+  },
+  primary_nav: {
+    aria_label: "Primary navigation",
+  },
+  notification_bell: {
+    aria_label: "Notifications",
+    needs_review: "Needs review",
+    no_high_risk: "No high-risk items right now.",
+    overflow_more_view_all: "+{count} more — view all",
+    steadii_noticed: "Steadii noticed",
+    view_all: "View all →",
+  },
+  reauth_banner: {
+    body: "Gmail triage is new. Sign out and back in to grant the Gmail scope — the agent can't read or draft until you do.",
+    reconnect: "Reconnect",
+    dismiss: "Dismiss",
+    dismiss_aria: "Dismiss",
+  },
+  error_page: {
+    badge: "Something went wrong",
+    heading: "Steadii stumbled on this page.",
+    body_with_id: "The error has been reported. If it keeps happening, mention this ID when you email us:",
+    fallback_id: "n/a",
+    retry: "Try again",
+    back_home: "Back to Home",
+  },
+  inbox_detail: {
+    back: "Inbox",
+    new_sender: "New sender",
+    paused_title: "Draft generation paused",
+    paused_body: "You ran out of credits this cycle. Top up to resume draft generation — classification continues for free.",
+    manage_billing: "Manage billing →",
+    risk_high: "High",
+    risk_medium: "Medium",
+    risk_low: "Low",
+    risk_classifying: "Classifying",
+    no_subject: "(no subject)",
+  },
+  proposal_detail: {
+    back: "Back to inbox",
+    what_to_do: "What would you like to do?",
+    already_status_pending: "This proposal is already pending",
+    already_status_resolved: "This proposal is already resolved",
+    already_status_dismissed: "This proposal is already dismissed",
+    already_status_with_action: " (chose: {action})",
+    status_resolved: "Resolved",
+    status_dismissed: "Dismissed",
+    issue_time_conflict: "Time conflict",
+    issue_exam_conflict: "Exam conflict",
+    issue_deadline_during_travel: "Deadline during travel",
+    issue_exam_under_prepared: "Exam coming up",
+    issue_workload_over_capacity: "Workload spike",
+    issue_syllabus_calendar_ambiguity: "Confirm import",
+    issue_auto_action_log: "Steadii action log",
+    issue_admin_waitlist_pending: "Waitlist request",
+  },
+  class_form: {
+    back: "Classes",
+    title: "New class",
+    name_label: "Name",
+    name_placeholder: "e.g. Linear Algebra",
+    code_label: "Course code",
+    code_placeholder: "e.g. MAT223",
+    term_label: "Term",
+    term_placeholder: "e.g. Spring 2026",
+    color_label: "Color",
+    color_aria: "Class color",
+    optional_indicator: "(optional)",
+    submit: "Create class",
+    cancel: "Cancel",
+  },
+  cancel_form_page: {
+    title: "Cancel subscription",
+    scheduled_toast: "Cancellation scheduled.",
+    back_to_billing: "Back to Billing",
+    why_label: "Why are you canceling?",
+    optional_indicator: "(optional)",
+    continue: "Continue",
+    skip: "Skip",
+    back: "Back",
+    summary_heading: "What happens when you cancel:",
+    keep_access_until: "You keep full access until",
+  },
+  connections_page: {
+    title: "Connections",
+    setup_rerun_success: "Setup re-run successfully. Your Steadii workspace has been re-created in Notion.",
+    imported_prefix: "Imported",
+    imported_suffix: "rows from Notion into Steadii.",
+    microsoft_connected_toast: "Microsoft 365 connected.",
+    microsoft_disconnected_toast: "Microsoft 365 disconnected.",
+    ical_subscription_added: "iCal subscription",
+    notion_label: "Notion",
+    connected_to: "Connected to",
+    import_button: "Import from Notion",
+    rerun_setup: "Re-run setup",
+    reconnect: "Re-connect",
+    disconnect: "Disconnect",
+    notion_blurb: "Import copies your Notion classes, mistakes, syllabi, and assignments into Steadii's Postgres store (idempotent — safe to re-run). Re-run setup if the Steadii page has been deleted from Notion or the four databases are out of sync.",
+    connect_notion: "Connect Notion",
+    google_calendar: "Google Calendar",
+    gmail: "Gmail",
+    microsoft_label: "Microsoft 365",
+    connected_simple: "Connected.",
+    reconnect_missing_scopes: "Re-connect to grant missing scopes",
+    microsoft_blurb: "Pull Outlook calendar events and Microsoft To Do tasks into the same prompt block as Google.",
+    connect_microsoft: "Connect Microsoft 365",
+    ical_heading: "iCal subscriptions",
+    ical_blurb: "Paste any read-only iCal feed (school timetable, public calendar) and Steadii will sync it every 6 hours.",
+    url_label: "URL",
+    url_placeholder: "https://… or webcal://…",
+    label_optional_label: "Label (optional)",
+    label_placeholder: "e.g. UToronto",
+    add_button: "Add",
+    paused_prefix: "Paused —",
+    last_error_prefix: "Last error:",
+    last_synced_prefix: "Last synced",
+    last_synced_z_suffix: "Z",
+    reactivate: "Reactivate",
+    remove: "Remove",
+  },
+  agent_thinks_page: {
+    settings_back: "Settings",
+    title: "How your agent thinks",
+    description_prefix: "The last",
+    description_suffix: "decisions, with the fanout sources that grounded each one. Read-only — see something off? Open the inbox item to give feedback.",
+    empty: "The agent hasn't drafted anything yet. Once it does, every decision lands here.",
+    from_label: "From",
+  },
+  syllabus_new_page: {
+    title: "Upload a syllabus",
+    subtitle: "Drop a PDF, an image, or paste a URL. We'll extract the structure and show you a preview before saving.",
+  },
+  invite_page: {
+    invalid_title: "Invite link not valid",
+    invalid_body: "This invitation has been revoked, used, or expired. Ask whoever sent you the link for a fresh one.",
+    back_to_steadii: "Back to Steadii",
+    invite_title: "You're invited to Steadii Pro",
+    invite_body: "This invite unlocks 3 months of Pro — full AI agent, 1000 credits per cycle, everything. No charge for the first three months; the plan then rolls to the standard Pro price unless you cancel.",
+    today_label: "Today",
+    after_3mo_label: "After 3 months",
+    price_after: "$20 / month",
+    cancel_anytime: "You can cancel any time before the trial ends from Settings → Billing.",
+  },
+  clarification_reply: {
+    heading: "Provide context",
+    body: "Steadii will pick this up in a chat thread, draft a reply with the new info, and bring it back to you.",
+    placeholder: "e.g. The Legal Status form is here: https://… ; the deadline they meant is May 15.",
+  },
+  chat_history_row: {
+    confirm: "Confirm",
+  },
+  chat_view_v2: {
+    blob_token_const: "BLOB_READ_WRITE_TOKEN",
+  },
+  mistake_note_dialog: {
+    title: "Add to Mistake Notes",
+    title_label: "Title (short problem summary)",
+    title_placeholder: "e.g. 2D projectile with wind",
+    class_label: "Class",
+    class_none: "(none)",
+    unit_label: "Unit / chapter",
+    difficulty_label: "Difficulty",
+    tags_label: "Tags (comma-separated)",
+    tags_placeholder: "vectors, integration",
+    cancel: "Cancel",
+  },
+  new_chat_input: {
+    attach_aria: "Attach image or PDF",
+    ai_ready: "AI Ready",
+    send_aria: "Send",
+  },
+  tool_call_card: {
+    delete_target_label: "The agent wants to DELETE:",
+    cancel: "Cancel",
+    confirm_delete: "Confirm deletion",
+  },
+  hero_animation_extra: {
+    cmd_k: "⌘K",
+    syllabus_filename: "MAT223_Syllabus_Spring2026.pdf",
+  },
+  voice_demo_extra: {
+    caps_key_label: "⇪ Caps",
+  },
+  markdown_editor_extra: {
+    saved_at_label: "Saved at",
+    class_label: "Class",
+    class_none: "(none)",
+    unit_label: "Unit",
+    difficulty_label: "Difficulty",
+    tags_label: "Tags",
+    tags_placeholder: "vectors, integration",
+    bold_glyph: "B",
+    italic_glyph: "I",
+    inline_code_glyph: "</>",
+    inline_math_glyph: "ƒ",
+    block_math_glyph: "ƒ²",
+    heading_glyph: "H",
+    edit_tab: "Edit",
+    preview_tab: "Preview",
+  },
+  notion_connect_panel: {
+    connected: "Connected.",
+    one_thing_first: "One thing to know first",
+    permission_screen_prefix: "On Notion's permission screen, select",
+    permission_screen_quoted: "\"All pages\"",
+    permission_screen_suffix: ". Steadii creates its own workspace for you — you don't need to pre-create a page.",
+    bullet_only_steadii: "Steadii only touches pages under the Steadii parent it creates.",
+    bullet_single_page: "Picking a single page here is the main reason onboarding gets stuck.",
+    got_it: "Got it — show me Connect",
+    connect_notion: "Connect Notion",
+  },
+  drop_zone: {
+    remove: "Remove",
+    upload_aria: "Upload file",
+    drop_prefix: "Drop {hint} here, or",
+    drop_separator: "here, or",
+    click_to_browse: "click to browse",
+    max_size: "Max 20 MB",
+  },
+  syllabus_wizard: {
+    url_label: "URL (web-page syllabi only)",
+    url_placeholder: "https://…",
+    or_a_prefix: "Or a",
+    or_a_pdf_image: "PDF / image",
+    or_a_pdf: "PDF",
+    blob_warning_prefix: "Image uploads require Vercel Blob. Ask the administrator to configure",
+    blob_token_const: "BLOB_READ_WRITE_TOKEN",
+    blob_warning_suffix: ". PDF uploads still work.",
+    preview_heading: "Preview",
+    preview_body: "Edit anything before saving. Leave a field blank to skip it.",
+    field_course_name: "Course name",
+    field_course_code: "Course code",
+    field_term: "Term",
+    field_instructor: "Instructor",
+    field_grading: "Grading",
+    field_attendance: "Attendance",
+    field_textbooks: "Textbooks",
+    field_office_hours: "Office hours",
+    class_link_label: "Class (optional — link this syllabus to a Class)",
+    class_none: "(none)",
+    schedule_heading: "Schedule",
+    start_over: "Start over",
+  },
+  voice_overlay_extra: {
+    send_aria: "Send",
   },
 };
 

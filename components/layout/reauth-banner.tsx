@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 const DISMISS_KEY = "steadii:reauth-banner:dismissed";
 
@@ -10,6 +11,7 @@ const DISMISS_KEY = "steadii:reauth-banner:dismissed";
 // α-scale concession per W1 handoff (no need for a server-side
 // dismissal table).
 export function ReauthBanner() {
+  const t = useTranslations("reauth_banner");
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
@@ -34,24 +36,21 @@ export function ReauthBanner() {
   return (
     <div className="mx-auto mb-5 max-w-4xl rounded-lg bg-[hsl(var(--surface-raised))] px-4 py-2.5 text-small text-[hsl(var(--foreground))]">
       <div className="flex items-center justify-between gap-4">
-        <span>
-          Gmail triage is new. Sign out and back in to grant the Gmail scope —
-          the agent can&apos;t read or draft until you do.
-        </span>
+        <span>{t("body")}</span>
         <span className="flex shrink-0 items-center gap-2">
           <Link
             href="/api/auth/signout"
             className="rounded-md px-3 py-1 text-small transition-hover hover:bg-[hsl(var(--surface))]"
           >
-            Reconnect
+            {t("reconnect")}
           </Link>
           <button
             type="button"
             onClick={onDismiss}
             className="rounded-md px-2 py-1 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface))] hover:text-[hsl(var(--foreground))]"
-            aria-label="Dismiss"
+            aria-label={t("dismiss_aria")}
           >
-            Dismiss
+            {t("dismiss")}
           </button>
         </span>
       </div>

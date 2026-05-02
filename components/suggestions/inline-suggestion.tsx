@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import {
   type IntegrationSourceId,
   type SuggestionSurface,
@@ -26,7 +27,7 @@ type Props = {
 // Renders a small bordered block with a connect CTA and a Dismiss action;
 // the Dismiss form posts to dismissSuggestionAction which writes one row
 // to integration_suggestion_dismissals and revalidates the surface path.
-export function InlineSuggestion({
+export async function InlineSuggestion({
   source,
   surface,
   revalidatePath,
@@ -35,6 +36,7 @@ export function InlineSuggestion({
   reason,
   variant = "card",
 }: Props) {
+  const t = await getTranslations("inline_suggestion");
   const isPill = variant === "pill";
   const containerClass = isPill
     ? "mt-3 flex flex-wrap items-center gap-3 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-2 text-sm"
@@ -58,7 +60,7 @@ export function InlineSuggestion({
             type="submit"
             className="inline-flex items-center rounded-md border border-[hsl(var(--border))] px-3 py-1.5 text-sm text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))]"
           >
-            Dismiss
+            {t("dismiss")}
           </button>
         </form>
       </div>

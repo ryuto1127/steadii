@@ -199,6 +199,7 @@ function Sidebar({ phase }: { phase: Phase }) {
 
 function ChatPanel({ phase }: { phase: Phase }) {
   const t = useTranslations("landing.hero_animation");
+  const tExtra = useTranslations("hero_animation_extra");
   const idx = PHASE_INDEX[phase];
   const showFloatingPdf = phase === "pdfDragging";
   // Pill is visible only during the brief `attached` window — once the
@@ -229,7 +230,7 @@ function ChatPanel({ phase }: { phase: Phase }) {
           {t("chat_header")}
         </span>
         <span className="font-mono text-[9px] tracking-widest text-[#1A1814]/30">
-          ⌘K
+          {tExtra("cmd_k")}
         </span>
       </div>
       <div className="relative flex-1 px-4 pt-4 pb-2">
@@ -266,6 +267,7 @@ function ChatInput({
   sendPulse: boolean;
 }) {
   const t = useTranslations("landing.hero_animation");
+  const tExtra = useTranslations("hero_animation_extra");
   return (
     <div className="border-t border-black/[0.05] bg-white px-4 py-3">
       <div className="flex min-h-[40px] items-center gap-2 rounded-[10px] border border-black/[0.08] bg-white px-3 py-2 shadow-[0_2px_8px_-4px_rgba(20,20,40,0.05)]">
@@ -284,7 +286,7 @@ function ChatInput({
         >
           <FileText size={10} strokeWidth={1.6} />
           <span className="whitespace-nowrap">
-            MAT223_Syllabus_Spring2026.pdf
+            {tExtra("syllabus_filename")}
           </span>
         </span>
         <span
@@ -308,6 +310,7 @@ function ChatInput({
 }
 
 function FloatingPdf({ visible }: { visible: boolean }) {
+  const tExtra = useTranslations("hero_animation_extra");
   return (
     <div
       aria-hidden={!visible}
@@ -323,7 +326,7 @@ function FloatingPdf({ visible }: { visible: boolean }) {
       <div className="flex items-center gap-1.5 rounded-[8px] border border-black/[0.08] bg-white px-2.5 py-1.5 shadow-[0_8px_22px_-6px_rgba(20,20,40,0.18)]">
         <FileText size={12} strokeWidth={1.6} className="text-[#1A1814]/55" />
         <span className="font-mono text-[10px] text-[#1A1814]">
-          MAT223_Syllabus_Spring2026.pdf
+          {tExtra("syllabus_filename")}
         </span>
       </div>
     </div>

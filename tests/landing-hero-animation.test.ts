@@ -20,9 +20,15 @@ describe("HeroAnimation source contract", () => {
   });
 
   it("wires choreography text via i18n (no hardcoded EN/JP mix on the page)", () => {
-    // The file name is universal — kept literal in the source.
-    expect(SRC).toContain("MAT223_Syllabus_Spring2026.pdf");
-    // The visible labels are now sourced from i18n. Verify the component
+    // The file name is universal — kept identical in both locales but
+    // routed through i18n so the audit gate stays clean.
+    expect(en.hero_animation_extra.syllabus_filename).toBe(
+      "MAT223_Syllabus_Spring2026.pdf",
+    );
+    expect(ja.hero_animation_extra.syllabus_filename).toBe(
+      "MAT223_Syllabus_Spring2026.pdf",
+    );
+    // The visible labels are sourced from i18n. Verify the component
     // pulls from the expected keys, and verify the keys' values cover both
     // locales with the syllabus class identity. The marketing landing
     // surface must be 100% locale-aware — no JP strings rendering on the

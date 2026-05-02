@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { DropZone } from "./drop-zone";
 
 type ScheduleItem = { date: string | null; topic: string | null };
@@ -49,6 +50,7 @@ export function SyllabusWizard({
   classes: Array<{ id: string; name: string }>;
   blobConfigured?: boolean;
 }) {
+  const t = useTranslations("syllabus_wizard");
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [extracting, setExtracting] = useState(false);
@@ -115,7 +117,7 @@ export function SyllabusWizard({
       {!syllabus && (
         <section className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
           <label className="block text-xs text-[hsl(var(--muted-foreground))]">
-            URL (web-page syllabi only)
+            {t("url_label")}
           </label>
           <input
             type="url"
@@ -124,12 +126,12 @@ export function SyllabusWizard({
               setUrl(e.target.value);
               setFile(null);
             }}
-            placeholder="https://…"
+            placeholder={t("url_placeholder")}
             className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
           />
           <div className="mt-5">
             <label className="block text-xs text-[hsl(var(--muted-foreground))]">
-              Or a {imagesAllowed ? "PDF / image" : "PDF"}
+              {t("or_a_prefix")} {imagesAllowed ? t("or_a_pdf_image") : t("or_a_pdf")}
             </label>
             <DropZone
               accept={accept}
@@ -142,9 +144,9 @@ export function SyllabusWizard({
             />
             {!imagesAllowed && (
               <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
-                Image uploads require Vercel Blob. Ask the administrator to
-                configure <code className="font-mono">BLOB_READ_WRITE_TOKEN</code>.
-                PDF uploads still work.
+                {t("blob_warning_prefix")}{" "}
+                <code className="font-mono">{t("blob_token_const")}</code>
+                {t("blob_warning_suffix")}
               </p>
             )}
           </div>
@@ -167,33 +169,33 @@ export function SyllabusWizard({
 
       {syllabus && (
         <section className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
-          <h2 className="text-h2 text-[hsl(var(--foreground))]">Preview</h2>
+          <h2 className="text-h2 text-[hsl(var(--foreground))]">{t("preview_heading")}</h2>
           <p className="mt-1 text-small text-[hsl(var(--muted-foreground))]">
-            Edit anything before saving. Leave a field blank to skip it.
+            {t("preview_body")}
           </p>
 
           <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label="Course name" value={syllabus.courseName} onChange={(v) => patch("courseName", v)} />
-            <Field label="Course code" value={syllabus.courseCode} onChange={(v) => patch("courseCode", v)} />
-            <Field label="Term" value={syllabus.term} onChange={(v) => patch("term", v)} />
-            <Field label="Instructor" value={syllabus.instructor} onChange={(v) => patch("instructor", v)} />
+            <Field label={t("field_course_name")} value={syllabus.courseName} onChange={(v) => patch("courseName", v)} />
+            <Field label={t("field_course_code")} value={syllabus.courseCode} onChange={(v) => patch("courseCode", v)} />
+            <Field label={t("field_term")} value={syllabus.term} onChange={(v) => patch("term", v)} />
+            <Field label={t("field_instructor")} value={syllabus.instructor} onChange={(v) => patch("instructor", v)} />
           </div>
 
-          <FieldArea label="Grading" value={syllabus.grading} onChange={(v) => patch("grading", v)} />
-          <FieldArea label="Attendance" value={syllabus.attendance} onChange={(v) => patch("attendance", v)} />
-          <FieldArea label="Textbooks" value={syllabus.textbooks} onChange={(v) => patch("textbooks", v)} />
-          <FieldArea label="Office hours" value={syllabus.officeHours} onChange={(v) => patch("officeHours", v)} />
+          <FieldArea label={t("field_grading")} value={syllabus.grading} onChange={(v) => patch("grading", v)} />
+          <FieldArea label={t("field_attendance")} value={syllabus.attendance} onChange={(v) => patch("attendance", v)} />
+          <FieldArea label={t("field_textbooks")} value={syllabus.textbooks} onChange={(v) => patch("textbooks", v)} />
+          <FieldArea label={t("field_office_hours")} value={syllabus.officeHours} onChange={(v) => patch("officeHours", v)} />
 
           <div className="mt-6">
             <label className="block text-xs text-[hsl(var(--muted-foreground))]">
-              Class (optional — link this syllabus to a Class)
+              {t("class_link_label")}
             </label>
             <select
               value={classId}
               onChange={(e) => setClassId(e.target.value)}
               className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-sm"
             >
-              <option value="">(none)</option>
+              <option value="">{t("class_none")}</option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -204,7 +206,7 @@ export function SyllabusWizard({
 
           {syllabus.schedule.length > 0 && (
             <div className="mt-6">
-              <h3 className="text-sm font-medium">Schedule</h3>
+              <h3 className="text-sm font-medium">{t("schedule_heading")}</h3>
               <ul className="mt-2 space-y-1 text-xs text-[hsl(var(--muted-foreground))]">
                 {syllabus.schedule.map((s, i) => (
                   <li key={i}>
@@ -229,7 +231,7 @@ export function SyllabusWizard({
               onClick={() => setSyllabus(null)}
               className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm"
             >
-              Start over
+              {t("start_over")}
             </button>
           </div>
         </section>
