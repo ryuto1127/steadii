@@ -180,8 +180,6 @@ export default async function HomePage() {
           title={t("past_week")}
           pattern={weekSummary.pattern}
           emptyLabel={t("focus_summary_empty")}
-          reviewLabel={t("review_action")}
-          practiceLabel={t("generate_practice_action")}
           isEmpty={weekSummary.empty}
         />
       </div>
@@ -472,8 +470,6 @@ function PastWeekCard({
   title,
   pattern,
   emptyLabel,
-  reviewLabel,
-  practiceLabel,
   isEmpty,
 }: {
   sessions: number;
@@ -481,8 +477,6 @@ function PastWeekCard({
   title: string;
   pattern: string;
   emptyLabel: string;
-  reviewLabel: string;
-  practiceLabel: string;
   isEmpty: boolean;
 }) {
   return (
@@ -510,26 +504,8 @@ function PastWeekCard({
               {pattern}
             </p>
           ) : null}
-          <div className="mt-auto grid grid-cols-1 gap-2 pt-5 sm:grid-cols-2">
-            <SeedPill seed="review_recent_mistakes" label={reviewLabel} />
-            <SeedPill seed="generate_similar_problems" label={practiceLabel} />
-          </div>
         </>
       )}
     </BentoCard>
-  );
-}
-
-function SeedPill({ seed, label }: { seed: string; label: string }) {
-  return (
-    <form action="/api/chat/seeded" method="post">
-      <input type="hidden" name="seed" value={seed} />
-      <button
-        type="submit"
-        className="flex w-full items-center justify-center rounded-xl border border-[hsl(var(--border)/0.6)] bg-[hsl(var(--surface))] px-3 py-2.5 text-[12px] font-semibold text-[hsl(var(--foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))]"
-      >
-        {label}
-      </button>
-    </form>
   );
 }

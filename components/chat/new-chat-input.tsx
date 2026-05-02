@@ -8,11 +8,12 @@ import {
   type FormEvent,
 } from "react";
 import { useRouter } from "next/navigation";
-import { Paperclip, SendHorizontal } from "lucide-react";
+import { ExternalLink, Paperclip, SendHorizontal, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils/cn";
 import { reportDetectedTimezone } from "@/lib/utils/report-timezone";
+import { detectTutorScope } from "@/lib/chat/scope-detection";
 import { useVoiceInput, type VoiceTriggerKey } from "./use-voice-input";
 import { VoiceChoice } from "./voice-choice";
 
@@ -118,6 +119,7 @@ export function NewChatInput({
 }) {
   const t = useTranslations("chat_input");
   const tChat = useTranslations("chat");
+  const tTutorOffer = useTranslations("chat.tutor_offer");
   const tVoice = useTranslations("voice");
   const router = useRouter();
   const [value, setValue] = useState("");
@@ -128,6 +130,14 @@ export function NewChatInput({
   const [exampleIdx, setExampleIdx] = useState(0);
   const [fadeIn, setFadeIn] = useState(true);
   const [voiceFlashKey, setVoiceFlashKey] = useState(0);
+  // When set, the user typed something the heuristic flagged as a tutor
+  // question. We surface an inline offer to redirect to ChatGPT instead
+  // of pushing the request through Steadii's orchestrator. The offer is
+  // dismissable: "Ask Steadii anyway" calls `submitNow` to bypass.
+  const [tutorOffer, setTutorOffer] = useState<{ question: string } | null>(
+    null
+  );
+  const [openingChatGPT, setOpeningChatGPT] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -232,11 +242,9 @@ export function NewChatInput({
   const canSubmit = (value.trim().length > 0 || file !== null) && !isPending;
   const auraActive = isFocused || value.length > 0;
 
-  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!canSubmit) return;
-    const content = value.trim();
-    const picked = file;
+  // Actually creates the chat + first message and navigates. Used by both
+  // the normal submit path and the "Ask Steadii anyway" bypass.
+  const submitNow = (content: string, picked: File | null) => {
     setError(null);
     reportDetectedTimezone();
     startTransition(async () => {
@@ -244,11 +252,70 @@ export function NewChatInput({
       if (typeof result === "string") {
         setValue("");
         setFile(null);
+        setTutorOffer(null);
         router.push(`/app/chat/${result}?stream=1`);
       } else {
         setError(result.error);
       }
     });
+  };
+
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    const content = value.trim();
+    const picked = file;
+
+    // Tutor-style detection only runs when the user is typing pure text.
+    // An attached file (problem image, scan) almost always implies a
+    // command intent (save / explain / extract), so we never block those
+    // with the offer card.
+    if (!picked) {
+      const detection = detectTutorScope(content);
+      if (detection.isTutor) {
+        setTutorOffer({ question: content });
+        return;
+      }
+    }
+
+    submitNow(content, picked);
+  };
+
+  const askSteadiiAnyway = () => {
+    if (!tutorOffer) return;
+    submitNow(tutorOffer.question, file);
+  };
+
+  const openInChatGPT = async () => {
+    if (!tutorOffer) return;
+    setOpeningChatGPT(true);
+    setError(null);
+    // Open a popup synchronously *inside the click handler* — browsers
+    // will block `window.open` if it's awaited behind a fetch. We point
+    // the placeholder at "about:blank" and rewrite its location once the
+    // server returns the prepared URL.
+    const popup = window.open("about:blank", "_blank");
+    try {
+      const resp = await fetch("/api/chat/handoff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: tutorOffer.question }),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const body = (await resp.json()) as { url?: string };
+      if (!body.url) throw new Error("no url");
+      if (popup) popup.location.href = body.url;
+      else window.open(body.url, "_blank");
+      // Leave Steadii in the original tab; clear the offer + input so the
+      // user lands back on a clean composer if they return.
+      setTutorOffer(null);
+      setValue("");
+    } catch {
+      if (popup) popup.close();
+      toast.error(tTutorOffer("open_failed"));
+    } finally {
+      setOpeningChatGPT(false);
+    }
   };
 
   return (
@@ -276,6 +343,60 @@ export function NewChatInput({
           shortened={voice.pendingChoice.shortened}
           onSelect={voice.selectChoice}
         />
+      ) : null}
+      {tutorOffer ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] p-4 shadow-[0_4px_20px_-8px_rgba(20,20,40,0.08)]"
+        >
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden
+              className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--surface))] text-[hsl(var(--primary))]"
+            >
+              <Sparkles size={14} strokeWidth={1.75} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-semibold text-[hsl(var(--foreground))]">
+                {tTutorOffer("heading")}
+              </p>
+              <p className="mt-1 text-[13px] leading-snug text-[hsl(var(--muted-foreground))]">
+                {tTutorOffer("body")}
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openInChatGPT}
+                  disabled={openingChatGPT}
+                  className={cn(
+                    "inline-flex h-8 items-center gap-1.5 rounded-full bg-[hsl(var(--foreground))] px-3 text-[12px] font-medium text-[hsl(var(--surface))] transition-default",
+                    openingChatGPT
+                      ? "opacity-60"
+                      : "hover:opacity-90"
+                  )}
+                >
+                  {openingChatGPT ? (
+                    <span>{tTutorOffer("preparing")}</span>
+                  ) : (
+                    <>
+                      <ExternalLink size={12} strokeWidth={2} />
+                      <span>{tTutorOffer("open_in_chatgpt")}</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={askSteadiiAnyway}
+                  disabled={openingChatGPT || isPending}
+                  className="inline-flex h-8 items-center rounded-full px-3 text-[12px] font-medium text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+                >
+                  {tTutorOffer("ask_anyway")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : null}
       <form
         ref={formRef}

@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth/config";
 import { redirect, notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/lib/db/client";
 import {
   classes as classesTable,
@@ -42,8 +43,13 @@ export default async function MistakeDetailPage({
     .orderBy(desc(classesTable.createdAt))
     .limit(200);
 
+  const tMistakes = await getTranslations("mistakes");
+
   return (
     <div className="mx-auto max-w-4xl py-2 md:py-6">
+      <p className="mb-4 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-small leading-snug text-[hsl(var(--muted-foreground))]">
+        {tMistakes("context_note")}
+      </p>
       <MistakeMarkdownEditor
         mistakeId={row.id}
         initialTitle={row.title}
