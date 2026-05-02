@@ -28,6 +28,7 @@ import { getTranslations } from "next-intl/server";
 
 export async function VoiceDemo() {
   const t = await getTranslations("landing.voice_demo");
+  const tExtra = await getTranslations("voice_demo_extra");
 
   return (
     <div className="voice-demo-wrap relative mx-auto mt-6 w-full max-w-xl px-4">
@@ -36,7 +37,7 @@ export async function VoiceDemo() {
           aria-hidden
           className="voice-demo-key flex h-9 w-12 shrink-0 items-center justify-center rounded-md border border-black/10 bg-white font-mono text-[10px] font-medium uppercase tracking-wider text-[#1A1814]/70 shadow-[0_1px_0_rgba(0,0,0,0.06),0_2px_6px_-2px_rgba(20,20,40,0.10)]"
         >
-          ⇪ Caps
+          {tExtra("caps_key_label")}
         </span>
         <div className="relative h-[34px] flex-1 overflow-hidden rounded-lg border border-black/10 bg-white/90">
           <span

@@ -30,6 +30,7 @@ export function CancelForm({
 }) {
   const router = useRouter();
   const tCancel = useTranslations("cancel_form");
+  const t = useTranslations("cancel_form_page");
   const [step, setStep] = useState<"reason" | "confirm" | "done">("reason");
   const [reason, setReason] = useState<Reason>("skipped");
   const [note, setNote] = useState("");
@@ -65,7 +66,7 @@ export function CancelForm({
   if (step === "done") {
     return (
       <div className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4 text-sm">
-        <p className="font-medium">Cancellation scheduled.</p>
+        <p className="font-medium">{t("scheduled_toast")}</p>
         <p className="mt-2 text-[hsl(var(--muted-foreground))]">
           {currentPeriodEnd
             ? `You'll keep full access until ${new Date(
@@ -77,7 +78,7 @@ export function CancelForm({
           href="/app/settings/billing"
           className="mt-4 inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
         >
-          Back to Billing
+          {t("back_to_billing")}
         </Link>
       </div>
     );
@@ -89,7 +90,7 @@ export function CancelForm({
         <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
           <fieldset className="space-y-2 text-sm">
             <legend className="mb-2 font-medium">
-              Why are you canceling? <span className="font-normal text-[hsl(var(--muted-foreground))]">(optional)</span>
+              {t("why_label")} <span className="font-normal text-[hsl(var(--muted-foreground))]">{t("optional_indicator")}</span>
             </legend>
             {REASONS.map((r) => (
               <label
@@ -129,7 +130,7 @@ export function CancelForm({
             onClick={() => setStep("confirm")}
             className="inline-flex items-center rounded-md bg-[hsl(var(--foreground))] px-3 py-1.5 text-small font-medium text-[hsl(var(--background))] transition-hover hover:opacity-90"
           >
-            Continue
+            {t("continue")}
           </button>
           <button
             type="button"
@@ -139,13 +140,13 @@ export function CancelForm({
             }}
             className="inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
           >
-            Skip
+            {t("skip")}
           </button>
           <Link
             href="/app/settings/billing"
             className="inline-flex items-center rounded-md px-3 py-1.5 text-small text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
           >
-            Back
+            {t("back")}
           </Link>
         </div>
       </div>
@@ -156,10 +157,10 @@ export function CancelForm({
   return (
     <div className="mt-6 space-y-4">
       <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4 text-sm">
-        <p className="font-medium">What happens when you cancel:</p>
+        <p className="font-medium">{t("summary_heading")}</p>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-[hsl(var(--muted-foreground))]">
           <li>
-            You keep full access until{" "}
+            {t("keep_access_until")}{" "}
             {currentPeriodEnd
               ? new Date(currentPeriodEnd).toLocaleDateString()
               : "the end of the current billing period"}
@@ -185,7 +186,7 @@ export function CancelForm({
           disabled={busy}
           className="inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))] disabled:opacity-40"
         >
-          Back
+          {t("back")}
         </button>
       </div>
       {error && (

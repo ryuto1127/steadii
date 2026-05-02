@@ -1,8 +1,11 @@
-export default function AppLoading() {
+import { getTranslations } from "next-intl/server";
+
+export default async function AppLoading() {
+  const t = await getTranslations("app");
   return (
     <div
       role="status"
-      aria-label="Loading"
+      aria-label={t("loading_aria")}
       className="mx-auto flex min-h-[calc(100vh-8rem)] max-w-6xl flex-col gap-10 py-2"
     >
       <div className="flex flex-col gap-3">

@@ -2,16 +2,18 @@
 
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 const OPTIONS = [
-  { value: "light", label: "Light", Icon: Sun },
-  { value: "dark", label: "Dark", Icon: Moon },
-  { value: "system", label: "System", Icon: Monitor },
+  { value: "light", labelKey: "option_light", Icon: Sun },
+  { value: "dark", labelKey: "option_dark", Icon: Moon },
+  { value: "system", labelKey: "option_system", Icon: Monitor },
 ] as const;
 
 export function ThemeToggle({ initial }: { initial: "light" | "dark" | "system" }) {
+  const t = useTranslations("theme_toggle");
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -37,10 +39,10 @@ export function ThemeToggle({ initial }: { initial: "light" | "dark" | "system" 
   return (
     <div
       role="radiogroup"
-      aria-label="Theme"
+      aria-label={t("aria")}
       className="inline-flex rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-0.5"
     >
-      {OPTIONS.map(({ value, label, Icon }) => {
+      {OPTIONS.map(({ value, labelKey, Icon }) => {
         const isActive = active === value;
         return (
           <button
@@ -57,7 +59,7 @@ export function ThemeToggle({ initial }: { initial: "light" | "dark" | "system" 
             )}
           >
             <Icon size={12} strokeWidth={1.5} />
-            {label}
+            {t(labelKey)}
           </button>
         );
       })}

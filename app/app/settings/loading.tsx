@@ -1,6 +1,9 @@
-export default function SettingsLoading() {
+import { getTranslations } from "next-intl/server";
+
+export default async function SettingsLoading() {
+  const t = await getTranslations("app");
   return (
-    <div role="status" aria-label="Loading" className="mx-auto max-w-2xl space-y-8">
+    <div role="status" aria-label={t("loading_aria")} className="mx-auto max-w-2xl space-y-8">
       <div className="h-9 w-40 animate-pulse rounded-md bg-[hsl(var(--surface-raised))]" />
       {[0, 1, 2].map((sec) => (
         <section

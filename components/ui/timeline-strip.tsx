@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { CLASS_COLOR_HEX, normalizeClassColor, type ClassColor } from "./class-color";
 import { cn } from "@/lib/utils/cn";
 
@@ -30,8 +31,9 @@ function formatTime(d: Date): string {
 }
 
 export function TimelineStrip({ days }: { days: TimelineDay[] }) {
+  const t = useTranslations("timeline_strip");
   return (
-    <div className="flex flex-col gap-2" role="list" aria-label="Timeline">
+    <div className="flex flex-col gap-2" role="list" aria-label={t("aria_label")}>
       {days.map((d) => (
         <TimelineRow key={d.label} day={d} />
       ))}
@@ -40,6 +42,7 @@ export function TimelineStrip({ days }: { days: TimelineDay[] }) {
 }
 
 function TimelineRow({ day }: { day: TimelineDay }) {
+  const t = useTranslations("timeline_strip");
   const [hovered, setHovered] = useState<number | null>(null);
   return (
     <div className="flex items-center gap-3 sm:gap-4" role="listitem">
@@ -57,7 +60,11 @@ function TimelineRow({ day }: { day: TimelineDay }) {
             <button
               key={i}
               type="button"
-              aria-label={`${ev.title}, ${formatTime(ev.start)} to ${formatTime(ev.end)}`}
+              aria-label={t("event_aria", {
+                title: ev.title,
+                start: formatTime(ev.start),
+                end: formatTime(ev.end),
+              })}
               onMouseEnter={() => setHovered(i)}
               onMouseLeave={() => setHovered(null)}
               onFocus={() => setHovered(i)}

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import * as Sentry from "@sentry/nextjs";
+import { useTranslations } from "next-intl";
 import { Button, LinkButton } from "@/components/ui/button";
 
 export default function AppError({
@@ -11,6 +12,7 @@ export default function AppError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const t = useTranslations("error_page");
   useEffect(() => {
     Sentry.captureException(error);
   }, [error]);
@@ -18,20 +20,19 @@ export default function AppError({
   return (
     <div className="mx-auto max-w-2xl px-6 py-16">
       <p className="font-mono text-[11px] uppercase tracking-widest text-[hsl(var(--destructive))]">
-        Something went wrong
+        {t("badge")}
       </p>
       <h1 className="mt-4 text-h1 text-[hsl(var(--foreground))]">
-        Steadii stumbled on this page.
+        {t("heading")}
       </h1>
       <p className="mt-3 text-small text-[hsl(var(--muted-foreground))]">
-        The error has been reported. If it keeps happening, mention this ID
-        when you email us:{" "}
-        <span className="font-mono">{error.digest ?? "n/a"}</span>.
+        {t("body_with_id")}{" "}
+        <span className="font-mono">{error.digest ?? t("fallback_id")}</span>.
       </p>
       <div className="mt-6 flex gap-2">
-        <Button onClick={() => reset()}>Try again</Button>
+        <Button onClick={() => reset()}>{t("retry")}</Button>
         <LinkButton href="/app" variant="secondary">
-          Back to Home
+          {t("back_home")}
         </LinkButton>
       </div>
     </div>

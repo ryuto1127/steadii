@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 export function DropZone({
   accept,
@@ -13,6 +14,7 @@ export function DropZone({
   onFile: (f: File | null) => void;
   status?: "ready" | "extracting";
 }) {
+  const t = useTranslations("drop_zone");
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
@@ -56,7 +58,7 @@ export function DropZone({
             onClick={() => onFile(null)}
             className="ml-3 rounded-md border border-[hsl(var(--border))] px-3 py-1 text-xs transition hover:bg-[hsl(var(--surface))]"
           >
-            Remove
+            {t("remove")}
           </button>
         )}
       </div>
@@ -80,7 +82,7 @@ export function DropZone({
       onDrop={handleDrop}
       role="button"
       tabIndex={0}
-      aria-label="Upload file"
+      aria-label={t("upload_aria")}
       className={[
         "mt-2 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-6 py-10 text-center transition",
         dragging
@@ -89,10 +91,10 @@ export function DropZone({
       ].join(" ")}
     >
       <p className="text-sm text-[hsl(var(--foreground))]">
-        Drop {hint} here, or{" "}
-        <span className="font-medium text-[hsl(var(--primary))]">click to browse</span>
+        {t("drop_prefix", { hint })}{" "}
+        <span className="font-medium text-[hsl(var(--primary))]">{t("click_to_browse")}</span>
       </p>
-      <p className="text-xs text-[hsl(var(--muted-foreground))]">Max 20 MB</p>
+      <p className="text-xs text-[hsl(var(--muted-foreground))]">{t("max_size")}</p>
       <input
         ref={inputRef}
         id={inputId}

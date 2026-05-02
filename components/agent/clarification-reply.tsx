@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { Send } from "lucide-react";
 
 export function ClarificationReply({
@@ -17,6 +18,7 @@ export function ClarificationReply({
   // /app/chat/[id]. Defined inline in the page route.
   submitAction: (formData: FormData) => Promise<void>;
 }) {
+  const t = useTranslations("clarification_reply");
   const [isPending, startTransition] = useTransition();
 
   void emailSubject;
@@ -26,11 +28,10 @@ export function ClarificationReply({
   return (
     <section className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
       <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-        Provide context
+        {t("heading")}
       </h2>
       <p className="mt-1.5 text-small text-[hsl(var(--muted-foreground))]">
-        Steadii will pick this up in a chat thread, draft a reply with
-        the new info, and bring it back to you.
+        {t("body")}
       </p>
 
       <form
@@ -45,7 +46,7 @@ export function ClarificationReply({
           name="context"
           required
           rows={4}
-          placeholder="e.g. The Legal Status form is here: https://… ; the deadline they meant is May 15."
+          placeholder={t("placeholder")}
           className="w-full resize-y rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-small text-[hsl(var(--foreground))] focus:border-[hsl(var(--primary))] focus:outline-none"
           disabled={isPending}
         />

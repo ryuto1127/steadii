@@ -32,6 +32,7 @@ export function MistakeMarkdownEditor({
   const tMistakes = useTranslations("mistakes");
   const tActions = useTranslations("classes.actions");
   const tEditor = useTranslations("markdown_editor");
+  const tME = useTranslations("markdown_editor_extra");
   const [title, setTitle] = useState(initialTitle);
   const [unit, setUnit] = useState(initialUnit ?? "");
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard" | "">(
@@ -171,7 +172,7 @@ export function MistakeMarkdownEditor({
       />
       {savedAt && (
         <div className="text-xs text-[hsl(var(--muted-foreground))]">
-          Saved at {savedAt.toLocaleTimeString()}
+          {tME("saved_at_label")} {savedAt.toLocaleTimeString()}
         </div>
       )}
       {error && (
@@ -182,13 +183,13 @@ export function MistakeMarkdownEditor({
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <label className="block text-xs text-[hsl(var(--muted-foreground))]">
-          Class
+          {tME("class_label")}
           <select
             value={classId}
             onChange={(e) => setClassId(e.target.value)}
             className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-sm"
           >
-            <option value="">(none)</option>
+            <option value="">{tME("class_none")}</option>
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -197,7 +198,7 @@ export function MistakeMarkdownEditor({
           </select>
         </label>
         <label className="block text-xs text-[hsl(var(--muted-foreground))]">
-          Unit
+          {tME("unit_label")}
           <input
             value={unit}
             onChange={(e) => setUnit(e.target.value)}
@@ -205,7 +206,7 @@ export function MistakeMarkdownEditor({
           />
         </label>
         <label className="block text-xs text-[hsl(var(--muted-foreground))]">
-          Difficulty
+          {tME("difficulty_label")}
           <select
             value={difficulty}
             onChange={(e) =>
@@ -220,11 +221,11 @@ export function MistakeMarkdownEditor({
           </select>
         </label>
         <label className="block text-xs text-[hsl(var(--muted-foreground))]">
-          Tags
+          {tME("tags_label")}
           <input
             value={tagsText}
             onChange={(e) => setTagsText(e.target.value)}
-            placeholder="vectors, integration"
+            placeholder={tME("tags_placeholder")}
             className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-sm"
           />
         </label>
@@ -232,13 +233,13 @@ export function MistakeMarkdownEditor({
 
       <div className="flex items-center gap-1 border-b border-[hsl(var(--border))] pb-2">
         <ToolbarButton onClick={() => wrap("**")} aria-label={tEditor("aria_bold")}>
-          <span className="font-bold">B</span>
+          <span className="font-bold">{tME("bold_glyph")}</span>
         </ToolbarButton>
         <ToolbarButton onClick={() => wrap("*")} aria-label={tEditor("aria_italic")}>
-          <span className="italic">I</span>
+          <span className="italic">{tME("italic_glyph")}</span>
         </ToolbarButton>
         <ToolbarButton onClick={() => wrap("`")} aria-label={tEditor("aria_inline_code")}>
-          <span className="font-mono">{"<>"}</span>
+          <span className="font-mono">{tME("inline_code_glyph")}</span>
         </ToolbarButton>
         <ToolbarButton onClick={() => prefixLines("- ")} aria-label={tEditor("aria_bullet_list")}>
           •
@@ -247,13 +248,13 @@ export function MistakeMarkdownEditor({
           1.
         </ToolbarButton>
         <ToolbarButton onClick={() => wrap("$")} aria-label={tEditor("aria_inline_math")}>
-          ƒ
+          {tME("inline_math_glyph")}
         </ToolbarButton>
         <ToolbarButton onClick={() => wrap("\n$$\n", "\n$$\n")} aria-label={tEditor("aria_block_math")}>
-          ƒ²
+          {tME("block_math_glyph")}
         </ToolbarButton>
         <ToolbarButton onClick={() => prefixLines("## ")} aria-label={tEditor("aria_heading")}>
-          H
+          {tME("heading_glyph")}
         </ToolbarButton>
 
         <div className="ml-auto flex items-center gap-1 text-xs">
@@ -266,7 +267,7 @@ export function MistakeMarkdownEditor({
                 : "px-2 py-1 text-[hsl(var(--muted-foreground))]"
             }
           >
-            Edit
+            {tME("edit_tab")}
           </button>
           <button
             type="button"
@@ -277,7 +278,7 @@ export function MistakeMarkdownEditor({
                 : "px-2 py-1 text-[hsl(var(--muted-foreground))]"
             }
           >
-            Preview
+            {tME("preview_tab")}
           </button>
         </div>
       </div>

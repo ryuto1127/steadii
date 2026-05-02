@@ -25,6 +25,7 @@ export default async function ProposalDetailPage({
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
   const t = await getTranslations("agent.proposal_detail");
+  const tDetail = await getTranslations("proposal_detail");
 
   const [row] = await db
     .select()
@@ -58,7 +59,7 @@ export default async function ProposalDetailPage({
         href="/app/inbox"
         className="mb-4 inline-flex items-center gap-1 text-[12px] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
       >
-        <ArrowLeft size={12} /> Back to inbox
+        <ArrowLeft size={12} /> {tDetail("back")}
       </Link>
 
       <div className="mb-4 flex items-center gap-2">
@@ -70,11 +71,13 @@ export default async function ProposalDetailPage({
           }`}
         >
           {issueTypeIcon(row.issueType)}
-          {issueTypeLabel(row.issueType)}
+          {tDetail(issueTypeLabelKey(row.issueType))}
         </span>
         {isResolved ? (
           <span className="text-[12px] text-[hsl(var(--muted-foreground))]">
-            {row.status === "resolved" ? "Resolved" : "Dismissed"}
+            {row.status === "resolved"
+              ? tDetail("status_resolved")
+              : tDetail("status_dismissed")}
             {row.resolvedAt
               ? ` · ${row.resolvedAt.toISOString().slice(0, 10)}`
               : null}
@@ -118,7 +121,7 @@ export default async function ProposalDetailPage({
       {!isResolved ? (
         <section className="mb-2">
           <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-            What would you like to do?
+            {tDetail("what_to_do")}
           </h2>
           <ProposedActions
             proposalId={row.id}
@@ -128,33 +131,42 @@ export default async function ProposalDetailPage({
         </section>
       ) : (
         <p className="text-small text-[hsl(var(--muted-foreground))]">
-          This proposal is already {row.status}
-          {row.resolvedAction ? ` (chose: ${row.resolvedAction})` : ""}.
+          {tDetail(alreadyStatusKey(row.status))}
+          {row.resolvedAction
+            ? tDetail("already_status_with_action", { action: row.resolvedAction })
+            : ""}
+          .
         </p>
       )}
     </div>
   );
 }
 
-function issueTypeLabel(t: AgentProposalIssueType): string {
+function issueTypeLabelKey(t: AgentProposalIssueType): string {
   switch (t) {
     case "time_conflict":
-      return "Time conflict";
+      return "issue_time_conflict";
     case "exam_conflict":
-      return "Exam conflict";
+      return "issue_exam_conflict";
     case "deadline_during_travel":
-      return "Deadline during travel";
+      return "issue_deadline_during_travel";
     case "exam_under_prepared":
-      return "Exam coming up";
+      return "issue_exam_under_prepared";
     case "workload_over_capacity":
-      return "Workload spike";
+      return "issue_workload_over_capacity";
     case "syllabus_calendar_ambiguity":
-      return "Confirm import";
+      return "issue_syllabus_calendar_ambiguity";
     case "auto_action_log":
-      return "Steadii action log";
+      return "issue_auto_action_log";
     case "admin_waitlist_pending":
-      return "Waitlist request";
+      return "issue_admin_waitlist_pending";
   }
+}
+
+function alreadyStatusKey(status: string): string {
+  if (status === "resolved") return "already_status_resolved";
+  if (status === "dismissed") return "already_status_dismissed";
+  return "already_status_pending";
 }
 
 function issueTypeIcon(t: AgentProposalIssueType) {

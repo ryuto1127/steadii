@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { Trash2 } from "lucide-react";
 import { deleteChatFromListAction } from "@/lib/agent/chat-actions";
 import { cn } from "@/lib/utils/cn";
@@ -15,6 +16,7 @@ export function ChatHistoryRow({
   title: string;
   updatedAt: string;
 }) {
+  const t = useTranslations("chat_history_row");
   const [isPending, startTransition] = useTransition();
   const [removed, setRemoved] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -82,7 +84,7 @@ export function ChatHistoryRow({
         )}
       >
         <Trash2 size={14} strokeWidth={1.5} />
-        {confirming && <span className="text-small">Confirm</span>}
+        {confirming && <span className="text-small">{t("confirm")}</span>}
       </button>
     </div>
   );

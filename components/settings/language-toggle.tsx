@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils/cn";
 
 type Locale = "en" | "ja";
@@ -13,6 +14,7 @@ export function LanguageToggle({
   initial: Locale;
   labels: { en: string; ja: string };
 }) {
+  const t = useTranslations("landing.locale_toggle");
   const [value, setValue] = useState<Locale>(initial);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -37,7 +39,7 @@ export function LanguageToggle({
   return (
     <div
       role="radiogroup"
-      aria-label="Language"
+      aria-label={t("aria_label")}
       className="inline-flex shrink-0 rounded-lg border border-[hsl(var(--border)/0.6)] bg-[hsl(var(--surface))] p-0.5"
     >
       {(["en", "ja"] as const).map((loc) => {

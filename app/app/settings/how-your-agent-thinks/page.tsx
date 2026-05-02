@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import { and, desc, eq } from "drizzle-orm";
@@ -28,6 +29,8 @@ export default async function HowYourAgentThinksPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
+  const t = await getTranslations("agent_thinks_page");
+  const tInbox = await getTranslations("inbox_detail");
 
   const rows = await db
     .select({
@@ -58,22 +61,19 @@ export default async function HowYourAgentThinksPage() {
           className="inline-flex items-center gap-1 transition-hover hover:text-[hsl(var(--foreground))]"
         >
           <ChevronLeft size={14} strokeWidth={1.75} />
-          Settings
+          {t("settings_back")}
         </Link>
       </div>
       <header>
-        <h1 className="text-h2 font-semibold">How your agent thinks</h1>
+        <h1 className="text-h2 font-semibold">{t("title")}</h1>
         <p className="mt-1 text-small text-[hsl(var(--muted-foreground))]">
-          The last {N_DECISIONS} decisions, with the fanout sources that
-          grounded each one. Read-only — see something off? Open the inbox
-          item to give feedback.
+          {t("description_prefix")} {N_DECISIONS} {t("description_suffix")}
         </p>
       </header>
 
       {rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 text-center text-small text-[hsl(var(--muted-foreground))]">
-          The agent hasn't drafted anything yet. Once it does, every
-          decision lands here.
+          {t("empty")}
         </div>
       ) : (
         <ul className="space-y-4">
@@ -89,14 +89,14 @@ export default async function HowYourAgentThinksPage() {
                     href={`/app/inbox/${r.inboxItemId}`}
                     className="text-body font-medium text-[hsl(var(--foreground))] transition-hover hover:text-[hsl(var(--primary))]"
                   >
-                    {r.subject ?? "(no subject)"}
+                    {r.subject ?? tInbox("no_subject")}
                   </Link>
                   <span className="text-[11px] text-[hsl(var(--muted-foreground))]">
                     {formatStamp(r.createdAt)}
                   </span>
                 </div>
                 <div className="mb-3 text-[12px] text-[hsl(var(--muted-foreground))]">
-                  From {r.senderName ?? r.senderEmail}
+                  {t("from_label")} {r.senderName ?? r.senderEmail}
                   <span className="mx-1.5">·</span>
                   {r.action}
                   {r.autoSent ? (

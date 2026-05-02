@@ -34,6 +34,7 @@ import { useVoiceApp } from "./voice-app-provider";
 export function VoiceOverlay() {
   const tVoice = useTranslations("voice");
   const t = useTranslations("chat_input");
+  const tOverlay = useTranslations("voice_overlay_extra");
   const router = useRouter();
   const { closeOverlay, effectiveKey } = useVoiceApp();
   const [input, setInput] = useState("");
@@ -283,7 +284,7 @@ export function VoiceOverlay() {
                 ? "bg-[hsl(var(--foreground))] text-[hsl(var(--surface))] hover:opacity-90"
                 : "bg-[hsl(var(--surface))] text-[hsl(var(--muted-foreground))] opacity-60"
             )}
-            aria-label="Send"
+            aria-label={tOverlay("send_aria")}
           >
             <SendHorizontal size={18} strokeWidth={2} />
           </button>

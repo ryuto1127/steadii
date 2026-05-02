@@ -71,6 +71,7 @@ export function ChatView({
   const t = useTranslations();
   const tVoice = useTranslations("voice");
   const tChat = useTranslations("chat_view");
+  const tChatV2 = useTranslations("chat_view_v2");
   const [title, setTitle] = useState<string>(initialTitle ?? "");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -639,7 +640,7 @@ export function ChatView({
           <div className="mb-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-small text-[hsl(var(--muted-foreground))]">
             {tChat("blob_disabled_prefix")}
             <code className="mx-1 font-mono text-[hsl(var(--foreground))]">
-              BLOB_READ_WRITE_TOKEN
+              {tChatV2("blob_token_const")}
             </code>
             {tChat("blob_disabled_suffix")}
           </div>
