@@ -64,8 +64,8 @@ vi.mock("drizzle-orm", () => ({
   isNull: () => ({}),
 }));
 
-const assertMock = vi.fn(async () => ({}));
-const refreshMock = vi.fn(async () => ({ count: 3 }));
+const assertMock = vi.fn(async (_userId: string) => ({}));
+const refreshMock = vi.fn(async (_args: unknown) => ({ count: 3 }));
 
 vi.mock("@/lib/billing/credits", () => {
   class FakeBillingErr extends Error {
