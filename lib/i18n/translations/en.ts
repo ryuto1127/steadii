@@ -29,15 +29,26 @@ type MessagesShape = {
       title: string;
       body: string;
       real_screen: string;
-      step_calendar: string;
-      step_calendar_meta: string;
-      step_notification: string;
-      step_notification_meta: string;
-      step_proposal: string;
-      step_proposal_meta: string;
-      action_email: string;
-      action_reschedule: string;
-      action_dismiss: string;
+      step1_label: string;
+      step1_sender: string;
+      step1_subject: string;
+      step1_chip_tier: string;
+      step1_chip_time: string;
+      step1_classifying: string;
+      step1_outcome: string;
+      step1_outcome_meta: string;
+      step2_label: string;
+      step2_filter_all: string;
+      step2_filter_hidden: string;
+      step2_restore: string;
+      step2_meta: string;
+      step3_label: string;
+      step3_sender: string;
+      step3_subject: string;
+      step3_chip_tier: string;
+      step3_chip_time: string;
+      step3_status: string;
+      step3_meta: string;
     };
     how_it_works: {
       title: string;
@@ -71,28 +82,31 @@ type MessagesShape = {
     };
     sign_in: string;
     hero_animation: {
-      chat_header: string;
-      message_placeholder: string;
-      extracting: string;
-      imported_summary: string;
-      classes_heading: string;
-      term_label: string;
-      calendar_heading: string;
-      week_range: string;
-      days: string[];
-      classes: {
-        new: string;
-        eng200: string;
-        bio110: string;
-        psy100: string;
-        hst101: string;
-      };
-      events: {
-        math_lec: string;
-        math_tut: string;
-        math_quiz: string;
-        hw1_due: string;
-      };
+      app_header: string;
+      greeting: string;
+      summary_ready: string;
+      palette_placeholder: string;
+      palette_typing_query: string;
+      briefing_label: string;
+      briefing_event: string;
+      card_title: string;
+      card_eta: string;
+      card_body: string;
+      card_bullet_1: string;
+      card_bullet_2: string;
+      card_bullet_3: string;
+      card_action_open_calendar: string;
+      card_action_mark_reviewed: string;
+      card_dismiss_aria: string;
+      chip_email: string;
+      chip_mistake: string;
+      chip_calendar: string;
+      nav_home: string;
+      nav_inbox: string;
+      nav_calendar: string;
+      nav_classes: string;
+      nav_chats: string;
+      nav_settings: string;
     };
     voice_demo: {
       phrase_1: string;
@@ -1301,7 +1315,6 @@ type MessagesShape = {
   };
   hero_animation_extra: {
     cmd_k: string;
-    syllabus_filename: string;
   };
   voice_demo_extra: {
     caps_key_label: string;
@@ -1427,21 +1440,33 @@ export const en: MessagesShape = {
       },
     },
     steadii_in_motion: {
-      title: "And it watches your back.",
+      title: "And it filters out the noise.",
       body:
-        "Steadii reads your syllabus, calendar, and the notes it's kept about you — then surfaces what you'd otherwise miss.",
-      real_screen: "Real screen. No mocks.",
-      step_calendar: "Tokyo trip · 5/15 — 5/17",
-      step_calendar_meta: "Calendar · 3-day event added",
-      step_notification: "Important — schedule conflict",
-      step_notification_meta:
-        "5/16 Math II midterm overlaps with your Tokyo trip.",
-      step_proposal: "Conflict found",
-      step_proposal_meta:
-        "Cited: syllabus §midterms · calendar · 2 prior reschedule emails",
-      action_email: "Email professor",
-      action_reschedule: "Reschedule trip",
-      action_dismiss: "Dismiss",
+        "Steadii classifies every inbound email. Clear noise — newsletters, no-reply, marketing — is auto-archived so your queue stays focused on what needs you. The agent learns from anything you restore.",
+      real_screen: "Real surfaces. Mock data.",
+      step1_label: "Inbox · 09:42",
+      step1_sender: "Coursera Newsletter",
+      step1_subject: "Top courses this week",
+      step1_chip_tier: "tier 1",
+      step1_chip_time: "2m",
+      step1_classifying: "Classifying… Tier 1 noise · 96%",
+      step1_outcome: "Auto-archived",
+      step1_outcome_meta:
+        "Queue stayed clean. Logged in this week's digest.",
+      step2_label: "Inbox · later that day",
+      step2_filter_all: "Inbox",
+      step2_filter_hidden: "Hidden ({n})",
+      step2_restore: "Restore — keep these in inbox",
+      step2_meta:
+        "Open the Hidden filter any time to review or restore.",
+      step3_label: "Tomorrow",
+      step3_sender: "Coursera Newsletter",
+      step3_subject: "New course series for you",
+      step3_chip_tier: "review",
+      step3_chip_time: "now",
+      step3_status: "Confidence ↓ · surfaced for review",
+      step3_meta:
+        "Steadii learned from the restore. Similar items now stay visible.",
     },
     how_it_works: {
       title: "Get started in three steps.",
@@ -1488,29 +1513,32 @@ export const en: MessagesShape = {
     },
     sign_in: "Sign in",
     hero_animation: {
-      chat_header: "Chat · Steadii",
-      message_placeholder: "Message Steadii…",
-      extracting: "Extracting syllabus…",
-      imported_summary:
-        "Imported. Syllabus: <highlight>Math II (Linear Algebra)</highlight>. <highlight>7</highlight> schedule items.",
-      classes_heading: "Classes",
-      term_label: "Spring 2026",
-      calendar_heading: "Calendar",
-      week_range: "Apr 27 – May 3",
-      days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-      classes: {
-        new: "Math II · Linear Algebra",
-        eng200: "ENG 200 · Lit Survey",
-        bio110: "BIO 110 · Cell Biology",
-        psy100: "PSY 100 · Intro Psych",
-        hst101: "HST 101 · World History",
-      },
-      events: {
-        math_lec: "Math II — Lec",
-        math_tut: "Math II — Tut",
-        math_quiz: "Math II Quiz",
-        hw1_due: "HW1 due",
-      },
+      app_header: "Home · Steadii",
+      greeting: "Good morning, Ryuto",
+      summary_ready: "Your day is ready.",
+      palette_placeholder: "Tell Steadii…",
+      palette_typing_query:
+        "Brief me before tomorrow's meeting with Prof. Tanaka",
+      briefing_label: "Today",
+      briefing_event: "10:00 — Meeting w/ Prof. Tanaka",
+      card_title: "Meeting with Prof. Tanaka in 14 min",
+      card_eta: "14m",
+      card_body: "Pre-brief ready. 3 items pulled from your context.",
+      card_bullet_1: "Last thread: Ch 4 extension request, 5/14",
+      card_bullet_2: "Pending: midterm scope question (no reply yet)",
+      card_bullet_3: "Recent note: §3.4 linear transformations",
+      card_action_open_calendar: "Open in Calendar",
+      card_action_mark_reviewed: "Mark reviewed",
+      card_dismiss_aria: "Dismiss",
+      chip_email: "email-1",
+      chip_mistake: "note-1",
+      chip_calendar: "calendar-1",
+      nav_home: "Home",
+      nav_inbox: "Inbox",
+      nav_calendar: "Calendar",
+      nav_classes: "Classes",
+      nav_chats: "Recent",
+      nav_settings: "Settings",
     },
     voice_demo: {
       phrase_1: "MAT223 report due tomorrow",
@@ -2950,7 +2978,6 @@ export const en: MessagesShape = {
   },
   hero_animation_extra: {
     cmd_k: "⌘K",
-    syllabus_filename: "MAT223_Syllabus_Spring2026.pdf",
   },
   voice_demo_extra: {
     caps_key_label: "⇪ Caps",
