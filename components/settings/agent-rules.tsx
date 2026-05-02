@@ -89,8 +89,14 @@ export async function AgentRulesSection({ userId }: { userId: string }) {
     if (r.lastSeen > bucket.lastSeen) bucket.lastSeen = r.lastSeen;
     grouped.set(r.senderEmail, bucket);
   }
+  // Drizzle's `sql<Date>` template is a runtime lie — Postgres returns a
+  // string for max(timestamp), not a JS Date. The `lastSeen > bucket.lastSeen`
+  // comparison above already works lexicographically because both sides are
+  // ISO strings, but `.getTime()` here would TypeError on a string. Coerce
+  // through `new Date()` which accepts both string and Date inputs.
   const senderBuckets = Array.from(grouped.values()).sort(
-    (a, b) => b.lastSeen.getTime() - a.lastSeen.getTime()
+    (a, b) =>
+      new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime()
   );
 
   return (
