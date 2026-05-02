@@ -1,5 +1,6 @@
 import "server-only";
 import { and, desc, eq, gt, inArray, isNull, lte, ne, or } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/lib/db/client";
 import {
   agentDrafts,
@@ -32,7 +33,19 @@ import {
 
 // ── Public API ───────────────────────────────────────────────────────
 
-export async function buildQueueForUser(userId: string): Promise<QueueCard[]> {
+type IssueTitleFn = (key: string) => string;
+
+export async function buildQueueForUser(
+  userId: string,
+  locale?: string
+): Promise<QueueCard[]> {
+  // Resolve the issue-title translator once per build. `locale` is
+  // optional so dev / test paths that don't thread a locale still work
+  // — next-intl falls back to the request's negotiated locale when
+  // omitted on the server.
+  const tIssue = (locale
+    ? await getTranslations({ locale, namespace: "queue.issue_title" })
+    : await getTranslations("queue.issue_title")) as unknown as IssueTitleFn;
   // We pull more than the visible cap so the "Show more" expansion has
   // material — the page-level collapse logic is what trims the visible
   // count to QUEUE_VISIBLE_LIMIT.
@@ -49,11 +62,11 @@ export async function buildQueueForUser(userId: string): Promise<QueueCard[]> {
   const eFromProposals: QueueCardE[] = [];
   for (const p of proposalRows) {
     if (p.issueType === "group_project_detected") {
-      eFromProposals.push(proposalToTypeE_GroupDetect(p));
+      eFromProposals.push(proposalToTypeE_GroupDetect(p, tIssue));
     } else if (p.issueType === "group_member_silent") {
-      cFromProposals.push(proposalToTypeC_GroupSilent(p));
+      cFromProposals.push(proposalToTypeC_GroupSilent(p, tIssue));
     } else {
-      aCards.push(proposalToTypeA(p));
+      aCards.push(proposalToTypeA(p, tIssue));
     }
   }
 
@@ -90,14 +103,17 @@ export async function buildQueueForUser(userId: string): Promise<QueueCard[]> {
   ].slice(0, QUEUE_FETCH_LIMIT);
 }
 
-function proposalToTypeE_GroupDetect(p: AgentProposalRow): QueueCardE {
+function proposalToTypeE_GroupDetect(
+  p: AgentProposalRow,
+  tIssue: IssueTitleFn
+): QueueCardE {
   const choices = (p.actionOptions ?? [])
     .filter((o) => o.tool !== "dismiss")
     .map((o) => ({ key: o.key, label: o.label }));
   return {
     id: `group_detect:${p.id}`,
     archetype: "E",
-    title: titleForIssue("group_project_detected", p.issueSummary),
+    title: titleForIssue("group_project_detected", p.issueSummary, tIssue),
     body: p.issueSummary,
     confidence: "medium",
     createdAt: p.createdAt.toISOString(),
@@ -109,7 +125,10 @@ function proposalToTypeE_GroupDetect(p: AgentProposalRow): QueueCardE {
   };
 }
 
-function proposalToTypeC_GroupSilent(p: AgentProposalRow): QueueCardC {
+function proposalToTypeC_GroupSilent(
+  p: AgentProposalRow,
+  tIssue: IssueTitleFn
+): QueueCardC {
   // The action_options[0] payload carries the group_project_id so we
   // can deep-link the "Take action" button straight to the detail page.
   const opt = (p.actionOptions ?? [])[0];
@@ -120,7 +139,7 @@ function proposalToTypeC_GroupSilent(p: AgentProposalRow): QueueCardC {
   return {
     id: `proposal:${p.id}`,
     archetype: "C",
-    title: titleForIssue("group_member_silent", p.issueSummary),
+    title: titleForIssue("group_member_silent", p.issueSummary, tIssue),
     body: p.issueSummary,
     confidence: "medium",
     createdAt: p.createdAt.toISOString(),
@@ -180,7 +199,7 @@ async function fetchPendingProposals(userId: string): Promise<AgentProposalRow[]
   return deduped;
 }
 
-function proposalToTypeA(p: AgentProposalRow): QueueCardA {
+function proposalToTypeA(p: AgentProposalRow, tIssue: IssueTitleFn): QueueCardA {
   // QueueCardA already renders its own dismiss/snooze button via
   // queue.card_a.dismiss (locale-aware). The Phase 8 scanner stamps a
   // synthetic English-labelled "dismiss" fallback option when the LLM
@@ -193,7 +212,7 @@ function proposalToTypeA(p: AgentProposalRow): QueueCardA {
   return {
     id: `proposal:${p.id}`,
     archetype: "A",
-    title: titleForIssue(p.issueType, p.issueSummary),
+    title: titleForIssue(p.issueType, p.issueSummary, tIssue),
     body: p.issueSummary,
     confidence: confidenceForIssue(p.issueType),
     createdAt: p.createdAt.toISOString(),
@@ -220,30 +239,26 @@ function actionOptionToQueue(opt: ActionOption): QueueDecisionOption {
 
 // Map issue types to a one-line title that reads as the *headline* of
 // the card. The proposal's `issueSummary` flows into the body so the
-// title can be terse.
+// title can be terse. Locale-aware via the translator passed down from
+// buildQueueForUser; falls back to the proposal's summary or the
+// generic "Steadii noticed" key when the issue type is unknown.
 function titleForIssue(
   issue: AgentProposalIssueType,
-  fallback: string
+  fallback: string,
+  tIssue: IssueTitleFn
 ): string {
   switch (issue) {
     case "time_conflict":
-      return "Calendar conflict";
     case "exam_conflict":
-      return "Exam clash";
     case "deadline_during_travel":
-      return "Deadline during travel";
     case "exam_under_prepared":
-      return "Exam prep gap";
     case "workload_over_capacity":
-      return "Workload overload";
     case "syllabus_calendar_ambiguity":
-      return "Syllabus needs review";
     case "group_project_detected":
-      return "Group project detected";
     case "group_member_silent":
-      return "Group member silent";
+      return tIssue(issue);
     default:
-      return fallback || "Steadii noticed";
+      return fallback || tIssue("fallback");
   }
 }
 
