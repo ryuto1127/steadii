@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
 import { runPreBriefScan } from "@/lib/agent/pre-brief/scanner";
 import { verifyQStashSignature } from "@/lib/integrations/qstash/verify";
+import { withHeartbeat } from "@/lib/observability/cron-heartbeat";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -15,24 +16,26 @@ export const runtime = "nodejs";
 // double-brief the same event; the (user_id, event_id) unique index
 // in event_pre_briefs is the safety net if they ever do.
 export async function POST(req: Request) {
-  return Sentry.startSpan(
-    { name: "cron.pre_brief.tick", op: "cron" },
-    async () => {
-      const rawBody = await req.text();
-      if (!(await verifyQStashSignature(req, rawBody))) {
-        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-      }
+  return withHeartbeat("pre-brief", () =>
+    Sentry.startSpan(
+      { name: "cron.pre_brief.tick", op: "cron" },
+      async () => {
+        const rawBody = await req.text();
+        if (!(await verifyQStashSignature(req, rawBody))) {
+          return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+        }
 
-      try {
-        const report = await runPreBriefScan();
-        return NextResponse.json(report);
-      } catch (err) {
-        Sentry.captureException(err, { tags: { feature: "pre_brief_cron" } });
-        return NextResponse.json(
-          { error: "scan_failed" },
-          { status: 500 }
-        );
+        try {
+          const report = await runPreBriefScan();
+          return NextResponse.json(report);
+        } catch (err) {
+          Sentry.captureException(err, { tags: { feature: "pre_brief_cron" } });
+          return NextResponse.json(
+            { error: "scan_failed" },
+            { status: 500 }
+          );
+        }
       }
-    }
+    )
   );
 }

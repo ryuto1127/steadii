@@ -10,6 +10,8 @@ import {
 import {
   GmailNotConnectedError,
   getGoogleProviderAccountId,
+  isInvalidGrantError,
+  markGmailTokenRevoked,
 } from "@/lib/integrations/google/gmail";
 import * as Sentry from "@sentry/nextjs";
 import { applyTriageResult, triageMessage } from "./triage";
@@ -70,6 +72,20 @@ export async function ingestLast24h(
         action: "email_ingest_failed",
         result: "failure",
         detail: { reason: "gmail_not_connected" },
+      });
+      return emptySummary(Date.now() - startedAt);
+    }
+    // Wave 5 — invalid_grant means the user's refresh token was
+    // rejected (revoked access, password reset, etc). Stamp the user
+    // so the layout banner offers a clear re-connect path instead of
+    // the silent retry loop the old code path landed in.
+    if (isInvalidGrantError(err)) {
+      await markGmailTokenRevoked(userId);
+      await logEmailAudit({
+        userId,
+        action: "email_ingest_failed",
+        result: "failure",
+        detail: { reason: "invalid_grant", message: errorMessage(err) },
       });
       return emptySummary(Date.now() - startedAt);
     }

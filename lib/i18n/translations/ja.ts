@@ -439,6 +439,13 @@ export const ja: Messages = {
     status_pending: "対応待ち — アクションを選択",
     status_resolved: "対応済み",
     status_dismissed: "却下済み",
+    hidden_filter_aria: "受信箱の表示フィルタ",
+    filter_all: "受信箱",
+    filter_hidden: "非表示 ({n})",
+    restore_button: "復元 — 受信箱に戻す",
+    hidden_empty_title: "非表示のメールはありません。",
+    hidden_empty_description:
+      "Steadii が低リスクメールを自動でアーカイブすると、ここに表示されます。確認・復元できます。",
   },
   calendar: {
     title: "カレンダー",
@@ -952,6 +959,24 @@ export const ja: Messages = {
       on: "オン — オフにする",
       off: "オフ — オンにする",
     },
+    inbox_auto_archive: {
+      section_title: "受信箱",
+      description:
+        "マーケティング、no-reply、明らかなノイズメールを Steadii が自動的にアーカイブし、キューを散らかしません。週次ダイジェストや受信箱の「非表示」フィルタからいつでも確認できます。",
+      toggle_label: "低リスクメールを自動で非表示にする",
+      on: "オン — オフにする",
+      off: "オフ — オンにする",
+      safety_ramp_note:
+        "α 期間: 分類精度の調整のため最初の 2 週間はデフォルトでオフです。切り替えは新しいメールから適用されます（既存の非表示は復元されません）。",
+    },
+    profile_completion: {
+      heading: "プロフィールを完成させる",
+      missing_name:
+        "名前を登録すると、Steadii が下書きで宛名として使えます。",
+      missing_locale:
+        "言語を選ぶと、ダイジェストとキューがその言語で届きます。",
+      all_set: "プロフィールは完成しています。",
+    },
     agent_modes: {
       destructive_only_label:
         "破壊的な操作だけ確認する（推奨）",
@@ -1371,6 +1396,20 @@ export const ja: Messages = {
     overflow_more_view_all: "ほか {count} 件 — すべて見る",
     steadii_noticed: "Steadii からのお知らせ",
     view_all: "すべて見る →",
+  },
+  gmail_revoked_banner: {
+    heading: "Gmail のアクセスが切れました",
+    body:
+      "Steadii はメールの読み取り・下書きができない状態です。Google で再度サインインするとアクセスが復旧します。設定はそのまま保持されます。",
+    reconnect: "Gmail を再接続",
+  },
+  onboarding_skip_recovery_banner: {
+    heading: "カレンダーを接続するともっと活用できます",
+    body:
+      "セットアップ時に任意の連携をスキップしました。カレンダーを接続すると、衝突の検出、ミーティング前のブリーフィング、受信箱との締切重なりの可視化ができます。",
+    connect: "今すぐ接続",
+    dismiss: "閉じる",
+    dismiss_aria: "このお知らせを閉じる",
   },
   reauth_banner: {
     body: "Gmail のトリアージ機能が新しく追加されました。一度サインアウトして再度サインインし、Gmail のスコープを許可してください。許可するまで、エージェントはメールの読み取りや下書きができません。",

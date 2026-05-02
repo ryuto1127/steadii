@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, gt, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   agentDrafts,
@@ -39,6 +39,18 @@ export type DigestProposal = {
   issueSummary: string;
 };
 
+// Wave 5 — auto-archive summary entry. The "Steadii hid" digest
+// section surfaces the last-7-day count + a sample of senders so the
+// user can quickly skim what they didn't see (and click into the
+// Inbox Hidden filter to review). Per spec we cap at 5 sample
+// entries; the count line is the source of truth.
+export type DigestHiddenSample = {
+  inboxItemId: string;
+  senderName: string;
+  senderEmail: string;
+  subject: string;
+};
+
 export type DigestPayload = {
   userEmail: string;
   subject: string;
@@ -49,6 +61,8 @@ export type DigestPayload = {
   mediumCount: number;
   lowCount: number;
   proposals: DigestProposal[];
+  hiddenCount7d: number;
+  hiddenSamples: DigestHiddenSample[];
 };
 
 // Pick up pending drafts for the user. Ordered by risk (high first) then
@@ -98,6 +112,42 @@ export async function loadPendingDigestItems(
     riskTier: r.riskTier,
     action: r.action as "draft_reply" | "ask_clarifying" | "notify_only",
   }));
+}
+
+// Wave 5 — last-7-day auto-archive summary loader. Returns the count
+// of items Steadii silently archived plus up to 5 representative
+// samples (newest first). When the count is 0 the digest renderer
+// suppresses the section entirely.
+export async function loadHiddenSummary(
+  userId: string,
+  sampleLimit: number = 5
+): Promise<{ count: number; samples: DigestHiddenSample[] }> {
+  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const rows = await db
+    .select({
+      id: inboxItems.id,
+      senderEmail: inboxItems.senderEmail,
+      senderName: inboxItems.senderName,
+      subject: inboxItems.subject,
+      receivedAt: inboxItems.receivedAt,
+    })
+    .from(inboxItems)
+    .where(
+      and(
+        eq(inboxItems.userId, userId),
+        eq(inboxItems.autoArchived, true),
+        isNull(inboxItems.deletedAt),
+        gt(inboxItems.receivedAt, cutoff)
+      )
+    )
+    .orderBy(desc(inboxItems.receivedAt));
+  const samples = rows.slice(0, sampleLimit).map((r) => ({
+    inboxItemId: r.id,
+    senderName: r.senderName ?? r.senderEmail,
+    senderEmail: r.senderEmail,
+    subject: r.subject ?? "(no subject)",
+  }));
+  return { count: rows.length, samples };
 }
 
 // Fix 5 (2026-04-29): the digest's "Steadii noticed" subsection now
@@ -205,6 +255,8 @@ export function buildDigestText(args: {
   appUrl: string;
   locale?: DigestLocale;
   proposals?: DigestProposal[];
+  hiddenCount7d?: number;
+  hiddenSamples?: DigestHiddenSample[];
 }): string {
   const locale = args.locale ?? "en";
   const lines: string[] = [];
@@ -233,6 +285,28 @@ export function buildDigestText(args: {
     lines.push(`  → ${link}`);
     lines.push("");
   }
+
+  // Wave 5 — auto-archive summary. Section appears only when there
+  // were hidden items in the trailing 7-day window. Click target is
+  // the Inbox Hidden filter view.
+  if ((args.hiddenCount7d ?? 0) > 0) {
+    lines.push(
+      locale === "ja"
+        ? `Steadii が今週 ${args.hiddenCount7d} 件を非表示にしました:`
+        : `Steadii hid ${args.hiddenCount7d} items this week:`
+    );
+    for (const s of args.hiddenSamples ?? []) {
+      lines.push(`  • ${s.senderName} — ${s.subject}`);
+    }
+    const hiddenLink = `${args.appUrl}/app/inbox?hidden=1&utm_source=digest`;
+    lines.push(
+      locale === "ja"
+        ? `  → 確認・復元: ${hiddenLink}`
+        : `  → Review / restore: ${hiddenLink}`
+    );
+    lines.push("");
+  }
+
   lines.push(
     locale === "ja"
       ? "Steadiiで内容を確認し、各ドラフトを承認してください。あなたのタップなしには何も送信されません。"
@@ -249,6 +323,8 @@ export function buildDigestHtml(args: {
   appUrl: string;
   locale?: DigestLocale;
   proposals?: DigestProposal[];
+  hiddenCount7d?: number;
+  hiddenSamples?: DigestHiddenSample[];
 }): string {
   const locale = args.locale ?? "en";
   const reviewLabel = locale === "ja" ? "ドラフトを確認 →" : "Review draft →";
@@ -261,6 +337,12 @@ export function buildDigestHtml(args: {
     locale === "ja"
       ? "Steadiiで内容を確認し、各ドラフトを承認してください。あなたのタップなしには何も送信されません。"
       : "Review + confirm each draft in Steadii. Nothing sends without your tap.";
+  const hiddenHeading =
+    locale === "ja"
+      ? `Steadii が今週 ${args.hiddenCount7d ?? 0} 件を非表示にしました`
+      : `Steadii hid ${args.hiddenCount7d ?? 0} items this week`;
+  const hiddenReviewLabel =
+    locale === "ja" ? "全件を確認 / 復元 →" : "Review / restore all →";
 
   const proposalRows = (args.proposals ?? [])
     .map((p) => {
@@ -338,6 +420,34 @@ export function buildDigestHtml(args: {
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">${rows}</table>
               </td>
             </tr>
+            ${
+              (args.hiddenCount7d ?? 0) > 0
+                ? `
+            <tr>
+              <td style="padding: 16px 24px 0 24px;">
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #6E6A64;">${escapeHtml(hiddenHeading)}</div>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  ${(args.hiddenSamples ?? [])
+                    .map(
+                      (s) => `
+                  <tr>
+                    <td style="padding: 6px 0; border-bottom: 1px solid #E4E0DB;">
+                      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 12px; color: #1A1814;">
+                        <strong>${escapeHtml(s.senderName)}</strong>
+                        <span style="color: #6E6A64;"> — ${escapeHtml(s.subject)}</span>
+                      </div>
+                    </td>
+                  </tr>`
+                    )
+                    .join("")}
+                </table>
+                <div style="margin-top: 8px;">
+                  <a href="${escapeHtmlAttr(`${args.appUrl}/app/inbox?hidden=1&utm_source=digest`)}" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 12px; color: #D97706; text-decoration: none;">${escapeHtml(hiddenReviewLabel)}</a>
+                </div>
+              </td>
+            </tr>`
+                : ""
+            }
             <tr>
               <td style="padding: 16px 24px 24px 24px;">
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 12px; color: #6E6A64;">${escapeHtml(footerCopy)}</div>
@@ -383,8 +493,14 @@ export async function buildDigestPayload(
 
   const items = await loadPendingDigestItems(userId);
   const proposals = await loadPendingProposals(userId);
+  // Wave 5 — auto-archive 7-day summary. We always run the loader (it's
+  // a small partial-index probe) and let the renderer decide whether
+  // to show the section based on count.
+  const hidden = await loadHiddenSummary(userId);
   // Send a digest if either bucket has signal — a clean inbox with
   // unresolved proactive proposals is exactly when the digest matters.
+  // The hidden summary alone isn't enough signal to send; it lands as
+  // a section on top of pending work, not its own digest.
   if (items.length === 0 && proposals.length === 0) return null;
 
   const e = env();
@@ -392,8 +508,22 @@ export async function buildDigestPayload(
   const locale: DigestLocale =
     user.preferences?.locale === "ja" ? "ja" : "en";
   const subject = buildDigestSubject(items, locale);
-  const text = buildDigestText({ items, appUrl, locale, proposals });
-  const html = buildDigestHtml({ items, appUrl, locale, proposals });
+  const text = buildDigestText({
+    items,
+    appUrl,
+    locale,
+    proposals,
+    hiddenCount7d: hidden.count,
+    hiddenSamples: hidden.samples,
+  });
+  const html = buildDigestHtml({
+    items,
+    appUrl,
+    locale,
+    proposals,
+    hiddenCount7d: hidden.count,
+    hiddenSamples: hidden.samples,
+  });
   return {
     userEmail: user.email,
     subject,
@@ -404,5 +534,7 @@ export async function buildDigestPayload(
     mediumCount: items.filter((i) => i.riskTier === "medium").length,
     lowCount: items.filter((i) => i.riskTier === "low").length,
     proposals,
+    hiddenCount7d: hidden.count,
+    hiddenSamples: hidden.samples,
   };
 }

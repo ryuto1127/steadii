@@ -343,6 +343,12 @@ type MessagesShape = {
     status_pending: string;
     status_resolved: string;
     status_dismissed: string;
+    hidden_filter_aria: string;
+    filter_all: string;
+    filter_hidden: string;
+    restore_button: string;
+    hidden_empty_title: string;
+    hidden_empty_description: string;
   };
   calendar: {
     title: string;
@@ -943,6 +949,20 @@ type MessagesShape = {
       on: string;
       off: string;
     };
+    inbox_auto_archive: {
+      section_title: string;
+      description: string;
+      toggle_label: string;
+      on: string;
+      off: string;
+      safety_ramp_note: string;
+    };
+    profile_completion: {
+      heading: string;
+      missing_name: string;
+      missing_locale: string;
+      all_set: string;
+    };
     agent_modes: {
       destructive_only_label: string;
       destructive_only_hint: string;
@@ -1104,6 +1124,18 @@ type MessagesShape = {
   reauth_banner: {
     body: string;
     reconnect: string;
+    dismiss: string;
+    dismiss_aria: string;
+  };
+  gmail_revoked_banner: {
+    heading: string;
+    body: string;
+    reconnect: string;
+  };
+  onboarding_skip_recovery_banner: {
+    heading: string;
+    body: string;
+    connect: string;
     dismiss: string;
     dismiss_aria: string;
   };
@@ -1779,6 +1811,13 @@ export const en: MessagesShape = {
     status_pending: "Pending — pick an action",
     status_resolved: "Resolved",
     status_dismissed: "Dismissed",
+    hidden_filter_aria: "Inbox view filter",
+    filter_all: "Inbox",
+    filter_hidden: "Hidden ({n})",
+    restore_button: "Restore — keep these in inbox",
+    hidden_empty_title: "Nothing hidden yet.",
+    hidden_empty_description:
+      "When Steadii archives a low-risk email, it'll appear here so you can review or restore it.",
   },
   calendar: {
     title: "Calendar",
@@ -2452,6 +2491,24 @@ export const en: MessagesShape = {
       on: "On — turn off",
       off: "Off — turn on",
     },
+    inbox_auto_archive: {
+      section_title: "Inbox",
+      description:
+        "Steadii silently archives marketing, no-reply, and other clear-noise emails so they don't clutter your queue. You can review hidden items in the weekly digest or via the Hidden filter in Inbox.",
+      toggle_label: "Hide low-risk emails automatically",
+      on: "On — turn off",
+      off: "Off — turn on",
+      safety_ramp_note:
+        "α: defaults off for the first two weeks while we tune the classifier. Toggle changes only apply to new email.",
+    },
+    profile_completion: {
+      heading: "Finish your profile",
+      missing_name:
+        "Add your name so Steadii can address you in drafts.",
+      missing_locale:
+        "Pick a language so the digest and queue speak the right one.",
+      all_set: "Profile is complete.",
+    },
     agent_modes: {
       destructive_only_label:
         "Only confirm destructive actions (recommended)",
@@ -2716,6 +2773,20 @@ export const en: MessagesShape = {
     reconnect: "Reconnect",
     dismiss: "Dismiss",
     dismiss_aria: "Dismiss",
+  },
+  gmail_revoked_banner: {
+    heading: "Gmail access expired",
+    body:
+      "Steadii can no longer read or draft email. Sign in again with Google to restore access — your settings stay intact.",
+    reconnect: "Reconnect Gmail",
+  },
+  onboarding_skip_recovery_banner: {
+    heading: "Connect calendar to get more from Steadii",
+    body:
+      "You skipped the optional integrations during setup. Adding your calendar lets Steadii spot conflicts, prep meeting briefs, and surface deadline overlap with your inbox.",
+    connect: "Connect now",
+    dismiss: "Dismiss",
+    dismiss_aria: "Dismiss this prompt",
   },
   error_page: {
     badge: "Something went wrong",

@@ -23,7 +23,14 @@ export type EmailAuditAction =
   // independently filterable in admin dashboards.
   | "email_class_bound"
   | "email_fanout_completed"
-  | "email_fanout_timeout";
+  | "email_fanout_timeout"
+  // Wave 5 — auto-archive (Tier 1 low-risk silent hide) and the
+  // user-driven restore that feeds the learning signal back into
+  // agent_rules. Recent activity + Inbox Hidden chip + digest section
+  // all read these.
+  | "auto_archive"
+  | "auto_archive_failed"
+  | "auto_archive_restored";
 
 export async function logEmailAudit(params: {
   userId: string;

@@ -176,6 +176,24 @@ export async function dismissOnboardingWaitAction(args?: {
   redirect("/app");
 }
 
+// Wave 5 — dismiss the post-skip integrations re-prompt banner. Stamps
+// users.onboarding_skip_recovery_dismissed_at; the layout's banner
+// gate suppresses rendering once non-null. One-and-done — there's no
+// "snooze" semantics; if the user wants to revisit integrations they
+// click through to /app/settings/connections at any time.
+export async function dismissOnboardingSkipRecoveryAction() {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  await db
+    .update(users)
+    .set({
+      onboardingSkipRecoveryDismissedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, session.user.id));
+  revalidatePath("/app", "layout");
+}
+
 export async function removeResourceAction(formData: FormData) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthenticated");

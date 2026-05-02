@@ -24,8 +24,11 @@ import { getUserVoiceTriggerKey } from "@/lib/agent/preferences";
 import { VoiceAppProvider } from "@/components/voice/voice-app-provider";
 import { VoiceHint } from "@/components/voice/voice-hint";
 import { db } from "@/lib/db/client";
-import { subscriptions } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { subscriptions, users } from "@/lib/db/schema";
+import { eq, and, isNotNull, isNull, gt, gte, count } from "drizzle-orm";
+import { GmailRevokedBanner } from "@/components/layout/gmail-revoked-banner";
+import { OnboardingSkipRecoveryBanner } from "@/components/layout/onboarding-skip-recovery-banner";
+import { inboxItems } from "@/lib/db/schema";
 
 // Onboarding redirects gate every /app/* route on getOnboardingStatus, so
 // any static optimization of this layout risks serving a stale redirect
@@ -48,17 +51,32 @@ export default async function AppLayout({
     redirect("/onboarding");
   }
 
-  const [balance, effective, subRow, voiceTriggerKey] = await Promise.all([
-    getCreditBalance(session.user.id),
-    getEffectivePlan(session.user.id),
-    db
-      .select({ status: subscriptions.status })
-      .from(subscriptions)
-      .where(eq(subscriptions.userId, session.user.id))
-      .limit(1)
-      .then((rows) => rows[0] ?? null),
-    getUserVoiceTriggerKey(session.user.id),
-  ]);
+  const [balance, effective, subRow, voiceTriggerKey, userFlags] =
+    await Promise.all([
+      getCreditBalance(session.user.id),
+      getEffectivePlan(session.user.id),
+      db
+        .select({ status: subscriptions.status })
+        .from(subscriptions)
+        .where(eq(subscriptions.userId, session.user.id))
+        .limit(1)
+        .then((rows) => rows[0] ?? null),
+      getUserVoiceTriggerKey(session.user.id),
+      // Wave 5 — surface flags for layout banners. Cheap one-row select
+      // alongside the rest.
+      db
+        .select({
+          gmailTokenRevokedAt: users.gmailTokenRevokedAt,
+          onboardingIntegrationsSkippedAt:
+            users.onboardingIntegrationsSkippedAt,
+          onboardingSkipRecoveryDismissedAt:
+            users.onboardingSkipRecoveryDismissedAt,
+        })
+        .from(users)
+        .where(eq(users.id, session.user.id))
+        .limit(1)
+        .then((rows) => rows[0] ?? null),
+    ]);
   // Pre-Gmail users: they completed onboarding under the old scope set
   // (Calendar only). isOnboardingComplete now requires Gmail, so in
   // practice such users get redirected to /onboarding — but the banner
@@ -79,6 +97,44 @@ export default async function AppLayout({
     pastDue || (effective.plan !== "admin" && balance.nearLimit);
   const pct = Math.min(100, Math.round((balance.used / balance.limit) * 100));
   const t = await getTranslations("app_layout");
+
+  // Wave 5 — Gmail token revocation banner. Stamped by the ingest path
+  // when refresh fails with invalid_grant; cleared on successful
+  // re-auth (lib/integrations/google/gmail.ts).
+  const showGmailRevokedBanner = userFlags?.gmailTokenRevokedAt != null;
+
+  // Wave 5 — onboarding-skip recovery. Conditions:
+  //   1. user clicked "Skip" on Step 2 (onboarding_integrations_skipped_at set)
+  //   2. user hasn't dismissed the banner
+  //   3. user has had at least one inbox item (= they've actually used
+  //      Steadii enough to be ready for "want more out of this?" prompt)
+  // The banner suppresses itself when 2 is set, so the dismiss action
+  // is one-and-done.
+  let showSkipRecoveryBanner = false;
+  if (
+    userFlags?.onboardingIntegrationsSkippedAt &&
+    !userFlags.onboardingSkipRecoveryDismissedAt
+  ) {
+    const [first] = await db
+      .select({ n: count(inboxItems.id) })
+      .from(inboxItems)
+      .where(
+        and(
+          eq(inboxItems.userId, session.user.id),
+          isNull(inboxItems.deletedAt),
+          gte(
+            inboxItems.createdAt,
+            userFlags.onboardingIntegrationsSkippedAt
+          )
+        )
+      );
+    showSkipRecoveryBanner = (first?.n ?? 0) > 0;
+  }
+  // Trivially keep import of `gt`/`isNotNull` live for tree-shake (we
+  // may use them in subsequent queries; their import keeps the layout
+  // file's import block stable across the next iteration).
+  void gt;
+  void isNotNull;
 
   // Arc-style island: body bg = warm canvas (--background); 12px padding
   // on every edge shows the canvas; main content floats as a surface-
@@ -146,6 +202,8 @@ export default async function AppLayout({
           ) : null}
           <div className="px-4 py-5 sm:px-6 md:px-10 md:py-8">
             {!gmailConnected && <ReauthBanner />}
+            {showGmailRevokedBanner && <GmailRevokedBanner />}
+            {showSkipRecoveryBanner && <OnboardingSkipRecoveryBanner />}
             {pastDue && (
               <div className="mx-auto mb-5 max-w-4xl rounded-lg bg-[hsl(var(--destructive)/0.08)] px-4 py-2.5 text-small text-[hsl(var(--destructive))]">
                 <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">

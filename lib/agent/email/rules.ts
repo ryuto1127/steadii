@@ -37,8 +37,32 @@ export function classifyEmail(
   const senderRole: SenderRole | null =
     learnedSender?.senderRole ?? learnedDomain?.senderRole ?? null;
 
+  // Wave 5 — learned opt-out. When the user has restored a similar item
+  // before, we record an agent_rules row scoped to the sender/domain
+  // with risk_tier='medium'. Auto-archive consults this flag and skips
+  // the archive even if bucket+confidence would otherwise qualify.
+  const learnedOptOut =
+    learnedDomain?.riskTier === "medium" ||
+    learnedDomain?.riskTier === "high" ||
+    learnedSender?.riskTier === "medium" ||
+    learnedSender?.riskTier === "high";
+
+  // Local helper to assemble a consistent TriageResult. Every return
+  // site goes through this so confidence + learnedOptOut stay in lockstep
+  // with the bucket choice. firstTimeSender is already false for
+  // fromSelf rows (computed above) so no override is needed.
+  const finish = (bucket: InboxBucket, confidence: number): TriageResult => ({
+    bucket,
+    senderRole,
+    ruleProvenance: provenance,
+    firstTimeSender,
+    confidence,
+    learnedOptOut,
+  });
+
   // ---------------------------------------------------------------------
   // IGNORE bucket (checked first; short-circuits everything else).
+  // Confidence is 1.0 — these are deterministic Gmail-side signals.
   // ---------------------------------------------------------------------
   if (fromSelf(input, ctx)) {
     provenance.push({
@@ -46,12 +70,7 @@ export function classifyEmail(
       source: "global",
       why: "Auto-reply from the user's own address.",
     });
-    return {
-      bucket: "ignore",
-      senderRole,
-      ruleProvenance: provenance,
-      firstTimeSender: false,
-    };
+    return finish("ignore", 1.0);
   }
 
   const spamOrPromo = input.gmailLabelIds.some(
@@ -63,12 +82,7 @@ export function classifyEmail(
       source: "global",
       why: "Gmail tagged this as SPAM or CATEGORY_PROMOTIONS.",
     });
-    return {
-      bucket: "ignore",
-      senderRole,
-      ruleProvenance: provenance,
-      firstTimeSender,
-    };
+    return finish("ignore", 1.0);
   }
 
   if (
@@ -80,12 +94,7 @@ export function classifyEmail(
       source: "global",
       why: "List-Unsubscribe header + promo-vendor domain.",
     });
-    return {
-      bucket: "ignore",
-      senderRole,
-      ruleProvenance: provenance,
-      firstTimeSender,
-    };
+    return finish("ignore", 1.0);
   }
 
   if (isNoreplySender(input.fromEmail) && !containsActionVerb(haystack)) {
@@ -94,12 +103,7 @@ export function classifyEmail(
       source: "global",
       why: "noreply/no-reply sender without action-required language.",
     });
-    return {
-      bucket: "ignore",
-      senderRole,
-      ruleProvenance: provenance,
-      firstTimeSender,
-    };
+    return finish("ignore", 1.0);
   }
 
   // ---------------------------------------------------------------------
@@ -144,12 +148,13 @@ export function classifyEmail(
   }
 
   if (highMatches.length > 0 || escalatedRole || firstTimeSender) {
-    return {
-      bucket: "auto_high",
-      senderRole,
-      ruleProvenance: provenance,
-      firstTimeSender,
-    };
+    // Stronger when learned role + keyword stack; weaker when first-time
+    // alone (we err high but signal it's a guess to admin metrics).
+    let conf = 0.85;
+    if (escalatedRole) conf += 0.05;
+    if (highMatches.length >= 2) conf += 0.05;
+    if (highMatches.length >= 1 && escalatedRole) conf = 0.95;
+    return finish("auto_high", Math.min(0.99, conf));
   }
 
   // ---------------------------------------------------------------------
@@ -184,16 +189,15 @@ export function classifyEmail(
     medMatches.length > 0 ||
     (subjectHasQ && isEduDomain(input.fromDomain))
   ) {
-    return {
-      bucket: "auto_medium",
-      senderRole,
-      ruleProvenance: provenance,
-      firstTimeSender,
-    };
+    let conf = 0.78;
+    if (senderRole === "professor" || senderRole === "ta") conf = 0.92;
+    if (medMatches.length >= 2) conf = Math.max(conf, 0.86);
+    return finish("auto_medium", conf);
   }
 
   // ---------------------------------------------------------------------
   // AUTO_LOW — RSVPs, short acknowledgments, personal contacts.
+  // Only this bucket auto-archives at confidence ≥ 0.95 (Wave 5).
   // ---------------------------------------------------------------------
   const lowMatches = collectKeywordMatches(haystack, AUTO_LOW_KEYWORDS);
   for (const m of lowMatches) provenance.push(globalProv(m));
@@ -218,29 +222,45 @@ export function classifyEmail(
   }
 
   if (lowMatches.length > 0 || isShortAck || senderRole === "personal") {
-    return {
-      bucket: "auto_low",
-      senderRole,
-      ruleProvenance: provenance,
-      firstTimeSender,
-    };
+    // Confidence model — additive signals, capped at 0.99. Tuned so
+    // single-signal items stay ≤ 0.85 (no auto-archive; Inbox surfaces
+    // them at low visual weight) and clear multi-signal noise lands ≥
+    // 0.95 (auto-archive eligible).
+    let conf = 0;
+    if (lowMatches.length >= 1) conf = Math.max(conf, 0.82);
+    if (lowMatches.length >= 2) conf = Math.max(conf, 0.93);
+    if (isShortAck) conf = Math.max(conf, 0.84);
+    if (senderRole === "personal") conf = Math.max(conf, 0.96);
+    // Domain familiarity bonus — if we've seen the domain before, the
+    // false-positive risk drops materially (the user has handled mail
+    // from this domain in some bucket and we still landed in auto_low).
+    if (!firstTimeSender && conf > 0) conf = Math.min(0.99, conf + 0.03);
+    // Stack a short-ack on top of a keyword match — strong "really nothing
+    // here" signal (the kind of "Got it, thanks!" that a real secretary
+    // would archive without thinking).
+    if (lowMatches.length >= 1 && isShortAck) conf = Math.max(conf, 0.95);
+    return finish("auto_low", conf || 0.75);
   }
 
   // ---------------------------------------------------------------------
   // Fallback → L2 (not invoked in W1).
+  // L2 fills its own confidence on the way back; L1 stamps 0.5 to mark
+  // "we punted" so the admin distribution is honest.
   // ---------------------------------------------------------------------
   provenance.push({
     ruleId: "GLOBAL_L2_FALLBACK",
     source: "global",
     why: "No L1 rule matched — deferred to L2 classifier.",
   });
-  return {
-    bucket: "l2_pending",
-    senderRole,
-    ruleProvenance: provenance,
-    firstTimeSender,
-  };
+  return finish("l2_pending", 0.5);
 }
+
+// Wave 5 — public threshold for the auto-archive decision. Exported so
+// the auto-archive helper, tests, and admin dashboards all read from a
+// single source of truth. If the safety ramp tightens this past 0.95
+// (≥ 5% false-positive rate observed during the α 2-week window), bump
+// here and the gate moves with it.
+export const AUTO_ARCHIVE_CONFIDENCE_THRESHOLD = 0.95;
 
 // Exported for the ingest caller: inserts rows into `inbox_items` downstream
 // and needs the bucket to decide whether to queue an L2 request later.

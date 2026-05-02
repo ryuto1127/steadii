@@ -11,6 +11,7 @@ import {
 import { sendAndAudit } from "@/lib/agent/tools/gmail";
 import { verifyQStashSignature } from "@/lib/integrations/qstash/verify";
 import { recordSenderFeedback } from "@/lib/agent/email/feedback";
+import { withHeartbeat } from "@/lib/observability/cron-heartbeat";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -41,12 +42,13 @@ const STALE_PROCESSING_MINUTES = 5;
 // ... FOR UPDATE SKIP LOCKED). The losing tick simply skips past locked
 // rows and finds nothing to send.
 export async function POST(req: Request) {
-  return Sentry.startSpan(
-    {
-      name: "cron.send_queue.tick",
-      op: "cron",
-    },
-    async () => {
+  return withHeartbeat("send-queue", () =>
+    Sentry.startSpan(
+      {
+        name: "cron.send_queue.tick",
+        op: "cron",
+      },
+      async () => {
       const rawBody = await req.text();
       if (!(await verifyQStashSignature(req, rawBody))) {
         return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -151,7 +153,8 @@ export async function POST(req: Request) {
         sent,
         failed,
       });
-    }
+      }
+    )
   );
 }
 
