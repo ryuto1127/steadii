@@ -1241,6 +1241,17 @@ export const ja: Messages = {
     archetype_c_pill: "気づき",
     archetype_d_pill: "完了",
     archetype_e_pill: "確認",
+    issue_title: {
+      time_conflict: "予定の衝突",
+      exam_conflict: "試験の衝突",
+      deadline_during_travel: "旅行中の締切",
+      exam_under_prepared: "試験準備が間に合わない",
+      workload_over_capacity: "作業量が過剰",
+      syllabus_calendar_ambiguity: "シラバスの確認が必要",
+      group_project_detected: "グループ課題を検出",
+      group_member_silent: "グループメンバーが沈黙中",
+      fallback: "Steadii からのお知らせ",
+    },
     shared: {
       dismiss: "却下",
       verify_recommended: "詳細確認推奨",

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { and, asc, eq, gte, isNull, lte, ne } from "drizzle-orm";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
@@ -41,6 +41,7 @@ export default async function HomePage() {
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
   const t = await getTranslations("home");
+  const locale = await getLocale();
 
   // One round-trip burst — every panel that needs DB reads is parallel.
   const [
@@ -50,7 +51,7 @@ export default async function HomePage() {
     todayTasks,
     tzPref,
   ] = await Promise.all([
-    buildQueueForUser(userId),
+    buildQueueForUser(userId, locale),
     getTodaysEvents(userId),
     getDueSoonAssignments(userId, 168),
     fetchTodayTasks(userId),
