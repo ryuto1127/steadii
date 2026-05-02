@@ -13,12 +13,6 @@ import { getTranslations, getLocale } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
-function fmt(template: string, vars: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_, k) =>
-    k in vars ? String(vars[k]) : `{${k}}`
-  );
-}
-
 export default async function BillingPage({
   searchParams,
 }: {
@@ -51,19 +45,19 @@ export default async function BillingPage({
     if (effective.plan === "admin") return t("plan_admin");
     if (effective.plan === "student") {
       return effective.until
-        ? fmt(t("plan_student_renews"), {
+        ? t("plan_student_renews", {
             date: effective.until.toLocaleDateString(dateLocale),
           })
         : t("plan_student");
     }
     if (effective.plan === "pro" && effective.source === "trial") {
-      return fmt(t("plan_pro_trial"), {
+      return t("plan_pro_trial", {
         date: effective.until.toLocaleDateString(dateLocale),
       });
     }
     if (effective.plan === "pro") {
       return effective.until
-        ? fmt(t("plan_pro_renews"), {
+        ? t("plan_pro_renews", {
             date: effective.until.toLocaleDateString(dateLocale),
           })
         : t("plan_pro");
@@ -102,7 +96,7 @@ export default async function BillingPage({
       )}
       {!flagsRow?.foundingMember && flagsRow?.grandfatherPriceLockedUntil && (
         <p className="mt-6 text-xs text-[hsl(var(--muted-foreground))]">
-          {fmt(t("price_locked_until"), {
+          {t("price_locked_until", {
             date: flagsRow.grandfatherPriceLockedUntil.toLocaleDateString(
               dateLocale
             ),
@@ -112,7 +106,7 @@ export default async function BillingPage({
 
       {(effective.source === "stripe" || balance.topupRemaining > 0) && (
         <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
-          {fmt(t("currency_locked"), { currency: currency.toUpperCase() })}
+          {t("currency_locked", { currency: currency.toUpperCase() })}
         </p>
       )}
 
@@ -150,7 +144,7 @@ export default async function BillingPage({
           <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
             {effective.plan === "admin"
               ? t("admin_quota_unenforced")
-              : fmt(t("credits_remaining"), {
+              : t("credits_remaining", {
                   remaining: balance.remaining.toLocaleString(dateLocale),
                   date: balance.windowEnd.toLocaleDateString(dateLocale, {
                     month: "short",
@@ -160,7 +154,7 @@ export default async function BillingPage({
           </p>
           {balance.topupRemaining > 0 && (
             <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
-              {fmt(t("topup_remaining"), {
+              {t("topup_remaining", {
                 remaining: balance.topupRemaining.toLocaleString(dateLocale),
               })}
             </p>
