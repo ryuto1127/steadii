@@ -1,5 +1,13 @@
 # Rebrand — skin-swap (visual layer only, behavior locked)
 
+> **STATUS: SUPERSEDED 2026-05-02 — Path A taken (engineer-22 cut entirely).**
+>
+> Ryuto evaluated the lighter color-calm intervention (PR #122 — `polish(landing): tone down hero palette`) and decided it satisfied the "too colorful" complaint that triggered this rebrand effort. Full holographic rebrand (Claude Design's cascade arcs / Logomark refresh / voice-modal vibe upgrade / `/app` token swap) is **not shipping**. Engineer-22 cycle skipped; queue advances directly to engineer-23 (Wave 5 — `wave-5-launch-prep.md`).
+>
+> This doc is kept as historical reference. If a future cycle revisits the holographic direction, the operating principle, do-not-touch list, color-restraint directive, and phase structure below remain reusable.
+
+---
+
 **Read these first** (memory):
 - `feedback_role_split.md`, `feedback_prompts_in_english.md`, `feedback_self_capture_verification_screenshots.md`
 - `project_secretary_pivot.md` — Steadii positioning (chief of staff, not tutor)
