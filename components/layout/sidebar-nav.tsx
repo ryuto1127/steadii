@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useRef, type KeyboardEvent } from "react";
+import { useTranslations } from "next-intl";
 import {
   Inbox,
   Home,
@@ -48,6 +49,7 @@ export function SidebarNav({
   const pathname = usePathname();
   const router = useRouter();
   const containerRef = useRef<HTMLElement>(null);
+  const t = useTranslations("primary_nav");
 
   // Global shortcut: press `g` then one of the per-item letters
   // (h/i/c/t/k/j) to jump. Skip when an input/textarea/contentEditable is
@@ -192,7 +194,7 @@ export function SidebarNav({
       ref={containerRef}
       onKeyDown={handleNavKey}
       className="flex-1 space-y-0.5"
-      aria-label="Primary navigation"
+      aria-label={t("aria_label")}
     >
       {NAV_ITEM_KEYS.map(renderItem)}
       {SECONDARY_NAV_ITEM_KEYS.length > 0 ? (

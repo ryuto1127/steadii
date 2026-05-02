@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { auth } from "@/lib/auth/config";
 import { stripe } from "@/lib/billing/stripe";
 import { AcceptInviteButton } from "./accept-button";
@@ -17,6 +18,7 @@ export default async function InvitePage({
 }) {
   const { code } = await params;
   const session = await auth();
+  const t = await getTranslations("invite_page");
 
   // Validate the code against Stripe. Cheap one-shot API call — an invite
   // page view is rare. No rate-limit concern at α scale.
@@ -30,16 +32,15 @@ export default async function InvitePage({
   if (!promo) {
     return (
       <div className="mx-auto max-w-lg px-6 py-16">
-        <h1 className="text-h1">Invite link not valid</h1>
+        <h1 className="text-h1">{t("invalid_title")}</h1>
         <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">
-          This invitation has been revoked, used, or expired. Ask whoever sent
-          you the link for a fresh one.
+          {t("invalid_body")}
         </p>
         <Link
           href="/"
           className="mt-6 inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-sm font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
         >
-          Back to Steadii
+          {t("back_to_steadii")}
         </Link>
       </div>
     );
@@ -52,28 +53,26 @@ export default async function InvitePage({
 
   return (
     <div className="mx-auto max-w-lg px-6 py-16">
-      <h1 className="text-h1">You&apos;re invited to Steadii Pro</h1>
+      <h1 className="text-h1">{t("invite_title")}</h1>
       <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">
-        This invite unlocks 3 months of Pro — full AI agent, 1000 credits per
-        cycle, everything. No charge for the first three months; the plan then
-        rolls to the standard Pro price unless you cancel.
+        {t("invite_body")}
       </p>
 
       <div className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4 text-sm">
         <div className="flex items-baseline justify-between">
-          <span>Today</span>
+          <span>{t("today_label")}</span>
           <span className="font-mono">$0.00</span>
         </div>
         <div className="mt-2 flex items-baseline justify-between text-[hsl(var(--muted-foreground))]">
-          <span>After 3 months</span>
-          <span className="font-mono">$20 / month</span>
+          <span>{t("after_3mo_label")}</span>
+          <span className="font-mono">{t("price_after")}</span>
         </div>
       </div>
 
       <AcceptInviteButton code={code} />
 
       <p className="mt-4 text-xs text-[hsl(var(--muted-foreground))]">
-        You can cancel any time before the trial ends from Settings → Billing.
+        {t("cancel_anytime")}
       </p>
     </div>
   );

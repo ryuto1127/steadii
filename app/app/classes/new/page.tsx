@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 import { createClass, classSaveSchema } from "@/lib/classes/save";
 
@@ -53,6 +54,7 @@ export default async function NewClassPage({
 }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
+  const t = await getTranslations("class_form");
 
   const sp = await searchParams;
   const error = sp.error;
@@ -65,11 +67,11 @@ export default async function NewClassPage({
           className="inline-flex items-center gap-1 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
         >
           <ArrowLeft size={14} strokeWidth={1.75} />
-          Classes
+          {t("back")}
         </Link>
       </div>
 
-      <h1 className="text-h1 text-[hsl(var(--foreground))]">New class</h1>
+      <h1 className="text-h1 text-[hsl(var(--foreground))]">{t("title")}</h1>
 
       {error ? (
         <div className="rounded-md border border-[hsl(var(--destructive))] bg-[hsl(var(--destructive)/0.08)] px-3 py-2 text-small text-[hsl(var(--destructive))]">
@@ -83,7 +85,7 @@ export default async function NewClassPage({
             htmlFor="name"
             className="text-small font-medium text-[hsl(var(--foreground))]"
           >
-            Name <span className="text-[hsl(var(--destructive))]">*</span>
+            {t("name_label")} <span className="text-[hsl(var(--destructive))]">*</span>
           </label>
           <input
             id="name"
@@ -91,7 +93,7 @@ export default async function NewClassPage({
             type="text"
             required
             maxLength={200}
-            placeholder="e.g. 線形代数 / Linear Algebra"
+            placeholder={t("name_placeholder")}
             className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-body text-[hsl(var(--foreground))] focus:border-[hsl(var(--primary))] focus:outline-none"
           />
         </div>
@@ -101,15 +103,15 @@ export default async function NewClassPage({
             htmlFor="code"
             className="text-small font-medium text-[hsl(var(--foreground))]"
           >
-            Course code{" "}
-            <span className="text-[hsl(var(--muted-foreground))]">(optional)</span>
+            {t("code_label")}{" "}
+            <span className="text-[hsl(var(--muted-foreground))]">{t("optional_indicator")}</span>
           </label>
           <input
             id="code"
             name="code"
             type="text"
             maxLength={50}
-            placeholder="e.g. MAT223 / 21130200"
+            placeholder={t("code_placeholder")}
             className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-body text-[hsl(var(--foreground))] focus:border-[hsl(var(--primary))] focus:outline-none"
           />
         </div>
@@ -119,27 +121,27 @@ export default async function NewClassPage({
             htmlFor="term"
             className="text-small font-medium text-[hsl(var(--foreground))]"
           >
-            Term{" "}
-            <span className="text-[hsl(var(--muted-foreground))]">(optional)</span>
+            {t("term_label")}{" "}
+            <span className="text-[hsl(var(--muted-foreground))]">{t("optional_indicator")}</span>
           </label>
           <input
             id="term"
             name="term"
             type="text"
             maxLength={100}
-            placeholder="e.g. Spring 2026 / 2026年春学期"
+            placeholder={t("term_placeholder")}
             className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-body text-[hsl(var(--foreground))] focus:border-[hsl(var(--primary))] focus:outline-none"
           />
         </div>
 
         <div className="flex flex-col gap-1.5">
           <label className="text-small font-medium text-[hsl(var(--foreground))]">
-            Color{" "}
-            <span className="text-[hsl(var(--muted-foreground))]">(optional)</span>
+            {t("color_label")}{" "}
+            <span className="text-[hsl(var(--muted-foreground))]">{t("optional_indicator")}</span>
           </label>
           <div
             role="radiogroup"
-            aria-label="Class color"
+            aria-label={t("color_aria")}
             className="flex flex-wrap items-center gap-2"
           >
             {COLORS.map((c, idx) => (
@@ -169,13 +171,13 @@ export default async function NewClassPage({
             type="submit"
             className="rounded-md bg-[hsl(var(--primary))] px-4 py-2 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
           >
-            Create class
+            {t("submit")}
           </button>
           <Link
             href="/app/classes"
             className="rounded-md border border-[hsl(var(--border))] px-4 py-2 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
           >
-            Cancel
+            {t("cancel")}
           </Link>
         </div>
       </form>

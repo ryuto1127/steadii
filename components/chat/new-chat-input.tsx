@@ -121,6 +121,7 @@ export function NewChatInput({
   const tChat = useTranslations("chat");
   const tTutorOffer = useTranslations("chat.tutor_offer");
   const tVoice = useTranslations("voice");
+  const tNCI = useTranslations("new_chat_input");
   const router = useRouter();
   const [value, setValue] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -425,8 +426,8 @@ export function NewChatInput({
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              title="Attach image or PDF"
-              aria-label="Attach image or PDF"
+              title={tNCI("attach_aria")}
+              aria-label={tNCI("attach_aria")}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
             >
               <Paperclip size={18} strokeWidth={1.5} />
@@ -484,7 +485,7 @@ export function NewChatInput({
               <span className="flex items-center gap-1.5 rounded-full bg-[hsl(var(--surface))] px-2 py-1">
                 <span aria-hidden className="steadii-ai-dot" />
                 <span className="font-mono text-[10px] font-medium tracking-wide text-[hsl(var(--muted-foreground))]">
-                  AI Ready
+                  {tNCI("ai_ready")}
                 </span>
               </span>
               <button
@@ -496,7 +497,7 @@ export function NewChatInput({
                     ? "bg-[hsl(var(--foreground))] text-[hsl(var(--surface))] hover:opacity-90"
                     : "bg-[hsl(var(--surface))] text-[hsl(var(--muted-foreground))] opacity-60"
                 )}
-                aria-label="Send"
+                aria-label={tNCI("send_aria")}
               >
                 <SendHorizontal size={18} strokeWidth={2} />
               </button>

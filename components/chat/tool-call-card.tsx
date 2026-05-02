@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { ChevronRight, Check, X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
@@ -181,6 +182,7 @@ function DestructiveConfirm({
   pendingId?: string;
   onConfirm?: (decision: "approve" | "deny") => void;
 }) {
+  const t = useTranslations("tool_call_card");
   const target = describeDestructiveTarget(toolName, args);
   return (
     <div className="rounded-md border border-[hsl(var(--destructive)/0.4)] bg-[hsl(var(--destructive)/0.05)] p-3">
@@ -192,7 +194,7 @@ function DestructiveConfirm({
         />
         <div className="flex-1">
           <p className="text-body font-medium text-[hsl(var(--foreground))]">
-            The agent wants to DELETE:
+            {t("delete_target_label")}
           </p>
           <p className="mt-1 font-mono text-small text-[hsl(var(--foreground))]">
             &ldquo;{target.name}&rdquo;
@@ -209,14 +211,14 @@ function DestructiveConfirm({
             onClick={() => onConfirm?.("deny")}
             className="inline-flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
           >
-            Cancel
+            {t("cancel")}
           </button>
           <button
             type="button"
             onClick={() => onConfirm?.("approve")}
             className="inline-flex items-center rounded-md bg-[hsl(var(--destructive))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90"
           >
-            Confirm deletion
+            {t("confirm_delete")}
           </button>
         </div>
       ) : null}
