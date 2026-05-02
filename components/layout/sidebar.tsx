@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { SidebarNav } from "./sidebar-nav";
-import { NAV_ITEM_KEYS } from "./nav-items";
+import { ALL_NAV_ITEM_KEYS } from "./nav-items";
 import { Logo } from "./logo";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
@@ -71,7 +71,7 @@ export async function Sidebar({
   const t = await getTranslations("nav");
   const tLayout = await getTranslations("app_layout");
   const labels: Record<string, string> = {};
-  for (const key of NAV_ITEM_KEYS) labels[key] = t(key);
+  for (const key of ALL_NAV_ITEM_KEYS) labels[key] = t(key);
 
   const session = await auth();
   const user = session?.user;

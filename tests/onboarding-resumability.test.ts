@@ -64,6 +64,7 @@ describe("onboarding resumability (Phase 6 step order)", () => {
           calendarConnected: false,
           gmailConnected: false,
           integrationsStepCompleted: false,
+          waitStepCompleted: false,
         })
       ).toBe(1);
     });
@@ -76,6 +77,7 @@ describe("onboarding resumability (Phase 6 step order)", () => {
           calendarConnected: true,
           gmailConnected: false,
           integrationsStepCompleted: false,
+          waitStepCompleted: false,
         })
       ).toBe(1);
     });
@@ -88,6 +90,7 @@ describe("onboarding resumability (Phase 6 step order)", () => {
           calendarConnected: true,
           gmailConnected: true,
           integrationsStepCompleted: true,
+          waitStepCompleted: false,
         })
       ).toBe(2);
     });
@@ -102,6 +105,7 @@ describe("onboarding resumability (Phase 6 step order)", () => {
             calendarConnected: true,
             gmailConnected: true,
           integrationsStepCompleted: true,
+            waitStepCompleted: false,
           },
           4
         )
@@ -116,6 +120,7 @@ describe("onboarding resumability (Phase 6 step order)", () => {
           calendarConnected: true,
           gmailConnected: true,
           integrationsStepCompleted: true,
+          waitStepCompleted: false,
         })
       ).toBe(3);
     });
@@ -128,6 +133,7 @@ describe("onboarding resumability (Phase 6 step order)", () => {
           calendarConnected: true,
           gmailConnected: true,
           integrationsStepCompleted: true,
+          waitStepCompleted: false,
         })
       ).toBe(4);
     });

@@ -8,6 +8,7 @@ import { registeredResources, users, notionConnections } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { AgentRulesSection } from "@/components/settings/agent-rules";
 import { NotificationSettings } from "@/components/settings/notifications";
+import { readTierPrefs } from "@/lib/notifications/tier-matrix";
 import { getUserConfirmationMode, getUserTimezone, getUserVoiceTriggerKey } from "@/lib/agent/preferences";
 import {
   setConfirmationModeAction,
@@ -83,6 +84,7 @@ export default async function SettingsPage() {
         highRiskNotifyImmediate: users.highRiskNotifyImmediate,
         autonomySendEnabled: users.autonomySendEnabled,
         preferredCurrency: users.preferredCurrency,
+        preferences: users.preferences,
       })
       .from(users)
       .where(eq(users.id, userId))
@@ -238,6 +240,7 @@ export default async function SettingsPage() {
             undoWindowSeconds: userPrefs?.undoWindowSeconds ?? 10,
             highRiskNotifyImmediate:
               userPrefs?.highRiskNotifyImmediate ?? true,
+            notificationTiers: readTierPrefs(userPrefs?.preferences ?? null),
           }}
         />
       </Section>

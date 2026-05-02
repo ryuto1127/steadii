@@ -619,6 +619,111 @@ type MessagesShape = {
     undo_window_hint: string;
     high_risk_push_label: string;
     high_risk_push_hint: string;
+    snooze_24h_aria: string;
+    tier_matrix_heading: string;
+    tier_matrix_caption: string;
+    tier_a_label: string;
+    tier_a_hint: string;
+    tier_b_label: string;
+    tier_b_hint: string;
+    tier_c_label: string;
+    tier_c_hint: string;
+    tier_d_label: string;
+    tier_d_hint: string;
+    tier_e_label: string;
+    tier_e_hint: string;
+    channel_push: string;
+    channel_digest: string;
+    channel_in_app: string;
+    channel_off: string;
+  };
+  queue: {
+    section_heading: string;
+    section_caption: string;
+    show_more: string;
+    show_less: string;
+    empty_title: string;
+    empty_body: string;
+    empty_cta: string;
+    archetype_a_pill: string;
+    archetype_b_pill: string;
+    archetype_c_pill: string;
+    archetype_d_pill: string;
+    archetype_e_pill: string;
+    shared: {
+      dismiss: string;
+      verify_recommended: string;
+    };
+    menu: {
+      snooze_1h: string;
+      snooze_24h: string;
+      snooze_1w: string;
+      dismiss_permanent: string;
+    };
+    undo: {
+      done_with_remaining: string;
+      undo: string;
+    };
+    card_a: {
+      dismiss: string;
+    };
+    card_b: {
+      review: string;
+      send: string;
+      skip: string;
+      dismiss: string;
+    };
+    card_d: {
+      detail: string;
+      undo: string;
+      dismiss: string;
+    };
+    card_e: {
+      free_text_placeholder: string;
+      submit: string;
+      ask_later: string;
+      reject: string;
+      response_pending: string;
+    };
+  };
+  command_palette: {
+    placeholder_default: string;
+    placeholder_examples_label: string;
+    submit_aria: string;
+    recent_heading: string;
+    recent_empty: string;
+    examples_heading: string;
+    examples: string[];
+    examples_short: string[];
+    open_in_chat_link: string;
+    keyboard_hint: string;
+  };
+  home_v2: {
+    queue_label: string;
+    today_label: string;
+    today_no_events: string;
+    today_no_tasks: string;
+    today_no_deadlines: string;
+    today_calendar_heading: string;
+    today_tasks_heading: string;
+    today_deadlines_heading: string;
+    activity_heading: string;
+    activity_caption: string;
+    activity_empty: string;
+    activity_more: string;
+    activity_action_label: Record<string, string>;
+  };
+  onboarding_wait: {
+    title: string;
+    body_p1: string;
+    body_p2: string;
+    body_p3: string;
+    finish_button: string;
+    palette_hint: string;
+    progress_label: string;
+    push_permission_prompt: string;
+    push_permission_yes: string;
+    push_permission_no: string;
   };
   agent_rules_section: {
     global_rules: string;
@@ -1080,7 +1185,7 @@ export const en: MessagesShape = {
   nav: {
     inbox: "Inbox",
     home: "Home",
-    chats: "Chats",
+    chats: "Recent",
     classes: "Classes",
     calendar: "Calendar",
     tasks: "Tasks",
@@ -1655,6 +1760,137 @@ export const en: MessagesShape = {
     high_risk_push_label: "High-risk push",
     high_risk_push_hint:
       "Immediate notification when a high-risk draft lands. Pushes arrive once mobile ships — toggle is saved for later.",
+    snooze_24h_aria: "Snooze for 24 hours",
+    tier_matrix_heading: "Per-card-type routing",
+    tier_matrix_caption:
+      "Which channel fires when each card archetype lands in your queue. The in-app queue always shows everything.",
+    tier_a_label: "Decision required",
+    tier_a_hint: "High-stakes blocks — exam conflicts, deadlines clashing with travel.",
+    tier_b_label: "Drafts ready to review",
+    tier_b_hint: "Replies Steadii has prepared. You hit Send.",
+    tier_c_label: "Soft notices",
+    tier_c_hint: "Steadii noticed something but hasn't drafted yet.",
+    tier_d_label: "Completed actions",
+    tier_d_hint: "Auto-archives, auto-imports, low-risk auto-sends.",
+    tier_e_label: "Clarifying questions",
+    tier_e_hint: "Steadii needs more info before it can act.",
+    channel_push: "Push",
+    channel_digest: "Digest",
+    channel_in_app: "In-app only",
+    channel_off: "Off",
+  },
+  queue: {
+    section_heading: "Steadii queue",
+    section_caption: "What needs you. Sorted by stakes — decisions first.",
+    show_more: "Show more",
+    show_less: "Show less",
+    empty_title: "Queue is empty.",
+    empty_body:
+      "Steadii is watching. New email, deadline, or conflict will land here.",
+    empty_cta: "Ask Steadii to do something",
+    archetype_a_pill: "Decide",
+    archetype_b_pill: "Draft ready",
+    archetype_c_pill: "Notice",
+    archetype_d_pill: "Done",
+    archetype_e_pill: "Question",
+    shared: {
+      dismiss: "Dismiss",
+      verify_recommended: "Verify before acting.",
+    },
+    menu: {
+      snooze_1h: "Snooze 1 hour",
+      snooze_24h: "Snooze 1 day",
+      snooze_1w: "Snooze 1 week",
+      dismiss_permanent: "Dismiss permanently",
+    },
+    undo: {
+      done_with_remaining: "Done. {n}s to undo.",
+      undo: "Undo",
+    },
+    card_a: {
+      dismiss: "Skip",
+    },
+    card_b: {
+      review: "Review",
+      send: "Send",
+      skip: "Skip",
+      dismiss: "Dismiss",
+    },
+    card_d: {
+      detail: "Detail",
+      undo: "Undo",
+      dismiss: "Dismiss",
+    },
+    card_e: {
+      free_text_placeholder: "Or type something else…",
+      submit: "Send to Steadii",
+      ask_later: "Ask later",
+      reject: "Reject",
+      response_pending: "Awaiting response",
+    },
+  },
+  command_palette: {
+    placeholder_default: "Tell Steadii…",
+    placeholder_examples_label: "draft · schedule · move · check-in · cancel",
+    submit_aria: "Send command",
+    recent_heading: "Recent",
+    recent_empty: "Your last commands will show here.",
+    examples_heading: "Try",
+    examples: [
+      "Draft a polite extension request to Prof. Tanaka for ECO101",
+      "Move my Friday 3pm meeting to Monday morning",
+      "Check in on the group project — anyone gone quiet?",
+      "Email TA Yamada — I'll miss tomorrow's lab",
+      "What's piling up this week?",
+    ],
+    examples_short: [
+      "Draft an extension email",
+      "Move Friday's meeting",
+      "Check on the group project",
+      "What's due this week?",
+    ],
+    open_in_chat_link: "Open in chat",
+    keyboard_hint: "⌘K",
+  },
+  home_v2: {
+    queue_label: "Queue",
+    today_label: "Today",
+    today_no_events: "No events today.",
+    today_no_tasks: "Nothing on the task list.",
+    today_no_deadlines: "No deadlines this week.",
+    today_calendar_heading: "Calendar",
+    today_tasks_heading: "Tasks",
+    today_deadlines_heading: "Deadlines",
+    activity_heading: "Recent activity",
+    activity_caption: "What Steadii has been doing lately.",
+    activity_empty: "Nothing yet.",
+    activity_more: "More",
+    activity_action_label: {
+      draft_sent: "Sent draft",
+      draft_dismissed: "Skipped draft",
+      auto_archived: "Auto-archived",
+      auto_replied: "Auto-replied",
+      proposal_resolved: "Resolved",
+      proposal_dismissed: "Dismissed",
+      calendar_imported: "Imported event",
+      mistake_added: "Added note",
+      generic: "Action",
+    },
+  },
+  onboarding_wait: {
+    title: "Steadii is on it.",
+    body_p1:
+      "Steadii will read the last 7 days of email and prepare your first draft.",
+    body_p2:
+      "Usually within 24h, your first proposal lands on Home. We'll push you a notification.",
+    body_p3: "Anything you want handled in the meantime, just ask:",
+    finish_button: "Take me to Home",
+    palette_hint: "or paste a syllabus, command, or question…",
+    progress_label: "Step 3 of 3",
+    push_permission_prompt:
+      "Allow Steadii to send a push when your first proposal is ready?",
+    push_permission_yes: "Yes, notify me",
+    push_permission_no: "Skip notifications",
   },
   agent_rules_section: {
     global_rules: "Global rules",

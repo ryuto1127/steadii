@@ -11,13 +11,18 @@ import { WhyDisclosure } from "@/components/onboarding/why-disclosure";
 import { INTEGRATION_SOURCES } from "@/lib/integrations/suggestions/sources";
 import { recordSuggestionImpression } from "@/lib/integrations/suggestions/impressions";
 import { skipIntegrationsStepAction } from "./actions";
+import { OnboardingWaitStep } from "@/components/onboarding/wait-step";
+import { isWebPushEnabled } from "@/lib/notifications/web-push";
 
 // Symmetric with /app/layout — both endpoints branch on
 // getOnboardingStatus and redirect at each other. Static optimization
 // here can deadlock the bounce.
 export const dynamic = "force-dynamic";
 
-const TOTAL_STEPS = 2;
+// Wave 2 (2026-05-01) — total step count grew from 2 to 3 with the
+// commitment + wait screen. Step 1 grants Google, Step 2 surfaces
+// optional integrations, Step 3 is the wait + delegate prompt.
+const TOTAL_STEPS = 3;
 
 export default async function OnboardingPage() {
   const session = await auth();
@@ -30,9 +35,12 @@ export default async function OnboardingPage() {
 
   const t = await getTranslations("onboarding");
 
-  // Step 1: Connect Google. Once Calendar+Gmail scopes land, we move to Step 2.
-  const onStep1 = !(status.calendarConnected && status.gmailConnected);
-  const currentStep = onStep1 ? 1 : 2;
+  const googleDone = status.calendarConnected && status.gmailConnected;
+  const integrationsDone = status.integrationsStepCompleted;
+  const onStep1 = !googleDone;
+  const onStep2 = googleDone && !integrationsDone;
+  const onStep3 = googleDone && integrationsDone && !status.waitStepCompleted;
+  const currentStep = onStep1 ? 1 : onStep2 ? 2 : 3;
 
   async function connectGoogle() {
     "use server";
@@ -41,7 +49,7 @@ export default async function OnboardingPage() {
 
   // Record one impression per source as the page renders. Step 2 is the
   // canonical "we showed all three integrations to this user once."
-  if (!onStep1) {
+  if (onStep2) {
     await Promise.all(
       INTEGRATION_SOURCES.map((s) =>
         recordSuggestionImpression(
@@ -81,7 +89,7 @@ export default async function OnboardingPage() {
               </button>
             </form>
           </StepPane>
-        ) : (
+        ) : onStep2 ? (
           <StepPane
             title={t("step2.title")}
             oneLine={t("step2.one_line")}
@@ -129,7 +137,9 @@ export default async function OnboardingPage() {
               </button>
             </form>
           </StepPane>
-        )}
+        ) : onStep3 ? (
+          <OnboardingWaitStep pushSupported={isWebPushEnabled()} />
+        ) : null}
       </section>
     </main>
   );
