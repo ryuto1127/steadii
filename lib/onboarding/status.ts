@@ -35,6 +35,7 @@ export async function getOnboardingStatus(userId: string): Promise<OnboardingSta
   const [userRow] = await db
     .select({
       onboardingIntegrationsSkippedAt: users.onboardingIntegrationsSkippedAt,
+      preferences: users.preferences,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -66,11 +67,20 @@ export async function getOnboardingStatus(userId: string): Promise<OnboardingSta
     }
   }
 
+  // Wave 2 wait-step state. Stored in `users.preferences` JSONB so we
+  // can ship without a migration. The shape extends the existing
+  // preferences blob with an optional ISO timestamp.
+  const prefs = (userRow?.preferences ?? {}) as Record<string, unknown>;
+  const waitDismissedAt = prefs.onboardingWaitDismissedAt;
+  const waitStepCompleted =
+    typeof waitDismissedAt === "string" && waitDismissedAt.length > 0;
+
   return {
     notionConnected: !!conn,
     notionSetupComplete: !!(conn && conn.setupCompletedAt),
     calendarConnected,
     gmailConnected,
     integrationsStepCompleted,
+    waitStepCompleted,
   };
 }

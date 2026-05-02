@@ -5,6 +5,11 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { saveNotificationSettingsAction } from "@/app/app/settings/notification-actions";
+import {
+  type NotificationChannel,
+  type NotificationTierPrefs,
+} from "@/lib/notifications/tier-matrix";
+import type { QueueArchetype } from "@/lib/agent/queue/types";
 
 type Props = {
   initial: {
@@ -12,8 +17,12 @@ type Props = {
     digestHourLocal: number;
     undoWindowSeconds: number;
     highRiskNotifyImmediate: boolean;
+    notificationTiers: NotificationTierPrefs;
   };
 };
+
+const TIER_ORDER: QueueArchetype[] = ["A", "B", "C", "D", "E"];
+const CHANNEL_OPTIONS: NotificationChannel[] = ["push", "digest", "in_app"];
 
 export function NotificationSettings({ initial }: Props) {
   const router = useRouter();
@@ -23,6 +32,9 @@ export function NotificationSettings({ initial }: Props) {
   const [undoWindowSeconds, setUndoWindowSeconds] = useState(initial.undoWindowSeconds);
   const [highRiskNotifyImmediate, setHighRiskNotifyImmediate] = useState(
     initial.highRiskNotifyImmediate
+  );
+  const [tiers, setTiers] = useState<NotificationTierPrefs>(
+    initial.notificationTiers
   );
   const [isPending, startTransition] = useTransition();
 
@@ -34,6 +46,7 @@ export function NotificationSettings({ initial }: Props) {
           digestHourLocal,
           undoWindowSeconds,
           highRiskNotifyImmediate,
+          notificationTiers: tiers,
         });
         toast.success(t("saved_toast"));
         router.refresh();
@@ -110,6 +123,36 @@ export function NotificationSettings({ initial }: Props) {
         </label>
       </Row>
 
+      <section className="flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-4">
+        <header>
+          <h3 className="text-body font-semibold text-[hsl(var(--foreground))]">
+            {t("tier_matrix_heading")}
+          </h3>
+          <p className="text-small text-[hsl(var(--muted-foreground))]">
+            {t("tier_matrix_caption")}
+          </p>
+        </header>
+        <div className="flex flex-col gap-2">
+          {TIER_ORDER.map((arch) => (
+            <TierRow
+              key={arch}
+              archetype={arch}
+              value={tiers[arch]}
+              onChange={(next) =>
+                setTiers((prev) => ({ ...prev, [arch]: next }))
+              }
+              label={t(`tier_${arch.toLowerCase()}_label`)}
+              hint={t(`tier_${arch.toLowerCase()}_hint`)}
+              channelLabels={{
+                push: t("channel_push"),
+                digest: t("channel_digest"),
+                in_app: t("channel_in_app"),
+              }}
+            />
+          ))}
+        </div>
+      </section>
+
       <div>
         <button
           type="button"
@@ -119,6 +162,64 @@ export function NotificationSettings({ initial }: Props) {
         >
           {t("save")}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function TierRow({
+  archetype,
+  value,
+  onChange,
+  label,
+  hint,
+  channelLabels,
+}: {
+  archetype: QueueArchetype;
+  value: NotificationChannel;
+  onChange: (next: NotificationChannel) => void;
+  label: string;
+  hint: string;
+  channelLabels: Record<NotificationChannel, string>;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="flex min-w-0 flex-1 items-baseline gap-2">
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+          {archetype}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-small font-medium text-[hsl(var(--foreground))]">
+            {label}
+          </div>
+          <div className="text-[12px] text-[hsl(var(--muted-foreground))]">
+            {hint}
+          </div>
+        </div>
+      </div>
+      <div
+        role="radiogroup"
+        aria-label={label}
+        className="flex shrink-0 items-center gap-1 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] p-0.5 text-[11px]"
+      >
+        {CHANNEL_OPTIONS.map((opt) => (
+          <button
+            key={opt}
+            type="button"
+            role="radio"
+            aria-checked={value === opt}
+            onClick={() => onChange(opt)}
+            data-tier-row={archetype}
+            data-channel={opt}
+            className={
+              value === opt
+                ? "rounded-full bg-[hsl(var(--foreground))] px-2.5 py-1 font-medium text-[hsl(var(--surface))]"
+                : "rounded-full px-2.5 py-1 text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+            }
+          >
+            {channelLabels[opt]}
+          </button>
+        ))}
       </div>
     </div>
   );

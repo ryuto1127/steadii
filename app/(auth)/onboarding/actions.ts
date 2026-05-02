@@ -121,6 +121,11 @@ export async function addResourceAction(formData: FormData) {
 // Phase 7 W-Integrations — Step 2 skip-once. Stamp the user row so the
 // integrations page never re-renders. Contextual prompts (Surface 2)
 // remain active per locked decision Q1.
+//
+// Wave 2 (2026-05-01): redirect target is /onboarding (so the wait step
+// renders next), not /app. Without this, /app would bounce back here
+// anyway via the onboarding-not-complete gate, but bouncing through
+// /app first flashes a half-rendered Home for ~50ms.
 export async function skipIntegrationsStepAction() {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthenticated");
@@ -129,14 +134,45 @@ export async function skipIntegrationsStepAction() {
     .set({ onboardingIntegrationsSkippedAt: new Date() })
     .where(eq(users.id, session.user.id));
 
-  // The post-skip redirect lands on /app, whose layout re-runs
-  // getOnboardingStatus and decides whether to bounce back to /onboarding.
-  // Without invalidating the cache here, /app/layout can serve a stale
-  // render where integrationsStepCompleted is still false → infinite
-  // /app ↔ /onboarding loop.
   revalidatePath("/app", "layout");
   revalidatePath("/onboarding");
 
+  redirect("/onboarding");
+}
+
+// Wave 2 — dismiss the Step 3 commitment + wait screen. Stamps an ISO
+// timestamp into `users.preferences.onboardingWaitDismissedAt`. The
+// preferences blob is JSONB so we merge rather than overwrite to keep
+// the other prefs (theme, locale, voice trigger, agent confirmation
+// mode) intact.
+export async function dismissOnboardingWaitAction(args?: {
+  pushPermissionGranted?: boolean;
+}) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  const userId = session.user.id;
+
+  const [row] = await db
+    .select({ preferences: users.preferences })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const merged = {
+    ...((row?.preferences ?? {}) as Record<string, unknown>),
+    onboardingWaitDismissedAt: new Date().toISOString(),
+    onboardingPushPermissionGranted:
+      args?.pushPermissionGranted === true ? true : false,
+  };
+  await db
+    .update(users)
+    .set({
+      preferences: merged as typeof users.$inferSelect.preferences,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId));
+
+  revalidatePath("/app", "layout");
+  revalidatePath("/onboarding");
   redirect("/app");
 }
 

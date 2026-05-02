@@ -3,19 +3,33 @@
 // Next.js client-reference proxy, which wraps non-function exports in a way
 // that makes them non-iterable from a server component.
 
-// Phase 6: Inbox is pinned to index 0. `g i` jumps to it. Sidebar order is
-// locked by the pre-launch redesign memo (revised 2026-04-25 to 6 items
-// with Tasks at the bottom).
+// Wave 2 secretary-pivot order (2026-05-01) per
+// `project_wave_2_home_design.md`. Home is the primary destination
+// (queue + command + briefing); Inbox sits next as the "show me
+// everything triaged" catch-up surface; Calendar / Tasks / Classes
+// follow. 履歴 (renamed from チャット) is demoted to the secondary
+// section below the visual separator (`SECONDARY_NAV_ITEM_KEYS`).
 export const NAV_ITEM_KEYS = [
-  "inbox",
   "home",
-  "chats",
-  "classes",
+  "inbox",
   "calendar",
   "tasks",
+  "classes",
 ] as const;
 
-export type NavItemKey = (typeof NAV_ITEM_KEYS)[number];
+// Secondary section — items below the rule. The sidebar shell renders a
+// subtle separator between the primary block and this one. Settings is
+// still NOT in the rail (it lives behind the account footer link).
+export const SECONDARY_NAV_ITEM_KEYS = ["chats"] as const;
+
+export type NavItemKey =
+  | (typeof NAV_ITEM_KEYS)[number]
+  | (typeof SECONDARY_NAV_ITEM_KEYS)[number];
+
+export const ALL_NAV_ITEM_KEYS: readonly NavItemKey[] = [
+  ...NAV_ITEM_KEYS,
+  ...SECONDARY_NAV_ITEM_KEYS,
+];
 
 export const NAV_HREFS: Record<NavItemKey, string> = {
   inbox: "/app/inbox",
