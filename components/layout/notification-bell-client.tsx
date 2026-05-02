@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Bell, ClipboardList, Sparkles } from "lucide-react";
 import type { HighRiskPendingItem } from "@/lib/agent/email/pending-queries";
 import type { AutoActionFeedItem } from "@/lib/agent/proactive/auto-action-feed";
@@ -24,6 +25,7 @@ export function NotificationBellClient({
   adminWaitlist?: WaitlistAdminBellItem[];
   adminWaitlistTotal?: number;
 }) {
+  const t = useTranslations("notification_bell");
   const [open, setOpen] = useState(false);
   const [lastSeenIso, setLastSeenIso] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -101,7 +103,7 @@ export function NotificationBellClient({
       <button
         type="button"
         onClick={handleToggle}
-        aria-label="Notifications"
+        aria-label={t("aria_label")}
         aria-expanded={open}
         className="relative inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md transition-hover hover:bg-[hsl(var(--surface-raised))]"
       >
@@ -120,11 +122,11 @@ export function NotificationBellClient({
       {open ? (
         <div className="absolute right-0 top-full z-20 mt-1 w-[360px] rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-1 shadow-lg">
           <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-            Needs review
+            {t("needs_review")}
           </div>
           {!hasNeedsReview ? (
             <div className="px-3 py-2 text-small text-[hsl(var(--muted-foreground))]">
-              No high-risk items right now.
+              {t("no_high_risk")}
             </div>
           ) : (
             <ul className="flex flex-col">
@@ -198,7 +200,7 @@ export function NotificationBellClient({
                     onClick={handleItemClick}
                     className="block rounded-md px-3 py-2 text-[12px] text-[hsl(var(--primary))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:underline"
                   >
-                    +{adminOverflow} more — view all
+                    {t("overflow_more_view_all", { count: adminOverflow })}
                   </Link>
                 </li>
               ) : null}
@@ -210,7 +212,7 @@ export function NotificationBellClient({
               <div className="mt-1 border-t border-[hsl(var(--border))]" />
               <div className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                 <Sparkles size={11} strokeWidth={2.5} />
-                Steadii noticed
+                {t("steadii_noticed")}
               </div>
               <ul className="flex flex-col">
                 {autoActions.map((row) => {
@@ -252,7 +254,7 @@ export function NotificationBellClient({
               onClick={handleItemClick}
               className="text-[12px] text-[hsl(var(--primary))] hover:underline"
             >
-              View all →
+              {t("view_all")}
             </Link>
           </div>
         </div>

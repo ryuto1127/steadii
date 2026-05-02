@@ -1,6 +1,9 @@
-export default function CalendarLoading() {
+import { getTranslations } from "next-intl/server";
+
+export default async function CalendarLoading() {
+  const t = await getTranslations("app");
   return (
-    <div role="status" aria-label="Loading" className="mx-auto max-w-6xl">
+    <div role="status" aria-label={t("loading_aria")} className="mx-auto max-w-6xl">
       <div className="mb-6 flex items-center justify-between">
         <div className="h-9 w-40 animate-pulse rounded-md bg-[hsl(var(--surface-raised))]" />
         <div className="flex gap-2">

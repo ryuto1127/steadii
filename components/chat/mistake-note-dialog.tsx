@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 type ClassOption = { id: string; name: string; status: string };
 
@@ -15,6 +16,7 @@ export function MistakeNoteDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const t = useTranslations("mistake_note_dialog");
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [title, setTitle] = useState("");
   const [classId, setClassId] = useState("");
@@ -68,26 +70,26 @@ export function MistakeNoteDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
       <div className="w-full max-w-md rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4 shadow-lg">
-        <h2 className="text-h2 text-[hsl(var(--foreground))]">Add to Mistake Notes</h2>
+        <h2 className="text-h2 text-[hsl(var(--foreground))]">{t("title")}</h2>
         <div className="mt-4 space-y-3">
           <label className="block text-xs text-[hsl(var(--muted-foreground))]">
-            Title (short problem summary)
+            {t("title_label")}
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-sm"
-              placeholder="e.g. 2D projectile with wind"
+              placeholder={t("title_placeholder")}
             />
           </label>
 
           <label className="block text-xs text-[hsl(var(--muted-foreground))]">
-            Class
+            {t("class_label")}
             <select
               value={classId}
               onChange={(e) => setClassId(e.target.value)}
               className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-sm"
             >
-              <option value="">(none)</option>
+              <option value="">{t("class_none")}</option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -97,7 +99,7 @@ export function MistakeNoteDialog({
           </label>
 
           <label className="block text-xs text-[hsl(var(--muted-foreground))]">
-            Unit / chapter
+            {t("unit_label")}
             <input
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
@@ -106,7 +108,7 @@ export function MistakeNoteDialog({
           </label>
 
           <label className="block text-xs text-[hsl(var(--muted-foreground))]">
-            Difficulty
+            {t("difficulty_label")}
             <select
               value={difficulty}
               onChange={(e) =>
@@ -121,12 +123,12 @@ export function MistakeNoteDialog({
           </label>
 
           <label className="block text-xs text-[hsl(var(--muted-foreground))]">
-            Tags (comma-separated)
+            {t("tags_label")}
             <input
               value={tagsText}
               onChange={(e) => setTagsText(e.target.value)}
               className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-sm"
-              placeholder="vectors, integration"
+              placeholder={t("tags_placeholder")}
             />
           </label>
         </div>
@@ -143,7 +145,7 @@ export function MistakeNoteDialog({
             onClick={onClose}
             className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm"
           >
-            Cancel
+            {t("cancel")}
           </button>
           <button
             type="button"

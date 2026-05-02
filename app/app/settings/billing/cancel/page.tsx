@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth/config";
 import { redirect, notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/lib/db/client";
 import { subscriptions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -15,6 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function CancelPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
+  const t = await getTranslations("cancel_form_page");
 
   const [sub] = await db
     .select({
@@ -30,7 +32,7 @@ export default async function CancelPage() {
 
   return (
     <div className="mx-auto max-w-lg">
-      <h1 className="text-h1">Cancel subscription</h1>
+      <h1 className="text-h1">{t("title")}</h1>
       <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">
         {sub.cancelAtPeriodEnd === 1
           ? "Your subscription is already set to cancel at the end of the current period."

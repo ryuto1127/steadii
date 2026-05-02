@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/lib/db/client";
 import { classes as classesTable } from "@/lib/db/schema";
 import { and, eq, isNull, desc } from "drizzle-orm";
@@ -11,6 +12,7 @@ export default async function NewSyllabusPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
+  const t = await getTranslations("syllabus_new_page");
 
   const rows = await db
     .select({ id: classesTable.id, name: classesTable.name })
@@ -27,9 +29,9 @@ export default async function NewSyllabusPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="text-h1 text-[hsl(var(--foreground))]">Upload a syllabus</h1>
+      <h1 className="text-h1 text-[hsl(var(--foreground))]">{t("title")}</h1>
       <p className="mt-2 text-small text-[hsl(var(--muted-foreground))]">
-        Drop a PDF, an image, or paste a URL. We&apos;ll extract the structure and show you a preview before saving.
+        {t("subtitle")}
       </p>
       <SyllabusWizard
         classes={rows}

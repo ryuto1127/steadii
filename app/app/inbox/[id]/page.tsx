@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Mail, Pause } from "lucide-react";
 import { and, eq } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { MarkReviewedOnMount } from "./_mark-reviewed-on-mount";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
@@ -45,11 +46,11 @@ function riskTone(tier: "low" | "medium" | "high" | null): string {
   }
 }
 
-function riskLabel(tier: "low" | "medium" | "high" | null): string {
-  if (tier === "high") return "High";
-  if (tier === "medium") return "Medium";
-  if (tier === "low") return "Low";
-  return "Classifying";
+function riskLabelKey(tier: "low" | "medium" | "high" | null): string {
+  if (tier === "high") return "risk_high";
+  if (tier === "medium") return "risk_medium";
+  if (tier === "low") return "risk_low";
+  return "risk_classifying";
 }
 
 // actionLabel was removed in polish-6. The same per-action signal is
@@ -65,6 +66,7 @@ export default async function InboxItemPage({
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
+  const t = await getTranslations("inbox_detail");
 
   const [row] = await db
     .select({
@@ -164,7 +166,7 @@ export default async function InboxItemPage({
     const seed = [
       `I'm replying to an email from ${
         inbox.senderName ?? inbox.senderEmail
-      } about "${inbox.subject ?? "(no subject)"}".`,
+      } about "${inbox.subject ?? t("no_subject")}".`,
       "",
       "Steadii's clarifying question:",
       draft.reasoning?.trim() ?? "(no reasoning recorded)",
@@ -198,7 +200,7 @@ export default async function InboxItemPage({
           className="inline-flex h-8 items-center gap-1 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
         >
           <ArrowLeft size={14} strokeWidth={1.75} />
-          Inbox
+          {t("back")}
         </Link>
       </div>
 
@@ -218,11 +220,11 @@ export default async function InboxItemPage({
               draft.riskTier
             )}`}
           >
-            {riskLabel(draft.riskTier)}
+            {t(riskLabelKey(draft.riskTier))}
           </span>
           {inbox.firstTimeSender ? (
             <span className="text-[11px] uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-              New sender
+              {t("new_sender")}
             </span>
           ) : null}
           <span className="ml-auto text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]">
@@ -230,7 +232,7 @@ export default async function InboxItemPage({
           </span>
         </div>
         <h1 className="mt-2 text-h2 text-[hsl(var(--foreground))] break-words">
-          {inbox.subject ?? "(no subject)"}
+          {inbox.subject ?? t("no_subject")}
         </h1>
         <div className="mt-1 flex items-start gap-2 text-small text-[hsl(var(--muted-foreground))]">
           <Mail size={14} strokeWidth={1.75} className="mt-0.5 shrink-0" />
@@ -267,17 +269,16 @@ export default async function InboxItemPage({
           <Pause size={16} strokeWidth={1.75} className="mt-0.5 shrink-0 text-[hsl(var(--muted-foreground))]" />
           <div>
             <div className="font-medium text-[hsl(var(--foreground))]">
-              Draft generation paused
+              {t("paused_title")}
             </div>
             <div className="mt-1 text-[hsl(var(--muted-foreground))]">
-              You ran out of credits this cycle. Top up to resume draft
-              generation — classification continues for free.
+              {t("paused_body")}
             </div>
             <Link
               href="/app/settings/billing"
               className="mt-2 inline-block text-[hsl(var(--primary))] hover:underline"
             >
-              Manage billing →
+              {t("manage_billing")}
             </Link>
           </div>
         </div>
@@ -289,7 +290,7 @@ export default async function InboxItemPage({
 
       {draft.action === "ask_clarifying" && !paused ? (
         <ClarificationReply
-          emailSubject={inbox.subject ?? "(no subject)"}
+          emailSubject={inbox.subject ?? t("no_subject")}
           emailSender={inbox.senderName ?? inbox.senderEmail}
           agentQuestion={draft.reasoning ?? null}
           submitAction={submitClarificationAction}
