@@ -83,5 +83,8 @@ async function spawnFollowupChat(
     content: seed,
   });
 
-  return { redirectTo: `/app/chat/${chatRow.id}` };
+  // `?stream=1` triggers the chat-view auto-stream on mount. Without it,
+  // the seeded user message renders but the assistant turn never starts —
+  // user lands on an empty-looking chat. See chat-view.tsx auto-trigger.
+  return { redirectTo: `/app/chat/${chatRow.id}?stream=1` };
 }

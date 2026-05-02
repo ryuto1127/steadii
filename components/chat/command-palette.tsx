@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  type ChangeEvent,
   type FormEvent,
   type KeyboardEvent,
   useEffect,
@@ -10,7 +11,12 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Command, ExternalLink, SendHorizontal, Sparkles } from "lucide-react";
+import {
+  ExternalLink,
+  Paperclip,
+  SendHorizontal,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils/cn";
 import { detectTutorScope } from "@/lib/chat/scope-detection";
@@ -40,17 +46,26 @@ export function CommandPalette({
 }) {
   const t = useTranslations("command_palette");
   const tTutorOffer = useTranslations("chat.tutor_offer");
+  const tNCI = useTranslations("new_chat_input");
   const router = useRouter();
   const [value, setValue] = useState("");
   const [focused, setFocused] = useState(false);
+  // `dropdownOpen` separates the visual focus state of the input chrome
+  // from the dropdown visibility — the dropdown was hiding the queue
+  // below on Home, so it now opens only on user *intent* (typing or
+  // explicit click on input), not on raw focus. Auto-focus on mount no
+  // longer pops the menu over the queue.
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [exampleIdx, setExampleIdx] = useState(0);
   const [recents, setRecents] = useState<string[]>([]);
   const [tutorOffer, setTutorOffer] = useState<{ question: string } | null>(
     null
   );
   const [openingChatGPT, setOpeningChatGPT] = useState(false);
+  const [uploadPending, setUploadPending] = useState(false);
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // Hydrate recents from localStorage on mount. Per-device only — Wave 2
   // does not sync to DB (cost vs value; spec says "sync later if signal
@@ -161,6 +176,41 @@ export function CommandPalette({
     if (e.key === "Escape") {
       e.currentTarget.blur();
       setFocused(false);
+      setDropdownOpen(false);
+    }
+  };
+
+  // Upload an attachment from Home: create a fresh chat, attach the file,
+  // navigate with ?stream=1 so the assistant starts replying immediately.
+  // The text input is untouched — the file alone is the user's intent
+  // (matches the "attachment-only message" path in NewChatInput).
+  const onFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    setUploadPending(true);
+    try {
+      const createResp = await fetch("/api/chat", { method: "POST" });
+      if (!createResp.ok) throw new Error(`HTTP ${createResp.status}`);
+      const created = (await createResp.json()) as { id?: string };
+      if (!created.id) throw new Error("No chat id returned");
+      const form = new FormData();
+      form.set("file", file);
+      form.set("chatId", created.id);
+      const up = await fetch("/api/chat/attachments", {
+        method: "POST",
+        body: form,
+      });
+      if (!up.ok) throw new Error("Upload failed");
+      router.push(`/app/chat/${created.id}?stream=1`);
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Couldn't attach the file."
+      );
+    } finally {
+      setUploadPending(false);
     }
   };
 
@@ -257,22 +307,45 @@ export function CommandPalette({
             "border-[hsl(var(--primary)/0.4)] bg-[hsl(var(--surface))] shadow-[0_4px_20px_-8px_hsl(var(--primary)/0.18)]"
         )}
       >
-        <span
+        <input
+          ref={fileRef}
+          type="file"
+          className="hidden"
+          onChange={onFileChange}
           aria-hidden
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))]"
+        />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploadPending}
+          aria-label={tNCI("attach_aria")}
+          title={tNCI("attach_aria")}
+          className={cn(
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface))] hover:text-[hsl(var(--foreground))]",
+            uploadPending && "opacity-50"
+          )}
         >
-          <Command size={15} strokeWidth={1.75} />
-        </span>
+          <Paperclip size={15} strokeWidth={1.75} />
+        </button>
         <input
           ref={inputRef}
           type="text"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            setValue(e.target.value);
+            // Open the dropdown on first keystroke (intent signal). Auto-focus
+            // alone no longer triggers it — the queue stays unobstructed.
+            if (e.target.value.length > 0 && !dropdownOpen) setDropdownOpen(true);
+          }}
           onFocus={() => setFocused(true)}
+          onClick={() => setDropdownOpen(true)}
           onBlur={() => {
             // Delay so a click on a Recent item still fires before the
             // blur tears down the dropdown.
-            setTimeout(() => setFocused(false), 150);
+            setTimeout(() => {
+              setFocused(false);
+              setDropdownOpen(false);
+            }, 150);
           }}
           onKeyDown={onInputKey}
           autoFocus={autoFocus}
@@ -303,7 +376,17 @@ export function CommandPalette({
         </button>
       </form>
 
-      {focused && !tutorOffer ? (
+      {/* Voice trigger hint — Wave 1 wired Caps Lock universally on /app/*,
+          but the visual reminder went missing in Wave 2. Re-surface a small
+          subtle line so users discover voice input on Home. */}
+      <p
+        aria-hidden
+        className="mt-2 text-center text-[11px] text-[hsl(var(--muted-foreground))]"
+      >
+        {t("voice_hint")}
+      </p>
+
+      {dropdownOpen && !tutorOffer ? (
         <div
           className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] shadow-[0_8px_30px_rgba(0,0,0,0.10)]"
           role="listbox"
