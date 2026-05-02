@@ -34,15 +34,16 @@ describe("mistakes i18n namespace", () => {
     }
   });
 
-  // Per-brief: keep the photo button label and supported-formats line
-  // exactly aligned with the spec so docs/handoffs don't drift.
-  it("matches the exact JA + EN strings the brief locked in", () => {
+  // Per-brief (Wave 1 secretary-pivot 2026-05-01): rebrand mistake-notes
+  // UI as "Steadii's notes about you / weak-area context for drafts" —
+  // explicitly NOT a study aid. The button + modal title strings below
+  // are the canonical user-facing framing; if you need to change them,
+  // update both this lock and docs/handoffs/wave-1-secretary-pivot-foundation.md.
+  it("matches the exact JA + EN strings the Wave 1 brief locked in", () => {
     expect(en.mistakes.add_from_photo).toBe("📷 Add from photo");
     expect(ja.mistakes.add_from_photo).toBe("📷 写真から追加");
-    expect(en.mistakes.photo_upload_modal_title).toBe(
-      "Extract handwritten note"
-    );
-    expect(ja.mistakes.photo_upload_modal_title).toBe("手書きノートを取り込む");
+    expect(en.mistakes.photo_upload_modal_title).toBe("Add to Steadii's notes");
+    expect(ja.mistakes.photo_upload_modal_title).toBe("Steadii のメモに追加");
     expect(en.mistakes.photo_supported_formats).toBe("PDF, PNG, JPEG, GIF, WebP");
     expect(ja.mistakes.photo_supported_formats).toBe(
       "PDF・PNG・JPEG・GIF・WebP に対応"

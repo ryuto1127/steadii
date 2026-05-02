@@ -184,15 +184,24 @@ export function SidebarNav({
               )}
             >
               <span className="truncate">{labels[key] ?? key}</span>
-              {showBadge ? (
-                <span
-                  data-nav-badge-count
-                  aria-label={`${badgeCount} pending`}
-                  className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-[hsl(38_92%_50%)] px-1.5 text-[11px] font-semibold leading-none tabular-nums text-[hsl(var(--foreground))] dark:bg-[hsl(38_92%_55%)] dark:text-[hsl(220_20%_10%)]"
+              <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                {showBadge ? (
+                  <span
+                    data-nav-badge-count
+                    aria-label={`${badgeCount} pending`}
+                    className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[hsl(38_92%_50%)] px-1.5 text-[11px] font-semibold leading-none tabular-nums text-[hsl(var(--foreground))] dark:bg-[hsl(38_92%_55%)] dark:text-[hsl(220_20%_10%)]"
+                  >
+                    {badgeCount > 99 ? "99+" : badgeCount}
+                  </span>
+                ) : null}
+                <kbd
+                  data-nav-shortcut
+                  aria-hidden
+                  className="rounded bg-[hsl(var(--surface))] px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))] opacity-70"
                 >
-                  {badgeCount > 99 ? "99+" : badgeCount}
-                </span>
-              ) : null}
+                  g{NAV_SHORTCUTS[key]}
+                </kbd>
+              </span>
             </span>
           </Link>
         );

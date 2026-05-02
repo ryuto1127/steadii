@@ -212,6 +212,7 @@ type MessagesShape = {
   };
   mistakes: {
     add_from_photo: string;
+    context_note: string;
     photo_upload_modal_title: string;
     photo_upload_modal_subtitle: string;
     photo_choose_file: string;
@@ -679,6 +680,14 @@ type MessagesShape = {
     };
     dismiss: string;
     remove_attachment: string;
+    tutor_offer: {
+      heading: string;
+      body: string;
+      open_in_chatgpt: string;
+      ask_anyway: string;
+      preparing: string;
+      open_failed: string;
+    };
   };
   voice: {
     hint_caps: string;
@@ -916,11 +925,12 @@ type MessagesShape = {
 export const en: MessagesShape = {
   brand: {
     name: "Steadii",
-    tagline: "AI secretary for your studies.",
+    tagline: "Your chief of staff for college life.",
   },
   landing: {
-    headline: "AI secretary\nfor your studies.",
-    subhead: "Type or talk — Steadii reads, writes, and remembers for you.",
+    headline: "Your chief of staff\nfor college life.",
+    subhead:
+      "Steadii reads, writes, schedules, and tracks — so you don't have to.",
     cta: "Continue with Google",
     cta_request_access: "Request α access",
     cta_already_approved: "Already approved? Sign in",
@@ -941,7 +951,7 @@ export const en: MessagesShape = {
       },
       yours: {
         title: "Your data stays yours",
-        body: "Verbatim mistakes, syllabi, and tasks. Yours to read, search, and export — never locked in.",
+        body: "Syllabi, tasks, and the notes Steadii keeps about you. Yours to read, search, and export — never locked in.",
       },
     },
     what_you_do: {
@@ -956,9 +966,9 @@ export const en: MessagesShape = {
           action: "Calendar event added.",
         },
         syllabus: {
-          input: "What's covered on the Math II midterm?",
+          input: "When's the Math II midterm?",
           action:
-            "Reads your syllabus → \"Chapter 3-5, midterm 5/16, focus on §3.4 limits.\"",
+            "Reads your syllabus → \"Ch 3-5, midterm 5/16. Adding the date to your calendar.\"",
         },
         absence: {
           input: "I might not make it to campus tomorrow",
@@ -970,7 +980,7 @@ export const en: MessagesShape = {
     steadii_in_motion: {
       title: "And it watches your back.",
       body:
-        "Steadii reads your syllabus, calendar, and recent mistakes — then surfaces what you'd otherwise miss.",
+        "Steadii reads your syllabus, calendar, and the notes it's kept about you — then surfaces what you'd otherwise miss.",
       real_screen: "Real screen. No mocks.",
       step_calendar: "Tokyo trip · 5/15 — 5/17",
       step_calendar_meta: "Calendar · 3-day event added",
@@ -1006,7 +1016,7 @@ export const en: MessagesShape = {
       paragraph_reasoning:
         "Every reason behind every decision is visible. Click the reasoning panel under any draft and you see what the agent read, what it weighed, and which past emails it cited.",
       paragraph_yours:
-        "Your data stays yours. Verbatim mistakes, syllabi, and assignments. Yours to read, search, and export — never locked in.",
+        "Your data stays yours. Syllabi, tasks, and the notes Steadii keeps about you. Yours to read, search, and export — never locked in.",
       paragraph_confirm:
         "Nothing sends without you. Every outgoing message rides a 10-second undo and your explicit approval. The staged-autonomy mode that auto-sends low-stakes drafts is opt-in and per-user.",
     },
@@ -1082,7 +1092,9 @@ export const en: MessagesShape = {
       // "Tasks" is the user-facing label; the URL key, schema table, and
       // route handler all stay `assignments` to avoid a migration.
       assignments: "Tasks",
-      mistakes: "Mistakes",
+      // Wave 1 secretary pivot: framed as Steadii's notes about the user
+      // (input for draft personalization), not as study material.
+      mistakes: "Notes",
       chats: "Chats",
     },
     no_assignments_title: "No tasks yet.",
@@ -1119,9 +1131,9 @@ export const en: MessagesShape = {
       button: "Delete class",
       confirm_title: "Delete {name}?",
       confirm_body:
-        "This will also delete {syllabi} syllabi, {assignments} tasks, and {mistakes} mistake notes. Chats referencing this class will be untagged but kept.",
+        "This will also delete {syllabi} syllabi, {assignments} tasks, and {mistakes} of Steadii's notes about you. Chats referencing this class will be untagged but kept.",
       confirm_body_no_cascade:
-        "This class has no syllabi, tasks, or mistake notes. Chats referencing this class will be untagged but kept.",
+        "This class has no syllabi, tasks, or saved notes. Chats referencing this class will be untagged but kept.",
       success_toast: "Deleted {name}.",
       delete_failed: "Couldn't delete class.",
     },
@@ -1169,35 +1181,37 @@ export const en: MessagesShape = {
       delete_failed: "Couldn't delete task.",
     },
     mistakes_grid: {
-      empty_title: "No mistake notes for {className} yet.",
+      empty_title: "Steadii hasn't tracked any weak-area notes for {className} yet.",
       empty_description:
-        "Paste a problem image in chat and ask for an explanation, or scan a handwritten page with the button above.",
+        "These are the notes Steadii keeps so it can personalize drafts and spot when emails relate to topics you've struggled with. Drop a handwritten page above or paste one into chat.",
       open_chat: "Open chat",
-      delete_confirm_title: "Delete this mistake note?",
-      delete_confirm_body: "You can recreate it from chat anytime.",
-      deleted_toast: "Mistake note deleted.",
-      delete_failed: "Couldn't delete mistake note.",
+      delete_confirm_title: "Delete this note?",
+      delete_confirm_body: "Steadii will lose this context for future drafts. You can re-add it from chat anytime.",
+      deleted_toast: "Note deleted.",
+      delete_failed: "Couldn't delete this note.",
     },
   },
   mistakes: {
     add_from_photo: "📷 Add from photo",
-    photo_upload_modal_title: "Extract handwritten note",
+    context_note:
+      "Steadii uses these notes to personalize drafts and notice when emails relate to topics you've struggled with. Not a study tool — for studying, use ChatGPT or Claude.",
+    photo_upload_modal_title: "Add to Steadii's notes",
     photo_upload_modal_subtitle:
-      "Steadii reads the page verbatim — no summarizing, no interpreting.",
+      "Steadii reads the page verbatim and uses it as context when drafting your emails — not as a study guide. For studying, use ChatGPT or Claude.",
     photo_choose_file: "Choose file",
     photo_supported_formats: "PDF, PNG, JPEG, GIF, WebP",
     photo_extracting: "Extracting…",
     photo_preview_label: "Preview (editable)",
-    photo_title_placeholder: "Title (e.g. 'Integration by parts — practice 3')",
-    photo_save_button: "Save mistake note",
+    photo_title_placeholder: "Title (e.g. 'Integration by parts — weak area')",
+    photo_save_button: "Save to Steadii's notes",
     photo_cancel: "Cancel",
     photo_extract_failed: "Couldn't read the file. Try again or use a clearer image.",
     photo_save_failed: "Couldn't save. Please try again.",
     delete_button: "Delete",
-    delete_confirm_title: "Delete this mistake note?",
-    delete_confirm_body: "You can recreate it from chat anytime.",
-    deleted_toast: "Mistake note deleted.",
-    delete_failed: "Couldn't delete mistake note.",
+    delete_confirm_title: "Delete this note?",
+    delete_confirm_body: "Steadii will lose this context for future drafts. You can re-add it from chat anytime.",
+    deleted_toast: "Note deleted.",
+    delete_failed: "Couldn't delete this note.",
   },
   login: {
     title: "Welcome back",
@@ -1213,7 +1227,7 @@ export const en: MessagesShape = {
       why_calendar_gmail:
         "Read + write access to your Calendar and read/modify/send on Gmail. The agent triages incoming mail and prepares drafts for your review — nothing sends without your confirmation and a 20-second undo window. You can revoke access anytime from your Google account.",
       why_notion:
-        "Notion is optional and lives in Settings → Connections — connect it to import your existing classes, mistakes, syllabi, and assignments into Steadii.",
+        "Notion is optional and lives in Settings → Connections — connect it to import your existing classes, notes, syllabi, and assignments into Steadii.",
       button: "Grant Google access",
     },
     step2: {
@@ -1240,7 +1254,7 @@ export const en: MessagesShape = {
         notion: {
           label: "Notion",
           one_line:
-            "Import your existing classes, mistakes, syllabi, and assignments from Notion.",
+            "Import your existing classes, notes, syllabi, and assignments from Notion.",
         },
       },
     },
@@ -1294,9 +1308,9 @@ export const en: MessagesShape = {
     no_events: "No classes or events today.",
     nothing_due: "Nothing due. You're clear.",
     not_enough_history: "Not enough history yet. Come back next week.",
-    counts: "{chats} chats · {mistakes} mistakes · {syllabi} syllabi",
-    review_action: "Review",
-    generate_practice_action: "Practice",
+    counts: "{chats} chats · {mistakes} notes · {syllabi} syllabi",
+    review_action: "Open chat",
+    generate_practice_action: "Open chat",
     welcome_title: "Welcome to Steadii",
     welcome_body:
       "Connect your first class to start seeing today's schedule, due tasks, and recent activity.",
@@ -1307,12 +1321,12 @@ export const en: MessagesShape = {
     greeting_afternoon: "Good afternoon, {name}.",
     greeting_evening: "Good evening, {name}.",
     greeting_night: "Still up, {name}?",
-    summary_ready: "Your academic summary for the week is ready.",
+    summary_ready: "Here's where you are this week.",
     full_calendar: "Full calendar",
     assignments_remaining: "{count} tasks remaining today",
-    study_sessions: "study sessions",
-    focus_summary: "You focused for {hours} hours this week. Great momentum!",
-    focus_summary_empty: "Not enough sessions yet — a few more and we’ll have a trend.",
+    study_sessions: "chats",
+    focus_summary: "You ran {hours} hours of Steadii sessions this week.",
+    focus_summary_empty: "Not enough activity yet — give it a week.",
     pending_label: "Pending",
     youre_clear: "You're clear.",
     item_singular: "item",
@@ -1496,7 +1510,7 @@ export const en: MessagesShape = {
       role_professor_label: "Professor",
       role_professor_hint: "Course instructor",
       role_ta_label: "TA",
-      role_ta_hint: "Teaching assistant / tutor",
+      role_ta_hint: "Teaching assistant",
       role_classmate_label: "Classmate",
       role_classmate_hint: "Fellow student",
       role_admin_label: "Admin",
@@ -1545,7 +1559,7 @@ export const en: MessagesShape = {
       thinking_complete: "Thinking · complete",
       bound_to: "Bound to",
       this_class: "this class",
-      fanout_mistake: "{n} mistake",
+      fanout_mistake: "{n} note",
       fanout_syllabus: "{n} syllabus",
       fanout_calendar: "{n} calendar",
       fanout_email: "{n} email",
@@ -1601,7 +1615,7 @@ export const en: MessagesShape = {
     },
   },
   markdown_editor: {
-    placeholder_title: "Mistake title",
+    placeholder_title: "Title for Steadii's note",
     placeholder_body:
       "Markdown body. Math via $...$ inline or $$...$$ block. Images: ![](url).",
     aria_bold: "Bold",
@@ -1618,10 +1632,10 @@ export const en: MessagesShape = {
     add_class_button: "+ Add class",
     empty_title: "No classes yet.",
     empty_description:
-      "Classes are Steadii's core unit. Add one to start tracking assignments, mistakes, and syllabi.",
+      "Classes are Steadii's core unit. Add one to start tracking assignments, syllabi, and the notes Steadii keeps about your weak areas.",
     aria_classes: "Classes",
     metadata_due: "{n} due",
-    metadata_mistakes: "{n} mistakes",
+    metadata_mistakes: "{n} notes",
   },
   notifications: {
     saved_toast: "Notification settings saved",
@@ -1699,26 +1713,35 @@ export const en: MessagesShape = {
     open_dashboard: "Open coupon in Stripe Dashboard →",
   },
   chat_input: {
-    placeholder: "Ask Steadii…",
+    placeholder: "Tell Steadii what to handle…",
     example_prompts: [
       "What's due this week?",
-      "Explain this physics problem",
+      "Draft a reply to Prof. Tanaka's email",
       "Add a chemistry task for Friday",
       "What's my next class?",
-      "Summarize my CSC108 syllabus",
-      "Generate similar practice problems",
-      "Review my recent mistakes",
-      "How did I spend last week studying?",
+      "Email my TA — I'll miss the lab tomorrow",
+      "Reschedule my Friday meeting to Monday",
+      "Snooze the office-hours email till tomorrow",
+      "Who haven't I emailed in 3+ weeks?",
     ],
   },
   chat: {
     actions: {
-      add_to_mistakes: "+ Add to mistakes",
+      add_to_mistakes: "+ Add to Steadii's notes",
       generate_similar: "Generate similar",
-      save_mistake: "Save mistake note",
+      save_mistake: "Save to Steadii's notes",
     },
     dismiss: "Dismiss",
     remove_attachment: "Remove",
+    tutor_offer: {
+      heading: "This looks like a study question.",
+      body:
+        "Steadii handles academic admin (email, schedule, deadlines). For learning, ChatGPT is faster. Want me to send you there with your context loaded?",
+      open_in_chatgpt: "Open in ChatGPT",
+      ask_anyway: "No, ask Steadii anyway",
+      preparing: "Preparing your context…",
+      open_failed: "Couldn't open ChatGPT — try again or ask Steadii.",
+    },
   },
   voice: {
     hint_caps: "Hold Caps Lock to talk · Tap to chat from any page",
@@ -2021,7 +2044,7 @@ export const en: MessagesShape = {
       acceptable_use: {
         heading: "Acceptable use",
         body:
-          "Don't use Steadii to commit academic fraud. The agent is a study aid — it reasons, explains, and organizes. Submitting machine output as your own work on a graded assignment is your responsibility and may violate your institution's policies.",
+          "Steadii is an academic chief of staff — it triages email, drafts replies, manages your calendar and deadlines. It is not a substitute for doing your coursework. Submitting any machine-generated output as your own on a graded assignment is your responsibility and may violate your institution's policies.",
       },
       your_content: {
         heading: "Your content",
@@ -2062,9 +2085,9 @@ export const en: MessagesShape = {
   },
   seed_prompts: {
     review_recent_mistakes:
-      "From my mistakes notebook over the past week, pick the 3 most worth reviewing and briefly summarize the key point of each.",
+      "What's my biggest backlog right now — emails I haven't replied to, deadlines slipping, or commitments I haven't followed up on?",
     generate_similar_problems:
-      "Based on the patterns in my mistakes notebook from the past week, create 3 practice problems in a similar format. Keep the answers hidden.",
+      "Draft check-in messages to any of my professors I haven't emailed in 3+ weeks but have ongoing topics with.",
   },
 };
 
