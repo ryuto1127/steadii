@@ -11,6 +11,8 @@ const NOOP = async () => {};
 const NOOP_RESOLVE = async () => ({});
 const NOOP_E = async () => {};
 const NOOP_SNOOZE = async () => {};
+const NOOP_SECONDARY = async (_id: string, _key: string) => {};
+void NOOP_SECONDARY;
 
 // Client-side mount for the verification harness. Reuses the real
 // QueueList wrapper so the i18n-aware section heading + show-more
@@ -55,6 +57,8 @@ export function QueuePreviewClient({
             dismiss: NOOP,
             snooze: NOOP_SNOOZE,
             permanentDismiss: NOOP,
+            secondaryAction: NOOP,
+            sendOfficeHours: NOOP,
           }}
         />
       )}

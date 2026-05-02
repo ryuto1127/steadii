@@ -8,7 +8,10 @@ import { db } from "@/lib/db/client";
 import {
   agentDrafts,
   agentProposals,
+  eventPreBriefs,
+  groupProjects,
   inboxItems,
+  officeHoursRequests,
   type ActionOption,
 } from "@/lib/db/schema";
 import {
@@ -18,18 +21,47 @@ import {
 import { recordProactiveFeedback } from "@/lib/agent/proactive/feedback-bias";
 import { executeProactiveAction } from "@/lib/agent/proactive/action-executor";
 import { logEmailAudit } from "@/lib/agent/email/audit";
+import { resolveGroupDetectClarification } from "@/lib/agent/groups/detect-actions";
+import {
+  pickOfficeHoursSlot,
+  sendOfficeHoursDraft,
+} from "@/lib/agent/office-hours/actions";
 
 // Wave 2 — server actions that back the Steadii queue cards on Home.
-// Each action accepts a card id of the form `proposal:<uuid>` or
-// `draft:<uuid>`; the prefix routes to the right pipeline. This avoids
-// coupling the client to the underlying tables.
+// Each action accepts a card id of the form `<kind>:<uuid>`; the prefix
+// routes to the right pipeline. This avoids coupling the client to the
+// underlying tables.
+//
+// Wave 3 added pre_brief and group_detect_* card kinds — the schema
+// enforces the prefix is one of the known kinds; the parser then narrows
+// the type.
 
-const cardIdSchema = z.string().regex(/^(proposal|draft):[0-9a-f-]{36}$/i);
+type CardKind =
+  | "proposal"
+  | "draft"
+  | "pre_brief"
+  | "group_detect"
+  | "office_hours";
 
-function parseCardId(raw: string): { kind: "proposal" | "draft"; id: string } {
+const CARD_KINDS: readonly CardKind[] = [
+  "proposal",
+  "draft",
+  "pre_brief",
+  "group_detect",
+  "office_hours",
+];
+
+const cardIdSchema = z
+  .string()
+  .regex(/^([a-z_]+):[0-9a-f-]{36}$/i);
+
+function parseCardId(raw: string): { kind: CardKind; id: string } {
   const parsed = cardIdSchema.parse(raw);
   const [kind, id] = parsed.split(":");
-  return { kind: kind as "proposal" | "draft", id: id! };
+  if (!CARD_KINDS.includes(kind as CardKind)) {
+    throw new Error(`Unknown card kind: ${kind}`);
+  }
+  return { kind: kind as CardKind, id: id! };
 }
 
 async function getUserId(): Promise<string> {
@@ -49,6 +81,16 @@ export async function queueDismissAction(rawCardId: string): Promise<void> {
   if (kind === "draft") {
     const until = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await snoozeAgentDraftAction(id, until.toISOString());
+  } else if (kind === "pre_brief") {
+    await dismissPreBrief(userId, id);
+  } else if (kind === "group_detect") {
+    await resolveGroupDetectClarification(userId, id, {
+      pickedKey: null,
+      freeText: "",
+      decision: "later",
+    });
+  } else if (kind === "office_hours") {
+    await dismissOfficeHoursRequest(userId, id);
   } else {
     await dismissProposalSnooze(userId, id);
   }
@@ -65,6 +107,18 @@ export async function queueSnoozeAction(
   if (kind === "draft") {
     const until = new Date(Date.now() + clamped * 60 * 60 * 1000);
     await snoozeAgentDraftAction(id, until.toISOString());
+  } else if (kind === "pre_brief") {
+    // Pre-briefs have a hard event-driven expiry — we don't honor a
+    // user-chosen snooze beyond that. Treat snooze as dismiss.
+    await dismissPreBrief(userId, id);
+  } else if (kind === "group_detect") {
+    await resolveGroupDetectClarification(userId, id, {
+      pickedKey: null,
+      freeText: "",
+      decision: "later",
+    });
+  } else if (kind === "office_hours") {
+    await dismissOfficeHoursRequest(userId, id);
   } else {
     await dismissProposalSnooze(userId, id, clamped);
   }
@@ -78,9 +132,51 @@ export async function queuePermanentDismissAction(
   const { kind, id } = parseCardId(rawCardId);
   if (kind === "draft") {
     await dismissAgentDraftAction(id);
+  } else if (kind === "pre_brief") {
+    await dismissPreBrief(userId, id);
+  } else if (kind === "group_detect") {
+    await resolveGroupDetectClarification(userId, id, {
+      pickedKey: null,
+      freeText: "",
+      decision: "not_group",
+    });
+  } else if (kind === "office_hours") {
+    await dismissOfficeHoursRequest(userId, id);
   } else {
     await dismissProposalPermanent(userId, id);
   }
+  revalidatePath("/app");
+}
+
+// Wave 3.1 — Type B informational secondary actions.
+// "mark_reviewed" is the only inline secondary today; it dismisses the
+// pre-brief card without re-firing.
+export async function queueSecondaryAction(
+  rawCardId: string,
+  actionKey: string
+): Promise<void> {
+  const userId = await getUserId();
+  const { kind, id } = parseCardId(rawCardId);
+  if (kind !== "pre_brief") return;
+  if (actionKey === "mark_reviewed") {
+    await db
+      .update(eventPreBriefs)
+      .set({ viewedAt: new Date(), dismissedAt: new Date() })
+      .where(
+        and(eq(eventPreBriefs.id, id), eq(eventPreBriefs.userId, userId))
+      );
+    revalidatePath("/app");
+  }
+}
+
+// Wave 3.3 — office-hours Type B "Send" handler.
+export async function queueSendOfficeHoursAction(
+  rawCardId: string
+): Promise<void> {
+  const userId = await getUserId();
+  const { kind, id } = parseCardId(rawCardId);
+  if (kind !== "office_hours") throw new Error("Card is not an office hours request");
+  await sendOfficeHoursDraft({ userId, requestId: id });
   revalidatePath("/app");
 }
 
@@ -93,6 +189,21 @@ export async function queueResolveProposalAction(
 ): Promise<{ redirectTo?: string }> {
   const userId = await getUserId();
   const { kind, id } = parseCardId(rawCardId);
+
+  if (kind === "office_hours") {
+    if (actionKey === "edit") {
+      // Wave 3.3 ship: "Edit questions" routes to a future detail page.
+      // For now we treat it as dismiss since the card already shows the
+      // question list inline.
+      return {};
+    }
+    const m = actionKey.match(/^slot:(\d+)$/);
+    if (!m) throw new Error("Invalid slot key");
+    const slotIndex = Number(m[1]);
+    await pickOfficeHoursSlot({ userId, requestId: id, slotIndex });
+    return {};
+  }
+
   if (kind !== "proposal") throw new Error("Card is not a proposal");
 
   const [proposal] = await db
@@ -143,13 +254,27 @@ export async function queueResolveProposalAction(
 // The next L2 pass picks up any new context from the audit log when
 // re-classifying. Deeper integration with the orchestrator (the user's
 // answer driving an immediate re-draft) is Wave 3.
+//
+// Wave 3.2 adds group_detect cards, which also show as Type E but resolve
+// to a different pipeline (creates a group_projects row on confirm).
 export async function queueSubmitClarificationAction(
   rawCardId: string,
   args: { pickedKey: string | null; freeText: string }
 ): Promise<void> {
   const userId = await getUserId();
   const { kind, id } = parseCardId(rawCardId);
-  if (kind !== "draft") throw new Error("Card is not a draft");
+
+  if (kind === "group_detect") {
+    await resolveGroupDetectClarification(userId, id, {
+      pickedKey: args.pickedKey,
+      freeText: args.freeText,
+      decision: args.pickedKey === "create" ? "create" : "not_group",
+    });
+    revalidatePath("/app");
+    return;
+  }
+
+  if (kind !== "draft") throw new Error("Card is not a clarifying card");
 
   const [row] = await db
     .select({ draft: agentDrafts, inbox: inboxItems })
@@ -207,6 +332,36 @@ async function dismissProposalSnooze(
     );
   // Soft snooze: feedback bias stays neutral — we don't want a snooze
   // to bias the scanner away from this issue type.
+}
+
+async function dismissOfficeHoursRequest(
+  userId: string,
+  requestId: string
+): Promise<void> {
+  await db
+    .update(officeHoursRequests)
+    .set({ status: "dismissed", updatedAt: new Date() })
+    .where(
+      and(
+        eq(officeHoursRequests.id, requestId),
+        eq(officeHoursRequests.userId, userId)
+      )
+    );
+}
+
+async function dismissPreBrief(
+  userId: string,
+  preBriefId: string
+): Promise<void> {
+  await db
+    .update(eventPreBriefs)
+    .set({ dismissedAt: new Date() })
+    .where(
+      and(
+        eq(eventPreBriefs.id, preBriefId),
+        eq(eventPreBriefs.userId, userId)
+      )
+    );
 }
 
 async function dismissProposalPermanent(
