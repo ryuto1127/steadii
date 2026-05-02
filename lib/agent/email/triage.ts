@@ -16,6 +16,7 @@ import type { ClassifyInput, TriageResult, UserContext } from "./types";
 import { logEmailAudit } from "./audit";
 import { embedAndStoreInboxItem } from "./embeddings";
 import { bindEmailToClass, persistBinding } from "./class-binding";
+import { maybeAutoArchive } from "./auto-archive";
 
 // Public API. `triageMessage` is pure-enough: it reads user context from
 // DB but does not write. `applyTriageResult` writes the inbox row and
@@ -54,6 +55,9 @@ export async function applyTriageResult(
     bucket: result.bucket,
     ruleProvenance: result.ruleProvenance,
     firstTimeSender: result.firstTimeSender,
+    // Wave 5 — store classifier confidence so admin metrics + auto-archive
+    // recovery flows can trace back to the original signal strength.
+    triageConfidence: result.confidence,
     status: result.bucket === "ignore" ? "dismissed" : "open",
   };
 
@@ -154,6 +158,12 @@ export async function applyTriageResult(
         user: { id: userId },
       });
     }
+
+    // Wave 5 — silent auto-archive of Tier-1 high-confidence noise.
+    // Runs after class binding so admin retains the binding context
+    // even for hidden rows (search across hidden items still works).
+    // Failures are swallowed inside the helper.
+    await maybeAutoArchive(userId, created, result);
   } else {
     await logEmailAudit({
       userId,

@@ -49,4 +49,14 @@ export type TriageResult = {
   senderRole: SenderRole | null;
   ruleProvenance: RuleProvenance[];
   firstTimeSender: boolean;
+  // Wave 5 — classifier confidence in [0..1]. Currently consumed by the
+  // auto-archive decision (≥ 0.95 + bucket='auto_low' eligible). Other
+  // buckets get a confidence too so admin metrics can surface
+  // distribution.
+  confidence: number;
+  // Wave 5 — true when the user has a learned rule for this sender or
+  // domain with risk_tier ≥ 'medium' (typically inserted when they
+  // restored a previously auto-archived item). Suppresses auto-archive
+  // even if the bucket+confidence would otherwise qualify.
+  learnedOptOut: boolean;
 };

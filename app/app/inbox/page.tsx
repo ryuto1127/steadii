@@ -2,6 +2,8 @@ import {
   Inbox as InboxIcon,
   HelpCircle,
   Star,
+  Archive,
+  RotateCcw,
 } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -14,13 +16,14 @@ import {
   agentDrafts,
   agentProposals,
 } from "@/lib/db/schema";
-import { and, desc, eq, isNull, ne, or } from "drizzle-orm";
+import { and, count, desc, eq, isNull, ne, or } from "drizzle-orm";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   compareInboxRows,
   isPendingDraft,
 } from "@/lib/agent/email/pending-queries";
 import { SteadiiNoticedToggle } from "./_components/steadii-noticed-toggle";
+import { restoreAutoArchivedAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -99,11 +102,21 @@ function tierTone(tier: ReturnType<typeof tierFor>): string {
   }
 }
 
-export default async function InboxPage() {
+export default async function InboxPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ hidden?: string }>;
+}) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
   const t = await getTranslations("inbox");
+  // Wave 5 — `?hidden=1` flips the page into "show items Steadii
+  // auto-archived" mode. The default view is unchanged (open + non-
+  // ignore). We compute both queries unconditionally because the chip
+  // count is shown on the default view too.
+  const params = (await searchParams) ?? {};
+  const showingHidden = params.hidden === "1";
 
   // Gmail connectivity is a per-user signal: if the Google row lacks the
   // gmail scope, we can't triage anything yet. We nudge the user through
@@ -116,47 +129,85 @@ export default async function InboxPage() {
     .limit(1);
   const gmailConnected = acct?.scope?.includes("gmail") ?? false;
 
+  const baseSelect = {
+    id: inboxItems.id,
+    senderEmail: inboxItems.senderEmail,
+    senderName: inboxItems.senderName,
+    subject: inboxItems.subject,
+    snippet: inboxItems.snippet,
+    receivedAt: inboxItems.receivedAt,
+    bucket: inboxItems.bucket,
+    riskTier: inboxItems.riskTier,
+    firstTimeSender: inboxItems.firstTimeSender,
+    autoArchived: inboxItems.autoArchived,
+    // polish-7 — populated when the user opens the detail page.
+    // Combined with `agentDraftStatus`/`action` to compute the
+    // 3-state group key in compareInboxRows: pending → unread
+    // non-pending → read non-pending.
+    reviewedAt: inboxItems.reviewedAt,
+    // Latest agent_draft for this inbox_item (NULL if not yet
+    // processed). The inbox list deep-links into /app/inbox/[draftId]
+    // — the review page's canonical URL — so the digest, bell, and
+    // list all funnel through the same route.
+    agentDraftId: agentDrafts.id,
+    agentDraftCreatedAt: agentDrafts.createdAt,
+    agentDraftStatus: agentDrafts.status,
+    agentDraftAction: agentDrafts.action,
+  };
+
+  // Default view: status='open' + not ignored. Hidden view: rows that
+  // Wave 5 auto-archived (auto_archived=true). Both share the join
+  // shape so the per-row renderer below stays unified.
   const rawItems = gmailConnected
-    ? await db
-        .select({
-          id: inboxItems.id,
-          senderEmail: inboxItems.senderEmail,
-          senderName: inboxItems.senderName,
-          subject: inboxItems.subject,
-          snippet: inboxItems.snippet,
-          receivedAt: inboxItems.receivedAt,
-          bucket: inboxItems.bucket,
-          riskTier: inboxItems.riskTier,
-          firstTimeSender: inboxItems.firstTimeSender,
-          // polish-7 — populated when the user opens the detail page.
-          // Combined with `agentDraftStatus`/`action` to compute the
-          // 3-state group key in compareInboxRows: pending → unread
-          // non-pending → read non-pending.
-          reviewedAt: inboxItems.reviewedAt,
-          // Latest agent_draft for this inbox_item (NULL if not yet
-          // processed). The inbox list deep-links into /app/inbox/[draftId]
-          // — the review page's canonical URL — so the digest, bell, and
-          // list all funnel through the same route.
-          agentDraftId: agentDrafts.id,
-          agentDraftCreatedAt: agentDrafts.createdAt,
-          agentDraftStatus: agentDrafts.status,
-          agentDraftAction: agentDrafts.action,
-        })
-        .from(inboxItems)
-        .leftJoin(agentDrafts, eq(agentDrafts.inboxItemId, inboxItems.id))
-        .where(
-          and(
-            eq(inboxItems.userId, userId),
-            eq(inboxItems.status, "open"),
-            isNull(inboxItems.deletedAt),
-            // Hide ignore-bucket rows from the default view; they're
-            // stored for analytics, not for user attention.
-            ne(inboxItems.bucket, "ignore")
+    ? showingHidden
+      ? await db
+          .select(baseSelect)
+          .from(inboxItems)
+          .leftJoin(agentDrafts, eq(agentDrafts.inboxItemId, inboxItems.id))
+          .where(
+            and(
+              eq(inboxItems.userId, userId),
+              eq(inboxItems.autoArchived, true),
+              isNull(inboxItems.deletedAt)
+            )
           )
-        )
-        .orderBy(desc(inboxItems.receivedAt))
-        .limit(100)
+          .orderBy(desc(inboxItems.receivedAt))
+          .limit(100)
+      : await db
+          .select(baseSelect)
+          .from(inboxItems)
+          .leftJoin(agentDrafts, eq(agentDrafts.inboxItemId, inboxItems.id))
+          .where(
+            and(
+              eq(inboxItems.userId, userId),
+              eq(inboxItems.status, "open"),
+              isNull(inboxItems.deletedAt),
+              // Hide ignore-bucket rows from the default view; they're
+              // stored for analytics, not for user attention.
+              ne(inboxItems.bucket, "ignore")
+            )
+          )
+          .orderBy(desc(inboxItems.receivedAt))
+          .limit(100)
     : [];
+
+  // Hidden chip count — small index probe against the partial index
+  // we added in migration 0029. Cheap; runs alongside the default
+  // query so the chip is always accurate.
+  const hiddenCount = gmailConnected
+    ? (
+        await db
+          .select({ n: count(inboxItems.id) })
+          .from(inboxItems)
+          .where(
+            and(
+              eq(inboxItems.userId, userId),
+              eq(inboxItems.autoArchived, true),
+              isNull(inboxItems.deletedAt)
+            )
+          )
+      )[0]?.n ?? 0
+    : 0;
 
   // Dedupe inbox_items: if one has multiple drafts (future regen), keep
   // the newest. We picked the leftJoin over a subquery for Drizzle clarity.
@@ -251,6 +302,38 @@ export default async function InboxPage() {
           createdAt: p.createdAt.toISOString(),
         }))}
       />
+
+      {/* Wave 5 — Hidden filter chip. Shown when there's any auto-archived
+          item for this user. Clicking flips between the default view and
+          the hidden view; the chip's URL toggles ?hidden=1. */}
+      {hiddenCount > 0 || showingHidden ? (
+        <nav
+          aria-label={t("hidden_filter_aria")}
+          className="mb-3 flex flex-wrap items-center gap-2"
+        >
+          <Link
+            href="/app/inbox"
+            className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-hover ${
+              showingHidden
+                ? "border border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))]"
+                : "bg-[hsl(var(--foreground))] text-[hsl(var(--surface))]"
+            }`}
+          >
+            {t("filter_all")}
+          </Link>
+          <Link
+            href="/app/inbox?hidden=1"
+            className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-hover ${
+              showingHidden
+                ? "bg-[hsl(var(--foreground))] text-[hsl(var(--surface))]"
+                : "border border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))]"
+            }`}
+          >
+            <Archive size={11} strokeWidth={1.75} />
+            {t("filter_hidden", { n: hiddenCount })}
+          </Link>
+        </nav>
+      ) : null}
 
       {!gmailConnected ? (
         <EmptyState
@@ -363,11 +446,34 @@ export default async function InboxPage() {
                   ) : null}
                 </div>
               </Link>
+              {showingHidden && item.autoArchived ? (
+                <form
+                  action={restoreAutoArchivedAction}
+                  className="border-t border-[hsl(var(--border)/0.5)] bg-[hsl(var(--surface))] px-3 py-1.5 sm:px-4"
+                >
+                  <input type="hidden" name="id" value={item.id} />
+                  <button
+                    type="submit"
+                    className="inline-flex h-7 items-center gap-1 rounded-md text-[12px] font-medium text-[hsl(var(--primary))] transition-hover hover:opacity-80"
+                  >
+                    <RotateCcw size={11} strokeWidth={1.75} />
+                    {t("restore_button")}
+                  </button>
+                </form>
+              ) : null}
             </li>
             );
           })}
         </ul>
       )}
+
+      {showingHidden && items.length === 0 ? (
+        <EmptyState
+          icon={<Archive size={18} />}
+          title={t("hidden_empty_title")}
+          description={t("hidden_empty_description")}
+        />
+      ) : null}
     </div>
   );
 }
