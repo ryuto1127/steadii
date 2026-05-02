@@ -8,15 +8,22 @@ export type OnboardingStatus = {
   // one optional integration via the page. Either way the page never
   // re-shows; contextual prompts (Surface 2) keep working.
   integrationsStepCompleted: boolean;
+  // Wave 2 (2026-05-01) — Step 3 is the commitment + wait screen.
+  // Resolved when the user clicks "Take me to Home" (one-shot — the
+  // dismissal timestamp is stored in `users.preferences`). Re-asking
+  // would feel patronising on returning sessions.
+  waitStepCompleted: boolean;
 };
 
-// Phase 7 W-Integrations: onboarding is complete once Google is connected
-// (Calendar + Gmail bundled in one consent) AND the optional-integrations
-// step has been resolved (skipped or any integration clicked through).
+// Wave 2 lock: onboarding is complete once Google is connected
+// (Calendar + Gmail bundled in one consent), the optional-integrations
+// step has been resolved, AND the wait/commitment step (Step 3) has
+// been dismissed.
 export function isOnboardingComplete(status: OnboardingStatus): boolean {
   return (
     status.gmailConnected &&
     status.calendarConnected &&
-    status.integrationsStepCompleted
+    status.integrationsStepCompleted &&
+    status.waitStepCompleted
   );
 }

@@ -1,25 +1,35 @@
 import { describe, expect, it } from "vitest";
 import {
+  ALL_NAV_ITEM_KEYS,
   NAV_HREFS,
   NAV_ITEM_KEYS,
   NAV_SHORTCUTS,
+  SECONDARY_NAV_ITEM_KEYS,
 } from "@/components/layout/nav-items";
 
 describe("Sidebar keyboard nav config", () => {
-  it("exposes exactly 6 top-level items with Inbox at the top and Tasks at the bottom", () => {
-    // Settings lives in the account footer, not the rail. Phase 7 W1
-    // revised the locked sidebar to 6 items with Tasks at index 5.
+  it("primary block is Wave 2 secretary order — Home first, no Chats", () => {
+    // Wave 2 lock per `project_wave_2_home_design.md`: Home is the
+    // primary destination; 履歴 (chats) demoted to the secondary block.
     expect([...NAV_ITEM_KEYS]).toEqual([
-      "inbox",
       "home",
-      "chats",
-      "classes",
+      "inbox",
       "calendar",
       "tasks",
+      "classes",
     ]);
-    // Inbox is the first item; memory-locked.
-    expect(NAV_ITEM_KEYS[0]).toBe("inbox");
-    expect(NAV_ITEM_KEYS[NAV_ITEM_KEYS.length - 1]).toBe("tasks");
+    expect(NAV_ITEM_KEYS[0]).toBe("home");
+    expect(NAV_ITEM_KEYS).not.toContain("chats");
+  });
+
+  it("secondary block contains the demoted chats / 履歴 entry", () => {
+    expect([...SECONDARY_NAV_ITEM_KEYS]).toEqual(["chats"]);
+  });
+
+  it("the union (ALL_NAV_ITEM_KEYS) covers every routable item", () => {
+    expect([...ALL_NAV_ITEM_KEYS].sort()).toEqual(
+      ["calendar", "chats", "classes", "home", "inbox", "tasks"].sort()
+    );
   });
 
   it("maps each item to its documented href", () => {
@@ -46,8 +56,14 @@ describe("Sidebar keyboard nav config", () => {
     expect(NAV_SHORTCUTS.tasks).toBe("t");
   });
 
+  it("binds `g j` to the demoted 履歴 item", () => {
+    // Wave 1 freed `j` for chat history (renamed 履歴 in Wave 2). Lock
+    // the binding so the shortcut survives future re-orderings.
+    expect(NAV_SHORTCUTS.chats).toBe("j");
+  });
+
   it("includes every nav item in the shortcuts map", () => {
-    for (const key of NAV_ITEM_KEYS) {
+    for (const key of ALL_NAV_ITEM_KEYS) {
       expect(NAV_SHORTCUTS[key]).toBeTypeOf("string");
     }
   });

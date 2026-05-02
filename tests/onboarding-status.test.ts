@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isOnboardingComplete } from "@/lib/onboarding/is-complete";
 
-describe("isOnboardingComplete (Phase 6 — Notion optional)", () => {
+describe("isOnboardingComplete (Wave 2 — three-step flow)", () => {
   it("requires Gmail scope", () => {
     expect(
       isOnboardingComplete({
@@ -10,6 +10,7 @@ describe("isOnboardingComplete (Phase 6 — Notion optional)", () => {
         calendarConnected: true,
         gmailConnected: false,
         integrationsStepCompleted: true,
+        waitStepCompleted: true,
       })
     ).toBe(false);
   });
@@ -22,6 +23,7 @@ describe("isOnboardingComplete (Phase 6 — Notion optional)", () => {
         calendarConnected: false,
         gmailConnected: true,
         integrationsStepCompleted: true,
+        waitStepCompleted: true,
       })
     ).toBe(false);
   });
@@ -35,6 +37,7 @@ describe("isOnboardingComplete (Phase 6 — Notion optional)", () => {
         calendarConnected: true,
         gmailConnected: true,
         integrationsStepCompleted: true,
+        waitStepCompleted: true,
       })
     ).toBe(true);
   });
@@ -47,13 +50,11 @@ describe("isOnboardingComplete (Phase 6 — Notion optional)", () => {
         calendarConnected: true,
         gmailConnected: true,
         integrationsStepCompleted: true,
+        waitStepCompleted: true,
       })
     ).toBe(true);
   });
 
-  // Phase 7 W-Integrations — onboarding now also requires Step 2 (the
-  // optional-integrations skip-once page) to have been resolved. Skipping
-  // counts as resolution; so does linking any of the optional sources.
   it("is incomplete when integrations step has not been resolved", () => {
     expect(
       isOnboardingComplete({
@@ -62,6 +63,23 @@ describe("isOnboardingComplete (Phase 6 — Notion optional)", () => {
         calendarConnected: true,
         gmailConnected: true,
         integrationsStepCompleted: false,
+        waitStepCompleted: true,
+      })
+    ).toBe(false);
+  });
+
+  // Wave 2 — the wait/commitment step (Step 3) is the final gate.
+  // Without dismissing it, isOnboardingComplete must return false even
+  // if Google + integrations are both squared away.
+  it("is incomplete when the Step 3 wait screen has not been dismissed", () => {
+    expect(
+      isOnboardingComplete({
+        notionConnected: false,
+        notionSetupComplete: false,
+        calendarConnected: true,
+        gmailConnected: true,
+        integrationsStepCompleted: true,
+        waitStepCompleted: false,
       })
     ).toBe(false);
   });
