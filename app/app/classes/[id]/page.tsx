@@ -297,6 +297,7 @@ async function MistakesTab({
     .orderBy(desc(mistakeNotes.createdAt))
     .limit(100);
   const tMistakes = await getTranslations("classes.mistakes_grid");
+  const tMistakesRoot = await getTranslations("mistakes");
   return (
     <div className="space-y-4">
       <ContextualSuggestion
@@ -305,6 +306,9 @@ async function MistakesTab({
         surface="trigger_mistakes_notion"
         revalidatePath={`/app/classes/${classId}?tab=mistakes`}
       />
+      <p className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-small leading-snug text-[hsl(var(--muted-foreground))]">
+        {tMistakesRoot("context_note")}
+      </p>
       <div className="flex justify-end">
         <PhotoUploadButton classId={classId} />
       </div>

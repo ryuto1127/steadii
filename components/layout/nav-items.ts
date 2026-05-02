@@ -26,14 +26,21 @@ export const NAV_HREFS: Record<NavItemKey, string> = {
   tasks: "/app/tasks",
 };
 
-// Keyboard shortcut: `g` then the first letter of the nav key jumps to that
-// section. §4.1 spec. Settings is intentionally not in the sidebar rail —
-// it lives behind the account footer link — so it has no `g`-shortcut.
+// Keyboard shortcut: `g` then a letter jumps to that section. Settings is
+// intentionally not in the sidebar rail — it lives behind the account
+// footer link — so it has no `g`-shortcut.
+//
+// Wave 1 secretary-pivot remap (2026-05-01):
+//   `c` → calendar (mnemonic match — calendar is the primary daily check)
+//   `j` → chats    (was `c`; freed for calendar; "j" hints at journal/recent
+//                   and aligns with the Wave 2 履歴 rename)
+//   `k` → classes  (was `l`; "k" for klass/kurasu — clearer than `l`)
+// All bindings remain unique; no collisions.
 export const NAV_SHORTCUTS: Record<NavItemKey, string> = {
   inbox: "i",
   home: "h",
-  chats: "c",
-  classes: "l",
-  calendar: "a",
+  chats: "j",
+  classes: "k",
+  calendar: "c",
   tasks: "t",
 };

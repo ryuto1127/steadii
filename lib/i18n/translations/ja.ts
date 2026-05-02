@@ -3,11 +3,12 @@ import type { Messages } from "./en";
 export const ja: Messages = {
   brand: {
     name: "Steadii",
-    tagline: "学業に、あなただけの AI 秘書を。",
+    tagline: "あなた専属の、学業の chief of staff。",
   },
   landing: {
-    headline: "学業に、\nあなただけの AI 秘書を。",
-    subhead: "話しても、書いても — Steadii が読み、書き、覚える。",
+    headline: "あなた専属の、\n学業の chief of staff。",
+    subhead:
+      "Steadii が読み、書き、予定し、追跡します — あなたはやらなくていい。",
     cta: "Google で続ける",
     cta_request_access: "α アクセスをリクエスト",
     cta_already_approved: "既に承認済の方: サインイン",
@@ -28,7 +29,7 @@ export const ja: Messages = {
       },
       yours: {
         title: "データはあなたのもの",
-        body: "間違いノート・シラバス・課題はそのまま保管。読む・検索する・書き出す——いつでも自由、囲い込みません。",
+        body: "シラバス・課題、そして Steadii があなたについて覚え書きしたメモ。読む・検索する・書き出す——いつでも自由、囲い込みません。",
       },
     },
     what_you_do: {
@@ -43,9 +44,9 @@ export const ja: Messages = {
           action: "予定に追加しました。",
         },
         syllabus: {
-          input: "数学 II の試験範囲どこ?",
+          input: "数学 II の中間っていつ?",
           action:
-            "シラバスを読み取り → 「3〜5章、5/16 中間、§3.4 極限が要注意」。",
+            "シラバスを読み取り → 「3〜5章、5/16 中間。カレンダーに登録します」。",
         },
         absence: {
           input: "明日大学行けないかも",
@@ -57,7 +58,7 @@ export const ja: Messages = {
     steadii_in_motion: {
       title: "そして、先回りもする。",
       body:
-        "シラバス、カレンダー、過去の間違い。Steadii はそれを横断して読み、あなたが見落とすことに気づきます。",
+        "シラバス、カレンダー、Steadii があなたについて覚えてきたメモ。それらを横断して読み、あなたが見落とすことに気づきます。",
       real_screen: "実画面。モックではありません。",
       step_calendar: "東京旅行 · 5/15 — 5/17",
       step_calendar_meta: "カレンダー · 3 日間の予定を追加",
@@ -96,7 +97,7 @@ export const ja: Messages = {
       paragraph_reasoning:
         "判断の理由はすべて見えます。各ドラフトの推論パネルを開けば、エージェントが読んだもの、比較したこと、参照した過去のメールが確認できます。",
       paragraph_yours:
-        "データはあなたのもの。間違いノート・シラバス・課題はそのまま保管。読む・検索する・書き出す——いつでも自由、囲い込みません。",
+        "データはあなたのもの。シラバス・課題、そして Steadii があなたについて覚え書きしたメモはそのまま保管。読む・検索する・書き出す——いつでも自由、囲い込みません。",
       paragraph_confirm:
         "送信は必ずあなたを通ります。送信は 10 秒の undo と明示的な承認を経て送られます。低リスクのドラフトを自動送信する段階的自動送信モードはオプトイン、ユーザー単位で切替可能です。",
     },
@@ -170,7 +171,7 @@ export const ja: Messages = {
     tabs: {
       syllabus: "シラバス",
       assignments: "タスク",
-      mistakes: "間違いノート",
+      mistakes: "メモ",
       chats: "チャット",
     },
     no_assignments_title: "タスクはまだありません。",
@@ -207,9 +208,9 @@ export const ja: Messages = {
       button: "授業を削除",
       confirm_title: "{name} を削除しますか？",
       confirm_body:
-        "シラバス {syllabi} 件、タスク {assignments} 件、間違いノート {mistakes} 件も同時に削除されます。この授業を参照しているチャットのタグは外れますが、内容は保持されます。",
+        "シラバス {syllabi} 件、タスク {assignments} 件、Steadii のメモ {mistakes} 件も同時に削除されます。この授業を参照しているチャットのタグは外れますが、内容は保持されます。",
       confirm_body_no_cascade:
-        "この授業に紐付くシラバス・タスク・間違いノートはありません。参照しているチャットはタグが外れますが、チャット自体は残ります。",
+        "この授業に紐付くシラバス・タスク・Steadii のメモはありません。参照しているチャットはタグが外れますが、チャット自体は残ります。",
       success_toast: "{name} を削除しました。",
       delete_failed: "授業を削除できませんでした。",
     },
@@ -257,36 +258,38 @@ export const ja: Messages = {
       delete_failed: "タスクを削除できませんでした。",
     },
     mistakes_grid: {
-      empty_title: "{className} の間違いノートはまだありません。",
+      empty_title: "{className} に関する Steadii のメモはまだありません。",
       empty_description:
-        "問題画像をチャットに貼って解説を頼むか、上のボタンから手書きページを取り込んでください。",
+        "Steadii はあなたの弱点をメモして、メールの起案や提案に活かします。手書きページを上のボタンから取り込むか、チャットに貼り付けてください。",
       open_chat: "チャットを開く",
-      delete_confirm_title: "この間違いノートを削除しますか？",
-      delete_confirm_body: "チャットからいつでも作り直せます。",
-      deleted_toast: "間違いノートを削除しました。",
-      delete_failed: "間違いノートを削除できませんでした。",
+      delete_confirm_title: "このメモを削除しますか？",
+      delete_confirm_body: "Steadii はこの文脈を起案に使えなくなります。チャットからいつでも追加し直せます。",
+      deleted_toast: "メモを削除しました。",
+      delete_failed: "メモを削除できませんでした。",
     },
   },
   mistakes: {
     add_from_photo: "📷 写真から追加",
-    photo_upload_modal_title: "手書きノートを取り込む",
+    context_note:
+      "Steadii はこれらを参考にメールの起案や提案を調整します。学習用ではありません — 勉強は ChatGPT/Claude などをご利用ください。",
+    photo_upload_modal_title: "Steadii のメモに追加",
     photo_upload_modal_subtitle:
-      "Steadiiはページをそのまま読み取ります。要約も解釈もしません。",
+      "Steadii はページをそのまま読み取り、メールの起案時の文脈として活用します。学習教材ではありません。勉強は ChatGPT や Claude をご利用ください。",
     photo_choose_file: "ファイルを選択",
     photo_supported_formats: "PDF・PNG・JPEG・GIF・WebP に対応",
     photo_extracting: "読み取り中…",
     photo_preview_label: "プレビュー（編集可）",
-    photo_title_placeholder: "タイトル（例：「部分積分 — 練習 3」）",
-    photo_save_button: "間違いノートに保存",
+    photo_title_placeholder: "タイトル（例：「部分積分 — 苦手」）",
+    photo_save_button: "Steadii のメモに保存",
     photo_cancel: "キャンセル",
     photo_extract_failed:
       "読み取りに失敗しました。もう一度試すか、より鮮明な画像を使ってください。",
     photo_save_failed: "保存に失敗しました。もう一度お試しください。",
     delete_button: "削除",
-    delete_confirm_title: "この間違いノートを削除しますか？",
-    delete_confirm_body: "チャットからいつでも作り直せます。",
-    deleted_toast: "間違いノートを削除しました。",
-    delete_failed: "間違いノートを削除できませんでした。",
+    delete_confirm_title: "このメモを削除しますか？",
+    delete_confirm_body: "Steadii はこの文脈を起案に使えなくなります。チャットからいつでも追加し直せます。",
+    deleted_toast: "メモを削除しました。",
+    delete_failed: "メモを削除できませんでした。",
   },
   login: {
     title: "おかえりなさい",
@@ -302,7 +305,7 @@ export const ja: Messages = {
       why_calendar_gmail:
         "Calendar の読み書きと、Gmail の読み取り・修正・送信が可能になります。エージェントが受信メールをトリアージし、確認用に返信案を準備します。あなたの承認と 20 秒の undo を経ないと送信は行われません。許可はいつでも Google アカウントから取り消せます。",
       why_notion:
-        "Notion は任意です。設定 → 連携から後でも追加できます。連携すると既存の授業・間違いノート・シラバス・課題を Steadii にインポートできます。",
+        "Notion は任意です。設定 → 連携から後でも追加できます。連携すると既存の授業・メモ・シラバス・課題を Steadii にインポートできます。",
       button: "Google アクセスを許可",
     },
     step2: {
@@ -329,7 +332,7 @@ export const ja: Messages = {
         notion: {
           label: "Notion",
           one_line:
-            "既存の授業・間違いノート・シラバス・課題を Notion からインポートします。",
+            "既存の授業・メモ・シラバス・課題を Notion からインポートします。",
         },
       },
     },
@@ -382,9 +385,9 @@ export const ja: Messages = {
     no_events: "今日は授業も予定もありません。",
     nothing_due: "締切なし。今は落ち着いています。",
     not_enough_history: "履歴がまだ足りません。来週また見てみてください。",
-    counts: "チャット {chats} · 間違い {mistakes} · シラバス {syllabi}",
-    review_action: "復習する",
-    generate_practice_action: "練習",
+    counts: "チャット {chats} · メモ {mistakes} · シラバス {syllabi}",
+    review_action: "チャットを開く",
+    generate_practice_action: "チャットを開く",
     welcome_title: "Steadiiへようこそ",
     welcome_body:
       "最初の授業を登録すると、今日の予定・締切の近い課題・最近の活動が表示されます。",
@@ -395,12 +398,12 @@ export const ja: Messages = {
     greeting_afternoon: "こんにちは、{name}。",
     greeting_evening: "こんばんは、{name}。",
     greeting_night: "まだ起きてる？{name}。",
-    summary_ready: "今週の学習サマリーを用意しました。",
+    summary_ready: "今週の状況をまとめました。",
     full_calendar: "カレンダー全体",
     assignments_remaining: "今日残っている課題 {count} 件",
-    study_sessions: "学習セッション",
-    focus_summary: "今週は {hours} 時間集中しました。いいペースです。",
-    focus_summary_empty: "まだデータが少なめ。もう少し積み重ねると傾向が見えます。",
+    study_sessions: "やり取り",
+    focus_summary: "今週 Steadii と {hours} 時間やり取りしました。",
+    focus_summary_empty: "まだデータが少なめ。1 週間ほど使うと傾向が見えます。",
     pending_label: "待機中",
     youre_clear: "今は何もありません。",
     item_singular: "件",
@@ -584,7 +587,7 @@ export const ja: Messages = {
       role_professor_label: "教授",
       role_professor_hint: "授業の担当教員",
       role_ta_label: "TA",
-      role_ta_hint: "ティーチングアシスタント・チューター",
+      role_ta_hint: "ティーチングアシスタント",
       role_classmate_label: "クラスメート",
       role_classmate_hint: "同じ授業の学生",
       role_admin_label: "事務",
@@ -635,7 +638,7 @@ export const ja: Messages = {
       thinking_complete: "判断 · 完了",
       bound_to: "リンク先:",
       this_class: "この授業",
-      fanout_mistake: "ミス {n} 件",
+      fanout_mistake: "メモ {n} 件",
       fanout_syllabus: "シラバス {n} 件",
       fanout_calendar: "カレンダー {n} 件",
       fanout_email: "メール {n} 件",
@@ -692,7 +695,7 @@ export const ja: Messages = {
     },
   },
   markdown_editor: {
-    placeholder_title: "間違いノートのタイトル",
+    placeholder_title: "Steadii のメモのタイトル",
     placeholder_body:
       "Markdown 本文。数式は $...$（インライン）または $$...$$（ブロック）。画像: ![](url)。",
     aria_bold: "太字",
@@ -709,10 +712,10 @@ export const ja: Messages = {
     add_class_button: "+ 授業を追加",
     empty_title: "授業はまだありません。",
     empty_description:
-      "授業は Steadii の基本単位です。追加すると、課題・間違いノート・シラバスの管理を始められます。",
+      "授業は Steadii の基本単位です。追加すると、課題・シラバス・Steadii のメモ（あなたの弱点）の管理を始められます。",
     aria_classes: "授業",
     metadata_due: "{n} 件締切",
-    metadata_mistakes: "間違い {n} 件",
+    metadata_mistakes: "メモ {n} 件",
   },
   notifications: {
     saved_toast: "通知設定を保存しました",
@@ -790,26 +793,35 @@ export const ja: Messages = {
     open_dashboard: "Stripe Dashboard でクーポンを開く →",
   },
   chat_input: {
-    placeholder: "Steadiiに聞く…",
+    placeholder: "Steadii に頼む…",
     example_prompts: [
-      "今週の課題は？",
-      "この物理の問題を解説して",
+      "今週の締切は？",
+      "田中先生のメールに返信を起案して",
       "金曜までに化学の課題を追加",
       "次の授業は何？",
-      "CSC108のシラバスを要約して",
-      "似た練習問題を作って",
-      "最近の間違いを振り返りたい",
-      "先週の勉強時間を教えて",
+      "TA に明日の実習を欠席するメールを送って",
+      "金曜のミーティングを月曜に動かして",
+      "オフィスアワーのメールを明日まで保留",
+      "3 週間以上連絡してない教授は誰？",
     ],
   },
   chat: {
     actions: {
-      add_to_mistakes: "+ 間違いノートに追加",
+      add_to_mistakes: "+ Steadii のメモに追加",
       generate_similar: "類題を生成",
-      save_mistake: "間違いノートを保存",
+      save_mistake: "Steadii のメモに保存",
     },
     dismiss: "閉じる",
     remove_attachment: "削除",
+    tutor_offer: {
+      heading: "学習質問のようです。",
+      body:
+        "Steadii は学業の事務担当（メール・予定・締切）です。学習は ChatGPT の方が速いです。あなたのコンテキストを添えて ChatGPT で開きますか?",
+      open_in_chatgpt: "ChatGPT で開く",
+      ask_anyway: "いや、Steadii で続ける",
+      preparing: "コンテキストを準備中…",
+      open_failed: "ChatGPT を開けませんでした — もう一度試すか、Steadii で続けてください。",
+    },
   },
   voice: {
     hint_caps: "Caps Lock を長押しで話す・タップでチャットを開く",
@@ -901,7 +913,7 @@ export const ja: Messages = {
     agent_thinks: {
       section_title: "エージェントの思考過程",
       description:
-        "直近の判断の振り返りビュー（読み取り専用）。何を取り上げたか、なぜか、どの間違いノート・シラバス断片・カレンダー予定・過去メールを根拠にしたかが見えます。最後までガラス箱。",
+        "直近の判断の振り返りビュー（読み取り専用）。何を取り上げたか、なぜか、どの Steadii メモ・シラバス断片・カレンダー予定・過去メールを根拠にしたかが見えます。最後までガラス箱。",
       open: "開く",
     },
     agent_rules: {
@@ -955,13 +967,13 @@ export const ja: Messages = {
       account_button: "アカウントを削除",
       wipe_data_button: "すべてのデータを削除",
       wipe_data_description:
-        "授業・タスク・シラバス・間違いノート・チャット・受信トレイ・アップロードを消去します。アカウント・課金・OAuth 連携はそのまま残ります。",
+        "授業・タスク・シラバス・Steadii のメモ・チャット・受信トレイ・アップロードを消去します。アカウント・課金・OAuth 連携はそのまま残ります。",
       wipe_modal: {
         title: "すべてのデータを完全に削除しますか？",
         list_header: "以下が完全に削除されます：",
         list_classes: "授業 {count} 件",
         list_syllabi: "シラバス {count} 件",
-        list_mistakes: "間違いノート {count} 件",
+        list_mistakes: "Steadii のメモ {count} 件",
         list_assignments: "タスク {count} 件",
         list_chats: "チャット {count} 件（メッセージ {messages} 件）",
         list_inbox: "受信トレイ {count} 件",
@@ -1110,7 +1122,7 @@ export const ja: Messages = {
       acceptable_use: {
         heading: "禁止事項",
         body:
-          "Steadiiを学術不正に利用しないでください。本エージェントは学習補助ツールであり、推論・解説・整理を行うためのものです。生成された出力をそのまま自分の成果物として評価対象の課題に提出することは、利用者自身の責任となり、所属機関の規程に違反する可能性があります。",
+          "Steadii は学業の chief of staff です。メールのトリアージ、返信案の作成、カレンダーや締切の管理を行います。コースワーク自体を肩代わりするものではありません。生成された出力をそのまま自分の成果物として評価対象の課題に提出することは、利用者自身の責任となり、所属機関の規程に違反する可能性があります。",
       },
       your_content: {
         heading: "ユーザーコンテンツ",
@@ -1151,8 +1163,8 @@ export const ja: Messages = {
   },
   seed_prompts: {
     review_recent_mistakes:
-      "最近1週間の間違いノートから、特に復習した方がよいものを3件挙げて、それぞれのポイントを短くまとめてください。",
+      "今いちばん溜まっている対応はなんですか？返信していないメール、迫っている締切、フォローアップが必要な約束を整理してください。",
     generate_similar_problems:
-      "最近1週間の間違いノートのパターンを元に、似た形式の練習問題を3題作成してください。解答は伏せておいてください。",
+      "進行中の話題があるのに 3 週間以上連絡していない教授がいたら、近況確認のメール下書きを作ってください。",
   },
 };
