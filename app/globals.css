@@ -637,11 +637,11 @@
   --surface-raised: 0 0% 100%;
   --border: 0 0% 90%;               /* hairline on white */
   --muted-foreground: 30 6% 40%;    /* readable on white */
-  --accent: 262 83% 58%;            /* #7C3AED electric violet */
+  --accent: 257 23% 57%;            /* #8579A8 muted lavender (was #7C3AED electric violet — toned per Ryuto 2026-05-02) */
   --primary: 0 0% 4%;               /* #0A0A0A black CTA */
   --primary-foreground: 0 0% 100%;
   --destructive: 0 72% 51%;
-  --ring: 262 83% 58%;
+  --ring: 257 23% 57%;
   color-scheme: light;
 }
 
@@ -666,16 +666,17 @@
   .steadii-mesh { animation: none; }
 }
 
-/* Thin iridescent strip used as section dividers on landing. */
+/* Thin iridescent strip used as section dividers on landing.
+   Calmer 2-stop pale gradient (warm sand → muted lavender) per Ryuto
+   2026-05-02 — was 3-color cyan/magenta/blue rainbow. */
 .landing-strip {
   height: 1px;
   background: linear-gradient(
     to right,
-    rgba(6, 182, 212, 0)    0%,
-    rgba(6, 182, 212, 0.35) 20%,
-    rgba(217, 70, 239, 0.35) 50%,
-    rgba(59, 130, 246, 0.35) 80%,
-    rgba(59, 130, 246, 0)   100%
+    rgba(178, 160, 205, 0)    0%,
+    rgba(178, 160, 205, 0.45) 26%,
+    rgba(225, 200, 165, 0.45) 74%,
+    rgba(225, 200, 165, 0)    100%
   );
 }
 

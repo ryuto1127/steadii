@@ -89,7 +89,7 @@ function ChatActionCard({
           {showCursor ? (
             <span
               aria-hidden
-              className="ml-0.5 inline-block h-[0.95em] w-[0.5em] -translate-y-[0.05em] bg-[#7C3AED] align-middle"
+              className="ml-0.5 inline-block h-[0.95em] w-[0.5em] -translate-y-[0.05em] bg-[#8579A8] align-middle"
               style={{ animation: "steadii-tail-cursor 1s steps(1) infinite" }}
             />
           ) : null}
@@ -102,7 +102,7 @@ function ChatActionCard({
         <ArrowRight
           size={14}
           strokeWidth={1.6}
-          className="mt-0.5 shrink-0 text-[#7C3AED]"
+          className="mt-0.5 shrink-0 text-[#8579A8]"
         />
         <p className="text-[14px] text-[#1A1814]/70">{card.action}</p>
       </div>
