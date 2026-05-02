@@ -18,6 +18,7 @@ import {
   HelpCircle,
   Mail,
   Sparkles,
+  Users,
   X,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -76,6 +77,10 @@ type CardBProps = CommonProps & {
   onReview: () => void;
   onSend: () => Promise<ActionResult> | ActionResult;
   onSkip: () => Promise<ActionResult> | ActionResult;
+  // Wave 3.1 — informational variant only. Fires when the user clicks
+  // the [Mark reviewed] secondary action (or any other inline-action
+  // secondary). The parent records the review and removes the card.
+  onSecondaryAction?: (key: string) => Promise<ActionResult> | ActionResult;
 };
 
 type CardCProps = CommonProps & {
@@ -564,6 +569,7 @@ export function QueueCardBRender({
   onReview,
   onSend,
   onSkip,
+  onSecondaryAction,
   onDismiss,
   onSnooze,
   onPermanentDismiss,
@@ -571,11 +577,28 @@ export function QueueCardBRender({
 }: CardBProps) {
   const t = useTranslations("queue.card_b");
   const tShared = useTranslations("queue.shared");
+  const tSecondary = useTranslations("queue.card_b_secondary");
   const locale = useLocaleHint();
   const [pending, startTransition] = useTransition();
   const [undoToken, setUndoToken] = useState<string | null>(null);
   const [resolved, setResolved] = useState(false);
   const { bindings, menu } = useQuickMenu({ onSnooze, onPermanentDismiss });
+
+  const labelFor = (sa: { key: string; label: string }): string => {
+    // Known keys come from the queue builder (server-side, English).
+    // Unknown keys (e.g. dev-preview mocks, future variants) fall back
+    // to the server label so the UI never renders blank.
+    switch (sa.key) {
+      case "open_detail":
+        return tSecondary("open_detail");
+      case "open_calendar":
+        return tSecondary("open_calendar");
+      case "mark_reviewed":
+        return tSecondary("mark_reviewed");
+      default:
+        return sa.label;
+    }
+  };
 
   const send = () => {
     if (pending || resolved) return;
@@ -595,71 +618,130 @@ export function QueueCardBRender({
     });
   };
 
+  const isInformational = card.mode === "informational";
+  const headerIcon = isInformational ? (
+    <CalendarIcon size={14} strokeWidth={2} />
+  ) : (
+    <Mail size={14} strokeWidth={2} />
+  );
+
+  const runSecondary = (key: string) => {
+    if (!onSecondaryAction || pending || resolved) return;
+    startTransition(async () => {
+      await onSecondaryAction(key);
+      setResolved(true);
+    });
+  };
+
   return (
     <>
       <CardShell card={card} size="md" variant="default" onContextMenu={bindings.onContextMenu}>
         <div {...bindings} className={cn(resolved && "opacity-60")}>
-          <CardHeader
-            card={card}
-            icon={<Mail size={14} strokeWidth={2} />}
-            locale={locale}
-          />
+          <CardHeader card={card} icon={headerIcon} locale={locale} />
           {card.body ? (
             <p className="mt-1 text-[12px] text-[hsl(var(--muted-foreground))]">
               {card.body}
             </p>
           ) : null}
-          <div className="mt-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2">
-            {card.subjectLine ? (
-              <p className="mb-1 text-[12px] font-medium text-[hsl(var(--foreground))]">
-                {card.subjectLine}
+          {card.mode === "draft" ? (
+            <div className="mt-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2">
+              {card.subjectLine ? (
+                <p className="mb-1 text-[12px] font-medium text-[hsl(var(--foreground))]">
+                  {card.subjectLine}
+                </p>
+              ) : null}
+              {card.toLabel ? (
+                <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                  {card.toLabel}
+                </p>
+              ) : null}
+              <p className="line-clamp-3 text-[12px] leading-snug text-[hsl(var(--muted-foreground))]">
+                {card.draftPreview}
               </p>
-            ) : null}
-            {card.toLabel ? (
-              <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                {card.toLabel}
-              </p>
-            ) : null}
-            <p className="line-clamp-3 text-[12px] leading-snug text-[hsl(var(--muted-foreground))]">
-              {card.draftPreview}
-            </p>
-          </div>
+            </div>
+          ) : (
+            <ul className="mt-3 flex flex-col gap-1.5 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2">
+              {card.bullets.map((b, i) => (
+                <li
+                  key={i}
+                  className="flex gap-2 text-[12px] leading-snug text-[hsl(var(--foreground))]"
+                >
+                  <span
+                    aria-hidden
+                    className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[hsl(var(--muted-foreground))]"
+                  />
+                  <span>{b}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           {card.confidence === "low" ? (
             <p className="mt-2 text-[12px] italic text-[hsl(var(--muted-foreground))]">
               {tShared("verify_recommended")}
             </p>
           ) : null}
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={onReview}
-              disabled={pending || resolved}
-              className="inline-flex h-9 items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 text-[13px] font-medium text-[hsl(var(--foreground))] transition-default hover:bg-[hsl(var(--surface-raised))]"
-            >
-              {t("review")}
-            </button>
-            <button
-              type="button"
-              onClick={send}
-              disabled={pending || resolved}
-              className="inline-flex h-9 items-center gap-1 rounded-full bg-[hsl(var(--foreground))] px-4 text-[13px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90 disabled:opacity-50"
-            >
-              <Sparkles size={12} strokeWidth={2} />
-              <span>{t("send")}</span>
-            </button>
-            <button
-              type="button"
-              onClick={skip}
-              disabled={pending || resolved}
-              className="ml-auto inline-flex h-9 items-center rounded-full px-3 text-[13px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
-            >
-              {t("skip")}
-            </button>
+            {card.mode === "draft" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={onReview}
+                  disabled={pending || resolved}
+                  className="inline-flex h-9 items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 text-[13px] font-medium text-[hsl(var(--foreground))] transition-default hover:bg-[hsl(var(--surface-raised))]"
+                >
+                  {t("review")}
+                </button>
+                <button
+                  type="button"
+                  onClick={send}
+                  disabled={pending || resolved}
+                  className="inline-flex h-9 items-center gap-1 rounded-full bg-[hsl(var(--foreground))] px-4 text-[13px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90 disabled:opacity-50"
+                >
+                  <Sparkles size={12} strokeWidth={2} />
+                  <span>{t("send")}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={skip}
+                  disabled={pending || resolved}
+                  className="ml-auto inline-flex h-9 items-center rounded-full px-3 text-[13px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+                >
+                  {t("skip")}
+                </button>
+              </>
+            ) : (
+              <>
+                {card.secondaryActions.map((sa) =>
+                  sa.href ? (
+                    <a
+                      key={sa.key}
+                      href={sa.href}
+                      className="inline-flex h-9 items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 text-[13px] font-medium text-[hsl(var(--foreground))] transition-default hover:bg-[hsl(var(--surface-raised))]"
+                    >
+                      {labelFor(sa)}
+                    </a>
+                  ) : (
+                    <button
+                      key={sa.key}
+                      type="button"
+                      onClick={() => runSecondary(sa.key)}
+                      disabled={pending || resolved}
+                      className="inline-flex h-9 items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 text-[13px] font-medium text-[hsl(var(--foreground))] transition-default hover:bg-[hsl(var(--surface-raised))] disabled:opacity-50"
+                    >
+                      {labelFor(sa)}
+                    </button>
+                  )
+                )}
+              </>
+            )}
             <button
               type="button"
               onClick={() => void onDismiss()}
               disabled={pending || resolved}
-              className="inline-flex h-9 items-center rounded-full px-2 text-[13px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+              className={cn(
+                "inline-flex h-9 items-center rounded-full px-2 text-[13px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]",
+                card.mode === "informational" && "ml-auto"
+              )}
               aria-label={t("dismiss")}
             >
               <X size={14} strokeWidth={1.75} />
@@ -950,6 +1032,7 @@ export type QueueCardActions = {
   onReview?: CardBProps["onReview"];
   onSend?: CardBProps["onSend"];
   onSkip?: CardBProps["onSkip"];
+  onSecondaryAction?: CardBProps["onSecondaryAction"];
   onTakeAction?: CardCProps["onTakeAction"];
   onSubmit?: CardEProps["onSubmit"];
   onDismiss: CommonProps["onDismiss"];
@@ -984,6 +1067,7 @@ export function QueueCardRenderer({
           onReview={actions.onReview ?? noop}
           onSend={actions.onSend ?? noopAsync}
           onSkip={actions.onSkip ?? noopAsync}
+          onSecondaryAction={actions.onSecondaryAction}
           onDismiss={actions.onDismiss}
           onSnooze={actions.onSnooze}
           onPermanentDismiss={actions.onPermanentDismiss}

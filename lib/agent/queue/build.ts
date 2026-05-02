@@ -1,14 +1,20 @@
 import "server-only";
-import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lte, ne, or } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   agentDrafts,
   agentProposals,
+  events as eventsTable,
+  eventPreBriefs,
   inboxItems,
+  officeHoursRequests,
   type ActionOption,
   type AgentDraft,
   type AgentProposalIssueType,
   type AgentProposalRow,
+  type EventPreBriefRow,
+  type EventRow,
+  type OfficeHoursRequestRow,
   type ProposalSourceRef,
   type RetrievalProvenance,
 } from "@/lib/db/schema";
@@ -30,22 +36,101 @@ export async function buildQueueForUser(userId: string): Promise<QueueCard[]> {
   // We pull more than the visible cap so the "Show more" expansion has
   // material — the page-level collapse logic is what trims the visible
   // count to QUEUE_VISIBLE_LIMIT.
-  const [proposalRows, draftRows] = await Promise.all([
+  const [proposalRows, draftRows, preBriefRows, officeHoursRows] = await Promise.all([
     fetchPendingProposals(userId),
     fetchPendingDrafts(userId),
+    fetchPendingPreBriefs(userId),
+    fetchPendingOfficeHoursRequests(userId),
   ]);
 
-  const aCards: QueueCardA[] = proposalRows.map(proposalToTypeA);
+  // Wave 3.2 — proposals split across Type A / C / E by issueType.
+  const aCards: QueueCardA[] = [];
+  const cFromProposals: QueueCardC[] = [];
+  const eFromProposals: QueueCardE[] = [];
+  for (const p of proposalRows) {
+    if (p.issueType === "group_project_detected") {
+      eFromProposals.push(proposalToTypeE_GroupDetect(p));
+    } else if (p.issueType === "group_member_silent") {
+      cFromProposals.push(proposalToTypeC_GroupSilent(p));
+    } else {
+      aCards.push(proposalToTypeA(p));
+    }
+  }
+
   const { bCards, cCards, eCards } = partitionDrafts(draftRows);
+  const preBriefCards = preBriefRows.map(({ brief, event, now }) =>
+    preBriefToTypeB(brief, event, now)
+  );
+
+  const officeHoursACards: QueueCardA[] = [];
+  const officeHoursBCards: QueueCardB[] = [];
+  for (const r of officeHoursRows) {
+    if (r.status === "pending") officeHoursACards.push(officeHoursToTypeA(r));
+    else if (r.status === "confirmed")
+      officeHoursBCards.push(officeHoursToTypeB(r));
+  }
+
+  // Pre-briefs and W1 drafts are both Type B — interleave them then sort.
+  const allACards: QueueCardA[] = [...aCards, ...officeHoursACards];
+  const allBCards: QueueCardB[] = [
+    ...bCards,
+    ...preBriefCards,
+    ...officeHoursBCards,
+  ];
+  const allCCards: QueueCardC[] = [...cCards, ...cFromProposals];
+  const allECards: QueueCardE[] = [...eCards, ...eFromProposals];
 
   // Spec sort: A → B → C → D → E, newest-first within each group.
   // (D cards fold into Recent activity; the queue surfaces no D cards.)
   return [
-    ...sortByCreatedDesc(aCards),
-    ...sortByCreatedDesc(bCards),
-    ...sortByCreatedDesc(cCards),
-    ...sortByCreatedDesc(eCards),
+    ...sortByCreatedDesc(allACards),
+    ...sortByCreatedDesc(allBCards),
+    ...sortByCreatedDesc(allCCards),
+    ...sortByCreatedDesc(allECards),
   ].slice(0, QUEUE_FETCH_LIMIT);
+}
+
+function proposalToTypeE_GroupDetect(p: AgentProposalRow): QueueCardE {
+  const choices = (p.actionOptions ?? [])
+    .filter((o) => o.tool !== "dismiss")
+    .map((o) => ({ key: o.key, label: o.label }));
+  return {
+    id: `group_detect:${p.id}`,
+    archetype: "E",
+    title: titleForIssue("group_project_detected", p.issueSummary),
+    body: p.issueSummary,
+    confidence: "medium",
+    createdAt: p.createdAt.toISOString(),
+    sources: sourceChipsFromRefs(p.sourceRefs ?? []),
+    detailHref: undefined,
+    originHref: undefined,
+    reversible: true,
+    choices,
+  };
+}
+
+function proposalToTypeC_GroupSilent(p: AgentProposalRow): QueueCardC {
+  // The action_options[0] payload carries the group_project_id so we
+  // can deep-link the "Take action" button straight to the detail page.
+  const opt = (p.actionOptions ?? [])[0];
+  const payload = (opt?.payload ?? {}) as { groupProjectId?: string };
+  const detailHref = payload.groupProjectId
+    ? `/app/groups/${payload.groupProjectId}`
+    : undefined;
+  return {
+    id: `proposal:${p.id}`,
+    archetype: "C",
+    title: titleForIssue("group_member_silent", p.issueSummary),
+    body: p.issueSummary,
+    confidence: "medium",
+    createdAt: p.createdAt.toISOString(),
+    sources: sourceChipsFromRefs(p.sourceRefs ?? []),
+    detailHref,
+    originHref: detailHref,
+    originLabel: "Open group",
+    reversible: false,
+    primaryActionLabel: opt?.label ?? "Take action",
+  };
 }
 
 // ── Proposal → Type A ────────────────────────────────────────────────
@@ -145,6 +230,10 @@ function titleForIssue(
       return "Workload overload";
     case "syllabus_calendar_ambiguity":
       return "Syllabus needs review";
+    case "group_project_detected":
+      return "Group project detected";
+    case "group_member_silent":
+      return "Group member silent";
     default:
       return fallback || "Steadii noticed";
   }
@@ -165,6 +254,8 @@ function confidenceForIssue(
       return "high";
     case "exam_under_prepared":
     case "workload_over_capacity":
+    case "group_project_detected":
+    case "group_member_silent":
       return "medium";
     case "syllabus_calendar_ambiguity":
       return "low";
@@ -270,6 +361,7 @@ function draftToTypeB(row: DraftWithInbox): QueueCardB {
   return {
     id: `draft:${draft.id}`,
     archetype: "B",
+    mode: "draft",
     title: senderLabel,
     body: inbox.subject ? `re: ${inbox.subject}` : "",
     confidence: confidenceForRiskTier(draft.riskTier),
@@ -445,6 +537,310 @@ function sourceChipsFromProvenance(
 
 function sortByCreatedDesc<T extends { createdAt: string }>(items: T[]): T[] {
   return [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+// ── Wave 3.1 — meeting pre-briefs as Type B informational cards ──────
+
+type PreBriefWithEvent = {
+  brief: EventPreBriefRow;
+  event: EventRow;
+  now: Date;
+};
+
+async function fetchPendingPreBriefs(
+  userId: string
+): Promise<PreBriefWithEvent[]> {
+  const now = new Date();
+  let rows: Array<{ brief: EventPreBriefRow; event: EventRow }>;
+  try {
+    rows = await db
+      .select({ brief: eventPreBriefs, event: eventsTable })
+      .from(eventPreBriefs)
+      .innerJoin(eventsTable, eq(eventPreBriefs.eventId, eventsTable.id))
+      .where(
+        and(
+          eq(eventPreBriefs.userId, userId),
+          isNull(eventPreBriefs.dismissedAt),
+          gt(eventPreBriefs.expiresAt, now),
+          isNull(eventsTable.deletedAt)
+        )
+      )
+      .orderBy(desc(eventPreBriefs.createdAt))
+      .limit(QUEUE_FETCH_LIMIT);
+  } catch {
+    // Schema-drift defense — table may not exist yet on older deploys.
+    return [];
+  }
+  return rows.map((r) => ({ ...r, now }));
+}
+
+function preBriefToTypeB(
+  brief: EventPreBriefRow,
+  event: EventRow,
+  now: Date
+): QueueCardB {
+  const minsUntil = Math.max(
+    0,
+    Math.round((event.startsAt.getTime() - now.getTime()) / 60000)
+  );
+  const startedAlready = event.startsAt.getTime() <= now.getTime();
+  const title = startedAlready
+    ? meetingTitleNow(event)
+    : meetingTitleUpcoming(event, minsUntil);
+
+  const subtitle = formatMeetingSubtitle(event);
+
+  const bullets = brief.bullets
+    .map((b) => b.text)
+    .filter((t) => t.trim().length > 0);
+
+  const sources: QueueSourceChip[] = [];
+  // Always cite the underlying event so the user has a 1-click jump.
+  sources.push({
+    kind: "calendar",
+    index: 1,
+    label: `${event.title} · ${formatTimeRange(event)}`,
+    href: event.url ?? undefined,
+  });
+  // Build best-effort source chips from the bullet kinds. We don't have
+  // the underlying record IDs at this point — this is a visual cue, not
+  // a navigable link.
+  let emailIdx = 0;
+  let mistakeIdx = 0;
+  let syllabusIdx = 0;
+  for (const b of brief.bullets) {
+    if (b.kind === "email") {
+      emailIdx += 1;
+      sources.push({
+        kind: "email",
+        index: emailIdx,
+        label: b.text.slice(0, 80),
+        href: b.href,
+      });
+    } else if (b.kind === "mistake") {
+      mistakeIdx += 1;
+      sources.push({
+        kind: "mistake",
+        index: mistakeIdx,
+        label: b.text.slice(0, 80),
+        href: b.href,
+      });
+    } else if (b.kind === "syllabus") {
+      syllabusIdx += 1;
+      sources.push({
+        kind: "syllabus",
+        index: syllabusIdx,
+        label: b.text.slice(0, 80),
+        href: b.href,
+      });
+    }
+  }
+
+  return {
+    id: `pre_brief:${brief.id}`,
+    archetype: "B",
+    mode: "informational",
+    title,
+    body: subtitle,
+    confidence: "high",
+    createdAt: brief.createdAt.toISOString(),
+    sources,
+    detailHref: `/app/pre-briefs/${brief.id}`,
+    originHref: event.url ?? undefined,
+    originLabel: event.url ? "Open in Calendar" : undefined,
+    reversible: false,
+    bullets,
+    secondaryActions: [
+      ...(brief.detailMarkdown
+        ? [
+            {
+              key: "open_detail",
+              label: "Open detail",
+              href: `/app/pre-briefs/${brief.id}`,
+            },
+          ]
+        : []),
+      ...(event.url
+        ? [
+            {
+              key: "open_calendar",
+              label: "Open in Calendar",
+              href: event.url,
+            },
+          ]
+        : []),
+      {
+        key: "mark_reviewed",
+        label: "Mark reviewed",
+        action: "mark_reviewed" as const,
+      },
+    ],
+  };
+}
+
+function meetingTitleUpcoming(event: EventRow, minsUntil: number): string {
+  const subject = primaryAttendeeLabel(event) ?? event.title;
+  return `Meeting with ${subject} in ${minsUntil} min`;
+}
+
+function meetingTitleNow(event: EventRow): string {
+  const subject = primaryAttendeeLabel(event) ?? event.title;
+  return `Meeting with ${subject}`;
+}
+
+function primaryAttendeeLabel(event: EventRow): string | null {
+  const meta = (event.sourceMetadata ?? {}) as Record<string, unknown>;
+  const att = Array.isArray(meta.attendees)
+    ? (meta.attendees as Array<Record<string, unknown>>)
+    : [];
+  const first = att.find(
+    (a) => a.self !== true && (typeof a.email === "string" || typeof a.displayName === "string")
+  );
+  if (!first) return null;
+  if (typeof first.displayName === "string" && first.displayName.length > 0) {
+    return first.displayName;
+  }
+  if (typeof first.email === "string") return first.email;
+  return null;
+}
+
+function formatTimeRange(event: EventRow): string {
+  const start = event.startsAt;
+  const end = event.endsAt;
+  const tFmt = new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  if (!end) return tFmt.format(start);
+  return `${tFmt.format(start)}–${tFmt.format(end)}`;
+}
+
+function formatMeetingSubtitle(event: EventRow): string {
+  const range = formatTimeRange(event);
+  const where = event.location ? ` · ${event.location}` : "";
+  return `${event.title} · ${range}${where}`;
+}
+
+// ── Wave 3.3 — office hours requests ─────────────────────────────────
+
+async function fetchPendingOfficeHoursRequests(
+  userId: string
+): Promise<OfficeHoursRequestRow[]> {
+  try {
+    return await db
+      .select()
+      .from(officeHoursRequests)
+      .where(
+        and(
+          eq(officeHoursRequests.userId, userId),
+          inArray(officeHoursRequests.status, ["pending", "confirmed"])
+        )
+      )
+      .orderBy(desc(officeHoursRequests.createdAt))
+      .limit(QUEUE_FETCH_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+function officeHoursToTypeA(row: OfficeHoursRequestRow): QueueCardA {
+  const profLabel =
+    row.professorName ?? row.professorEmail ?? "the professor";
+  const slotOptions: QueueDecisionOption[] = (row.candidateSlots ?? []).map(
+    (s, i) => ({
+      key: `slot:${i}`,
+      label: formatSlotLabel(s),
+      description: s.location ? s.location : undefined,
+      recommended: i === 0,
+    })
+  );
+  slotOptions.push({
+    key: "edit",
+    label: "Edit questions",
+    description: "Open detail to refine the question list",
+    recommended: false,
+  });
+
+  const sources: QueueSourceChip[] = [];
+  let mistakeIdx = 0;
+  let emailIdx = 0;
+  let chatIdx = 0;
+  for (const q of row.compiledQuestions ?? []) {
+    if (q.source === "mistake") {
+      mistakeIdx += 1;
+      sources.push({ kind: "mistake", index: mistakeIdx, label: q.label, href: q.href });
+    } else if (q.source === "email") {
+      emailIdx += 1;
+      sources.push({ kind: "email", index: emailIdx, label: q.label, href: q.href });
+    } else if (q.source === "chat") {
+      // Chat doesn't have its own chip kind today; render as email-style
+      // pill (least surprising visual fallback).
+      emailIdx += 1;
+      sources.push({ kind: "email", index: emailIdx, label: q.label, href: q.href });
+    } else {
+      // task
+      mistakeIdx += 1;
+      sources.push({
+        kind: "calendar",
+        index: ++chatIdx,
+        label: q.label,
+        href: q.href,
+      });
+    }
+  }
+
+  const body =
+    row.compiledQuestions.length > 0
+      ? `${row.candidateSlots.length} slot(s) · ${row.compiledQuestions.length} question(s) compiled`
+      : `${row.candidateSlots.length} slot(s) · pick one to draft the request`;
+
+  return {
+    id: `office_hours:${row.id}`,
+    archetype: "A",
+    title: `${profLabel} office hours`,
+    body,
+    confidence: "high",
+    createdAt: row.createdAt.toISOString(),
+    sources,
+    detailHref: undefined,
+    reversible: true,
+    options: slotOptions,
+  };
+}
+
+function officeHoursToTypeB(row: OfficeHoursRequestRow): QueueCardB {
+  const subjectLine = row.draftSubject ?? "Office hours request";
+  const bodyPreview = row.draftBody ?? "";
+  return {
+    id: `office_hours:${row.id}`,
+    archetype: "B",
+    mode: "draft",
+    title: row.professorName ?? row.professorEmail ?? "Office hours request",
+    body: row.topic ? `re: ${row.topic}` : "Office hours request",
+    confidence: "high",
+    createdAt: row.createdAt.toISOString(),
+    sources: [],
+    detailHref: undefined,
+    originHref: undefined,
+    reversible: true,
+    draftPreview: bodyPreview,
+    subjectLine,
+    toLabel: row.draftTo ? `To: ${row.draftTo}` : undefined,
+  };
+}
+
+function formatSlotLabel(s: { startsAt: string; endsAt: string }): string {
+  const start = new Date(s.startsAt);
+  const end = new Date(s.endsAt);
+  const day = new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(start);
+  const date = `${start.getMonth() + 1}/${start.getDate()}`;
+  const tFmt = new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return `${day} ${tFmt.format(start)}-${tFmt.format(end)} (${date})`;
 }
 
 // ── Re-exports / accessors used by Recent Activity (Scope 5) ─────────

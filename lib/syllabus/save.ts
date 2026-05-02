@@ -1,10 +1,11 @@
 import "server-only";
 import { db } from "@/lib/db/client";
-import { auditLog, syllabi } from "@/lib/db/schema";
+import { auditLog, classOfficeHours, syllabi } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { refreshSyllabusEmbeddings } from "@/lib/embeddings/entity-embed";
 import { triggerScanInBackground } from "@/lib/agent/proactive/scanner";
 import { runSyllabusAutoImport } from "@/lib/agent/proactive/syllabus-import";
+import { extractOfficeHours } from "@/lib/agent/office-hours/extract";
 import type { Syllabus } from "./schema";
 
 export type SyllabusVerbatim = {
@@ -110,7 +111,54 @@ export async function saveSyllabusToPostgres(args: {
     }
   );
 
+  // Wave 3.3 — extract structured office-hours slots so the office-hours
+  // scheduler tool can compose specific dates without re-extracting at
+  // every demand. Fire-and-forget; the scheduler falls back to inline
+  // extraction if this hasn't completed yet.
+  if (classId && args.syllabus.officeHours) {
+    extractAndCacheOfficeHours({
+      userId: args.userId,
+      classId,
+      syllabusId: row.id,
+      text: args.syllabus.officeHours,
+    }).catch((err) => {
+      console.error("[syllabus.save] office-hours extraction failed", err);
+    });
+  }
+
   return { id: row.id };
+}
+
+async function extractAndCacheOfficeHours(args: {
+  userId: string;
+  classId: string;
+  syllabusId: string;
+  text: string;
+}): Promise<void> {
+  const [existing] = await db
+    .select({ id: classOfficeHours.id })
+    .from(classOfficeHours)
+    .where(
+      and(
+        eq(classOfficeHours.userId, args.userId),
+        eq(classOfficeHours.classId, args.classId)
+      )
+    )
+    .limit(1);
+  if (existing) return; // already cached
+  const result = await extractOfficeHours({
+    userId: args.userId,
+    text: args.text,
+  });
+  await db.insert(classOfficeHours).values({
+    userId: args.userId,
+    classId: args.classId,
+    syllabusId: args.syllabusId,
+    professorEmail: result.professorEmail,
+    slots: result.slots,
+    rawNote: result.rawNote,
+    bookingUrl: result.bookingUrl,
+  });
 }
 
 // Backwards-compat alias for the existing import sites; renamed to

@@ -96,8 +96,35 @@ export type QueueCardA = QueueCardBase & {
   issueType?: AgentProposalIssueType;
 };
 
-export type QueueCardB = QueueCardBase & {
+// Type B has two flavours per `project_wave_2_home_design.md` § "Type B
+// variant: informational":
+//
+//   - "draft" → the engine has prepared an action awaiting user approval
+//     (existing W1 reply drafts, group check-in drafts, office-hours
+//     proposal emails). Renders the embedded subject + body preview and
+//     the [Review] / [Send] / [Skip] action cluster.
+//
+//   - "informational" → the engine surfaces context the user should see
+//     but no draft to send (Wave 3.1 meeting pre-brief). Renders a
+//     bulleted body and a caller-supplied secondary action set; no Send
+//     button. Per the Wave 2 spec note: "designed to accept an optional
+//     primaryAction prop — when omitted, render only secondary actions
+//     + dismiss." We model that by discriminating on `mode`, which keeps
+//     the renderer branches type-safe instead of conditionally-undef
+//     props.
+export type QueueCardBSecondaryAction = {
+  key: string;
+  label: string;
+  // Either an external link (renders as <a href>) or an inline action key
+  // the parent server actions resolve. Pre-brief uses both: "Open in
+  // Calendar" is an href, "Mark reviewed" is an inline action.
+  href?: string;
+  action?: "mark_reviewed";
+};
+
+export type QueueCardBDraft = QueueCardBase & {
   archetype: "B";
+  mode: "draft";
   // 3-4 line preview snippet shown inside the card. The card layout
   // truncates at ~3 lines visually; we don't pre-trim here so the test
   // fixtures can assert full strings.
@@ -107,6 +134,20 @@ export type QueueCardB = QueueCardBase & {
   // Recipient summary ("To: prof@school.edu") for context. Optional.
   toLabel?: string;
 };
+
+export type QueueCardBInformational = QueueCardBase & {
+  archetype: "B";
+  mode: "informational";
+  // 4-6 short bullets summarizing the brief. Rendered as a styled list
+  // in place of the draft preview snippet.
+  bullets: string[];
+  // Caller-supplied secondary action cluster ([Open in Calendar] [Mark
+  // reviewed] etc.). The standard Dismiss control is ALWAYS rendered by
+  // the card itself — callers don't need to include a dismiss action.
+  secondaryActions: QueueCardBSecondaryAction[];
+};
+
+export type QueueCardB = QueueCardBDraft | QueueCardBInformational;
 
 export type QueueCardC = QueueCardBase & {
   archetype: "C";

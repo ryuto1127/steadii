@@ -123,6 +123,29 @@ async function sync(
             reminders: e.reminders ?? null,
             originalStart: { dateTime: startDt, date: startDate },
             originalEnd: { dateTime: endDt, date: endDate },
+            // Wave 3.1 — persist organizer + attendees so the pre-brief
+            // scanner doesn't need a live Google API call per event tick.
+            // Attendees array follows Google Calendar's shape (email +
+            // displayName + responseStatus). Skipped when empty so older
+            // synced events don't carry phantom keys.
+            organizer: e.organizer
+              ? {
+                  email: e.organizer.email ?? null,
+                  displayName: e.organizer.displayName ?? null,
+                }
+              : null,
+            attendees:
+              e.attendees && e.attendees.length > 0
+                ? e.attendees
+                    .filter((a) => Boolean(a.email))
+                    .map((a) => ({
+                      email: a.email!,
+                      displayName: a.displayName ?? null,
+                      responseStatus: a.responseStatus ?? null,
+                      organizer: a.organizer ?? false,
+                      self: a.self ?? false,
+                    }))
+                : null,
           },
           normalizedKey: null,
         };
