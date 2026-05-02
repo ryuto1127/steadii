@@ -1,4 +1,5 @@
 import "server-only";
+import * as Sentry from "@sentry/nextjs";
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 import MicrosoftEntraId from "next-auth/providers/microsoft-entra-id";
@@ -97,15 +98,46 @@ export const authConfig = {
         if (typeof account.token_type === "string")
           update.token_type = account.token_type;
 
-        await db
-          .update(accounts)
-          .set(update)
-          .where(
-            and(
-              eq(accounts.provider, account.provider),
-              eq(accounts.providerAccountId, account.providerAccountId)
-            )
-          );
+        // Neon serverless can hiccup on transient `fetch failed` / cold
+        // start / brief disconnect. The token update is best-effort — old
+        // tokens stay in DB on failure and the next request that needs a
+        // fresh access_token triggers a normal refresh via oauth-tokens.ts.
+        // One retry catches the common transient blip; persistent failure
+        // degrades to a Sentry warning so the user can still sign in.
+        // Mirrors the recordUsage pattern from PR #101.
+        let firstErr: unknown;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            await db
+              .update(accounts)
+              .set(update)
+              .where(
+                and(
+                  eq(accounts.provider, account.provider),
+                  eq(accounts.providerAccountId, account.providerAccountId)
+                )
+              );
+            firstErr = undefined;
+            break;
+          } catch (err) {
+            if (attempt === 0) {
+              firstErr = err;
+              await new Promise((resolve) => setTimeout(resolve, 200));
+              continue;
+            }
+            Sentry.captureException(err, {
+              level: "warning",
+              tags: {
+                context: "signin_token_update_failed",
+                provider: account.provider,
+              },
+              extra: {
+                firstError: firstErr,
+                providerAccountId: account.providerAccountId,
+              },
+            });
+          }
+        }
       }
 
       // α access waitlist gate. Only enforced on production Google sign-in;
