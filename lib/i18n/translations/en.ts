@@ -671,6 +671,17 @@ type MessagesShape = {
     archetype_c_pill: string;
     archetype_d_pill: string;
     archetype_e_pill: string;
+    issue_title: {
+      time_conflict: string;
+      exam_conflict: string;
+      deadline_during_travel: string;
+      exam_under_prepared: string;
+      workload_over_capacity: string;
+      syllabus_calendar_ambiguity: string;
+      group_project_detected: string;
+      group_member_silent: string;
+      fallback: string;
+    };
     shared: {
       dismiss: string;
       verify_recommended: string;
@@ -2174,6 +2185,17 @@ export const en: MessagesShape = {
     archetype_c_pill: "Notice",
     archetype_d_pill: "Done",
     archetype_e_pill: "Question",
+    issue_title: {
+      time_conflict: "Calendar conflict",
+      exam_conflict: "Exam clash",
+      deadline_during_travel: "Deadline during travel",
+      exam_under_prepared: "Exam prep gap",
+      workload_over_capacity: "Workload overload",
+      syllabus_calendar_ambiguity: "Syllabus needs review",
+      group_project_detected: "Group project detected",
+      group_member_silent: "Group member silent",
+      fallback: "Steadii noticed",
+    },
     shared: {
       dismiss: "Dismiss",
       verify_recommended: "Verify before acting.",
