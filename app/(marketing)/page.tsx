@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
-import { Plug, Eye, Sparkles } from "lucide-react";
 import { ChatActionCards } from "./_components/chat-action-cards";
 import { ProactiveMock } from "./_components/proactive-mock";
 import { LocaleToggle } from "./_components/locale-toggle";
+import { NavLocaleToggle } from "./_components/nav-locale-toggle";
+import { BoundariesSection } from "./_components/boundaries-section";
+import { FoundingCta } from "./_components/founding-cta";
 import { HeroMesh } from "./_components/hero-mesh";
 import HeroAnimation from "@/components/landing/hero-animation";
 import { VoiceDemo } from "@/components/landing/voice-demo";
@@ -52,24 +54,6 @@ export default async function LandingPage() {
     step3_meta: t("landing.steadii_in_motion.step3_meta"),
   };
 
-  const steps = [
-    {
-      icon: Plug,
-      title: t("landing.how_it_works.steps.connect.title"),
-      body: t("landing.how_it_works.steps.connect.body"),
-    },
-    {
-      icon: Eye,
-      title: t("landing.how_it_works.steps.watch.title"),
-      body: t("landing.how_it_works.steps.watch.body"),
-    },
-    {
-      icon: Sparkles,
-      title: t("landing.how_it_works.steps.trust.title"),
-      body: t("landing.how_it_works.steps.trust.body"),
-    },
-  ];
-
   return (
     <>
       {/* Section 1 — Hero (full-bleed mesh + stacked headline → video) */}
@@ -79,12 +63,22 @@ export default async function LandingPage() {
           <span className="text-[17px] font-semibold tracking-tight text-[#1A1814]">
             Steadii
           </span>
-          <Link
-            href="/login"
-            className="text-small text-[#1A1814]/70 transition-hover hover:text-[#8579A8]"
-          >
-            {t("landing.sign_in")}
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/login"
+              className="text-small text-[#1A1814]/70 transition-hover hover:text-[#8579A8]"
+            >
+              {t("landing.sign_in")}
+            </Link>
+            <NavLocaleToggle
+              current={locale}
+              labels={{
+                en: t("landing.locale_toggle.en"),
+                ja: t("landing.locale_toggle.ja"),
+              }}
+              ariaLabel={t("landing.locale_toggle.aria_label")}
+            />
+          </div>
         </nav>
 
         <div className="relative mx-auto max-w-5xl px-6 pt-8 pb-10 text-center md:pt-16 md:pb-14 md:text-left">
@@ -120,8 +114,11 @@ export default async function LandingPage() {
         </div>
       </section>
 
+      {/* Section 2 — Boundaries (cherry-picked from Claude Design archive) */}
+      <BoundariesSection />
+
       <main className="mx-auto max-w-6xl px-6">
-        {/* Section 2 — What you do */}
+        {/* Section 3 — What you do */}
         <section className="py-20 md:py-28">
           <div className="landing-strip mb-16 w-full" />
           <div className="mb-12 max-w-2xl">
@@ -149,7 +146,7 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* Section 3 — Steadii in motion */}
+        {/* Section 4 — Steadii in motion */}
         <section className="py-20 md:py-28">
           <div className="landing-strip mb-16 w-full" />
           <div className="mb-12 max-w-2xl">
@@ -165,124 +162,45 @@ export default async function LandingPage() {
             {t("landing.steadii_in_motion.real_screen")}
           </p>
         </section>
-
-        {/* Section 4 — How it works */}
-        <section className="py-20 md:py-28">
-          <div className="landing-strip mb-16 w-full" />
-          <h2 className="mb-12 whitespace-pre-line text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[44px]">
-            {t("landing.how_it_works.title")}
-          </h2>
-          <ol className="grid gap-5 md:grid-cols-3">
-            {steps.map((step, i) => {
-              const Icon = step.icon;
-              return (
-                <li
-                  key={step.title}
-                  className="rounded-[12px] border border-black/[0.06] bg-white p-6 shadow-[0_4px_20px_-8px_rgba(20,20,40,0.08)]"
-                >
-                  <div className="flex items-center gap-2">
-                    <Icon
-                      size={16}
-                      strokeWidth={1.6}
-                      className="text-[#8579A8]"
-                    />
-                    <span className="font-mono text-[11px] uppercase tracking-widest text-[#1A1814]/50">
-                      0{i + 1}
-                    </span>
-                  </div>
-                  <h3 className="mt-3 text-[18px] font-semibold tracking-tight text-[#1A1814]">
-                    {step.title}
-                  </h3>
-                  <p className="mt-2 text-[14px] leading-[1.5] text-[#1A1814]/65">
-                    {step.body}
-                  </p>
-                </li>
-              );
-            })}
-          </ol>
-        </section>
-
-        {/* Section 5 — Glass box */}
-        <section className="py-20 md:py-28">
-          <div className="landing-strip mb-16 w-full" />
-          <h2 className="whitespace-pre-line text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[44px]">
-            {t("landing.glass_box.title")}
-          </h2>
-          <div className="mt-8 grid max-w-3xl gap-5 text-[17px] leading-[1.6] text-[#1A1814]/75 md:text-[18px]">
-            <p>{t("landing.glass_box.paragraph_reasoning")}</p>
-            <p>{t("landing.glass_box.paragraph_yours")}</p>
-            <p>{t("landing.glass_box.paragraph_confirm")}</p>
-          </div>
-        </section>
-
-        {/* Section 6 — Founding member CTA */}
-        <section className="py-20 md:py-28">
-          <div className="landing-strip mb-16 w-full" />
-          <div className="relative overflow-hidden rounded-[16px] border border-black/[0.06] bg-white p-8 shadow-[0_8px_30px_-12px_rgba(20,20,40,0.12)] md:p-10">
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-0 opacity-70"
-              style={{
-                background: `
-                  radial-gradient(circle at 0% 0%, rgba(178, 165, 200, 0.10) 0%, transparent 50%),
-                  radial-gradient(circle at 100% 100%, rgba(220, 200, 170, 0.10) 0%, transparent 50%)
-                `,
-              }}
-            />
-            <div className="relative">
-              <p className="font-mono text-[11px] uppercase tracking-widest text-[#8579A8]">
-                {t("landing.founding.headline")}
-              </p>
-              <p className="mt-4 max-w-2xl text-[17px] leading-[1.55] text-[#1A1814] md:text-[18px]">
-                {t("landing.founding.body")}
-              </p>
-              <div className="mt-7">
-                <Link
-                  href="/request-access"
-                  className="inline-flex items-center rounded-full bg-[#0A0A0A] px-6 py-3 text-[15px] font-medium text-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] transition-hover hover:scale-[1.02]"
-                >
-                  {t("landing.founding.cta")}
-                </Link>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Section 7 — Footer */}
-        <footer className="flex flex-wrap items-center gap-6 border-t border-black/[0.06] py-12 text-small text-[#1A1814]/60">
-          <Link
-            href="/privacy"
-            className="transition-hover hover:text-[#8579A8]"
-          >
-            {t("landing.footer.privacy")}
-          </Link>
-          <Link
-            href="/terms"
-            className="transition-hover hover:text-[#8579A8]"
-          >
-            {t("landing.footer.terms")}
-          </Link>
-          <a
-            href="mailto:hello@mysteadii.com"
-            className="transition-hover hover:text-[#8579A8]"
-          >
-            {t("landing.footer.contact")}
-          </a>
-          <div className="ml-auto flex flex-wrap items-center gap-4">
-            <LocaleToggle
-              current={locale}
-              labels={{
-                en: t("landing.locale_toggle.en"),
-                ja: t("landing.locale_toggle.ja"),
-              }}
-              ariaLabel={t("landing.locale_toggle.aria_label")}
-            />
-            <span className="font-mono text-[11px] text-[#8579A8]">
-              {t("landing.footer.subject_to_change")}
-            </span>
-          </div>
-        </footer>
       </main>
+
+      {/* Section 5 — Founding CTA (cherry-picked Claude Design UI) */}
+      <FoundingCta />
+
+      {/* Section 6 — Footer */}
+      <footer className="mx-auto flex max-w-6xl flex-wrap items-center gap-6 border-t border-black/[0.06] px-6 py-12 text-small text-[#1A1814]/60">
+        <Link
+          href="/privacy"
+          className="transition-hover hover:text-[#8579A8]"
+        >
+          {t("landing.footer.privacy")}
+        </Link>
+        <Link
+          href="/terms"
+          className="transition-hover hover:text-[#8579A8]"
+        >
+          {t("landing.footer.terms")}
+        </Link>
+        <a
+          href="mailto:hello@mysteadii.com"
+          className="transition-hover hover:text-[#8579A8]"
+        >
+          {t("landing.footer.contact")}
+        </a>
+        <div className="ml-auto flex flex-wrap items-center gap-4">
+          <LocaleToggle
+            current={locale}
+            labels={{
+              en: t("landing.locale_toggle.en"),
+              ja: t("landing.locale_toggle.ja"),
+            }}
+            ariaLabel={t("landing.locale_toggle.aria_label")}
+          />
+          <span className="font-mono text-[11px] text-[#8579A8]">
+            {t("landing.footer.subject_to_change")}
+          </span>
+        </div>
+      </footer>
     </>
   );
 }
