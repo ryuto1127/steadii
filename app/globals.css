@@ -669,36 +669,95 @@
 }
 
 /* /app main-island background — translucent iridescent overlay layered
-   over hsl(var(--surface)). Per Ryuto 2026-05-03: the iridescent shimmer
-   should live ON the main content island (the white/dark "box" where
-   Home content sits), NOT on the surrounding canvas / sidebar area.
-   Canvas reverts to plain hsl(var(--background)).
+   over hsl(var(--surface)). Per Ryuto 2026-05-03 (PR #133 then #134):
+   the iridescent shimmer should live ON the main content island, with
+   strong gradation and slow drift over time.
 
-   Light island base = #FFFFFF; opacities tuned to be visible against
-   pure white without going loud. Dark island base = #0F0E0D; opacities
-   bumped because the dark surface absorbs more of the gradient color. */
+   Implementation:
+   - Larger radial sizes (95% 80% vs prior 60% 50%) so the 4 anchor
+     hues bleed into each other across the island instead of reading
+     as isolated color blobs.
+   - 3-stop falloff per radial (full → half-opacity at 38% → transparent
+     at 80%) so each color fades smoothly rather than terminating with
+     a hard ring.
+   - Anchor positions threaded through CSS @property variables so they
+     can be smoothly interpolated by a 32s drift keyframe — gives
+     ambient "ゆらゆら" motion without distracting.
+   - prefers-reduced-motion kills the animation but keeps the static
+     iridescence. */
+@property --p1x { syntax: "<percentage>"; inherits: false; initial-value: 12%; }
+@property --p1y { syntax: "<percentage>"; inherits: false; initial-value: 8%; }
+@property --p2x { syntax: "<percentage>"; inherits: false; initial-value: 88%; }
+@property --p2y { syntax: "<percentage>"; inherits: false; initial-value: 22%; }
+@property --p3x { syntax: "<percentage>"; inherits: false; initial-value: 50%; }
+@property --p3y { syntax: "<percentage>"; inherits: false; initial-value: 100%; }
+@property --p4x { syntax: "<percentage>"; inherits: false; initial-value: 92%; }
+@property --p4y { syntax: "<percentage>"; inherits: false; initial-value: 88%; }
+
 .app-island-bg {
   background:
-    radial-gradient(ellipse 60% 50% at 12% 8%, rgba(167, 139, 250, 0.14) 0%, transparent 60%),
-    radial-gradient(ellipse 55% 45% at 88% 22%, rgba(45, 212, 191, 0.12) 0%, transparent 60%),
-    radial-gradient(ellipse 70% 50% at 50% 100%, rgba(244, 114, 182, 0.10) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 40% at 92% 88%, rgba(245, 158, 11, 0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 95% 80% at var(--p1x) var(--p1y), rgba(167, 139, 250, 0.22) 0%, rgba(167, 139, 250, 0.10) 38%, transparent 80%),
+    radial-gradient(ellipse 90% 75% at var(--p2x) var(--p2y), rgba(45, 212, 191, 0.20) 0%, rgba(45, 212, 191, 0.09) 38%, transparent 80%),
+    radial-gradient(ellipse 110% 80% at var(--p3x) var(--p3y), rgba(244, 114, 182, 0.16) 0%, rgba(244, 114, 182, 0.08) 38%, transparent 80%),
+    radial-gradient(ellipse 85% 70% at var(--p4x) var(--p4y), rgba(245, 158, 11, 0.16) 0%, rgba(245, 158, 11, 0.08) 38%, transparent 80%),
     hsl(var(--surface));
   background-attachment: fixed;
+  animation: steadii-island-drift 45s linear infinite;
 }
 
-/* Dark mode bumps opacity so the iridescent shimmer reads against the
-   darker --surface tone. */
+/* Dark mode bumps opacity further so the iridescent shimmer reads
+   against the darker --surface tone. Same drift animation. */
 @media (prefers-color-scheme: dark) {
   .app-island-bg {
     background:
-      radial-gradient(ellipse 60% 50% at 12% 8%, rgba(167, 139, 250, 0.28) 0%, transparent 60%),
-      radial-gradient(ellipse 55% 45% at 88% 22%, rgba(45, 212, 191, 0.22) 0%, transparent 60%),
-      radial-gradient(ellipse 70% 50% at 50% 100%, rgba(244, 114, 182, 0.18) 0%, transparent 60%),
-      radial-gradient(ellipse 50% 40% at 92% 88%, rgba(245, 158, 11, 0.20) 0%, transparent 55%),
+      radial-gradient(ellipse 95% 80% at var(--p1x) var(--p1y), rgba(167, 139, 250, 0.42) 0%, rgba(167, 139, 250, 0.20) 38%, transparent 80%),
+      radial-gradient(ellipse 90% 75% at var(--p2x) var(--p2y), rgba(45, 212, 191, 0.34) 0%, rgba(45, 212, 191, 0.16) 38%, transparent 80%),
+      radial-gradient(ellipse 110% 80% at var(--p3x) var(--p3y), rgba(244, 114, 182, 0.28) 0%, rgba(244, 114, 182, 0.13) 38%, transparent 80%),
+      radial-gradient(ellipse 85% 70% at var(--p4x) var(--p4y), rgba(245, 158, 11, 0.30) 0%, rgba(245, 158, 11, 0.14) 38%, transparent 80%),
       hsl(var(--surface));
     background-attachment: fixed;
   }
+}
+
+/* Each anchor rotates 360° clockwise around the island center (50%, 50%)
+   over one cycle. Net effect: the 4 colored radials sweep past every
+   side of the island in turn, producing a "回っている" (rotating) feel
+   without any individual hue ever leaving the field. */
+@keyframes steadii-island-drift {
+  0% {
+    --p1x: 12%; --p1y: 8%;
+    --p2x: 88%; --p2y: 22%;
+    --p3x: 50%; --p3y: 100%;
+    --p4x: 92%; --p4y: 88%;
+  }
+  25% {
+    --p1x: 92%; --p1y: 12%;
+    --p2x: 78%; --p2y: 88%;
+    --p3x: 0%; --p3y: 50%;
+    --p4x: 12%; --p4y: 92%;
+  }
+  50% {
+    --p1x: 88%; --p1y: 92%;
+    --p2x: 12%; --p2y: 78%;
+    --p3x: 50%; --p3y: 0%;
+    --p4x: 8%; --p4y: 12%;
+  }
+  75% {
+    --p1x: 8%; --p1y: 88%;
+    --p2x: 22%; --p2y: 12%;
+    --p3x: 100%; --p3y: 50%;
+    --p4x: 88%; --p4y: 8%;
+  }
+  100% {
+    --p1x: 12%; --p1y: 8%;
+    --p2x: 88%; --p2y: 22%;
+    --p3x: 50%; --p3y: 100%;
+    --p4x: 92%; --p4y: 88%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-island-bg { animation: none; }
 }
 
 /* Thin iridescent strip used as section dividers on landing.
