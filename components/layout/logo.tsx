@@ -1,9 +1,11 @@
-import { cn } from "@/lib/utils/cn";
+import { Logomark } from "@/components/landing/visual/logomark";
 
-// Steadii brand mark. A diamond (45°-rotated square with softened
-// points) with a warm gradient whose hue cycles slowly (~14s) via
-// `steadii-logo-hue` in globals.css, giving a subtle "always alive"
-// feel. Animation respects prefers-reduced-motion.
+// Steadii brand mark. Three nested holographic arcs — reads as a stylized
+// "S" and as a cascade waveform. Replaced the diamond + warm-gradient
+// version 2026-05-02 to align with the Claude Design archive. The arc
+// gradient stops bind to --holo-1/2/3, which resolve under the marketing
+// .landing-light scope and fall back to the same hex values everywhere
+// else (Logomark inlines them via SVG <linearGradient>).
 export function Logo({
   size = 26,
   className,
@@ -11,11 +13,5 @@ export function Logo({
   size?: number;
   className?: string;
 }) {
-  return (
-    <span
-      aria-hidden
-      className={cn("steadii-logo block shrink-0", className)}
-      style={{ width: size, height: size }}
-    />
-  );
+  return <Logomark size={size} className={className} />;
 }
