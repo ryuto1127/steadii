@@ -105,24 +105,28 @@ export default async function HomePage() {
         tz={tz}
       />
 
-      {queueCards.length > 0 ? (
-        <QueueList
-          cards={queueCards}
-          actions={{
-            resolveProposal: queueResolveProposalAction,
-            submitClarification: queueSubmitClarificationAction,
-            dismiss: queueDismissAction,
-            snooze: queueSnoozeAction,
-            permanentDismiss: queuePermanentDismissAction,
-            secondaryAction: queueSecondaryAction,
-            sendOfficeHours: queueSendOfficeHoursAction,
-          }}
-        />
-      ) : (
-        <QueueEmptyState />
-      )}
+      <div className="mt-10 md:mt-12">
+        {queueCards.length > 0 ? (
+          <QueueList
+            cards={queueCards}
+            actions={{
+              resolveProposal: queueResolveProposalAction,
+              submitClarification: queueSubmitClarificationAction,
+              dismiss: queueDismissAction,
+              snooze: queueSnoozeAction,
+              permanentDismiss: queuePermanentDismissAction,
+              secondaryAction: queueSecondaryAction,
+              sendOfficeHours: queueSendOfficeHoursAction,
+            }}
+          />
+        ) : (
+          <QueueEmptyState />
+        )}
+      </div>
 
-      <RecentActivity userId={userId} />
+      <div className="mt-10 md:mt-12">
+        <RecentActivity userId={userId} />
+      </div>
     </div>
   );
 }
