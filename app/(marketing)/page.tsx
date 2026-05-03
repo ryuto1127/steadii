@@ -64,12 +64,6 @@ export default async function LandingPage() {
             Steadii
           </span>
           <div className="flex items-center gap-4">
-            <Link
-              href="/login"
-              className="text-small text-[#1A1814]/70 transition-hover hover:text-[#8579A8]"
-            >
-              {t("landing.sign_in")}
-            </Link>
             <NavLocaleToggle
               current={locale}
               labels={{
@@ -78,6 +72,12 @@ export default async function LandingPage() {
               }}
               ariaLabel={t("landing.locale_toggle.aria_label")}
             />
+            <Link
+              href="/login"
+              className="inline-flex items-center rounded-full border border-black/[0.10] bg-white/60 px-4 py-1.5 text-[14px] font-medium text-[#1A1814] transition-hover hover:border-black/[0.18] hover:bg-white"
+            >
+              {t("landing.sign_in")}
+            </Link>
           </div>
         </nav>
 
@@ -119,9 +119,9 @@ export default async function LandingPage() {
 
       <main className="mx-auto max-w-6xl px-6">
         {/* Section 3 — What you do */}
-        <section className="py-20 md:py-28">
-          <div className="landing-strip mb-16 w-full" />
-          <div className="mb-12 max-w-2xl">
+        <section className="py-10 md:py-14">
+          <div className="landing-strip mb-10 w-full" />
+          <div className="mb-10 max-w-2xl">
             <h2 className="whitespace-pre-line text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[44px]">
               {t("landing.what_you_do.title")}
             </h2>
@@ -141,15 +141,15 @@ export default async function LandingPage() {
               shouldn't lead the page, but it's worth showing the
               cleanup that makes Steadii's voice meaningfully different
               from raw STT. */}
-          <div className="mt-16 md:mt-20">
+          <div className="mt-12 md:mt-14">
             <VoiceDemo />
           </div>
         </section>
 
         {/* Section 4 — Steadii in motion */}
-        <section className="py-20 md:py-28">
-          <div className="landing-strip mb-16 w-full" />
-          <div className="mb-12 max-w-2xl">
+        <section className="py-10 md:py-14">
+          <div className="landing-strip mb-10 w-full" />
+          <div className="mb-10 max-w-2xl">
             <h2 className="whitespace-pre-line text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[44px]">
               {t("landing.steadii_in_motion.title")}
             </h2>
