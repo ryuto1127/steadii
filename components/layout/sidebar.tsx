@@ -136,18 +136,14 @@ export async function Sidebar({
         <Link
           href="/app"
           aria-label={tLayout("sidebar_brand_aria")}
-          className={`flex h-9 items-center gap-2.5 rounded-lg px-1.5 transition-hover ${
-            expanded ? "" : "justify-center group-hover/sidebar:justify-start"
-          }`}
+          className="flex h-9 items-center gap-2.5 rounded-lg px-1 transition-hover"
         >
           <span className="grid h-8 w-8 shrink-0 place-items-center">
             <Logo size={32} />
           </span>
           <span
-            className={`min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-[15px] font-semibold tracking-tight text-[hsl(var(--foreground))] ${
-              expanded
-                ? "flex"
-                : "hidden group-hover/sidebar:flex"
+            className={`flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-[15px] font-semibold tracking-tight text-[hsl(var(--foreground))] transition-opacity duration-200 ${
+              expanded ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
             }`}
           >
             Steadii
