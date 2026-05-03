@@ -136,11 +136,19 @@ export async function Sidebar({
         <Link
           href="/app"
           aria-label={tLayout("sidebar_brand_aria")}
-          className="flex h-9 items-center gap-2.5 rounded-lg px-1.5 transition-hover"
+          className={`flex h-9 items-center gap-2.5 rounded-lg px-1.5 transition-hover ${
+            expanded ? "" : "justify-center group-hover/sidebar:justify-start"
+          }`}
         >
-          <Logo size={26} />
+          <span className="grid h-8 w-8 shrink-0 place-items-center">
+            <Logo size={32} />
+          </span>
           <span
-            className={`flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-[15px] font-semibold tracking-tight text-[hsl(var(--foreground))] ${labelRevealClass}`}
+            className={`min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-[15px] font-semibold tracking-tight text-[hsl(var(--foreground))] ${
+              expanded
+                ? "flex"
+                : "hidden group-hover/sidebar:flex"
+            }`}
           >
             Steadii
             <ChevronRight
