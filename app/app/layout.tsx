@@ -149,7 +149,7 @@ export default async function AppLayout({
   return (
     <MobileNavProvider>
      <VoiceAppProvider voiceTriggerKey={voiceTriggerKey}>
-      <div className="app-shell-bg flex h-[100dvh] flex-col md:h-screen md:flex-row md:gap-3 md:p-3">
+      <div className="flex h-[100dvh] flex-col bg-[hsl(var(--background))] md:h-screen md:flex-row md:gap-3 md:p-3">
         {/* Mobile top bar — md:hidden. Sticky-on-canvas above the main
             island. Holds the hamburger, the brand mark, and the bell. */}
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 md:hidden">
@@ -191,7 +191,7 @@ export default async function AppLayout({
           />
         </MobileNavDrawer>
 
-        <main className="relative flex-1 overflow-y-auto bg-[hsl(var(--surface))] md:rounded-xl md:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.08)] md:ring-1 md:ring-black/[0.04]">
+        <main className="app-island-bg relative flex-1 overflow-y-auto md:rounded-xl md:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.08)] md:ring-1 md:ring-black/[0.04]">
           <OfflineStrip />
           {/* Desktop-only floating bell (top-right of the island). Mobile
               gets the bell inside the top bar above. */}
