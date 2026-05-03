@@ -149,7 +149,7 @@ export default async function AppLayout({
   return (
     <MobileNavProvider>
      <VoiceAppProvider voiceTriggerKey={voiceTriggerKey}>
-      <div className="flex h-[100dvh] flex-col bg-[hsl(var(--background))] md:h-screen md:flex-row md:gap-3 md:p-3">
+      <div className="app-shell-bg flex h-[100dvh] flex-col md:h-screen md:flex-row md:gap-3 md:p-3">
         {/* Mobile top bar — md:hidden. Sticky-on-canvas above the main
             island. Holds the hamburger, the brand mark, and the bell. */}
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 md:hidden">
