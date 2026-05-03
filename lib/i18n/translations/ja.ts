@@ -14,22 +14,79 @@ export const ja: Messages = {
     cta_already_approved: "既に承認済の方: サインイン",
     alpha: "α版 — 招待制",
     invite_hint: "α期間中は招待制です。",
+    nav: {
+      what_it_does: "できること",
+      students: "学生の声",
+      privacy: "プライバシー",
+      log_in: "ログイン",
+    },
+    hero: {
+      eyebrow: "学生のための、影武者のような秘書。",
+      h1_a: "勉強だけに",
+      h1_b: "集中させてくれる",
+      h1_c: "AI 秘書。",
+      sub: "メールの返信、カレンダーの調整、グループの進行、事務手続き — Steadii が動いている間、あなたは学ぶことに集中できます。",
+      cta_primary: "創立メンバーに加わる",
+      cta_secondary: "1 分のデモを見る",
+      meta: "東大・慶應・早稲田の学生 200 人が早期利用中",
+      demo: {
+        aria_label: "音声デモ",
+        full_phrase:
+          "田中先生に、水曜のデータ分析レポートを 2 日延ばしてもらえないか丁寧にメールして",
+        listening: "聞いています…",
+        transcribing: "書き起こし中",
+        drafting: "下書き作成中…",
+        done: "下書き完了",
+        draft_eyebrow: "下書きあり",
+        draft_title: "田中先生への返信 — 延長依頼",
+        draft_subject: "件名: Re: CS340 期末プロジェクト提出について",
+        draft_body:
+          "田中先生\n\nデータセットの件、ご連絡ありがとうございます。可能でしたら 2 日間の延長をお願いできれば幸いです。日曜 23:59 までには提出いたします…",
+        draft_send: "送信",
+        draft_review: "確認",
+        draft_skip: "見送り",
+        draft_origin: "受信箱",
+        draft_time: "9 分前",
+      },
+    },
     value_props: {
-      triage: {
-        title: "頼む前にドラフトが揃う",
-        body: "受信メールを自動でトリアージし、リスクを分類し、あなたの口調で返信案を準備します。受信箱ではなくキューを開く感覚です。",
+      email: {
+        key: "メール",
+        body: "受信箱を読み、整理し、下書きを置いておきます。判断はあなた。",
       },
-      glassbox: {
-        title: "ガラス箱：すべて見える",
-        body: "各ドラフトには何が発動したか、どの過去メールを参照したか、何を検討したかが添えられています。隠れて動くことはありません。",
+      calendar: {
+        key: "カレンダー",
+        body: "授業・予定・締切を一枚で。衝突は先回りして直しておきます。",
       },
-      confirm: {
-        title: "送信は必ずあなたが承認",
-        body: "送信はワンクリック承認＋10 秒の undo を通ります。あなたを通さずに何も出ません。",
+      groups: {
+        key: "グループ",
+        body: "Discord・Slack・LINE をまたいで、進捗を 1 つに集める。",
       },
-      yours: {
-        title: "データはあなたのもの",
-        body: "シラバス・課題、そして Steadii があなたについて覚え書きしたメモ。読む・検索する・書き出す——いつでも自由、囲い込みません。",
+      admin: {
+        key: "事務",
+        body: "履修・申請・提出 — 期日と書類を Steadii が追います。",
+      },
+    },
+    boundaries: {
+      title: "あなたがやること、Steadii がやること",
+      subhead:
+        "境界線をはっきりさせています。学びは AI に任せない。動かす作業は学生に任せない。",
+      cards: {
+        learning: {
+          who: "あなた",
+          key: "学ぶ",
+          body: "ChatGPT や Claude と一緒に、概念に時間を費やす。本当にやりたかったやつ。",
+        },
+        deciding: {
+          who: "あなた",
+          key: "判断する",
+          body: "Steadii は前に立ちません。決定は全部、あなたの手元に置いておきます。",
+        },
+        doing: {
+          who: "Steadii",
+          key: "動かす",
+          body: "メールを返し、ブッキングを取り、書類を整え、進捗を集める。",
+        },
       },
     },
     what_you_do: {
@@ -84,40 +141,13 @@ export const ja: Messages = {
       step3_meta:
         "復元から学習しました。同様のメールは表示されるようになります。",
     },
-    how_it_works: {
-      title: "3 ステップで始める。",
-      steps: {
-        connect: {
-          title: "つなぐ",
-          body:
-            "Google でサインイン。Steadii が受信箱とカレンダーを読み取ります。セットアップは約 90 秒。",
-        },
-        watch: {
-          title: "見守る",
-          body:
-            "Steadii がメールをトリアージし、衝突を監視し、返信案を準備。すべてが見え、あなたを通さずには何も送られません。",
-        },
-        trust: {
-          title: "任せる",
-          body:
-            "間違っているときは「閉じる」を押せばいい。Steadii はあなたのスタイルを学びます。信頼が深まるほど、より多くを任せられるようになります。",
-        },
-      },
-    },
-    glass_box: {
-      title: "思考も判断も、見えるところに。",
-      paragraph_reasoning:
-        "判断の理由はすべて見えます。各ドラフトの推論パネルを開けば、エージェントが読んだもの、比較したこと、参照した過去のメールが確認できます。",
-      paragraph_yours:
-        "データはあなたのもの。シラバス・課題、そして Steadii があなたについて覚え書きしたメモはそのまま保管。読む・検索する・書き出す——いつでも自由、囲い込みません。",
-      paragraph_confirm:
-        "送信は必ずあなたを通ります。送信は 10 秒の undo と明示的な承認を経て送られます。低リスクのドラフトを自動送信する段階的自動送信モードはオプトイン、ユーザー単位で切替可能です。",
-    },
     founding: {
       headline: "α は招待制。",
-      body:
-        "Founding メンバーはサインアップ時の料金が永続固定、さらに北米公開（2026 年 9 月）前にすべての新機能を先行利用できます。",
-      cta: "α アクセスをリクエスト",
+      h2: "創立メンバーは 200 席。",
+      body: "学費の 1/10。卒業まで価格据え置き。",
+      cta: "学割で申し込む",
+      cta_secondary: "推薦コードを使う",
+      note: "@keio.jp / @waseda.jp / @u-tokyo.ac.jp 優先",
     },
     locale_toggle: {
       en: "EN",
@@ -129,6 +159,7 @@ export const ja: Messages = {
       terms: "利用規約",
       contact: "お問い合わせ",
       subject_to_change: "α · 変更の可能性あり",
+      copyright: "© 2026 Steadii K.K.",
     },
     sign_in: "サインイン",
     hero_animation: {

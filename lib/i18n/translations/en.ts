@@ -8,11 +8,53 @@ type MessagesShape = {
     cta_already_approved: string;
     alpha: string;
     invite_hint: string;
+    nav: {
+      what_it_does: string;
+      students: string;
+      privacy: string;
+      log_in: string;
+    };
+    hero: {
+      eyebrow: string;
+      h1_a: string;
+      h1_b: string;
+      h1_c: string;
+      sub: string;
+      cta_primary: string;
+      cta_secondary: string;
+      meta: string;
+      demo: {
+        aria_label: string;
+        full_phrase: string;
+        listening: string;
+        transcribing: string;
+        drafting: string;
+        done: string;
+        draft_eyebrow: string;
+        draft_title: string;
+        draft_subject: string;
+        draft_body: string;
+        draft_send: string;
+        draft_review: string;
+        draft_skip: string;
+        draft_origin: string;
+        draft_time: string;
+      };
+    };
     value_props: {
-      triage: { title: string; body: string };
-      glassbox: { title: string; body: string };
-      confirm: { title: string; body: string };
-      yours: { title: string; body: string };
+      email: { key: string; body: string };
+      calendar: { key: string; body: string };
+      groups: { key: string; body: string };
+      admin: { key: string; body: string };
+    };
+    boundaries: {
+      title: string;
+      subhead: string;
+      cards: {
+        learning: { who: string; key: string; body: string };
+        deciding: { who: string; key: string; body: string };
+        doing: { who: string; key: string; body: string };
+      };
     };
     what_you_do: {
       title: string;
@@ -50,24 +92,13 @@ type MessagesShape = {
       step3_status: string;
       step3_meta: string;
     };
-    how_it_works: {
-      title: string;
-      steps: {
-        connect: { title: string; body: string };
-        watch: { title: string; body: string };
-        trust: { title: string; body: string };
-      };
-    };
-    glass_box: {
-      title: string;
-      paragraph_reasoning: string;
-      paragraph_yours: string;
-      paragraph_confirm: string;
-    };
     founding: {
       headline: string;
+      h2: string;
       body: string;
       cta: string;
+      cta_secondary: string;
+      note: string;
     };
     locale_toggle: {
       en: string;
@@ -79,6 +110,7 @@ type MessagesShape = {
       terms: string;
       contact: string;
       subject_to_change: string;
+      copyright: string;
     };
     sign_in: string;
     hero_animation: {
@@ -1409,22 +1441,79 @@ export const en: MessagesShape = {
     cta_already_approved: "Already approved? Sign in",
     alpha: "α version — invite only",
     invite_hint: "Invite-only during α.",
+    nav: {
+      what_it_does: "What it does",
+      students: "Students",
+      privacy: "Privacy",
+      log_in: "Log in",
+    },
+    hero: {
+      eyebrow: "A chief of staff for students.",
+      h1_a: "So you can focus on",
+      h1_b: "actually",
+      h1_c: "learning.",
+      sub: "Email triage, calendar, group projects, academic admin. Steadii does the work in the background — you stay on the learning.",
+      cta_primary: "Join as a founding member",
+      cta_secondary: "Watch the 1-min demo",
+      meta: "200 early students at Todai, Keio, Waseda",
+      demo: {
+        aria_label: "Voice demo",
+        full_phrase:
+          "Email Prof. Tanaka asking for a 2-day extension on Wednesday's data-analysis paper — keep it polite",
+        listening: "Listening…",
+        transcribing: "Transcribing",
+        drafting: "Drafting…",
+        done: "Draft ready",
+        draft_eyebrow: "Draft ready",
+        draft_title: "Reply to Prof. Tanaka — extension request",
+        draft_subject: "Subject: Re: CS340 Final Project Submission",
+        draft_body:
+          "Dear Prof. Tanaka,\n\nThank you for letting us know about the data set issue. I'd appreciate the 2-day extension if possible — I can submit by Sunday 23:59…",
+        draft_send: "Send",
+        draft_review: "Review",
+        draft_skip: "Skip",
+        draft_origin: "Inbox",
+        draft_time: "9 min ago",
+      },
+    },
     value_props: {
-      triage: {
-        title: "Drafts ready before you ask",
-        body: "Steadii reads every inbound email, classifies risk, and prepares a reply in your voice. You arrive to a queue, not an inbox.",
+      email: {
+        key: "Email",
+        body: "Reads, sorts, drafts. You stay the deciding mind.",
       },
-      glassbox: {
-        title: "Glass-box by design",
-        body: "Every draft shows what fired the agent, which past emails it cited, and what it considered. Nothing happens secretly.",
+      calendar: {
+        key: "Calendar",
+        body: "Classes, plans, deadlines in one place. Conflicts solved before you ask.",
       },
-      confirm: {
-        title: "You confirm. Always.",
-        body: "Send needs one-click approval and rides a 10-second undo. Nothing leaves your account without you.",
+      groups: {
+        key: "Groups",
+        body: "Discord, Slack, LINE — pulled into one source of progress.",
       },
-      yours: {
-        title: "Your data stays yours",
-        body: "Syllabi, tasks, and the notes Steadii keeps about you. Yours to read, search, and export — never locked in.",
+      admin: {
+        key: "Admin",
+        body: "Enrolment, paperwork, submissions — Steadii tracks it all.",
+      },
+    },
+    boundaries: {
+      title: "What you do, what Steadii does",
+      subhead:
+        "We draw the line clearly. Don't outsource thinking to an AI. Don't spend your day on logistics.",
+      cards: {
+        learning: {
+          who: "You",
+          key: "Learning",
+          body: "Spend time on concepts with ChatGPT, Claude, Gemini. The thing you came here for.",
+        },
+        deciding: {
+          who: "You",
+          key: "Deciding",
+          body: "Steadii never moves ahead of you. Every call lands in your hands first.",
+        },
+        doing: {
+          who: "Steadii",
+          key: "Doing",
+          body: "Replies emails, books rooms, files paperwork, chases group progress.",
+        },
       },
     },
     what_you_do: {
@@ -1479,37 +1568,14 @@ export const en: MessagesShape = {
       step3_meta:
         "Steadii learned from the restore. Similar items now stay visible.",
     },
-    how_it_works: {
-      title: "Get started in three steps.",
-      steps: {
-        connect: {
-          title: "Connect",
-          body: "Sign in with Google. Steadii reads your inbox + calendar. Setup ≈ 90 seconds.",
-        },
-        watch: {
-          title: "Watch",
-          body: "Steadii triages your emails, watches for conflicts, drafts replies. You see everything; nothing sends without you.",
-        },
-        trust: {
-          title: "Delegate",
-          body: "Dismiss when Steadii is wrong — it learns your style. The more you trust it, the more you can hand off.",
-        },
-      },
-    },
-    glass_box: {
-      title: "All reasoning, all decisions — visible.",
-      paragraph_reasoning:
-        "Every reason behind every decision is visible. Click the reasoning panel under any draft and you see what the agent read, what it weighed, and which past emails it cited.",
-      paragraph_yours:
-        "Your data stays yours. Syllabi, tasks, and the notes Steadii keeps about you. Yours to read, search, and export — never locked in.",
-      paragraph_confirm:
-        "Nothing sends without you. Every outgoing message rides a 10-second undo and your explicit approval. The staged-autonomy mode that auto-sends low-stakes drafts is opt-in and per-user.",
-    },
     founding: {
       headline: "α is invite-only.",
+      h2: "Founding seats — 200 of them.",
       body:
-        "Founding members get permanent price-lock at signup rate, plus early access to every feature ahead of NA public launch (Sept 2026).",
-      cta: "Request α access",
+        "1/10 of one semester's tuition. Price locked until you graduate.",
+      cta: "Apply with student discount",
+      cta_secondary: "Have a referral code?",
+      note: "@keio.jp / @waseda.jp / @u-tokyo.ac.jp priority",
     },
     locale_toggle: {
       en: "EN",
@@ -1521,6 +1587,7 @@ export const en: MessagesShape = {
       terms: "Terms",
       contact: "Contact",
       subject_to_change: "α · subject to change",
+      copyright: "© 2026 Steadii K.K.",
     },
     sign_in: "Sign in",
     hero_animation: {

@@ -83,11 +83,16 @@ describe("Marketing landing page wiring", () => {
     "utf-8",
   );
 
-  it("imports and renders HeroAnimation in place of the old <video>", () => {
-    expect(PAGE_SRC).toContain(
-      'import HeroAnimation from "@/components/landing/hero-animation"',
-    );
-    expect(PAGE_SRC).toContain("<HeroAnimation />");
+  it("composes the Claude Design landing structure (Hero / ValueProps / Boundaries / Founding)", () => {
+    // The Claude Design alignment (2026-05-02) replaced the engineer-26
+    // HeroAnimation embed with the HeroVoiceDemo + cascade-arcs hero, and
+    // dropped the prior how_it_works + glass_box sections. This test pins
+    // the new section composition so the structure can't silently regress.
+    expect(PAGE_SRC).toContain('from "./_components/landing-hero"');
+    expect(PAGE_SRC).toContain("<LandingHero />");
+    expect(PAGE_SRC).toContain("<ValuePropsRow />");
+    expect(PAGE_SRC).toContain("<BoundariesSection />");
+    expect(PAGE_SRC).toContain("<FoundingCta />");
     expect(PAGE_SRC).not.toContain("/demo/hero.webm");
     expect(PAGE_SRC).not.toContain("/demo/hero-poster.png");
   });

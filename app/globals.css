@@ -629,7 +629,20 @@
 /* Holographic landing palette. Scoped via the .landing-light wrapper
    on the (marketing) route group, so it shadows the in-product CSS
    vars without touching them globally. In-product routes keep D1
-   dark+amber. */
+   dark+amber.
+
+   Two layers live here:
+     1. The pre-existing HSL vars (--background / --foreground / --accent
+        / etc.) — kept for non-Claude-Design surfaces under the marketing
+        route group (request-access form, /privacy, /terms) so they
+        continue to read against the warm-white base.
+     2. The Claude Design token vocabulary (--holo-*, --gradient-holo-*,
+        --ink-1..5, --bg-page/raised/sunken, --line, --shadow-1..3,
+        --r-1..4, --ease, --dur). The new visual primitives + landing
+        sections consume these. Defaults match
+        [data-direction=holo][data-surface=warm][data-intensity=whisper]
+        which is set on the .landing-light wrapper itself.
+*/
 .landing-light {
   --background: 60 9% 98%;          /* #FAFAF9 white-warm base */
   --foreground: 30 12% 9%;          /* #1A1814 deep charcoal */
@@ -643,6 +656,136 @@
   --destructive: 0 72% 51%;
   --ring: 257 23% 57%;
   color-scheme: light;
+
+  /* ── Claude Design tokens ──────────────────────────────────────── */
+  /* Holographic palette — direction=holo defaults */
+  --holo-cyan:    #2dd4ff;
+  --holo-magenta: #ff4dcb;
+  --holo-lime:    #c4ff3a;
+  --holo-violet:  #a78bff;
+  --holo-1: var(--holo-cyan);
+  --holo-2: var(--holo-magenta);
+  --holo-3: var(--holo-lime);
+
+  /* Signature gradient + soft + mesh */
+  --gradient-holo: linear-gradient(96deg, var(--holo-1) 0%, var(--holo-2) 48%, var(--holo-3) 100%);
+  --gradient-holo-soft: linear-gradient(96deg,
+      color-mix(in oklch, var(--holo-1) 9%, white),
+      color-mix(in oklch, var(--holo-2) 10%, white),
+      color-mix(in oklch, var(--holo-3) 11%, white));
+  --gradient-holo-mesh:
+      radial-gradient(60% 80% at 8% 10%, color-mix(in oklch, var(--holo-1) 32%, transparent), transparent 60%),
+      radial-gradient(50% 70% at 92% 30%, color-mix(in oklch, var(--holo-2) 32%, transparent), transparent 60%),
+      radial-gradient(70% 60% at 50% 100%, color-mix(in oklch, var(--holo-3) 28%, transparent), transparent 65%);
+
+  /* Ink scale */
+  --ink-1: #0c0d10;
+  --ink-2: #2a2c33;
+  --ink-3: #5b5e69;
+  --ink-4: #8a8d97;
+  --ink-5: #b8bac2;
+  --line:        rgba(20, 22, 30, .08);
+  --line-strong: rgba(20, 22, 30, .14);
+
+  /* Surfaces — warm off-white default (surface=warm) */
+  --bg-page:    #faf9f6;
+  --bg-raised:  #ffffff;
+  --bg-sunken:  #f3f1ec;
+
+  /* Radius */
+  --r-1: 6px;
+  --r-2: 10px;
+  --r-3: 14px;
+  --r-4: 20px;
+  --r-pill: 999px;
+
+  /* Shadows */
+  --shadow-1: 0 1px 0 rgba(20, 22, 30, .04), 0 1px 2px rgba(20, 22, 30, .04);
+  --shadow-2: 0 1px 0 rgba(20, 22, 30, .03), 0 4px 16px rgba(20, 22, 30, .06);
+  --shadow-3: 0 1px 0 rgba(20, 22, 30, .03), 0 12px 40px rgba(20, 22, 30, .10);
+  --shadow-glow: 0 0 0 1px rgba(255,255,255,.6) inset, 0 8px 32px rgba(120, 80, 200, .12);
+
+  /* Semantic */
+  --positive: #1f9d6e;
+  --warning:  #d97706;
+  --critical: #dc2659;
+  --info:     #2563eb;
+
+  /* Motion */
+  --ease: cubic-bezier(.2, .7, .3, 1);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --dur-fast: 120ms;
+  --dur:      200ms;
+  --dur-slow: 400ms;
+}
+
+/* Holographic text utility — gradient-clipped fill on the holo palette. */
+.landing-light .holo-text {
+  background: var(--gradient-holo);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Holographic 1.5px border using a masked padding-box trick. */
+.landing-light .holo-border {
+  position: relative;
+}
+.landing-light .holo-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: var(--gradient-holo);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+}
+
+.landing-light .mono-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Cascade arc drift — gentle vertical sway used by <CascadeArcs />. */
+@keyframes landing-arc-drift {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(8px); }
+}
+@layer utilities {
+  .landing-arc-drift-9  { animation: landing-arc-drift  9s ease-in-out infinite; }
+  .landing-arc-drift-11 { animation: landing-arc-drift 11s ease-in-out infinite reverse; }
+  .landing-arc-drift-13 { animation: landing-arc-drift 13s ease-in-out infinite; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-arc-drift-9,
+  .landing-arc-drift-11,
+  .landing-arc-drift-13 { animation: none; }
+}
+
+/* Three waveform bar pulses, used inside the hero voice-demo. */
+@keyframes landing-wf-0 { 0%, 100% { transform: scaleY(.4); } 50% { transform: scaleY(1.2); } }
+@keyframes landing-wf-1 { 0%, 100% { transform: scaleY(.6); } 50% { transform: scaleY(1.4); } }
+@keyframes landing-wf-2 { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1.1); } }
+@layer utilities {
+  .landing-wf-0 { animation: landing-wf-0 0.7s ease-in-out infinite; }
+  .landing-wf-1 { animation: landing-wf-1 0.8s ease-in-out infinite; }
+  .landing-wf-2 { animation: landing-wf-2 0.9s ease-in-out infinite; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-wf-0, .landing-wf-1, .landing-wf-2 { animation: none; }
+}
+
+/* Caret blink for the hero transcribing text. */
+@keyframes landing-caret-blink { 50% { opacity: 0; } }
+@layer utilities {
+  .landing-caret { animation: landing-caret-blink 1s step-end infinite; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-caret { animation: none; }
 }
 
 /* Holographic mesh drift — slow, almost imperceptible scale + rotate.
