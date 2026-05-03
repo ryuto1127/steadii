@@ -50,24 +50,20 @@ type MessagesShape = {
       step3_status: string;
       step3_meta: string;
     };
-    how_it_works: {
+    boundaries: {
       title: string;
-      steps: {
-        connect: { title: string; body: string };
-        watch: { title: string; body: string };
-        trust: { title: string; body: string };
+      subhead: string;
+      cards: {
+        learning: { who: string; key: string; body: string };
+        deciding: { who: string; key: string; body: string };
+        doing: { who: string; key: string; body: string };
       };
-    };
-    glass_box: {
-      title: string;
-      paragraph_reasoning: string;
-      paragraph_yours: string;
-      paragraph_confirm: string;
     };
     founding: {
       headline: string;
-      body: string;
+      sub: string;
       cta: string;
+      cta_secondary: string;
     };
     locale_toggle: {
       en: string;
@@ -1479,37 +1475,33 @@ export const en: MessagesShape = {
       step3_meta:
         "Steadii learned from the restore. Similar items now stay visible.",
     },
-    how_it_works: {
-      title: "Get started in three steps.",
-      steps: {
-        connect: {
-          title: "Connect",
-          body: "Sign in with Google. Steadii reads your inbox + calendar. Setup ≈ 90 seconds.",
+    boundaries: {
+      title: "What you do, what Steadii does",
+      subhead:
+        "We draw the line clearly. Don't outsource thinking to an AI. Don't spend your day on logistics.",
+      cards: {
+        learning: {
+          who: "You",
+          key: "Learning",
+          body: "Spend time on concepts with ChatGPT, Claude, Gemini. The thing you came here for.",
         },
-        watch: {
-          title: "Watch",
-          body: "Steadii triages your emails, watches for conflicts, drafts replies. You see everything; nothing sends without you.",
+        deciding: {
+          who: "You",
+          key: "Deciding",
+          body: "Steadii never moves ahead of you. Every call lands in your hands first.",
         },
-        trust: {
-          title: "Delegate",
-          body: "Dismiss when Steadii is wrong — it learns your style. The more you trust it, the more you can hand off.",
+        doing: {
+          who: "Steadii",
+          key: "Doing",
+          body: "Replies emails, books rooms, files paperwork, chases group progress.",
         },
       },
     },
-    glass_box: {
-      title: "All reasoning, all decisions — visible.",
-      paragraph_reasoning:
-        "Every reason behind every decision is visible. Click the reasoning panel under any draft and you see what the agent read, what it weighed, and which past emails it cited.",
-      paragraph_yours:
-        "Your data stays yours. Syllabi, tasks, and the notes Steadii keeps about you. Yours to read, search, and export — never locked in.",
-      paragraph_confirm:
-        "Nothing sends without you. Every outgoing message rides a 10-second undo and your explicit approval. The staged-autonomy mode that auto-sends low-stakes drafts is opt-in and per-user.",
-    },
     founding: {
-      headline: "α is invite-only.",
-      body:
-        "Founding members get permanent price-lock at signup rate, plus early access to every feature ahead of NA public launch (Sept 2026).",
-      cta: "Request α access",
+      headline: "Founding seats — first 100.",
+      sub: "Lock your price forever.",
+      cta: "Request access",
+      cta_secondary: "Have an invite code?",
     },
     locale_toggle: {
       en: "EN",
