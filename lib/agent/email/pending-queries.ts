@@ -27,6 +27,16 @@ export const PENDING_ACTIONS: ReadonlyArray<AgentDraftAction> = [
   "notify_only",
 ];
 
+// Narrower set than PENDING_ACTIONS — only items that REQUIRE the user
+// to do something (send a reply, or provide clarifying info). The Inbox
+// "Action needed" filter chip + future digest-narrowing flows use this.
+// notify_only is excluded because it's a "FYI, you should know but no
+// reply expected" category — important but not action-blocking.
+export const ACTION_NEEDED_ACTIONS: ReadonlyArray<AgentDraftAction> = [
+  "draft_reply",
+  "ask_clarifying",
+];
+
 export function isPendingDraft(
   status: AgentDraftStatus | string | null | undefined,
   action: AgentDraftAction | string | null | undefined
