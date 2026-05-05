@@ -14,6 +14,7 @@ import {
   type DraftCalendarTask,
 } from "@/lib/integrations/google/tasks";
 import { fetchMsUpcomingTasks } from "@/lib/integrations/microsoft/tasks";
+import { getUserTimezone } from "@/lib/agent/preferences";
 import { DenseList } from "@/components/ui/dense-list";
 import { DenseRow } from "@/components/ui/dense-row";
 import { DenseRowLink } from "@/components/ui/dense-row-link";
@@ -49,11 +50,19 @@ export default async function TasksPage() {
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
   const t = await getTranslations("tasks");
+  // Day diffs (overdue / due today / due in N days) must be computed in
+  // the user's local timezone — Google Tasks stores date-only fields as
+  // midnight UTC, so a "due 2026-05-05" task read on a Vancouver
+  // afternoon would otherwise show "1 日超過" because the raw ms diff is
+  // -21h ≈ -1 day. Defaulting to UTC keeps the old behavior for users
+  // who haven't set a timezone (they get UTC-equivalent answers, which
+  // is at most off-by-one and was the prior status quo).
+  const tz = (await getUserTimezone(userId)) ?? "UTC";
 
   const [steadiiRes, googleRes, msRes] = await Promise.all([
-    safelyFetchSteadii(userId, t),
-    safelyFetchGoogleTasks(userId, t),
-    safelyFetchMsTasks(userId, t),
+    safelyFetchSteadii(userId, t, tz),
+    safelyFetchGoogleTasks(userId, t, tz),
+    safelyFetchMsTasks(userId, t, tz),
   ]);
 
   const bySource: Record<Source, AdapterResult<UnifiedRow>> = {
@@ -152,7 +161,8 @@ type Translator = (key: string, vars?: Record<string, string | number>) => strin
 
 async function safelyFetchSteadii(
   userId: string,
-  t: Translator
+  t: Translator,
+  tz: string
 ): Promise<AdapterResult<UnifiedRow>> {
   try {
     const rows = await db
@@ -196,7 +206,8 @@ async function safelyFetchSteadii(
           status: r.status,
           priority: r.priority,
         },
-        t
+        t,
+        tz
       ),
       leadingDot: r.classColor ?? null,
     }));
@@ -212,13 +223,16 @@ async function safelyFetchSteadii(
 
 async function safelyFetchGoogleTasks(
   userId: string,
-  t: Translator
+  t: Translator,
+  tz: string
 ): Promise<AdapterResult<UnifiedRow>> {
   try {
     const tasks = await fetchUpcomingTasks(userId, { days: 30, max: 50 });
     return {
       ok: true,
-      items: tasks.map((task, i) => projectExternalTask(task, "google_tasks", i, t)),
+      items: tasks.map((task, i) =>
+        projectExternalTask(task, "google_tasks", i, t, tz)
+      ),
     };
   } catch (err) {
     Sentry.captureException(err, {
@@ -231,14 +245,15 @@ async function safelyFetchGoogleTasks(
 
 async function safelyFetchMsTasks(
   userId: string,
-  t: Translator
+  t: Translator,
+  tz: string
 ): Promise<AdapterResult<UnifiedRow>> {
   try {
     const tasks = await fetchMsUpcomingTasks(userId, { days: 30, max: 50 });
     return {
       ok: true,
       items: tasks.map((task, i) =>
-        projectExternalTask(task, "microsoft_todo", i, t)
+        projectExternalTask(task, "microsoft_todo", i, t, tz)
       ),
     };
   } catch (err) {
@@ -254,14 +269,21 @@ function projectExternalTask(
   task: DraftCalendarTask,
   source: Exclude<Source, "steadii">,
   index: number,
-  t: Translator
+  t: Translator,
+  tz: string
 ): UnifiedRow {
-  // YYYY-MM-DD parsed as local-midnight so sort comparisons line up
-  // with Steadii's local-tz `dueAt` Dates.
+  // Anchor a date-only "YYYY-MM-DD" to NOON UTC, not midnight UTC. The
+  // old `new Date(task.due)` parsed "2026-05-05" as 2026-05-05T00:00Z
+  // which in Vancouver is 2026-05-04 17:00 PT — already yesterday by
+  // afternoon, rendering as "1 日超過" even when the user meant "due
+  // today". Noon UTC gives ±12h of slack so the formatted YYYY-MM-DD
+  // in any reasonable IANA timezone (UTC-12 to UTC+12) lands on the
+  // intended date. Trade-off: Samoa/Kiribati (UTC+13/+14) would render
+  // off by one — out of scope for the current α population (NA + JP).
   const [y, m, d] = task.due.split("-").map(Number);
   const dueAt =
     Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d)
-      ? new Date(y, m - 1, d)
+      ? new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
       : null;
   return {
     key: `${source}:${task.due}:${index}:${task.title}`,
@@ -272,7 +294,7 @@ function projectExternalTask(
     // source app would need per-provider deep-links we don't track.
     href: null,
     secondary: null,
-    metadata: dueAt ? [formatDueAt(dueAt, t)] : [task.due],
+    metadata: dueAt ? [formatDueAt(dueAt, t, tz)] : [task.due],
     leadingDot: null,
   };
 }
@@ -290,25 +312,61 @@ function buildSteadiiMetadata(
     status: AssignmentStatus;
     priority: "low" | "medium" | "high" | null;
   },
-  t: Translator
+  t: Translator,
+  tz: string
 ): string[] {
   const parts: string[] = [];
-  parts.push(args.dueAt ? formatDueAt(args.dueAt, t) : t("no_due_date"));
+  parts.push(args.dueAt ? formatDueAt(args.dueAt, t, tz) : t("no_due_date"));
   if (args.status === "in_progress") parts.push(t("in_progress"));
   if (args.priority === "high") parts.push(t("high_priority"));
   return parts;
 }
 
-function formatDueAt(d: Date, t: Translator): string {
-  const now = new Date();
-  const diffDays = Math.round(
-    (d.getTime() - now.getTime()) / (24 * 3600 * 1000)
-  );
+// Day diff between `d` and now, computed as the difference between the
+// YYYY-MM-DD strings each Date renders to in `tz`. The previous raw
+// (d - now) ms diff was off-by-one whenever the user's local TZ was
+// behind the date's UTC anchor — Google Tasks store date-only fields as
+// midnight UTC, so a "due 2026-05-05" task viewed in Vancouver
+// (UTC-7) afternoon read as -21h ≈ -1 day overdue. Using the date
+// strings instead of the underlying instants makes the comparison
+// strictly date-based, which matches how date-only "due" values are
+// meant to be interpreted.
+export function dueDayLabel(d: Date, t: Translator, tz: string): string {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const dueDay = fmt.format(d); // "2026-05-05" in `tz`
+  const todayDay = fmt.format(new Date());
+  const dueMs = Date.parse(dueDay);
+  const todayMs = Date.parse(todayDay);
+  if (Number.isNaN(dueMs) || Number.isNaN(todayMs)) {
+    // Defensive — fall back to the old behavior so the page never
+    // renders a NaN string. This branch is unreachable for valid
+    // Date inputs and a valid IANA tz string.
+    const now = new Date();
+    const fallback = Math.round(
+      (d.getTime() - now.getTime()) / (24 * 3600 * 1000)
+    );
+    return formatDayDiffLabel(fallback, d, t);
+  }
+  const diffDays = Math.round((dueMs - todayMs) / (24 * 3600 * 1000));
+  return formatDayDiffLabel(diffDays, d, t);
+}
+
+function formatDayDiffLabel(diffDays: number, d: Date, t: Translator): string {
   if (diffDays < 0) return t("overdue_days", { n: -diffDays });
   if (diffDays === 0) return t("due_today");
   if (diffDays === 1) return t("due_tomorrow");
   if (diffDays < 7) return t("due_in_days", { n: diffDays });
   return t("due_short_date", { date: `${d.getMonth() + 1}/${d.getDate()}` });
+}
+
+// Internal alias kept so the call sites read the same as before.
+function formatDueAt(d: Date, t: Translator, tz: string): string {
+  return dueDayLabel(d, t, tz);
 }
 
 function errMsg(err: unknown): string {
