@@ -5,10 +5,8 @@ import { db } from "@/lib/db/client";
 import { accounts, users } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { env } from "@/lib/env";
-import {
-  decryptOAuthToken,
-  encryptOAuthToken,
-} from "@/lib/auth/oauth-tokens";
+import { decryptOAuthToken } from "@/lib/auth/oauth-tokens";
+import { persistRefreshedOAuthToken } from "@/lib/auth/oauth-refresh-persist";
 
 export class GmailNotConnectedError extends Error {
   code = "GMAIL_NOT_CONNECTED" as const;
@@ -93,28 +91,14 @@ export async function getGmailForUser(
 
   oauth2.on("tokens", async (tokens) => {
     if (tokens.access_token) {
-      try {
-        await db
-          .update(accounts)
-          .set({
-            access_token: encryptOAuthToken(tokens.access_token),
-            expires_at: tokens.expiry_date
-              ? Math.floor(tokens.expiry_date / 1000)
-              : row.expires_at,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(accounts.provider, "google"),
-              eq(accounts.providerAccountId, row.providerAccountId)
-            )
-          );
-      } catch (err) {
-        Sentry.captureException(err, {
-          tags: { integration: "gmail", op: "token_refresh_persist" },
-          user: { id: userId },
-        });
-      }
+      await persistRefreshedOAuthToken({
+        provider: "google",
+        providerAccountId: row.providerAccountId,
+        accessTokenPlain: tokens.access_token,
+        expiresAtSeconds: tokens.expiry_date
+          ? Math.floor(tokens.expiry_date / 1000)
+          : row.expires_at,
+      });
     }
   });
 
