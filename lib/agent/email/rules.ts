@@ -8,9 +8,11 @@ import {
   AUTO_HIGH_KEYWORDS,
   AUTO_LOW_KEYWORDS,
   AUTO_MEDIUM_KEYWORDS,
+  GITHUB_HIGH_SIGNALS,
   containsActionVerb,
+  isBotSender,
   isEduDomain,
-  isNoreplySender,
+  isGithubNotificationDomain,
   isPromoSenderDomain,
 } from "./rules-global";
 
@@ -97,11 +99,61 @@ export function classifyEmail(
     return finish("ignore", 1.0);
   }
 
-  if (isNoreplySender(input.fromEmail) && !containsActionVerb(haystack)) {
+  // ---------------------------------------------------------------------
+  // GitHub notification routing (auto_low default, gated escalation).
+  // PR-comment / review-request emails arrive from notifications.github.com
+  // wearing a human display name (the comment author). Without this branch
+  // the AUTO_HIGH first-time-domain heuristic + role-based escalation fired
+  // on every PR notification, drowning the inbox. Default these to
+  // auto_low; escalate only on explicit reviewer-request signals or an
+  // @-mention of the user's own GitHub login.
+  //
+  // This branch runs BEFORE the generic bot-sender ignore. GitHub
+  // notifications are bot-relays by definition (notifications.github.com
+  // is in BOT_HOST_HINTS) but we want them visible at auto_low rather
+  // than silently dropped — the user often does need to see the PR
+  // happened, just not at top-of-inbox priority. Generic bot mail still
+  // gets ignored by the check below.
+  // ---------------------------------------------------------------------
+  if (isGithubNotificationDomain(input.fromDomain)) {
+    const userLoginPattern = ctx.githubUsername
+      ? new RegExp(`@${escapeRegExp(ctx.githubUsername)}\\b`, "i")
+      : null;
+    const promote =
+      GITHUB_HIGH_SIGNALS.some((re) => re.test(haystack)) ||
+      (userLoginPattern ? userLoginPattern.test(haystack) : false);
+    if (promote) {
+      provenance.push({
+        ruleId: "GLOBAL_AUTO_HIGH_GITHUB_REVIEW_REQUESTED",
+        source: "global",
+        why: "GitHub notification with reviewer-request / CI-failure / merge-conflict signal.",
+      });
+      return finish("auto_high", 0.92);
+    }
     provenance.push({
-      ruleId: "GLOBAL_IGNORE_NOREPLY_NO_ACTION",
+      ruleId: "GLOBAL_AUTO_LOW_GITHUB_NOTIFICATION",
       source: "global",
-      why: "noreply/no-reply sender without action-required language.",
+      why: "GitHub notification (default routing — bot relay despite human display name).",
+    });
+    return finish("auto_low", 0.95);
+  }
+
+  // Generic bot-sender ignore. Catches everything other than GitHub
+  // (handled above). Same `containsActionVerb` guard as before so OTP /
+  // password-reset bot mail still surfaces.
+  if (
+    isBotSender({
+      fromEmail: input.fromEmail,
+      fromName: input.fromName,
+      autoSubmittedHeader: input.autoSubmittedHeader ?? null,
+      precedenceHeader: input.precedenceHeader ?? null,
+    }) &&
+    !containsActionVerb(haystack)
+  ) {
+    provenance.push({
+      ruleId: "GLOBAL_IGNORE_BOT_SENDER",
+      source: "global",
+      why: "Detected automated sender (bot, noreply, or auto-submitted) without action-required language.",
     });
     return finish("ignore", 1.0);
   }
@@ -318,4 +370,8 @@ function isShortAcknowledgment(input: ClassifyInput): boolean {
   if (body.length === 0) return false;
   if (body.length >= 50) return false;
   return !containsActionVerb(body);
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

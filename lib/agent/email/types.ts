@@ -23,6 +23,12 @@ export type ClassifyInput = {
   listUnsubscribe: string | null;
   inReplyTo: string | null;
   headerFromRaw: string | null;
+  // RFC 3834 Auto-Submitted + legacy Precedence headers. Used by the
+  // L1 bot-sender predicate to detect mailing-list / bulk / auto-reply
+  // automation that wears a human display name. Optional so existing
+  // callers / fixtures don't need to thread a header they don't have.
+  autoSubmittedHeader?: string | null;
+  precedenceHeader?: string | null;
 };
 
 // What L1 knows about the user's prior triage state. The classifier is
@@ -42,6 +48,12 @@ export type UserContext = {
   // Whether we've ever triaged an email from this sender_domain before.
   // Set of already-known domains.
   seenDomains: Set<string>;
+  // Optional GitHub login. When set, GitHub notification emails that
+  // mention `@${githubUsername}` in subject or body promote out of the
+  // auto_low default into auto_high. Sourced from
+  // `users.preferences.githubUsername` (jsonb — no migration). Settings
+  // UI for entering the username is out of scope for this PR.
+  githubUsername: string | null;
 };
 
 export type TriageResult = {

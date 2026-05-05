@@ -236,6 +236,9 @@ function normalizeMessage(
     listUnsubscribe: getHeader(msg, "List-Unsubscribe"),
     inReplyTo: getHeader(msg, "In-Reply-To"),
     headerFromRaw,
+    // RFC 3834 Auto-Submitted + legacy Precedence — fed to isBotSender.
+    autoSubmittedHeader: getHeader(msg, "Auto-Submitted"),
+    precedenceHeader: getHeader(msg, "Precedence"),
   };
 }
 

@@ -186,11 +186,12 @@ async function buildUserContext(
   _senderDomain: string
 ): Promise<UserContext> {
   const [userRow] = await db
-    .select({ email: users.email })
+    .select({ email: users.email, preferences: users.preferences })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
   const userEmail = userRow?.email ?? "";
+  const githubUsername = userRow?.preferences?.githubUsername ?? null;
 
   // Pull enabled per-user rules scoped to sender or domain. We only need
   // the `senderRole` + `riskTier` slices for L1.
@@ -240,5 +241,6 @@ async function buildUserContext(
     learnedDomains,
     learnedSenders,
     seenDomains,
+    githubUsername,
   };
 }
