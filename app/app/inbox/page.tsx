@@ -16,12 +16,14 @@ import {
   agentDrafts,
   agentProposals,
 } from "@/lib/db/schema";
-import { and, count, desc, eq, isNull, ne, or } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   compareInboxRows,
   isPendingDraft,
+  ACTION_NEEDED_ACTIONS,
 } from "@/lib/agent/email/pending-queries";
+import type { AgentDraftAction } from "@/lib/db/schema";
 import { SteadiiNoticedToggle } from "./_components/steadii-noticed-toggle";
 import { restoreAutoArchivedAction } from "./actions";
 
@@ -105,7 +107,7 @@ function tierTone(tier: ReturnType<typeof tierFor>): string {
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ hidden?: string }>;
+  searchParams?: Promise<{ hidden?: string; view?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
@@ -115,8 +117,15 @@ export default async function InboxPage({
   // auto-archived" mode. The default view is unchanged (open + non-
   // ignore). We compute both queries unconditionally because the chip
   // count is shown on the default view too.
+  //
+  // post-α inbox quality — `?view=action` narrows the default view to
+  // items where Steadii has produced a draft_reply or ask_clarifying
+  // (i.e. things that REQUIRE the user to act). notify_only / no_op /
+  // archive items stay hidden on this view because they are not
+  // action-blocking. Mutually exclusive with `?hidden=1` (hidden wins).
   const params = (await searchParams) ?? {};
   const showingHidden = params.hidden === "1";
+  const showingAction = !showingHidden && params.view === "action";
 
   // Gmail connectivity is a per-user signal: if the Google row lacks the
   // gmail scope, we can't triage anything yet. We nudge the user through
@@ -156,8 +165,10 @@ export default async function InboxPage({
   };
 
   // Default view: status='open' + not ignored. Hidden view: rows that
-  // Wave 5 auto-archived (auto_archived=true). Both share the join
-  // shape so the per-row renderer below stays unified.
+  // Wave 5 auto-archived (auto_archived=true). Action view: rows whose
+  // latest draft has action ∈ ACTION_NEEDED_ACTIONS AND status pending/
+  // edited. All three share the join shape so the per-row renderer
+  // below stays unified.
   const rawItems = gmailConnected
     ? showingHidden
       ? await db
@@ -169,6 +180,26 @@ export default async function InboxPage({
               eq(inboxItems.userId, userId),
               eq(inboxItems.autoArchived, true),
               isNull(inboxItems.deletedAt)
+            )
+          )
+          .orderBy(desc(inboxItems.receivedAt))
+          .limit(100)
+      : showingAction
+      ? await db
+          .select(baseSelect)
+          .from(inboxItems)
+          .innerJoin(agentDrafts, eq(agentDrafts.inboxItemId, inboxItems.id))
+          .where(
+            and(
+              eq(inboxItems.userId, userId),
+              eq(inboxItems.status, "open"),
+              isNull(inboxItems.deletedAt),
+              ne(inboxItems.bucket, "ignore"),
+              inArray(
+                agentDrafts.action,
+                ACTION_NEEDED_ACTIONS as AgentDraftAction[]
+              ),
+              inArray(agentDrafts.status, ["pending", "edited"])
             )
           )
           .orderBy(desc(inboxItems.receivedAt))
@@ -204,6 +235,34 @@ export default async function InboxPage({
               eq(inboxItems.userId, userId),
               eq(inboxItems.autoArchived, true),
               isNull(inboxItems.deletedAt)
+            )
+          )
+      )[0]?.n ?? 0
+    : 0;
+
+  // Action chip count — items the user must explicitly send a reply
+  // for (draft_reply) or provide info on (ask_clarifying). Same query
+  // shape the chip filter uses, so the count and the shown-list match.
+  const actionCount = gmailConnected
+    ? (
+        await db
+          .select({ n: count(inboxItems.id) })
+          .from(inboxItems)
+          .innerJoin(
+            agentDrafts,
+            eq(agentDrafts.inboxItemId, inboxItems.id)
+          )
+          .where(
+            and(
+              eq(inboxItems.userId, userId),
+              eq(inboxItems.status, "open"),
+              isNull(inboxItems.deletedAt),
+              ne(inboxItems.bucket, "ignore"),
+              inArray(
+                agentDrafts.action,
+                ACTION_NEEDED_ACTIONS as AgentDraftAction[]
+              ),
+              inArray(agentDrafts.status, ["pending", "edited"])
             )
           )
       )[0]?.n ?? 0
@@ -303,10 +362,13 @@ export default async function InboxPage({
         }))}
       />
 
-      {/* Wave 5 — Hidden filter chip. Shown when there's any auto-archived
-          item for this user. Clicking flips between the default view and
-          the hidden view; the chip's URL toggles ?hidden=1. */}
-      {hiddenCount > 0 || showingHidden ? (
+      {/* Filter chips — All / Action ({n}) / Hidden ({n}). All chip is
+          always shown when any of the others have content. Action chip
+          surfaces only when there's at least one item needing user
+          input. Hidden chip surfaces only when Wave-5 auto-archive has
+          run on this user. The three states are mutually exclusive
+          (URL params drive which is active). */}
+      {hiddenCount > 0 || actionCount > 0 || showingHidden || showingAction ? (
         <nav
           aria-label={t("hidden_filter_aria")}
           className="mb-3 flex flex-wrap items-center gap-2"
@@ -314,24 +376,39 @@ export default async function InboxPage({
           <Link
             href="/app/inbox"
             className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-hover ${
-              showingHidden
-                ? "border border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))]"
-                : "bg-[hsl(var(--foreground))] text-[hsl(var(--surface))]"
-            }`}
-          >
-            {t("filter_all")}
-          </Link>
-          <Link
-            href="/app/inbox?hidden=1"
-            className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-hover ${
-              showingHidden
+              !showingHidden && !showingAction
                 ? "bg-[hsl(var(--foreground))] text-[hsl(var(--surface))]"
                 : "border border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))]"
             }`}
           >
-            <Archive size={11} strokeWidth={1.75} />
-            {t("filter_hidden", { n: hiddenCount })}
+            {t("filter_all")}
           </Link>
+          {actionCount > 0 || showingAction ? (
+            <Link
+              href="/app/inbox?view=action"
+              className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-hover ${
+                showingAction
+                  ? "bg-[hsl(var(--foreground))] text-[hsl(var(--surface))]"
+                  : "border border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))]"
+              }`}
+            >
+              <Star size={11} strokeWidth={1.75} />
+              {t("filter_action", { n: actionCount })}
+            </Link>
+          ) : null}
+          {hiddenCount > 0 || showingHidden ? (
+            <Link
+              href="/app/inbox?hidden=1"
+              className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-hover ${
+                showingHidden
+                  ? "bg-[hsl(var(--foreground))] text-[hsl(var(--surface))]"
+                  : "border border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))]"
+              }`}
+            >
+              <Archive size={11} strokeWidth={1.75} />
+              {t("filter_hidden", { n: hiddenCount })}
+            </Link>
+          ) : null}
         </nav>
       ) : null}
 
