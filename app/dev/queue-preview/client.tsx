@@ -33,6 +33,7 @@ export function QueuePreviewClient({
         initial={{
           digestEnabled: true,
           digestHourLocal: 7,
+          weeklyDigestEnabled: true,
           undoWindowSeconds: 10,
           highRiskNotifyImmediate: true,
           notificationTiers: DEFAULT_NOTIFICATION_TIER_PREFS,
