@@ -15,6 +15,7 @@ type Props = {
   initial: {
     digestEnabled: boolean;
     digestHourLocal: number;
+    weeklyDigestEnabled: boolean;
     undoWindowSeconds: number;
     highRiskNotifyImmediate: boolean;
     notificationTiers: NotificationTierPrefs;
@@ -29,6 +30,9 @@ export function NotificationSettings({ initial }: Props) {
   const t = useTranslations("notifications");
   const [digestEnabled, setDigestEnabled] = useState(initial.digestEnabled);
   const [digestHourLocal, setDigestHourLocal] = useState(initial.digestHourLocal);
+  const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState(
+    initial.weeklyDigestEnabled
+  );
   const [undoWindowSeconds, setUndoWindowSeconds] = useState(initial.undoWindowSeconds);
   const [highRiskNotifyImmediate, setHighRiskNotifyImmediate] = useState(
     initial.highRiskNotifyImmediate
@@ -44,6 +48,7 @@ export function NotificationSettings({ initial }: Props) {
         await saveNotificationSettingsAction({
           digestEnabled,
           digestHourLocal,
+          weeklyDigestEnabled,
           undoWindowSeconds,
           highRiskNotifyImmediate,
           notificationTiers: tiers,
@@ -88,6 +93,22 @@ export function NotificationSettings({ initial }: Props) {
         <span className="ml-3 inline-block min-w-[60px] text-right font-mono text-small tabular-nums">
           {digestHourLocal.toString().padStart(2, "0")}:00
         </span>
+      </Row>
+
+      <Row
+        label={t("weekly_digest_label")}
+        hint={t("weekly_digest_hint")}
+      >
+        <label className="inline-flex items-center gap-2 text-small">
+          <input
+            type="checkbox"
+            checked={weeklyDigestEnabled}
+            onChange={(e) => setWeeklyDigestEnabled(e.target.checked)}
+            className="h-4 w-4"
+            data-testid="weekly-digest-toggle"
+          />
+          <span>{t("enabled")}</span>
+        </label>
       </Row>
 
       <Row

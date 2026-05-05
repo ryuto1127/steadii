@@ -11,6 +11,10 @@ const channelSchema = z.enum(["push", "digest", "in_app"]);
 const inputSchema = z.object({
   digestEnabled: z.boolean(),
   digestHourLocal: z.number().int().min(0).max(23),
+  // Post-α #5 — weekly retrospective Sunday-evening digest. Optional in
+  // the input schema so existing callers (older clients, tests) don't
+  // break; defaults to `true` server-side when omitted.
+  weeklyDigestEnabled: z.boolean().optional(),
   undoWindowSeconds: z.number().int().min(10).max(60),
   highRiskNotifyImmediate: z.boolean(),
   // Wave 2 — per-archetype notification routing. Optional so existing
@@ -55,6 +59,9 @@ export async function saveNotificationSettingsAction(raw: unknown) {
       digestHourLocal: args.digestHourLocal,
       undoWindowSeconds: args.undoWindowSeconds,
       highRiskNotifyImmediate: args.highRiskNotifyImmediate,
+      ...(args.weeklyDigestEnabled !== undefined
+        ? { weeklyDigestEnabled: args.weeklyDigestEnabled }
+        : {}),
       ...(mergedPreferences ? { preferences: mergedPreferences } : {}),
       updatedAt: now,
     })

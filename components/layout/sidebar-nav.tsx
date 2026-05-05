@@ -11,6 +11,7 @@ import {
   GraduationCap,
   Calendar,
   ListChecks,
+  Activity as ActivityIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -29,6 +30,7 @@ const ICONS: Record<NavItemKey, LucideIcon> = {
   classes: GraduationCap,
   calendar: Calendar,
   tasks: ListChecks,
+  activity: ActivityIcon,
 };
 
 export function SidebarNav({

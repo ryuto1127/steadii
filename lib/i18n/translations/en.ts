@@ -125,6 +125,7 @@ type MessagesShape = {
     classes: string;
     calendar: string;
     tasks: string;
+    activity: string;
     settings: string;
   };
   classes: {
@@ -631,6 +632,8 @@ type MessagesShape = {
     morning_digest_hint: string;
     digest_hour_label: string;
     digest_hour_hint: string;
+    weekly_digest_label: string;
+    weekly_digest_hint: string;
     undo_window_label: string;
     undo_window_hint: string;
     high_risk_push_label: string;
@@ -745,7 +748,30 @@ type MessagesShape = {
     activity_caption: string;
     activity_empty: string;
     activity_more: string;
+    activity_view_all: string;
     activity_action_label: Record<string, string>;
+  };
+  activity_page: {
+    eyebrow: string;
+    page_title: string;
+    page_subtitle: string;
+    stats_heading: string;
+    range_this_week: string;
+    range_this_month: string;
+    range_all_time: string;
+    stat_archived_short: string;
+    stat_drafted_short: string;
+    stat_calendar_short: string;
+    stat_time_saved: string;
+    stat_time_saved_caption: string;
+    today: string;
+    yesterday: string;
+    load_more: string;
+    load_more_loading: string;
+    empty_title: string;
+    empty_description_connected: string;
+    empty_description_no_gmail: string;
+    empty_cta_connect: string;
   };
   onboarding_wait: {
     title: string;
@@ -1564,6 +1590,7 @@ export const en: MessagesShape = {
     classes: "Classes",
     calendar: "Calendar",
     tasks: "Tasks",
+    activity: "Activity",
     settings: "Settings",
   },
   classes: {
@@ -2137,6 +2164,9 @@ export const en: MessagesShape = {
     digest_hour_label: "Digest hour (local)",
     digest_hour_hint:
       "What time in your timezone to send the digest. Memory-locked default is 7am.",
+    weekly_digest_label: "Weekly Sunday recap email",
+    weekly_digest_hint:
+      "Sent every Sunday at 5pm in your timezone with what Steadii did this week.",
     undo_window_label: "Undo window",
     undo_window_hint:
       "Seconds between Send and actual Gmail delivery. 10 feels fast; 60 is forgiving.",
@@ -2266,6 +2296,7 @@ export const en: MessagesShape = {
     activity_caption: "What Steadii has been doing lately.",
     activity_empty: "Nothing yet.",
     activity_more: "More",
+    activity_view_all: "View all →",
     activity_action_label: {
       draft_sent: "Sent draft",
       draft_dismissed: "Skipped draft",
@@ -2277,6 +2308,30 @@ export const en: MessagesShape = {
       mistake_added: "Added note",
       generic: "Action",
     },
+  },
+  activity_page: {
+    eyebrow: "Audit log",
+    page_title: "Activity",
+    page_subtitle: "Everything Steadii has done for you, in one place.",
+    stats_heading: "Activity stats",
+    range_this_week: "This week",
+    range_this_month: "This month",
+    range_all_time: "All time",
+    stat_archived_short: "Archived",
+    stat_drafted_short: "Drafted",
+    stat_calendar_short: "Calendar",
+    stat_time_saved: "Time saved",
+    stat_time_saved_caption: "Estimated, all-time. Conservative.",
+    today: "Today",
+    yesterday: "Yesterday",
+    load_more: "Load more",
+    load_more_loading: "Loading…",
+    empty_title: "Nothing here yet.",
+    empty_description_connected:
+      "Your first ingest will appear here once Steadii starts triaging.",
+    empty_description_no_gmail:
+      "Steadii hasn't done anything yet — connect Gmail to get started.",
+    empty_cta_connect: "Open Settings",
   },
   onboarding_wait: {
     title: "Steadii is on it.",
