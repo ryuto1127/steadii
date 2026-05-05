@@ -356,6 +356,7 @@ type MessagesShape = {
     status_dismissed: string;
     hidden_filter_aria: string;
     filter_all: string;
+    filter_action: string;
     filter_hidden: string;
     restore_button: string;
     hidden_empty_title: string;
@@ -1871,6 +1872,7 @@ export const en: MessagesShape = {
     status_dismissed: "Dismissed",
     hidden_filter_aria: "Inbox view filter",
     filter_all: "Inbox",
+    filter_action: "Action needed ({n})",
     filter_hidden: "Hidden ({n})",
     restore_button: "Restore — keep these in inbox",
     hidden_empty_title: "Nothing hidden yet.",
