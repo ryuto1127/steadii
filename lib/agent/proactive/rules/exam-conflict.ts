@@ -23,6 +23,25 @@ export const examConflictRule: ProactiveRule = {
         const overlaps = evtStart < exam.endsAt && evtFinish > exam.startsAt;
         if (!overlaps) continue;
 
+        // Skip the trivial self-match: a calendar event whose title
+        // references the class code (e.g. "MAT223 Final Exam") or
+        // class name is presumably the exam itself imported into the
+        // calendar — not something that conflicts with the exam.
+        // Mirrors the same guard in time_conflict.ts. Without this,
+        // syllabus-imported exams (which Steadii pushes into the user's
+        // calendar) re-detect as "conflicting" with the syllabus they
+        // came from, plus user-managed duplicate entries get flagged
+        // against themselves. See sparring 2026-05-05 — Ryuto's MAT223
+        // exam-conflict card was the canonical instance.
+        const titleLower = evt.title.toLowerCase();
+        const codeMatch =
+          exam.classCode && titleLower.includes(exam.classCode.toLowerCase());
+        const nameMatch =
+          exam.className && titleLower.includes(exam.className.toLowerCase());
+        if (codeMatch || nameMatch) {
+          continue;
+        }
+
         const examLabel = `${exam.classCode ?? exam.className ?? "Exam"} ${
           exam.label
         }`;
