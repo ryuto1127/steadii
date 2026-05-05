@@ -7,13 +7,13 @@ import { db } from "@/lib/db/client";
 import {
   agentDrafts,
   inboxItems,
-  sendQueue,
   agentRules,
   type SenderRole,
 } from "@/lib/db/schema";
 import { auth } from "@/lib/auth/config";
 import { logEmailAudit } from "./audit";
 import { deleteGmailDraft } from "@/lib/agent/tools/gmail";
+import { qstash } from "@/lib/integrations/qstash/client";
 import { enqueueSendForDraft } from "./send-enqueue";
 import { recordSenderFeedback } from "./feedback";
 import { createClass } from "@/lib/classes/save";
@@ -57,29 +57,51 @@ export async function approveAgentDraftAction(
   return result;
 }
 
-// Cancel the pending send. Deletes the send_queue row + Gmail draft,
-// transitions agent_draft status back to 'approved' so the user can
-// re-edit or re-send.
+// Cancel the pending send. Calls QStash messages.delete to drop the
+// scheduled execute publish, deletes the Gmail draft, transitions
+// agent_draft status back to `pending` so the user can re-edit or re-
+// send.
+//
+// Order: QStash cancel → Gmail delete → status flip. If the QStash
+// message has already fired (between the user's click and our cancel
+// call), the delete throws and we swallow it — the execute route's
+// idempotency gate (`status !== 'sent_pending'`) catches the race
+// because we set status='pending' immediately after, sub-second after
+// the QStash call. Race window is acceptable for α.
 export async function cancelPendingSendAction(draftId: string): Promise<void> {
   const userId = await getUserId();
   const { draft } = await loadDraftAndInbox(userId, draftId);
   if (draft.status !== "sent_pending") return;
 
-  const [queueRow] = await db
-    .select()
-    .from(sendQueue)
-    .where(eq(sendQueue.agentDraftId, draft.id))
-    .limit(1);
-  if (queueRow) {
+  if (draft.qstashMessageId) {
     try {
-      await deleteGmailDraft(userId, queueRow.gmailDraftId);
+      await qstash().messages.delete(draft.qstashMessageId);
+    } catch (err) {
+      // Two failure modes are normal here:
+      //   1. message already fired — the execute route will hit the
+      //      status gate (we flip to 'pending' below) and skip.
+      //   2. QStash transient error — same outcome, the status flip
+      //      still wins the race.
+      // Log at warning so we can spot pathological misuse but don't
+      // block the user.
+      Sentry.captureException(err, {
+        level: "warning",
+        tags: { feature: "send_execute", op: "qstash_cancel" },
+        user: { id: userId },
+        extra: { draftId: draft.id },
+      });
+    }
+  }
+
+  if (draft.gmailDraftId) {
+    try {
+      await deleteGmailDraft(userId, draft.gmailDraftId);
     } catch (err) {
       Sentry.captureException(err, {
-        tags: { feature: "email_send_queue", op: "cancel_delete_draft" },
+        tags: { feature: "send_execute", op: "cancel_delete_draft" },
         user: { id: userId },
       });
     }
-    await db.delete(sendQueue).where(eq(sendQueue.id, queueRow.id));
   }
 
   const now = new Date();
@@ -88,6 +110,8 @@ export async function cancelPendingSendAction(draftId: string): Promise<void> {
     .set({
       status: "pending",
       approvedAt: null,
+      qstashMessageId: null,
+      gmailDraftId: null,
       updatedAt: now,
     })
     .where(eq(agentDrafts.id, draft.id));
