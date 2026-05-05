@@ -95,15 +95,37 @@ is `jpy`. Locale-based currency selection lands at /checkout — see §6.5.
 
 ## 2. Databases
 
-- [ ] Neon prod branch provisioned
-- [ ] `pnpm db:migrate` applied on prod DB (latest: 0021,
-      `mistake_notes.source` for handwritten OCR — all migrations
-      through Phase 7 W-Integrations including `ical_subscriptions`,
-      `integration_suggestions`, `mistake_note_chunks`,
-      `syllabus_chunks`, `inbox_items.class_id` etc.)
+- [ ] Neon prod branch provisioned (separate from the dev/staging branch
+      `.env.local DATABASE_URL` points to — they are NOT the same)
+- [ ] All migrations applied on **prod** DB (see "Applying migrations to
+      prod" below for the correct procedure — `pnpm db:migrate` reads
+      `.env.local` which is the **dev** branch and will not update prod)
 - [ ] Ryuto's own user row has `is_admin = true` (set via Neon SQL editor
       or Drizzle Studio — the previous redemption-based admin mechanism
       was removed)
+
+### Applying migrations to prod
+
+`pnpm db:migrate` applies migrations to whatever DB `.env.local` points
+at, which is the dev/staging Neon branch. To migrate **production**:
+
+1. Get prod `DATABASE_URL` from **Neon dashboard** (https://console.neon.tech) →
+   steadii project → branch dropdown → select the prod / main branch (NOT
+   the dev branch) → Connection string → copy `postgresql://...`. The
+   value is unobtainable from the Vercel UI (sensitive secret) and from
+   `vercel env pull` (Neon Vercel integration returns it as `""`).
+2. Run:
+   ```bash
+   PROD_DATABASE_URL='<paste from Neon>' pnpm tsx scripts/migrate-prod.ts
+   ```
+   The script logs the resolved hostname so you can confirm it differs
+   from the dev branch host. Drizzle's journal is idempotent — re-running
+   is a safe no-op for already-applied files.
+3. Verify by hitting an endpoint that touches the new columns or running
+   a one-off `information_schema.columns` probe.
+
+This runs after every PR that adds a file in `lib/db/migrations/` —
+flagged in `feedback_prod_migration_manual.md`.
 
 ---
 
