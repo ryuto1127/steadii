@@ -465,17 +465,30 @@ In the QStash console → **Schedules** → **Create**:
 |---|---|---|---|
 | `https://mysteadii.com/api/cron/digest` | `0 * * * *` | POST | Hourly. Daily morning digest (7am local). NA timezones are all whole-hour offsets, so hourly is enough; switch to `*/30` only if onboarding India / Newfoundland users. |
 | `https://mysteadii.com/api/cron/weekly-digest` | `0 * * * *` | POST | Hourly. Weekly Sunday retrospective (5pm local Sunday). Same hourly QStash cadence as daily; the Sunday-17:00-local cross + 6-day dedupe is enforced inside `lib/digest/weekly-picker.ts`. Verification span: `cron.weekly-digest.tick`. |
-| `https://mysteadii.com/api/cron/send-queue` | `*/5 * * * *` | POST | Every 5 minutes. The 20s undo window is enforced client-side; this cadence only affects time-from-send-click to Gmail API call. |
 | `https://mysteadii.com/api/cron/ingest-sweep` | `*/5 * * * *` | POST | Every 5 minutes. Fans out `ingestLast24h` across all gmail-scoped users, bypassing the page-render auto-ingest 24h cooldown. Without this, new emails only surface when the user manually refreshes Settings. Tightened from `*/15` to `*/5` 2026-05-04 for snappier "secretary" feel — α budget allows it (well within QStash free tier). |
 | `https://mysteadii.com/api/cron/ical-sync` | `0 */6 * * *` | POST | Every 6 hours per Phase 7 W-Integrations Q3. Walks active `ical_subscriptions`, conditional GETs each (If-None-Match: ETag), upserts events into the shared `events` mirror. After 3 consecutive failures the row auto-deactivates so we stop hammering a broken URL. |
 
 Body: leave empty. The signing key in headers handles auth.
 
+> **Removed 2026-05-04 (post-α #6):** the `/api/cron/send-queue` schedule
+> is gone. Approved sends now publish a single QStash message per draft
+> with `delay = users.undo_window_seconds`, hitting
+> `/api/send/execute/<draftId>` directly (see `lib/agent/email/send-
+> enqueue.ts`). After merging this PR, **delete the existing send-queue
+> schedule from the QStash console** so it stops firing into a 404.
+> Set `QSTASH_TOKEN` in Vercel prod env (publish-side credential — the
+> existing `QSTASH_CURRENT_SIGNING_KEY` / `QSTASH_NEXT_SIGNING_KEY` are
+> verify-side and stay as-is). The `send_queue` table is kept for
+> ≥2 weeks of audit and dropped in a separate migration.
+
 ### Verifying
 
-- After all three schedules are created, wait one tick and check Sentry for
-  `cron.digest.tick` / `cron.send_queue.tick` / `cron.ingest_sweep.tick`
-  spans with `op=cron`.
+- After the schedules above are created, wait one tick and check Sentry
+  for `cron.digest.tick` / `cron.weekly_digest.tick` /
+  `cron.ingest_sweep.tick` / `cron.ical_sync.tick` spans with `op=cron`.
+- Per-draft send delivery surfaces as `app.send.execute` HTTP server
+  spans (200 = delivered + sent; 401 = signature mismatch; 5xx → QStash
+  retries up to 3×).
 - Or hit the QStash console → Schedule → **Logs** for per-tick HTTP
   status (expect 200).
 - Manual trigger: QStash console → Schedule → **Publish now**.
