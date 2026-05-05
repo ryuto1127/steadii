@@ -99,6 +99,23 @@ export const users = pgTable("users", {
     mode: "date",
     withTimezone: true,
   }),
+  // Post-α #5 — Weekly retrospective digest (Sunday 5pm local). Default
+  // ON because this is the retention hook; not gated behind opt-in for α.
+  // dow_local 0..6 (Sun..Sat); hour_local 0..23 in IANA timezone. Picker
+  // skips when last_weekly_digest_sent_at is within the trailing 6 days.
+  weeklyDigestEnabled: boolean("weekly_digest_enabled")
+    .notNull()
+    .default(true),
+  weeklyDigestDowLocal: smallint("weekly_digest_dow_local")
+    .notNull()
+    .default(0),
+  weeklyDigestHourLocal: smallint("weekly_digest_hour_local")
+    .notNull()
+    .default(17),
+  lastWeeklyDigestSentAt: timestamp("last_weekly_digest_sent_at", {
+    mode: "date",
+    withTimezone: true,
+  }),
   // W4.3 — staged autonomy opt-in. When true, eligible draft_reply
   // drafts are routed straight into send_queue (with the standard 20s
   // undo) instead of waiting for explicit Send. False by default; the

@@ -81,6 +81,7 @@ export default async function SettingsPage() {
       .select({
         digestEnabled: users.digestEnabled,
         digestHourLocal: users.digestHourLocal,
+        weeklyDigestEnabled: users.weeklyDigestEnabled,
         undoWindowSeconds: users.undoWindowSeconds,
         highRiskNotifyImmediate: users.highRiskNotifyImmediate,
         autonomySendEnabled: users.autonomySendEnabled,
@@ -241,6 +242,7 @@ export default async function SettingsPage() {
           initial={{
             digestEnabled: userPrefs?.digestEnabled ?? true,
             digestHourLocal: userPrefs?.digestHourLocal ?? 7,
+            weeklyDigestEnabled: userPrefs?.weeklyDigestEnabled ?? true,
             undoWindowSeconds: userPrefs?.undoWindowSeconds ?? 10,
             highRiskNotifyImmediate:
               userPrefs?.highRiskNotifyImmediate ?? true,

@@ -15,6 +15,7 @@ export const NAV_ITEM_KEYS = [
   "calendar",
   "tasks",
   "classes",
+  "activity",
 ] as const;
 
 // Secondary section — items below the rule. The sidebar shell renders a
@@ -38,6 +39,7 @@ export const NAV_HREFS: Record<NavItemKey, string> = {
   classes: "/app/classes",
   calendar: "/app/calendar",
   tasks: "/app/tasks",
+  activity: "/app/activity",
 };
 
 // Keyboard shortcut: `g` then a letter jumps to that section. Settings is
@@ -57,4 +59,7 @@ export const NAV_SHORTCUTS: Record<NavItemKey, string> = {
   classes: "k",
   calendar: "c",
   tasks: "t",
+  // 'a' for activity — unique among existing letters and matches the
+  // first letter of "Activity" / 「アクティビティ」.
+  activity: "a",
 };
