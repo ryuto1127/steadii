@@ -57,6 +57,10 @@ export const users = pgTable("users", {
     // Option is a fallback for keyboards/OSes where Caps Lock events are
     // unreliable. Stored only when the user changes it from the default.
     voiceTriggerKey?: "caps_lock" | "alt_right";
+    // GitHub login used by the L1 classifier to promote PR notifications
+    // out of auto_low when the user is `@`-mentioned. Settings UI to set
+    // this is engineer-33 candidate; for now read-only via DB.
+    githubUsername?: string;
   }>().default({}),
   timezone: text("timezone"),
   onboardingStep: integer("onboarding_step").notNull().default(0),

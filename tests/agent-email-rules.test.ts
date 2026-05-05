@@ -34,6 +34,7 @@ function makeCtx(overrides: Partial<UserContext> = {}): UserContext {
     // Seed "known.edu" and "example.com" as seen so first-time-sender
     // doesn't bias tests that aren't specifically about it.
     seenDomains: new Set(["known.edu", "example.com"]),
+    githubUsername: null,
     ...overrides,
   };
 }
@@ -53,7 +54,7 @@ describe("classifyEmail — IGNORE bucket", () => {
     }));
     expect(res.bucket).toBe("ignore");
     expect(res.ruleProvenance.map((p) => p.ruleId)).toContain(
-      "GLOBAL_IGNORE_NOREPLY_NO_ACTION"
+      "GLOBAL_IGNORE_BOT_SENDER"
     );
   });
 
