@@ -4,10 +4,8 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { accounts } from "@/lib/db/schema";
 import { env } from "@/lib/env";
-import {
-  decryptOAuthToken,
-  encryptOAuthToken,
-} from "@/lib/auth/oauth-tokens";
+import { decryptOAuthToken } from "@/lib/auth/oauth-tokens";
+import { persistRefreshedOAuthToken } from "@/lib/auth/oauth-refresh-persist";
 import { withTokenRefreshLock } from "@/lib/auth/token-refresh-lock";
 
 const PROVIDER_ID = "microsoft-entra-id";
@@ -78,25 +76,15 @@ async function refreshAccessToken(row: AccountRow): Promise<string> {
   };
 
   const newExpiresAt = Math.floor(Date.now() / 1000) + json.expires_in;
-  const update: Partial<typeof accounts.$inferInsert> = {
-    access_token: encryptOAuthToken(json.access_token),
-    expires_at: newExpiresAt,
-    updatedAt: new Date(),
-  };
-  if (json.refresh_token)
-    update.refresh_token = encryptOAuthToken(json.refresh_token);
-  if (json.scope) update.scope = json.scope;
-  if (json.token_type) update.token_type = json.token_type;
-
-  await db
-    .update(accounts)
-    .set(update)
-    .where(
-      and(
-        eq(accounts.provider, PROVIDER_ID),
-        eq(accounts.providerAccountId, row.providerAccountId)
-      )
-    );
+  await persistRefreshedOAuthToken({
+    provider: PROVIDER_ID,
+    providerAccountId: row.providerAccountId,
+    accessTokenPlain: json.access_token,
+    expiresAtSeconds: newExpiresAt,
+    refreshTokenPlain: json.refresh_token ?? undefined,
+    scope: json.scope ?? undefined,
+    tokenType: json.token_type ?? undefined,
+  });
 
   return json.access_token;
 }
