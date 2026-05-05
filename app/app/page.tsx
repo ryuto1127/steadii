@@ -17,6 +17,8 @@ import {
 } from "@/lib/dashboard/today";
 import { getUserTimezone } from "@/lib/agent/preferences";
 import { FALLBACK_TZ, addDaysToDateStr, localMidnightAsUtc } from "@/lib/calendar/tz-utils";
+import { fetchUpcomingTasks } from "@/lib/integrations/google/tasks";
+import { fetchMsUpcomingTasks } from "@/lib/integrations/microsoft/tasks";
 import {
   queueDismissAction,
   queuePermanentDismissAction,
@@ -131,9 +133,17 @@ export default async function HomePage() {
   );
 }
 
-// Tasks due *today* — narrower than the 72h dueSoon window. Reads
-// directly here to avoid widening the dashboard helper API for what's
-// essentially a one-call need.
+// Tasks due *today* — narrower than the 72h dueSoon window. Pulls
+// from THREE sources so the home briefing matches /app/tasks parity:
+//   1. Steadii assignments (DB, the canonical academic-deadline store)
+//   2. Google Tasks (live)
+//   3. Microsoft To Do (live, when connected)
+// External-source pulls go through the existing fetchers with `days: 2`
+// — that gives ±1 calendar-day of slack against the server's UTC-based
+// date filter so a user in a TZ behind UTC doesn't drop a "today" task
+// that the API cursor placed on tomorrow's UTC date. The actual
+// "today" filter is applied client-side here against the user-TZ
+// `today` date string.
 async function fetchTodayTasks(userId: string): Promise<
   Array<{ id: string; title: string; classTitle: string | null }>
 > {
@@ -141,28 +151,62 @@ async function fetchTodayTasks(userId: string): Promise<
   const today = todayDateInTz(tz);
   const start = localMidnightAsUtc(today, tz);
   const end = localMidnightAsUtc(addDaysToDateStr(today, 1), tz);
-  const rows = await db
-    .select({
-      id: assignmentsTable.id,
-      title: assignmentsTable.title,
-      classTitle: classesTable.name,
-    })
-    .from(assignmentsTable)
-    .leftJoin(classesTable, eq(classesTable.id, assignmentsTable.classId))
-    .where(
-      and(
-        eq(assignmentsTable.userId, userId),
-        isNull(assignmentsTable.deletedAt),
-        ne(assignmentsTable.status, "done"),
-        gte(assignmentsTable.dueAt, start),
-        lte(assignmentsTable.dueAt, end)
+
+  const [steadiiRows, googleTasks, msTasks] = await Promise.all([
+    db
+      .select({
+        id: assignmentsTable.id,
+        title: assignmentsTable.title,
+        classTitle: classesTable.name,
+      })
+      .from(assignmentsTable)
+      .leftJoin(classesTable, eq(classesTable.id, assignmentsTable.classId))
+      .where(
+        and(
+          eq(assignmentsTable.userId, userId),
+          isNull(assignmentsTable.deletedAt),
+          ne(assignmentsTable.status, "done"),
+          gte(assignmentsTable.dueAt, start),
+          lte(assignmentsTable.dueAt, end)
+        )
       )
-    )
-    .orderBy(asc(assignmentsTable.dueAt))
-    .limit(10);
-  return rows.map((r) => ({
-    id: r.id,
-    title: r.title,
-    classTitle: r.classTitle ?? null,
-  }));
+      .orderBy(asc(assignmentsTable.dueAt))
+      .limit(10),
+    // External fetchers soft-fail when the integration isn't connected;
+    // .catch keeps a single broken provider from blanking today's
+    // briefing for the user.
+    fetchUpcomingTasks(userId, { days: 2, max: 50 }).catch(() => []),
+    fetchMsUpcomingTasks(userId, { days: 2, max: 50 }).catch(() => []),
+  ]);
+
+  return mergeTodayTasks(
+    steadiiRows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      classTitle: r.classTitle ?? null,
+    })),
+    googleTasks,
+    msTasks,
+    today
+  );
+}
+
+// Pure helper — extracted so the merge logic can be unit-tested
+// without mocking three sources of side-effects.
+export function mergeTodayTasks(
+  steadii: Array<{ id: string; title: string; classTitle: string | null }>,
+  google: Array<{ due: string; title: string }>,
+  ms: Array<{ due: string; title: string }>,
+  todayStr: string,
+  limit: number = 10
+): Array<{ id: string; title: string; classTitle: string | null }> {
+  const externalToday = [...google, ...ms].filter((t) => t.due === todayStr);
+  return [
+    ...steadii,
+    ...externalToday.map((task, i) => ({
+      id: `external:${task.due}:${i}:${task.title}`,
+      title: task.title,
+      classTitle: null,
+    })),
+  ].slice(0, limit);
 }
