@@ -463,7 +463,8 @@ In the QStash console → **Schedules** → **Create**:
 
 | Endpoint | Schedule | Method | Notes |
 |---|---|---|---|
-| `https://mysteadii.com/api/cron/digest` | `0 * * * *` | POST | Hourly. NA timezones are all whole-hour offsets, so hourly is enough; switch to `*/30` only if onboarding India / Newfoundland users. |
+| `https://mysteadii.com/api/cron/digest` | `0 * * * *` | POST | Hourly. Daily morning digest (7am local). NA timezones are all whole-hour offsets, so hourly is enough; switch to `*/30` only if onboarding India / Newfoundland users. |
+| `https://mysteadii.com/api/cron/weekly-digest` | `0 * * * *` | POST | Hourly. Weekly Sunday retrospective (5pm local Sunday). Same hourly QStash cadence as daily; the Sunday-17:00-local cross + 6-day dedupe is enforced inside `lib/digest/weekly-picker.ts`. Verification span: `cron.weekly-digest.tick`. |
 | `https://mysteadii.com/api/cron/send-queue` | `*/5 * * * *` | POST | Every 5 minutes. The 20s undo window is enforced client-side; this cadence only affects time-from-send-click to Gmail API call. |
 | `https://mysteadii.com/api/cron/ingest-sweep` | `*/15 * * * *` | POST | Every 15 minutes. Fans out `ingestLast24h` across all gmail-scoped users, bypassing the page-render auto-ingest 24h cooldown. Without this, new emails only surface when the user manually refreshes Settings. |
 | `https://mysteadii.com/api/cron/ical-sync` | `0 */6 * * *` | POST | Every 6 hours per Phase 7 W-Integrations Q3. Walks active `ical_subscriptions`, conditional GETs each (If-None-Match: ETag), upserts events into the shared `events` mirror. After 3 consecutive failures the row auto-deactivates so we stop hammering a broken URL. |
