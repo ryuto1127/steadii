@@ -203,6 +203,95 @@ export function isNoreplySender(senderEmail: string): boolean {
   return false;
 }
 
+// Hostname hints — curated list of bot-relay domains. Substring match
+// against the sender's @domain part. Grow this when new false-negatives
+// surface in dogfood inboxes (e.g. PR-comment relays misclassified as
+// human-authored work mail). Bot-mail at these hosts wears a human
+// display name in the From: header, so domain match is the only reliable
+// signal that the underlying author is a bot.
+export const BOT_HOST_HINTS: string[] = [
+  // Apex `github.com` covers `notifications@github.com` (the actual PR
+  // comment relay sender). Subdomains like `users.noreply.github.com`
+  // are caught by the `.github.com` substring as well.
+  "github.com",
+  "noreply.discord.com",
+  "notifications.slack.com",
+  "mail.figma.com",
+  "alerts.bitbucket.com",
+  "atlassian.net", // jira
+  "linear.app",
+  "circleci.com",
+  "vercel.com", // status / deploy
+  "stripe.com",
+];
+
+export type BotSenderInput = {
+  fromEmail: string;
+  fromName: string | null;
+  // Optional: pass through Gmail message headers when available so we
+  // can inspect Auto-Submitted (RFC 3834) / Precedence. Triage extracts
+  // them at the ingest boundary and forwards them via ClassifyInput.
+  autoSubmittedHeader?: string | null;
+  precedenceHeader?: string | null;
+};
+
+// Wider bot-sender predicate. Augments isNoreplySender with three more
+// signals: [bot] / -bot suffix in display-name or local-part, known SaaS
+// bot-relay hostnames, and RFC 3834 / Precedence headers. Used by the L1
+// IGNORE rule (paired with `containsActionVerb` so OTP / password-reset
+// bot mail still surfaces).
+export function isBotSender(input: BotSenderInput): boolean {
+  if (isNoreplySender(input.fromEmail)) return true;
+
+  const local = input.fromEmail.split("@")[0]?.toLowerCase() ?? "";
+  const display = (input.fromName ?? "").toLowerCase();
+  if (local.endsWith("[bot]") || display.endsWith("[bot]")) return true;
+  if (local.endsWith("-bot") || display.includes("(bot)")) return true;
+
+  const domain = input.fromEmail.split("@")[1]?.toLowerCase() ?? "";
+  if (domain && BOT_HOST_HINTS.some((hint) => domain.includes(hint))) {
+    return true;
+  }
+
+  // RFC 3834 — `Auto-Submitted: no` is the only value that means
+  // human-sent. Anything else (auto-generated / auto-replied / etc.) is
+  // bot-flagged.
+  const auto = (input.autoSubmittedHeader ?? "").toLowerCase().trim();
+  if (auto && auto !== "no") return true;
+
+  // Legacy `Precedence: bulk | auto_reply | junk`.
+  const prec = (input.precedenceHeader ?? "").toLowerCase().trim();
+  if (prec === "bulk" || prec === "auto_reply" || prec === "junk") return true;
+
+  return false;
+}
+
+// GitHub notification routing. PR comments and review requests arrive
+// from `notifications.github.com` with a human display name pulled from
+// the comment author, which previously caused L1 to over-weight them as
+// human work mail. This predicate narrows the GitHub branch in L1.
+export function isGithubNotificationDomain(senderDomain: string): boolean {
+  const d = senderDomain.toLowerCase();
+  // PR-comment relays send from `notifications@github.com` (apex) — match
+  // it directly. Subdomains like `noreply.github.com` /
+  // `users.noreply.github.com` are caught by the `.github.com` suffix.
+  return d === "github.com" || d.endsWith(".github.com");
+}
+
+// Subject signals that justify promoting a GitHub notification out of
+// the auto_low default. Matched case-insensitively against the email
+// haystack (subject + snippet + bodySnippet). The user's own login is
+// matched separately at the L1 callsite (so "@${githubUsername}" promotes
+// only when configured).
+export const GITHUB_HIGH_SIGNALS: RegExp[] = [
+  /\breview\s+requested\b/i,
+  /\bmerge\s+conflict\b/i,
+  /\bci\s+failed\b/i,
+  /\btests?\s+failed\b/i,
+  /\bdeployment\s+failed\b/i,
+  /\bsecurity\s+alert\b/i,
+];
+
 // Phase 7 W1 — JA-formatted course-code patterns used by the class-binding
 // module to recognize a course identifier in the email subject. Operator-
 // curated; grow over time per false-negative rescue rate. The plain Latin-
