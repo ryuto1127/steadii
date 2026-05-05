@@ -19,10 +19,10 @@ Reference shipped patterns:
 
 The current send-queue is a polling pattern: every 5 minutes a cron sweeps the `send_queue` table for rows whose `send_at` has elapsed, processes them, marks them `sent`. Two problems:
 
-1. **User-perceived latency** — the user clicks Send, waits out the 20s undo window, then waits up to another 5 min before the email actually leaves Gmail. Average wait beyond undo: **2.5 minutes**.
+1. **User-perceived latency** — the user clicks Send, waits out the undo window (default **10s**, configurable per-user via `users.undo_window_seconds`), then waits up to another 5 min before the email actually leaves Gmail. Average wait beyond undo: **2.5 minutes**.
 2. **Wasted QStash budget** — 288 cron ticks/day fire even on days the user sends zero emails. The polling exists only because `send_at` is row-local; a global-time cron is the only way to discover them.
 
-QStash supports per-message delivery with an `Upstash-Delay: 20s` header. Each send becomes a single delayed publish that QStash itself fires at the exact send time. No table polling, no cron, no average wait.
+QStash supports per-message delivery with an `Upstash-Delay: <seconds>` header. Each send becomes a single delayed publish that QStash itself fires at the exact send time. No table polling, no cron, no average wait. The delay value comes from the same `users.undo_window_seconds` the existing path already reads — engineer must NOT hard-code seconds.
 
 **Cost shift**: 288 fixed messages/day → ~5 messages/day per active user (at α). Net **decrease** in QStash usage.
 
@@ -185,7 +185,7 @@ Per AGENTS.md §13 — `preview_screenshot @ 1440×900` EN+JA:
 - Cancel during undo, status flips to `cancelled`
 - (Verifies the visible flow; the new code path is server-side and confirmed via tests + dev-server actual send)
 
-For dev-side verification: with `QSTASH_TOKEN` set in `.env.local` (publish target = QStash production), sending a draft should produce a QStash message visible in the QStash console **Logs** tab firing 20 seconds later.
+For dev-side verification: with `QSTASH_TOKEN` set in `.env.local` (publish target = QStash production), sending a draft should produce a QStash message visible in the QStash console **Logs** tab firing after the user's undo window (default 10 seconds).
 
 ---
 
