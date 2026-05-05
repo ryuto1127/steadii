@@ -69,6 +69,12 @@ const schema = z.object({
   // qstash/verify.ts for the runtime guard.
   QSTASH_CURRENT_SIGNING_KEY: z.string().optional().default(""),
   QSTASH_NEXT_SIGNING_KEY: z.string().optional().default(""),
+  // Publish-side token. Required by the delayed-send pattern in
+  // lib/agent/email/send-enqueue.ts (each approved draft becomes a single
+  // QStash message with `delay = users.undo_window_seconds`). Empty in
+  // local dev short-circuits the publish path so `pnpm dev` doesn't need
+  // QStash to function for non-send flows.
+  QSTASH_TOKEN: z.string().optional().default(""),
 });
 
 export type Env = z.infer<typeof schema>;

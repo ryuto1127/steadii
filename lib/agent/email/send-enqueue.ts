@@ -1,8 +1,10 @@
 import "server-only";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { agentDrafts, inboxItems, sendQueue, users } from "@/lib/db/schema";
+import { agentDrafts, inboxItems, users } from "@/lib/db/schema";
 import { createGmailDraft } from "@/lib/agent/tools/gmail";
+import { qstash } from "@/lib/integrations/qstash/client";
+import { env } from "@/lib/env";
 import { logEmailAudit } from "./audit";
 
 // Shared core for "the user (or the orchestrator) decided this draft
@@ -10,17 +12,17 @@ import { logEmailAudit } from "./audit";
 // - approveAgentDraftAction (server action, user clicked Send)
 // - W4.3 staged-autonomy auto-send path (orchestrator, no user click)
 //
-// Differences from a raw insert:
-// - creates the Gmail draft via Gmail API first (so the queue row points
-//   at a real draft id Gmail can resolve into a sent message)
-// - upserts on (agent_draft_id) — same draft re-enqueued just resets
-//   the row instead of failing the unique constraint
-// - flips agent_drafts.status to 'sent_pending' atomically with the queue
-//   write so the UI is never out of sync
+// Post-α #6 (delayed-message pattern): instead of inserting a row into
+// send_queue and waiting for a polling cron to drain it, we publish a
+// single QStash message with `delay = users.undo_window_seconds`. QStash
+// fires the configured URL after the delay, which calls the execute
+// route that promotes the Gmail draft to sent. The qstashMessageId is
+// stored on agent_drafts so the cancel path can call
+// `messages.delete(messageId)`.
 //
 // `isAutomatic=true` sets agent_drafts.auto_sent so downstream UI /
 // digest can label it distinctly. The undo window is identical for both
-// paths — auto-sent drafts still have the 20s recall window.
+// paths — auto-sent drafts still respect the per-user recall window.
 export type EnqueueSendResult = {
   sendAt: Date;
   undoWindowSeconds: number;
@@ -69,31 +71,14 @@ export async function enqueueSendForDraft(args: {
     threadId: inbox.threadExternalId ?? null,
   });
 
+  const publishRes = await qstash().publishJSON({
+    url: `${env().APP_URL}/api/send/execute/${draft.id}`,
+    delay: undoWindowSeconds,
+    retries: 3,
+  });
+
   const now = new Date();
   const sendAt = new Date(now.getTime() + undoWindowSeconds * 1000);
-
-  await db
-    .insert(sendQueue)
-    .values({
-      userId: args.userId,
-      agentDraftId: draft.id,
-      gmailDraftId,
-      sendAt,
-      status: "pending",
-    })
-    .onConflictDoUpdate({
-      target: sendQueue.agentDraftId,
-      set: {
-        gmailDraftId,
-        sendAt,
-        status: "pending",
-        attemptCount: 0,
-        attemptedAt: null,
-        lastError: null,
-        sentGmailMessageId: null,
-        updatedAt: now,
-      },
-    });
 
   await db
     .update(agentDrafts)
@@ -101,6 +86,8 @@ export async function enqueueSendForDraft(args: {
       status: "sent_pending",
       approvedAt: now,
       autoSent: args.isAutomatic,
+      qstashMessageId: publishRes.messageId,
+      gmailDraftId,
       updatedAt: now,
     })
     .where(eq(agentDrafts.id, draft.id));
@@ -114,6 +101,7 @@ export async function enqueueSendForDraft(args: {
       subAction: args.isAutomatic ? "auto_send" : "approve",
       undoWindowSeconds,
       gmailDraftId,
+      qstashMessageId: publishRes.messageId,
     },
   });
 

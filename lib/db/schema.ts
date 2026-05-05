@@ -993,6 +993,16 @@ export const agentDrafts = pgTable(
     // human was out of the loop.
     autoSent: boolean("auto_sent").notNull().default(false),
 
+    // Post-α #6 — delayed-message pattern (replaces polling send_queue).
+    // qstashMessageId is the id returned from `qstash().publishJSON(...)`,
+    // used by the cancel path. gmailDraftId moves off send_queue so the
+    // execute route can resolve both off the agent_drafts row directly.
+    // Both nullable: legacy rows pre-migration won't have either, and
+    // dismissed / cancelled drafts that never reached send don't need
+    // them.
+    qstashMessageId: text("qstash_message_id"),
+    gmailDraftId: text("gmail_draft_id"),
+
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
       .notNull()
       .defaultNow(),
