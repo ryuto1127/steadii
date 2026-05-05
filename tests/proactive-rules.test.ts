@@ -174,6 +174,62 @@ describe("exam_conflict rule", () => {
     ];
     expect(examConflictRule.detect(snapshot)).toHaveLength(0);
   });
+
+  it("does not fire when the calendar event title references the class code (Steadii-imported exam)", () => {
+    const snapshot = emptySnapshot();
+    snapshot.calendarEvents = [
+      {
+        id: "evt-1",
+        sourceType: "google_calendar",
+        externalId: "g1",
+        title: "[Steadii] MAT223 Final Exam",
+        description: null,
+        startsAt: new Date("2026-05-16T14:00:00Z"),
+        endsAt: new Date("2026-05-16T15:30:00Z"),
+        isAllDay: false,
+        location: null,
+      },
+    ];
+    snapshot.examWindows = [
+      {
+        classId: "c1",
+        classCode: "MAT223",
+        className: "Linear Algebra II",
+        startsAt: new Date("2026-05-16T14:00:00Z"),
+        endsAt: new Date("2026-05-16T15:30:00Z"),
+        label: "Final Exam",
+      },
+    ];
+    expect(examConflictRule.detect(snapshot)).toHaveLength(0);
+  });
+
+  it("does not fire when the calendar event title references the class name (user-managed duplicate of the exam)", () => {
+    const snapshot = emptySnapshot();
+    snapshot.calendarEvents = [
+      {
+        id: "evt-1",
+        sourceType: "google_calendar",
+        externalId: "g1",
+        title: "Linear Algebra II Final",
+        description: null,
+        startsAt: new Date("2026-05-16T14:00:00Z"),
+        endsAt: new Date("2026-05-16T15:30:00Z"),
+        isAllDay: false,
+        location: null,
+      },
+    ];
+    snapshot.examWindows = [
+      {
+        classId: "c1",
+        classCode: "MAT223",
+        className: "Linear Algebra II",
+        startsAt: new Date("2026-05-16T14:00:00Z"),
+        endsAt: new Date("2026-05-16T15:30:00Z"),
+        label: "Final Exam",
+      },
+    ];
+    expect(examConflictRule.detect(snapshot)).toHaveLength(0);
+  });
 });
 
 describe("deadline_during_travel rule", () => {
