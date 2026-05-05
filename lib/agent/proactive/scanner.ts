@@ -1,11 +1,12 @@
 import "server-only";
-import { and, eq, gte, lt, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import * as Sentry from "@sentry/nextjs";
 import { db } from "@/lib/db/client";
 import {
   agentEvents,
   agentProposals,
   type AgentEventSource,
+  type AgentProposalIssueType,
   type NewAgentProposalRow,
 } from "@/lib/db/schema";
 import { buildUserSnapshot } from "./snapshot";
@@ -16,6 +17,19 @@ import {
   shouldGenerateActionsFor,
 } from "./proposal-generator";
 import type { DetectedIssue } from "./types";
+
+// Issue types that the scanner's rule pipeline (ALL_RULES) can produce.
+// The auto-resolve pass is scoped to these — any pending proposal of
+// another issueType (e.g. auto_action_log, admin_waitlist_pending,
+// syllabus_calendar_ambiguity, group_project_*) is owned by a different
+// code path and must NOT be touched by the scanner sweep.
+const SCANNER_RULE_ISSUE_TYPES: AgentProposalIssueType[] = [
+  "time_conflict",
+  "exam_conflict",
+  "deadline_during_travel",
+  "exam_under_prepared",
+  "workload_over_capacity",
+];
 
 // 5-minute per-user debounce. Two scans within the window short-circuit
 // to a no-op so rapid sequential edits (e.g., user drags a calendar
@@ -41,6 +55,11 @@ export type ScanResult = {
   reason?: "debounced" | "concurrent";
   proposalsCreated: number;
   proposalsSkippedByDedup: number;
+  // post-α inbox quality — pending proposals from rule-driven scanner
+  // detections that the latest re-detection pass found absent (i.e.
+  // underlying issue resolved). Auto-flipped to status='resolved'
+  // with resolved_action='auto_revalidated'.
+  proposalsAutoResolved: number;
 };
 
 // Public entry. Called by every write hook + the daily cron. Coordinates
@@ -68,6 +87,7 @@ export async function runScanner(
         reason: "debounced",
         proposalsCreated: 0,
         proposalsSkippedByDedup: 0,
+        proposalsAutoResolved: 0,
       };
     }
   }
@@ -83,11 +103,13 @@ export async function runScanner(
       reason: "concurrent",
       proposalsCreated: 0,
       proposalsSkippedByDedup: 0,
+      proposalsAutoResolved: 0,
     };
   }
 
   let proposalsCreated = 0;
   let proposalsSkippedByDedup = 0;
+  let proposalsAutoResolved = 0;
 
   try {
     const snapshot = await buildUserSnapshot(userId);
@@ -111,6 +133,22 @@ export async function runScanner(
       if (result === "created") proposalsCreated++;
       else if (result === "skipped") proposalsSkippedByDedup++;
     }
+
+    // Auto-resolve pending proposals whose issue is no longer detected
+    // by ANY rule. Captures the "user fixed the underlying problem"
+    // case (deleted a duplicate event, moved a calendar entry off the
+    // exam window, etc.) — without this the proposal sticks until its
+    // 7-day TTL and the queue feels stale. Scoped to the issue types
+    // ALL_RULES owns; other issue types (auto_action_log,
+    // syllabus_calendar_ambiguity, group_project_*, admin_*) come from
+    // different code paths and must not be touched.
+    const currentIssueKeys = new Set(
+      issues.map((i) => buildDedupKey(i.issueType, i.sourceRecordIds))
+    );
+    proposalsAutoResolved = await autoResolveAbsentPending(
+      userId,
+      currentIssueKeys
+    );
 
     await db
       .update(agentEvents)
@@ -138,7 +176,49 @@ export async function runScanner(
     ran: true,
     proposalsCreated,
     proposalsSkippedByDedup,
+    proposalsAutoResolved,
   };
+}
+
+// Sweep pending proposals whose dedup_key is not in the current
+// detection set. Returns the count of rows flipped to status='resolved'
+// so the caller can surface it via ScanResult / Sentry / cron output.
+// Exported for unit-testing — the runScanner integration is the only
+// production call site.
+export async function autoResolveAbsentPending(
+  userId: string,
+  currentIssueKeys: Set<string>
+): Promise<number> {
+  const pending = await db
+    .select({
+      id: agentProposals.id,
+      dedupKey: agentProposals.dedupKey,
+    })
+    .from(agentProposals)
+    .where(
+      and(
+        eq(agentProposals.userId, userId),
+        eq(agentProposals.status, "pending"),
+        inArray(agentProposals.issueType, SCANNER_RULE_ISSUE_TYPES)
+      )
+    );
+
+  const staleIds = pending
+    .filter((p) => !currentIssueKeys.has(p.dedupKey))
+    .map((p) => p.id);
+
+  if (staleIds.length === 0) return 0;
+
+  await db
+    .update(agentProposals)
+    .set({
+      status: "resolved",
+      resolvedAction: "auto_revalidated",
+      resolvedAt: new Date(),
+    })
+    .where(inArray(agentProposals.id, staleIds));
+
+  return staleIds.length;
 }
 
 // Flip every 'running' row for this user that's older than the stale

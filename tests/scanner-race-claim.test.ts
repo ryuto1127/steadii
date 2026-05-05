@@ -36,12 +36,24 @@ vi.mock("@/lib/db/client", () => ({
     }),
     select: () => ({
       from: () => ({
-        where: () => ({
-          limit: async () => {
-            calls.push("select");
-            return fixture.recentExists ? [{ id: "recent-scan" }] : [];
-          },
-        }),
+        // The .where() chain end is dual-shape:
+        //   * findRecentCompletedScan → calls .limit(1) on top of .where()
+        //   * autoResolveAbsentPending → awaits .where() directly (no limit)
+        // To support both, .where() returns an awaitable that resolves to
+        // [] (= no pending proposals to auto-resolve in these tests) and
+        // also exposes .limit() for the recency debounce path.
+        where: () => {
+          const promise = Promise.resolve([] as Array<Record<string, unknown>>);
+          return {
+            limit: async () => {
+              calls.push("select");
+              return fixture.recentExists ? [{ id: "recent-scan" }] : [];
+            },
+            then: promise.then.bind(promise),
+            catch: promise.catch.bind(promise),
+            finally: promise.finally.bind(promise),
+          };
+        },
       }),
     }),
     insert: () => ({
@@ -70,6 +82,8 @@ vi.mock("@/lib/db/schema", () => ({
     id: {},
     userId: {},
     dedupKey: {},
+    status: {},
+    issueType: {},
   },
 }));
 
@@ -77,6 +91,7 @@ vi.mock("drizzle-orm", () => ({
   and: () => ({}),
   eq: () => ({}),
   gte: () => ({}),
+  inArray: () => ({}),
   lt: () => ({}),
   sql: Object.assign(
     (strings: TemplateStringsArray) => strings.join(""),
