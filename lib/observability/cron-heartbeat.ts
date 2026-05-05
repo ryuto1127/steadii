@@ -19,6 +19,7 @@ import { cronHeartbeats } from "@/lib/db/schema";
 // consults this map to compute staleness.
 export const CRON_EXPECTED_INTERVAL_MS: Record<string, number> = {
   "digest": 60 * 60 * 1000, // hourly tick
+  "weekly-digest": 60 * 60 * 1000, // hourly tick; internal Sun 5pm gate
   "pre-brief": 5 * 60 * 1000, // every 5 minutes
   "ingest-sweep": 30 * 60 * 1000, // every 30 minutes (approx)
   "send-queue": 60 * 1000, // every minute

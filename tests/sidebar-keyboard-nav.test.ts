@@ -11,12 +11,14 @@ describe("Sidebar keyboard nav config", () => {
   it("primary block is Wave 2 secretary order — Home first, no Chats", () => {
     // Wave 2 lock per `project_wave_2_home_design.md`: Home is the
     // primary destination; 履歴 (chats) demoted to the secondary block.
+    // Post-α #5 added Activity at the tail of the primary block.
     expect([...NAV_ITEM_KEYS]).toEqual([
       "home",
       "inbox",
       "calendar",
       "tasks",
       "classes",
+      "activity",
     ]);
     expect(NAV_ITEM_KEYS[0]).toBe("home");
     expect(NAV_ITEM_KEYS).not.toContain("chats");
@@ -28,7 +30,15 @@ describe("Sidebar keyboard nav config", () => {
 
   it("the union (ALL_NAV_ITEM_KEYS) covers every routable item", () => {
     expect([...ALL_NAV_ITEM_KEYS].sort()).toEqual(
-      ["calendar", "chats", "classes", "home", "inbox", "tasks"].sort()
+      [
+        "activity",
+        "calendar",
+        "chats",
+        "classes",
+        "home",
+        "inbox",
+        "tasks",
+      ].sort()
     );
   });
 
@@ -39,6 +49,7 @@ describe("Sidebar keyboard nav config", () => {
     expect(NAV_HREFS.classes).toBe("/app/classes");
     expect(NAV_HREFS.calendar).toBe("/app/calendar");
     expect(NAV_HREFS.tasks).toBe("/app/tasks");
+    expect(NAV_HREFS.activity).toBe("/app/activity");
   });
 
   it("assigns a unique single-letter `g` shortcut to each item", () => {

@@ -173,6 +173,7 @@ export const ja: Messages = {
     classes: "授業",
     calendar: "カレンダー",
     tasks: "タスク",
+    activity: "アクティビティ",
     settings: "設定",
   },
   classes: {
@@ -745,6 +746,9 @@ export const ja: Messages = {
     digest_hour_label: "ダイジェスト送信時刻（ローカル）",
     digest_hour_hint:
       "あなたのタイムゾーンで何時に送るか。デフォルトは午前 7 時。",
+    weekly_digest_label: "週次の振り返りメール（日曜）",
+    weekly_digest_hint:
+      "毎週日曜の午後 5 時（あなたのタイムゾーン）に、その週に Steadii が対応した内容をまとめて送信します。",
     undo_window_label: "取り消し可能時間",
     undo_window_hint:
       "送信ボタンと実際の Gmail 送信の間隔（秒）。10 秒は素早く、60 秒は余裕があります。",
@@ -1323,6 +1327,7 @@ export const ja: Messages = {
     activity_caption: "Steadii が直近にやったこと。",
     activity_empty: "まだ何もありません。",
     activity_more: "さらに",
+    activity_view_all: "すべて見る →",
     activity_action_label: {
       draft_sent: "下書きを送信",
       draft_dismissed: "下書きをスキップ",
@@ -1334,6 +1339,30 @@ export const ja: Messages = {
       mistake_added: "ノートを追加",
       generic: "アクション",
     },
+  },
+  activity_page: {
+    eyebrow: "監査ログ",
+    page_title: "アクティビティ",
+    page_subtitle: "Steadii があなたのために行ったすべてを、ひとまとめに。",
+    stats_heading: "アクティビティ統計",
+    range_this_week: "今週",
+    range_this_month: "今月",
+    range_all_time: "全期間",
+    stat_archived_short: "アーカイブ",
+    stat_drafted_short: "下書き",
+    stat_calendar_short: "予定",
+    stat_time_saved: "時間の節約",
+    stat_time_saved_caption: "全期間の概算（控えめ）。",
+    today: "今日",
+    yesterday: "昨日",
+    load_more: "さらに読み込む",
+    load_more_loading: "読み込み中…",
+    empty_title: "まだ何もありません。",
+    empty_description_connected:
+      "Steadii がトリアージを始めると、最初の処理がここに表示されます。",
+    empty_description_no_gmail:
+      "Steadii はまだ何もしていません — Gmail を接続して始めましょう。",
+    empty_cta_connect: "設定を開く",
   },
   onboarding_wait: {
     title: "Steadii が動いています。",

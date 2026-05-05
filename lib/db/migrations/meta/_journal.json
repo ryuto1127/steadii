@@ -211,6 +211,13 @@
       "when": 1777600000000,
       "tag": "0029_wave_5_launch_prep",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1777700000000,
+      "tag": "0030_post_alpha_5_weekly_activity",
+      "breakpoints": true
     }
   ]
 }
