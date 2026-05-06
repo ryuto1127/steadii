@@ -22,6 +22,7 @@ import {
   removeIcalSubscriptionAction,
   reactivateIcalSubscriptionAction,
   setGithubUsernameAction,
+  reclassifyAllInboxAction,
 } from "./actions";
 import { refreshGmailInboxAction } from "../actions";
 
@@ -34,12 +35,19 @@ export default async function ConnectionsPage({
     ms?: string;
     ical?: string;
     github?: string;
+    reclassify?: string;
+    changed?: string;
+    ignored?: string;
   }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
-  const { repaired, imported, ms, ical, github } = await searchParams;
+  const params = await searchParams;
+  const { repaired, imported, ms, ical, github } = params;
+  const reclassifyOk = params.reclassify === "ok";
+  const reclassifyChanged = Number(params.changed ?? "0") || 0;
+  const reclassifyIgnored = Number(params.ignored ?? "0") || 0;
   const tConn = await getTranslations("settings.connections");
   const t = await getTranslations("connections_page");
 
@@ -206,6 +214,28 @@ export default async function ConnectionsPage({
             >
               {tConn("refresh_inbox")}
             </button>
+          </form>
+        )}
+        {gmailConnected && (
+          <form action={reclassifyAllInboxAction} className="mt-3">
+            <button
+              type="submit"
+              title={t("reclassify_inbox.help")}
+              className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
+            >
+              {t("reclassify_inbox.button")}
+            </button>
+            <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+              {t("reclassify_inbox.help")}
+            </p>
+            {reclassifyOk && (
+              <p className="mt-2 rounded-md bg-[hsl(var(--surface-raised))] p-2 text-xs">
+                {t("reclassify_inbox.done", {
+                  changed: reclassifyChanged,
+                  ignored: reclassifyIgnored,
+                })}
+              </p>
+            )}
           </form>
         )}
       </section>
