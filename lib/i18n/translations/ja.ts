@@ -450,6 +450,7 @@ export const ja: Messages = {
     status_dismissed: "却下済み",
     hidden_filter_aria: "受信箱の表示フィルタ",
     filter_all: "受信箱",
+    filter_all_with_count: "すべて ({n})",
     filter_action: "要対応 ({n})",
     filter_hidden: "非表示 ({n})",
     restore_button: "復元 — 受信箱に戻す",
