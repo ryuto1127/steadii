@@ -1569,6 +1569,17 @@ export const ja: Messages = {
     last_synced_z_suffix: "Z",
     reactivate: "再開",
     remove: "削除",
+    github: {
+      title: "GitHub ユーザー名",
+      description:
+        "@メンションされた PR 通知を auto-low から昇格させるために使われます。",
+      save: "保存",
+      help_text:
+        "github.com/settings/profile で確認できます。英数字とハイフンのみ、最大 39 文字。",
+      invalid: "GitHub ユーザー名の形式が無効です。",
+      saved_toast: "GitHub ユーザー名を保存しました。",
+      cleared_toast: "GitHub ユーザー名を削除しました。",
+    },
   },
   agent_thinks_page: {
     settings_back: "設定",

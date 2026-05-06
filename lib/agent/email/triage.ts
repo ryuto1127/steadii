@@ -58,6 +58,9 @@ export async function applyTriageResult(
     // Wave 5 — store classifier confidence so admin metrics + auto-archive
     // recovery flows can trace back to the original signal strength.
     triageConfidence: result.confidence,
+    // engineer-33 — OTP / verification-code time-decay marker. Null for
+    // non-OTP rows; the urgency-decay sweep job consumes the timestamp.
+    urgencyExpiresAt: result.urgencyExpiresAt,
     status: result.bucket === "ignore" ? "dismissed" : "open",
   };
 
