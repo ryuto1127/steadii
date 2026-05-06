@@ -176,10 +176,17 @@ async function fetchTodayTasks(userId: string): Promise<
       .limit(10),
     // External fetchers soft-fail when the integration isn't connected;
     // .catch keeps a single broken provider from blanking today's
-    // briefing for the user. Pull a longer window (14 days) so
-    // overdue items the user hasn't completed are caught.
-    fetchUpcomingTasks(userId, { days: 14, max: 50 }).catch(() => []),
-    fetchMsUpcomingTasks(userId, { days: 14, max: 50 }).catch(() => []),
+    // briefing for the user. `daysBack: 30` opens the API filter so
+    // overdue tasks (still-pending past-due items) are returned, then
+    // mergeTodayTasks's `task.due <= todayStr` filter narrows to
+    // today + overdue. Without daysBack, the API's dueMin sits at
+    // today UTC and overdue items never make it to the client.
+    fetchUpcomingTasks(userId, { days: 1, daysBack: 30, max: 50 }).catch(
+      () => []
+    ),
+    fetchMsUpcomingTasks(userId, { days: 1, daysBack: 30, max: 50 }).catch(
+      () => []
+    ),
   ]);
 
   return mergeTodayTasks(
