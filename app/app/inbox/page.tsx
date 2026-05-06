@@ -16,14 +16,13 @@ import {
   agentDrafts,
   agentProposals,
 } from "@/lib/db/schema";
-import { and, count, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import { and, count, desc, eq, isNull, ne, or } from "drizzle-orm";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   compareInboxRows,
   isPendingDraft,
-  ACTION_NEEDED_ACTIONS,
+  attentionDraftClause,
 } from "@/lib/agent/email/pending-queries";
-import type { AgentDraftAction } from "@/lib/db/schema";
 import { SteadiiNoticedToggle } from "./_components/steadii-noticed-toggle";
 import { restoreAutoArchivedAction } from "./actions";
 
@@ -213,11 +212,7 @@ export default async function InboxPage({
               eq(inboxItems.status, "open"),
               isNull(inboxItems.deletedAt),
               ne(inboxItems.bucket, "ignore"),
-              inArray(
-                agentDrafts.action,
-                ACTION_NEEDED_ACTIONS as AgentDraftAction[]
-              ),
-              inArray(agentDrafts.status, ["pending", "edited"])
+              attentionDraftClause()
             )
           )
           .orderBy(desc(inboxItems.receivedAt))
@@ -242,9 +237,13 @@ export default async function InboxPage({
       )[0]?.n ?? 0
     : 0;
 
-  // Action chip count — items the user must explicitly send a reply
-  // for (draft_reply) or provide info on (ask_clarifying). Same query
-  // shape the chip filter uses, so the count and the shown-list match.
+  // Action chip count — items needing user attention per the
+  // "重要 or action 必要" policy. attentionDraftClause covers
+  // (1) action ∈ {draft_reply, ask_clarifying} pending/edited drafts,
+  // AND (2) action='notify_only' pending/edited drafts on auto_high
+  // bucket (important informational — Stripe action-required portal,
+  // billing alerts, etc.). Same shape as the action-view query above
+  // so count and listing always match.
   const actionCount = gmailConnected
     ? (
         await db
@@ -260,11 +259,7 @@ export default async function InboxPage({
               eq(inboxItems.status, "open"),
               isNull(inboxItems.deletedAt),
               ne(inboxItems.bucket, "ignore"),
-              inArray(
-                agentDrafts.action,
-                ACTION_NEEDED_ACTIONS as AgentDraftAction[]
-              ),
-              inArray(agentDrafts.status, ["pending", "edited"])
+              attentionDraftClause()
             )
           )
       )[0]?.n ?? 0
