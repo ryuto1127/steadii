@@ -1300,6 +1300,11 @@ type MessagesShape = {
       saved_toast: string;
       cleared_toast: string;
     };
+    reclassify_inbox: {
+      button: string;
+      help: string;
+      done: string;
+    };
   };
   agent_thinks_page: {
     settings_back: string;
@@ -3011,6 +3016,12 @@ export const en: MessagesShape = {
       invalid: "Invalid GitHub username format.",
       saved_toast: "GitHub username saved.",
       cleared_toast: "GitHub username removed.",
+    },
+    reclassify_inbox: {
+      button: "Re-classify inbox with latest rules",
+      help:
+        "Re-runs the L1 classifier over every open inbox item. Useful when Steadii ships an updated rule and legacy items are still tagged with the old bucket (e.g. Vercel/GitHub bot notifications stuck at HIGH from before the GitHub-aware routing landed).",
+      done: "Re-classified — {changed} items updated, {ignored} now silently ignored.",
     },
   },
   agent_thinks_page: {

@@ -11,6 +11,7 @@ import {
   IcalSubscribeError,
   subscribeToIcal,
 } from "@/lib/integrations/ical/subscribe";
+import { reclassifyAllInboxItems } from "@/lib/agent/email/reclassify";
 
 export async function importNotionAction() {
   const session = await auth();
@@ -174,4 +175,21 @@ export async function reactivateIcalSubscriptionAction(formData: FormData) {
     );
 
   redirect("/app/settings/connections?ical=reactivated#ical");
+}
+
+// Re-runs L1 over every open inbox_item for the current user. Useful
+// after the classifier shipped new rules (e.g. engineer-32 GitHub-aware
+// routing) that legacy items missed. Per-user scoped — never touches
+// other users' rows.
+export async function reclassifyAllInboxAction() {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  const userId = session.user.id;
+
+  const out = await reclassifyAllInboxItems(userId);
+  revalidatePath("/app/inbox");
+  revalidatePath("/app/settings/connections");
+  redirect(
+    `/app/settings/connections?reclassify=ok&scanned=${out.scanned}&changed=${out.changed}&ignored=${out.ignoredAfter}#inbox`
+  );
 }
