@@ -133,23 +133,23 @@ export default async function HomePage() {
   );
 }
 
-// Tasks due *today* — narrower than the 72h dueSoon window. Pulls
-// from THREE sources so the home briefing matches /app/tasks parity:
-//   1. Steadii assignments (DB, the canonical academic-deadline store)
-//   2. Google Tasks (live)
+// Tasks the user must deal with today — overdue (still pending) +
+// due today. Narrower than the 72h dueSoon window because dueSoon is
+// "what's coming up", whereas this slot is "what should be top of
+// mind right now". 2026-05-05: Ryuto's iPhone Google Task with
+// `due=2026-05-04` (overdue) wasn't showing on home with the strict
+// `task.due === todayStr` filter from PR #153 — overdue items are
+// MORE urgent than today's, not less, so we now include both.
+//
+// Pulls from THREE sources for /app/tasks parity:
+//   1. Steadii assignments (DB, canonical academic-deadline store)
+//   2. Google Tasks (live, ±1 day slack via days: 2)
 //   3. Microsoft To Do (live, when connected)
-// External-source pulls go through the existing fetchers with `days: 2`
-// — that gives ±1 calendar-day of slack against the server's UTC-based
-// date filter so a user in a TZ behind UTC doesn't drop a "today" task
-// that the API cursor placed on tomorrow's UTC date. The actual
-// "today" filter is applied client-side here against the user-TZ
-// `today` date string.
 async function fetchTodayTasks(userId: string): Promise<
   Array<{ id: string; title: string; classTitle: string | null }>
 > {
   const tz = (await getUserTimezone(userId)) ?? FALLBACK_TZ;
   const today = todayDateInTz(tz);
-  const start = localMidnightAsUtc(today, tz);
   const end = localMidnightAsUtc(addDaysToDateStr(today, 1), tz);
 
   const [steadiiRows, googleTasks, msTasks] = await Promise.all([
@@ -166,7 +166,9 @@ async function fetchTodayTasks(userId: string): Promise<
           eq(assignmentsTable.userId, userId),
           isNull(assignmentsTable.deletedAt),
           ne(assignmentsTable.status, "done"),
-          gte(assignmentsTable.dueAt, start),
+          // Drop the lower bound — show every still-pending assignment
+          // whose due date has either arrived or already passed, not
+          // just today's. Overdue items deserve top-of-mind treatment.
           lte(assignmentsTable.dueAt, end)
         )
       )
@@ -174,9 +176,10 @@ async function fetchTodayTasks(userId: string): Promise<
       .limit(10),
     // External fetchers soft-fail when the integration isn't connected;
     // .catch keeps a single broken provider from blanking today's
-    // briefing for the user.
-    fetchUpcomingTasks(userId, { days: 2, max: 50 }).catch(() => []),
-    fetchMsUpcomingTasks(userId, { days: 2, max: 50 }).catch(() => []),
+    // briefing for the user. Pull a longer window (14 days) so
+    // overdue items the user hasn't completed are caught.
+    fetchUpcomingTasks(userId, { days: 14, max: 50 }).catch(() => []),
+    fetchMsUpcomingTasks(userId, { days: 14, max: 50 }).catch(() => []),
   ]);
 
   return mergeTodayTasks(
@@ -192,7 +195,9 @@ async function fetchTodayTasks(userId: string): Promise<
 }
 
 // Pure helper — extracted so the merge logic can be unit-tested
-// without mocking three sources of side-effects.
+// without mocking three sources of side-effects. Filters external
+// tasks to "due today OR overdue" so the home briefing surfaces every
+// task that needs the user's attention RIGHT NOW.
 export function mergeTodayTasks(
   steadii: Array<{ id: string; title: string; classTitle: string | null }>,
   google: Array<{ due: string; title: string }>,
@@ -200,7 +205,7 @@ export function mergeTodayTasks(
   todayStr: string,
   limit: number = 10
 ): Array<{ id: string; title: string; classTitle: string | null }> {
-  const externalToday = [...google, ...ms].filter((t) => t.due === todayStr);
+  const externalToday = [...google, ...ms].filter((t) => t.due <= todayStr);
   return [
     ...steadii,
     ...externalToday.map((task, i) => ({
