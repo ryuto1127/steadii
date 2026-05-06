@@ -75,14 +75,22 @@ export type DraftCalendarTask = {
   completed: boolean;
 };
 
-// Live fetch of incomplete tasks due in the next N days. Soft-fails when
-// the user hasn't connected Tasks (no scope grant) — the fanout treats
-// that as "no tasks block to render," same as the calendar path.
+// Live fetch of incomplete tasks due in a window around today.
+// `days` controls the FORWARD window (default 7). `daysBack` controls
+// the BACKWARD window for catching overdue items (default 0 — fanout
+// L2 callers want forward-only context). The home /app/tasks pages
+// pass daysBack > 0 so a Google Task with `due=yesterday` still
+// surfaces in "今日のタスク" view alongside today's tasks.
+//
+// Soft-fails when the user hasn't connected Tasks (no scope grant) —
+// the fanout treats that as "no tasks block to render," same as the
+// calendar path.
 export async function fetchUpcomingTasks(
   userId: string,
-  options: { days?: number; max?: number } = {}
+  options: { days?: number; daysBack?: number; max?: number } = {}
 ): Promise<DraftCalendarTask[]> {
   const days = options.days ?? 7;
+  const daysBack = options.daysBack ?? 0;
   const max = options.max ?? 25;
   let tasks;
   try {
@@ -107,7 +115,8 @@ export async function fetchUpcomingTasks(
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const fromDate = today.toISOString().slice(0, 10);
+  const start = new Date(today.getTime() - daysBack * 24 * 60 * 60 * 1000);
+  const fromDate = start.toISOString().slice(0, 10);
   const end = new Date(today.getTime() + days * 24 * 60 * 60 * 1000);
   const toDate = end.toISOString().slice(0, 10);
 
