@@ -113,19 +113,22 @@ export default async function InboxPage({
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
   const t = await getTranslations("inbox");
-  // Wave 5 — `?hidden=1` flips the page into "show items Steadii
-  // auto-archived" mode. The default view is unchanged (open + non-
-  // ignore). We compute both queries unconditionally because the chip
-  // count is shown on the default view too.
+  // 2026-05-05 strategic shift — the DEFAULT view of /app/inbox is now
+  // action-needed only (draft_reply / ask_clarifying). Steadii's policy:
+  // surface only items that require the user's judgment by default;
+  // notify_only / no_op / auto_low rows live behind `?view=all` for
+  // when the user wants to scrub the full pile.
   //
-  // post-α inbox quality — `?view=action` narrows the default view to
-  // items where Steadii has produced a draft_reply or ask_clarifying
-  // (i.e. things that REQUIRE the user to act). notify_only / no_op /
-  // archive items stay hidden on this view because they are not
-  // action-blocking. Mutually exclusive with `?hidden=1` (hidden wins).
+  //   default          → action-needed (was opt-in via ?view=action)
+  //   ?view=all        → previous default (open + non-ignore)
+  //   ?hidden=1        → Wave-5 auto-archived items
+  //
+  // Three states are mutually exclusive; hidden wins, then all, then
+  // default-action.
   const params = (await searchParams) ?? {};
   const showingHidden = params.hidden === "1";
-  const showingAction = !showingHidden && params.view === "action";
+  const showingAll = !showingHidden && params.view === "all";
+  const showingAction = !showingHidden && !showingAll;
 
   // Gmail connectivity is a per-user signal: if the Google row lacks the
   // gmail scope, we can't triage anything yet. We nudge the user through
@@ -164,11 +167,12 @@ export default async function InboxPage({
     agentDraftAction: agentDrafts.action,
   };
 
-  // Default view: status='open' + not ignored. Hidden view: rows that
-  // Wave 5 auto-archived (auto_archived=true). Action view: rows whose
-  // latest draft has action ∈ ACTION_NEEDED_ACTIONS AND status pending/
-  // edited. All three share the join shape so the per-row renderer
-  // below stays unified.
+  // Three queries:
+  //   - hidden  : Wave-5 auto-archived items
+  //   - all     : status='open' + not ignored (old default)
+  //   - action  : draft.action ∈ ACTION_NEEDED + draft.status pending/edited
+  //               (NEW default)
+  // All share the column shape so the per-row renderer stays unified.
   const rawItems = gmailConnected
     ? showingHidden
       ? await db
@@ -184,8 +188,22 @@ export default async function InboxPage({
           )
           .orderBy(desc(inboxItems.receivedAt))
           .limit(100)
-      : showingAction
+      : showingAll
       ? await db
+          .select(baseSelect)
+          .from(inboxItems)
+          .leftJoin(agentDrafts, eq(agentDrafts.inboxItemId, inboxItems.id))
+          .where(
+            and(
+              eq(inboxItems.userId, userId),
+              eq(inboxItems.status, "open"),
+              isNull(inboxItems.deletedAt),
+              ne(inboxItems.bucket, "ignore")
+            )
+          )
+          .orderBy(desc(inboxItems.receivedAt))
+          .limit(100)
+      : await db
           .select(baseSelect)
           .from(inboxItems)
           .innerJoin(agentDrafts, eq(agentDrafts.inboxItemId, inboxItems.id))
@@ -200,22 +218,6 @@ export default async function InboxPage({
                 ACTION_NEEDED_ACTIONS as AgentDraftAction[]
               ),
               inArray(agentDrafts.status, ["pending", "edited"])
-            )
-          )
-          .orderBy(desc(inboxItems.receivedAt))
-          .limit(100)
-      : await db
-          .select(baseSelect)
-          .from(inboxItems)
-          .leftJoin(agentDrafts, eq(agentDrafts.inboxItemId, inboxItems.id))
-          .where(
-            and(
-              eq(inboxItems.userId, userId),
-              eq(inboxItems.status, "open"),
-              isNull(inboxItems.deletedAt),
-              // Hide ignore-bucket rows from the default view; they're
-              // stored for analytics, not for user attention.
-              ne(inboxItems.bucket, "ignore")
             )
           )
           .orderBy(desc(inboxItems.receivedAt))
@@ -263,6 +265,25 @@ export default async function InboxPage({
                 ACTION_NEEDED_ACTIONS as AgentDraftAction[]
               ),
               inArray(agentDrafts.status, ["pending", "edited"])
+            )
+          )
+      )[0]?.n ?? 0
+    : 0;
+
+  // All chip count — every open + non-ignore + non-archived item.
+  // Shown next to the "All" chip so the user can decide whether the
+  // notify_only / no_op pile is worth scrubbing.
+  const allCount = gmailConnected
+    ? (
+        await db
+          .select({ n: count(inboxItems.id) })
+          .from(inboxItems)
+          .where(
+            and(
+              eq(inboxItems.userId, userId),
+              eq(inboxItems.status, "open"),
+              isNull(inboxItems.deletedAt),
+              ne(inboxItems.bucket, "ignore")
             )
           )
       )[0]?.n ?? 0
@@ -362,13 +383,14 @@ export default async function InboxPage({
         }))}
       />
 
-      {/* Filter chips — All / Action ({n}) / Hidden ({n}). All chip is
-          always shown when any of the others have content. Action chip
-          surfaces only when there's at least one item needing user
-          input. Hidden chip surfaces only when Wave-5 auto-archive has
-          run on this user. The three states are mutually exclusive
-          (URL params drive which is active). */}
-      {hiddenCount > 0 || actionCount > 0 || showingHidden || showingAction ? (
+      {/* Filter chips — Action (active by default) / All ({n}) / Hidden ({n}).
+          The Action chip is the new default after the 2026-05-05
+          strategic shift; it has no count next to its label since it
+          represents "what's currently in view". The All chip surfaces
+          the full open-pile count so users know how much they're
+          choosing not to see. Hidden chip surfaces only when Wave-5
+          auto-archive has run. */}
+      {hiddenCount > 0 || allCount > 0 || showingHidden || showingAll ? (
         <nav
           aria-label={t("hidden_filter_aria")}
           className="mb-3 flex flex-wrap items-center gap-2"
@@ -376,24 +398,24 @@ export default async function InboxPage({
           <Link
             href="/app/inbox"
             className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-hover ${
-              !showingHidden && !showingAction
+              showingAction
                 ? "bg-[hsl(var(--foreground))] text-[hsl(var(--surface))]"
                 : "border border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))]"
             }`}
           >
-            {t("filter_all")}
+            <Star size={11} strokeWidth={1.75} />
+            {t("filter_action", { n: actionCount })}
           </Link>
-          {actionCount > 0 || showingAction ? (
+          {allCount > 0 || showingAll ? (
             <Link
-              href="/app/inbox?view=action"
+              href="/app/inbox?view=all"
               className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-hover ${
-                showingAction
+                showingAll
                   ? "bg-[hsl(var(--foreground))] text-[hsl(var(--surface))]"
                   : "border border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--surface-raised))]"
               }`}
             >
-              <Star size={11} strokeWidth={1.75} />
-              {t("filter_action", { n: actionCount })}
+              {t("filter_all_with_count", { n: allCount })}
             </Link>
           ) : null}
           {hiddenCount > 0 || showingHidden ? (
