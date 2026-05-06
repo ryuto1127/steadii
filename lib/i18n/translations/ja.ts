@@ -1581,6 +1581,12 @@ export const ja: Messages = {
       saved_toast: "GitHub ユーザー名を保存しました。",
       cleared_toast: "GitHub ユーザー名を削除しました。",
     },
+    reclassify_inbox: {
+      button: "受信箱を最新ルールで再分類",
+      help:
+        "L1 分類ルールを開いている全 inbox item に再適用します。Steadii が分類ルールを更新した後、古い分類のままの item を更新するのに便利です (Vercel/GitHub bot 通知が GitHub-aware ルーティング前の HIGH のまま残っているケース等)。",
+      done: "再分類完了 — {changed} 件更新、{ignored} 件は無視 (ignore) に変更。",
+    },
   },
   agent_thinks_page: {
     settings_back: "設定",
