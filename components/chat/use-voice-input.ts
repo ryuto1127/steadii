@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type VoiceState = "idle" | "listening" | "processing";
-export type VoiceTriggerKey = "caps_lock" | "alt_right";
+// 2026-05-05 — meta_right = Right ⌘ on Mac (JIS keyboard friendly:
+// no IME side effect, hold semantics work natively). caps_lock left in
+// for back-compat / power users despite the macOS toggle quirk that
+// the FALLBACK_STORAGE_KEY probe handles.
+export type VoiceTriggerKey = "caps_lock" | "alt_right" | "meta_right";
 export type VoiceErrorKind =
   | "mic_denied"
   | "transcribe_failed"
@@ -418,6 +422,7 @@ export function useVoiceInput(args: {
 
     const matchesTrigger = (e: KeyboardEvent): boolean => {
       if (effectiveKey === "caps_lock") return e.code === "CapsLock";
+      if (effectiveKey === "meta_right") return e.code === "MetaRight";
       return e.code === "AltRight";
     };
 

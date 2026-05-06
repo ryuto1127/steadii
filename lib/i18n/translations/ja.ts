@@ -907,10 +907,11 @@ export const ja: Messages = {
     },
     voice: {
       description:
-        "キーを長押ししている間、Steadii が音声を聞いています。離すと送信。デフォルトは Caps Lock、もしブラウザの挙動が不安定なら右 ⌥ キーに切り替えられます。",
+        "キーを長押ししている間、Steadii が音声を聞き、離すと送信します。お使いのキーボードに合わせて選んでください: 英語配列 (US/EN) は右 Option (⌥)、日本語配列 (JIS/JP) は右 Command (⌘) を推奨します — JIS の右 Option は「かな」キーで IME に取られるため。Caps Lock はレガシー互換ですが macOS の多くのブラウザでは toggle 動作になります。",
       trigger_label: "トリガーキー",
-      trigger_caps: "Caps Lock（デフォルト）",
-      trigger_alt: "右 Option（⌥）",
+      trigger_caps: "Caps Lock（レガシー）",
+      trigger_alt: "右 Option（⌥）— 英語配列 (US/EN)",
+      trigger_meta: "右 Command（⌘）— 日本語配列 (JIS/JP)",
       saved: "保存しました",
       hint_caps: "Caps Lock を長押しで話す",
       hint_alt: "右 ⌥ を長押しで話す",
