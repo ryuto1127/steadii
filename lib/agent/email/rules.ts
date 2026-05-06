@@ -9,10 +9,12 @@ import {
   AUTO_LOW_KEYWORDS,
   AUTO_MEDIUM_KEYWORDS,
   GITHUB_HIGH_SIGNALS,
+  OTP_DECAY_WINDOW_MS,
   containsActionVerb,
   isBotSender,
   isEduDomain,
   isGithubNotificationDomain,
+  isOtpUrgency,
   isPromoSenderDomain,
 } from "./rules-global";
 
@@ -49,6 +51,22 @@ export function classifyEmail(
     learnedSender?.riskTier === "medium" ||
     learnedSender?.riskTier === "high";
 
+  // engineer-33 — OTP / verification-code time-decay. Stamp the urgency
+  // expiry on the result regardless of which bucket the row lands in.
+  // OTP mail still routes to its natural bucket (typically AUTO_HIGH via
+  // action-verb / "verify" language); the decay is additive metadata that
+  // the urgency-decay sweep job consults later. Provenance gets the rule
+  // entry so the Settings transparency UI can show why the row decayed.
+  let urgencyExpiresAt: Date | null = null;
+  if (isOtpUrgency({ subject: input.subject, body: input.bodySnippet ?? input.snippet })) {
+    urgencyExpiresAt = new Date(Date.now() + OTP_DECAY_WINDOW_MS);
+    provenance.push({
+      ruleId: "GLOBAL_URGENCY_OTP_DECAY",
+      source: "global",
+      why: "OTP / verification-code keyword matched. Decays after the window.",
+    });
+  }
+
   // Local helper to assemble a consistent TriageResult. Every return
   // site goes through this so confidence + learnedOptOut stay in lockstep
   // with the bucket choice. firstTimeSender is already false for
@@ -60,6 +78,7 @@ export function classifyEmail(
     firstTimeSender,
     confidence,
     learnedOptOut,
+    urgencyExpiresAt,
   });
 
   // ---------------------------------------------------------------------
