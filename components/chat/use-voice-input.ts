@@ -436,25 +436,40 @@ export function useVoiceInput(args: {
     const onKeyUp = (e: KeyboardEvent) => {
       if (!matchesTrigger(e)) return;
       if (!triggerArmedRef.current) return;
-      // Caps Lock unreliability probe — only on the very first attempt.
-      // If the press-release cycle was suspiciously short, the browser
-      // is emitting toggle events rather than true hold/release. Persist
-      // the fallback flag and abort the recording so we don't ship a 50ms
-      // clip to Whisper.
+      // Caps Lock unreliability probe. On macOS (and many Linux desktops)
+      // Caps Lock is an OS-level toggle, not a hold key — keydown fires
+      // when the light comes on, the *next* keyup fires when the light
+      // goes off. The user experiences this as
+      //   tap 1 → listening (recording starts)
+      //   speak (light stays on)
+      //   tap 2 → processing (recording stops, light goes off)
+      // — NOT the hold-to-talk Steadii ships. Detect this and persist
+      // the fallback to Right Alt so subsequent attempts work as
+      // designed.
+      //
+      // Two signals together cover the common cases:
+      //   1. Quick tap-release (<80ms) — browser emits keyup almost
+      //      immediately even though caps remained ON. Original probe.
+      //   2. Caps Lock STILL ON at keyup — OS treated this press as
+      //      "toggle ON" rather than "hold". Catches the long-speak
+      //      pattern where heldMs is well above 80ms.
       if (
         effectiveKey === "caps_lock" &&
         !fallbackActive &&
         capsKeydownAtRef.current
       ) {
         const heldMs = Date.now() - capsKeydownAtRef.current;
-        if (heldMs < CAPS_LOCK_HOLD_PROBE_MS) {
+        const stillLitAtRelease = e.getModifierState("CapsLock");
+        if (heldMs < CAPS_LOCK_HOLD_PROBE_MS || stillLitAtRelease) {
           try {
             window.localStorage.setItem(FALLBACK_STORAGE_KEY, "1");
           } catch {
             // ignore
           }
           setFallbackActive(true);
-          // Tear down without uploading — the clip is meaningless.
+          // Tear down without uploading — the clip is meaningless OR
+          // (in the toggle-still-lit case) we abort the false start so
+          // the user gets a clean retry on Right Alt.
           isRecordingRef.current = false;
           const recorder = recorderRef.current;
           if (recorder && recorder.state !== "inactive") {
