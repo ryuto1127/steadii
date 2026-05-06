@@ -88,6 +88,13 @@ export function compareInboxRows(
 // reviewed-but-pending items at the top (compareInboxRows group 0), so
 // nothing is forgotten — only the count and bold typography decay.
 export async function countPendingDrafts(userId: string): Promise<number> {
+  // 2026-05-05 strategic shift — the sidebar badge counts ONLY
+  // action-needed drafts (draft_reply / ask_clarifying), excluding
+  // notify_only. Steadii's policy is "the badge must mean genuine
+  // attention required". notify_only items ("FYI but no reply
+  // expected") still surface in /app/inbox?view=all but don't
+  // contribute to the badge count, so 99+ ≈ "stuff Ryuto must act on"
+  // rather than "stuff Steadii had an opinion about".
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(agentDrafts)
@@ -96,7 +103,10 @@ export async function countPendingDrafts(userId: string): Promise<number> {
       and(
         eq(agentDrafts.userId, userId),
         eq(agentDrafts.status, "pending"),
-        inArray(agentDrafts.action, PENDING_ACTIONS as AgentDraftAction[]),
+        inArray(
+          agentDrafts.action,
+          ACTION_NEEDED_ACTIONS as AgentDraftAction[]
+        ),
         sql`${inboxItems.reviewedAt} IS NULL`
       )
     );
@@ -135,7 +145,12 @@ export async function loadTopHighRiskPending(
       and(
         eq(agentDrafts.userId, userId),
         eq(agentDrafts.status, "pending"),
-        inArray(agentDrafts.action, PENDING_ACTIONS as AgentDraftAction[])
+        // 2026-05-05 strategic shift — bell popover narrows to
+        // action-needed only, in lockstep with countPendingDrafts.
+        inArray(
+          agentDrafts.action,
+          ACTION_NEEDED_ACTIONS as AgentDraftAction[]
+        )
       )
     )
     .orderBy(desc(inboxItems.receivedAt))
