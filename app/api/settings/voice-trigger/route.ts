@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth/config";
 import { setUserVoiceTriggerKey } from "@/lib/agent/preferences";
 
 const bodySchema = z.object({
-  triggerKey: z.enum(["caps_lock", "alt_right"]),
+  triggerKey: z.enum(["caps_lock", "alt_right", "meta_right"]),
 });
 
 export async function POST(request: NextRequest) {

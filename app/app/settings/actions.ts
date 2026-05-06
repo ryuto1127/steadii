@@ -6,7 +6,7 @@ import type { ConfirmationMode } from "@/lib/agent/confirmation";
 import { ingestLast24h } from "@/lib/agent/email/ingest-recent";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -65,4 +65,28 @@ export async function setAutoArchiveEnabledAction(formData: FormData) {
     .where(eq(users.id, session.user.id));
   revalidatePath("/app/settings");
   revalidatePath("/app/inbox");
+}
+
+// 2026-05-05 — voice input keyboard layout. Drives the trigger key
+// the useVoiceInput hook listens for: en → Right Option, jn → Right ⌘.
+// Stored on users.preferences.keyboardLayout (jsonb, no migration).
+// Empty / "auto" drops the field so the client falls back to runtime
+// detection via navigator.keyboard.getLayoutMap().
+export async function setKeyboardLayoutAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  const raw = formData.get("layout");
+  if (raw !== "auto" && raw !== "en" && raw !== "jn") {
+    throw new Error("invalid layout");
+  }
+  const userId = session.user.id;
+  const expr =
+    raw === "auto"
+      ? sql`COALESCE(${users.preferences}, '{}'::jsonb) - 'keyboardLayout'`
+      : sql`COALESCE(${users.preferences}, '{}'::jsonb) || ${JSON.stringify({ keyboardLayout: raw })}::jsonb`;
+  await db
+    .update(users)
+    .set({ preferences: expr, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+  revalidatePath("/app/settings");
 }

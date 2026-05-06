@@ -457,6 +457,7 @@ export default async function SettingsPage() {
             trigger_label: t("voice.trigger_label"),
             trigger_caps: t("voice.trigger_caps"),
             trigger_alt: t("voice.trigger_alt"),
+            trigger_meta: t("voice.trigger_meta"),
             saved: t("voice.saved"),
           }}
         />
