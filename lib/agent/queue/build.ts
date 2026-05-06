@@ -329,6 +329,7 @@ async function fetchPendingDrafts(userId: string): Promise<DraftWithInbox[]> {
     .select({
       draft: agentDrafts,
       inboxId: inboxItems.id,
+      threadExternalId: inboxItems.threadExternalId,
       senderName: inboxItems.senderName,
       senderEmail: inboxItems.senderEmail,
       subject: inboxItems.subject,
@@ -350,15 +351,54 @@ async function fetchPendingDrafts(userId: string): Promise<DraftWithInbox[]> {
     .orderBy(desc(agentDrafts.createdAt))
     .limit(QUEUE_FETCH_LIMIT);
 
-  return rows.map((r) => ({
-    draft: r.draft,
-    inbox: {
-      id: r.inboxId,
-      senderName: r.senderName,
-      senderEmail: r.senderEmail,
-      subject: r.subject,
-    },
-  }));
+  return dedupePendingDraftsByThread(rows);
+}
+
+// Pure helper — exported so unit tests can target the dedup behavior
+// without mocking the entire buildQueueForUser pipeline (preBriefs,
+// proposals, office hours all need their own DB chain).
+//
+// 2026-05-05: Ryuto's home queue showed 5 identical GhostFilter
+// recruiter cards, all from the same email thread. Each follow-up
+// email creates its own inbox_item + agent_draft, so the queue listed
+// all 5 even though conceptually they're the same conversation.
+// Newest-per-thread collapses these into one card; older drafts stay
+// in DB for audit but disappear from the user-facing queue.
+//
+// Items without threadExternalId (rare, malformed Gmail headers)
+// bypass dedup so a never-threaded item is never lost. Input order
+// preserved — caller orders by createdAt DESC, we keep the first
+// occurrence per thread.
+export type PendingDraftRow = {
+  draft: AgentDraft;
+  inboxId: string;
+  threadExternalId: string | null;
+  senderName: string | null;
+  senderEmail: string;
+  subject: string | null;
+};
+
+export function dedupePendingDraftsByThread(
+  rows: PendingDraftRow[]
+): DraftWithInbox[] {
+  const seenThreads = new Set<string>();
+  const deduped: DraftWithInbox[] = [];
+  for (const r of rows) {
+    if (r.threadExternalId) {
+      if (seenThreads.has(r.threadExternalId)) continue;
+      seenThreads.add(r.threadExternalId);
+    }
+    deduped.push({
+      draft: r.draft,
+      inbox: {
+        id: r.inboxId,
+        senderName: r.senderName,
+        senderEmail: r.senderEmail,
+        subject: r.subject,
+      },
+    });
+  }
+  return deduped;
 }
 
 function partitionDrafts(rows: DraftWithInbox[]): {
