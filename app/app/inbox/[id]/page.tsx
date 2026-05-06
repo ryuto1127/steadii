@@ -156,20 +156,30 @@ export default async function InboxItemPage({
   // seeded with the email context + the user's clarification, then
   // redirects to /app/chat/[id]?stream=1 so Steadii picks up the
   // response and drafts the reply with the new info.
+  //
+  // Pre-resolve all closure-captured strings BEFORE the action body
+  // because inline server actions encode their closure for the
+  // client-side action ref. Functions (like the translator `t`) are
+  // not serializable and produce the production runtime error
+  // "Functions cannot be passed directly to Client Components".
+  // See Sentry incident 2026-05-05 (JAVASCRIPT-NEXTJS-8, escalating).
+  const noSubjectFallback = t("no_subject");
+  const senderLabel = inbox.senderName ?? inbox.senderEmail;
+  const subjectLabel = inbox.subject ?? noSubjectFallback;
+  const reasoningLine = draft.reasoning?.trim() ?? "(no reasoning recorded)";
+  const draftIdForRedirect = draft.id;
   async function submitClarificationAction(formData: FormData): Promise<void> {
     "use server";
     const session = await auth();
     if (!session?.user?.id) redirect("/login");
     const ctx = String(formData.get("context") ?? "").trim();
-    if (!ctx) redirect(`/app/inbox/${draft.id}`);
+    if (!ctx) redirect(`/app/inbox/${draftIdForRedirect}`);
 
     const seed = [
-      `I'm replying to an email from ${
-        inbox.senderName ?? inbox.senderEmail
-      } about "${inbox.subject ?? t("no_subject")}".`,
+      `I'm replying to an email from ${senderLabel} about "${subjectLabel}".`,
       "",
       "Steadii's clarifying question:",
-      draft.reasoning?.trim() ?? "(no reasoning recorded)",
+      reasoningLine,
       "",
       "My answer / context:",
       ctx,
