@@ -25,9 +25,10 @@ import {
 // per-list fan-out is bounded.
 export async function fetchMsUpcomingTasks(
   userId: string,
-  options: { days?: number; max?: number } = {}
+  options: { days?: number; daysBack?: number; max?: number } = {}
 ): Promise<DraftCalendarTask[]> {
   const days = options.days ?? 7;
+  const daysBack = options.daysBack ?? 0;
   const max = options.max ?? 25;
 
   const acct = await getMsAccount(userId);
@@ -68,7 +69,12 @@ export async function fetchMsUpcomingTasks(
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const fromIso = today.toISOString();
+  // Match the google/tasks fetcher: daysBack > 0 includes overdue
+  // tasks so the home /app + /app/tasks views can surface still-pending
+  // past-due items alongside today's tasks. Default 0 keeps the L2
+  // fanout / forward-looking callers unchanged.
+  const start = new Date(today.getTime() - daysBack * 24 * 60 * 60 * 1000);
+  const fromIso = start.toISOString();
   const end = new Date(today.getTime() + days * 24 * 60 * 60 * 1000);
   const toIso = end.toISOString();
 

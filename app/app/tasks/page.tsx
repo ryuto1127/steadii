@@ -227,7 +227,15 @@ async function safelyFetchGoogleTasks(
   tz: string
 ): Promise<AdapterResult<UnifiedRow>> {
   try {
-    const tasks = await fetchUpcomingTasks(userId, { days: 30, max: 50 });
+    // 2026-05-05 — daysBack: 30 includes overdue items (Google Tasks
+    // API's dueMin defaults to today UTC, so overdue tasks were
+    // silently dropped). Forward window stays 30 to cover upcoming
+    // deadlines.
+    const tasks = await fetchUpcomingTasks(userId, {
+      days: 30,
+      daysBack: 30,
+      max: 50,
+    });
     return {
       ok: true,
       items: tasks.map((task, i) =>
@@ -249,7 +257,11 @@ async function safelyFetchMsTasks(
   tz: string
 ): Promise<AdapterResult<UnifiedRow>> {
   try {
-    const tasks = await fetchMsUpcomingTasks(userId, { days: 30, max: 50 });
+    const tasks = await fetchMsUpcomingTasks(userId, {
+      days: 30,
+      daysBack: 30,
+      max: 50,
+    });
     return {
       ok: true,
       items: tasks.map((task, i) =>
