@@ -34,21 +34,21 @@ vi.mock("@/lib/calendar/tz-utils", () => ({
 import { mergeTodayTasks } from "@/app/app/page";
 
 describe("mergeTodayTasks", () => {
-  it("returns Steadii rows verbatim when no external tasks match today", () => {
+  it("returns Steadii rows + overdue external (today + past), excluding future external", () => {
+    // 2026-05-05 update — overdue items count as today's view because
+    // they need attention RIGHT NOW. Tomorrow stays excluded.
     const out = mergeTodayTasks(
       [
         { id: "a-1", title: "ECON essay", classTitle: "ECON 200" },
       ],
       [{ due: "2026-05-06", title: "Tomorrow's Google task" }],
-      [{ due: "2026-05-04", title: "Yesterday's MS task" }],
+      [{ due: "2026-05-04", title: "Yesterday's MS task (overdue)" }],
       "2026-05-05"
     );
-    expect(out).toHaveLength(1);
-    expect(out[0]).toEqual({
-      id: "a-1",
-      title: "ECON essay",
-      classTitle: "ECON 200",
-    });
+    expect(out.map((r) => r.title)).toEqual([
+      "ECON essay",
+      "Yesterday's MS task (overdue)",
+    ]);
   });
 
   it("includes a Google task whose `due` matches today", () => {
@@ -101,18 +101,37 @@ describe("mergeTodayTasks", () => {
     expect(out[9].title).toBe("Steadii task 9"); // external dropped
   });
 
-  it("filters external tasks by exact `due` string match — date-only semantics", () => {
+  it("filters external tasks by date-only semantics: today + overdue, never future", () => {
     const out = mergeTodayTasks(
       [],
       [
-        { due: "2026-05-05", title: "Match" },
-        { due: "2026-05-06", title: "Tomorrow" },
-        { due: "2026-05-04", title: "Yesterday" },
+        { due: "2026-05-05", title: "Today" },
+        { due: "2026-05-06", title: "Tomorrow — drops" },
+        { due: "2026-05-04", title: "Yesterday — overdue" },
+        { due: "2026-04-30", title: "Last week — still pending" },
       ],
       [],
       "2026-05-05"
     );
+    expect(out.map((r) => r.title)).toEqual([
+      "Today",
+      "Yesterday — overdue",
+      "Last week — still pending",
+    ]);
+  });
+
+  it("regression: Ryuto's overdue iPhone task on 2026-05-05 home (PR #157)", () => {
+    // The iPhone Google Task with due='2026-05-04' should appear on
+    // home 'today's tasks' panel when viewed on 2026-05-05 — even
+    // though it's strictly an overdue task, the home briefing's
+    // semantic is "what should be top of mind right now".
+    const out = mergeTodayTasks(
+      [],
+      [{ due: "2026-05-04", title: "iPhone を Apple に送り返す" }],
+      [],
+      "2026-05-05"
+    );
     expect(out).toHaveLength(1);
-    expect(out[0].title).toBe("Match");
+    expect(out[0].title).toBe("iPhone を Apple に送り返す");
   });
 });
