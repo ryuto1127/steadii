@@ -7,6 +7,7 @@ import {
   notionConnections,
   accounts,
   icalSubscriptions,
+  users,
 } from "@/lib/db/schema";
 import { and, asc, eq } from "drizzle-orm";
 import {
@@ -20,6 +21,7 @@ import {
   addIcalSubscriptionAction,
   removeIcalSubscriptionAction,
   reactivateIcalSubscriptionAction,
+  setGithubUsernameAction,
 } from "./actions";
 import { refreshGmailInboxAction } from "../actions";
 
@@ -31,12 +33,13 @@ export default async function ConnectionsPage({
     imported?: string;
     ms?: string;
     ical?: string;
+    github?: string;
   }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
-  const { repaired, imported, ms, ical } = await searchParams;
+  const { repaired, imported, ms, ical, github } = await searchParams;
   const tConn = await getTranslations("settings.connections");
   const t = await getTranslations("connections_page");
 
@@ -72,6 +75,13 @@ export default async function ConnectionsPage({
     .where(eq(icalSubscriptions.userId, userId))
     .orderBy(asc(icalSubscriptions.createdAt));
 
+  const [userPrefRow] = await db
+    .select({ preferences: users.preferences })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const existingGithubUsername = userPrefRow?.preferences?.githubUsername ?? "";
+
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="text-h1">{t("title")}</h1>
@@ -99,6 +109,21 @@ export default async function ConnectionsPage({
       {ical && (
         <div className="mt-6 rounded-lg bg-[hsl(var(--surface-raised))] px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">
           {t("ical_subscription_added")} {ical}.
+        </div>
+      )}
+      {github === "saved" && (
+        <div className="mt-6 rounded-lg bg-[hsl(var(--primary)/0.1)] px-4 py-3 text-sm text-[hsl(var(--foreground))]">
+          {t("github.saved_toast")}
+        </div>
+      )}
+      {github === "cleared" && (
+        <div className="mt-6 rounded-lg bg-[hsl(var(--surface-raised))] px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+          {t("github.cleared_toast")}
+        </div>
+      )}
+      {github === "invalid" && (
+        <div className="mt-6 rounded-lg bg-[hsl(var(--destructive,red)/0.1)] px-4 py-3 text-sm text-[hsl(var(--destructive,red))]">
+          {t("github.invalid")}
         </div>
       )}
 
@@ -230,6 +255,44 @@ export default async function ConnectionsPage({
             </form>
           </>
         )}
+      </section>
+
+      <section
+        id="github"
+        className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4"
+      >
+        <h2 className="text-lg font-medium">{t("github.title")}</h2>
+        <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
+          {t("github.description")}
+        </p>
+        <form
+          action={setGithubUsernameAction}
+          className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
+        >
+          <label className="flex flex-1 flex-col gap-1 text-xs text-[hsl(var(--muted-foreground))]">
+            {t("github.title")}
+            <input
+              type="text"
+              name="username"
+              defaultValue={existingGithubUsername}
+              pattern="[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}"
+              maxLength={39}
+              placeholder="ryuto1127"
+              autoComplete="off"
+              spellCheck={false}
+              className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
+            />
+          </label>
+          <button
+            type="submit"
+            className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))]"
+          >
+            {t("github.save")}
+          </button>
+        </form>
+        <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
+          {t("github.help_text")}
+        </p>
       </section>
 
       <section

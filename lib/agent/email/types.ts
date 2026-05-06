@@ -71,4 +71,8 @@ export type TriageResult = {
   // restored a previously auto-archived item). Suppresses auto-archive
   // even if the bucket+confidence would otherwise qualify.
   learnedOptOut: boolean;
+  // engineer-33 — when set, the urgency-decay sweep auto-archives the
+  // row after this timestamp passes. Stamped by L1 when an OTP /
+  // verification-code keyword matches; null otherwise.
+  urgencyExpiresAt: Date | null;
 };

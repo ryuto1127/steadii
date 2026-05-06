@@ -203,6 +203,7 @@ describe("isAutoArchiveEligible", () => {
     firstTimeSender: false,
     confidence: 0.96,
     learnedOptOut: false,
+    urgencyExpiresAt: null,
   };
 
   it("returns false when toggle is off", () => {

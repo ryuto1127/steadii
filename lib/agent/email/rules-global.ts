@@ -341,6 +341,37 @@ export const KANJI_COURSE_NAMES_JA: string[] = [
   "会計学",
 ];
 
+// engineer-33 — OTP / one-time verification-code time-decay. Most providers
+// expire OTPs at 5 min wire-side; we add a small grace so a user mid-flow
+// still sees them. After the window, the urgency decay sweep flips the
+// inbox row to auto_archived=true (the code is unambiguously useless past
+// expiry; the user can still find it via the Hidden ({n}) chip).
+//
+// Match is a case-insensitive substring against subject + snippet + body.
+// Curated; grow over time as false-negatives surface.
+export const OTP_KEYWORDS: Array<{ phrase: string; locale: "en" | "ja" }> = [
+  { phrase: "verification code", locale: "en" },
+  { phrase: "one-time code", locale: "en" },
+  { phrase: "one time code", locale: "en" },
+  { phrase: "OTP", locale: "en" },
+  { phrase: "security code", locale: "en" },
+  { phrase: "authentication code", locale: "en" },
+  { phrase: "認証コード", locale: "ja" },
+  { phrase: "確認コード", locale: "ja" },
+  { phrase: "ワンタイムコード", locale: "ja" },
+  { phrase: "ワンタイムパスワード", locale: "ja" },
+];
+
+export const OTP_DECAY_WINDOW_MS = 10 * 60 * 1000;
+
+export function isOtpUrgency(input: {
+  subject: string | null;
+  body?: string | null;
+}): boolean {
+  const haystack = `${input.subject ?? ""} ${input.body ?? ""}`.toLowerCase();
+  return OTP_KEYWORDS.some((k) => haystack.includes(k.phrase.toLowerCase()));
+}
+
 // Lightweight "does this subject/body contain an action verb" probe used
 // by the noreply IGNORE rule. If a noreply email asks the user to do
 // something ("confirm your email", "reset your password"), don't ignore.

@@ -1,10 +1,11 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { auth, signIn } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
-import { accounts, icalSubscriptions, events } from "@/lib/db/schema";
+import { accounts, icalSubscriptions, events, users } from "@/lib/db/schema";
 import { importNotionWorkspace } from "@/lib/integrations/notion/import-to-postgres";
 import {
   IcalSubscribeError,
@@ -113,6 +114,46 @@ export async function removeIcalSubscriptionAction(formData: FormData) {
     );
 
   redirect("/app/settings/connections?ical=removed#ical");
+}
+
+// engineer-33 — GitHub username preference. Drives the L1 classifier's
+// `@${username}` PR-promotion check. Stored in `users.preferences`
+// (jsonb) so no schema migration. The form posts a possibly-empty
+// string; empty drops the key from the jsonb so the L1 reads `null`
+// and the promotion stops triggering.
+//
+// GitHub username spec: 1-39 chars, alphanumeric + single dashes
+// between alphanumerics, may not start/end with a dash (matches
+// github.com/settings/profile validation).
+const GITHUB_USERNAME_RE = /^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/;
+
+export async function setGithubUsernameAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  const userId = session.user.id;
+
+  const raw = formData.get("username");
+  const trimmed = typeof raw === "string" ? raw.trim() : "";
+
+  if (trimmed.length > 0 && !GITHUB_USERNAME_RE.test(trimmed)) {
+    redirect("/app/settings/connections?github=invalid");
+  }
+
+  // jsonb merge — set the field if non-empty, drop it if empty.
+  // Avoids round-tripping the whole preferences blob and prevents a
+  // concurrent setter from clobbering an unrelated key.
+  const expr = trimmed
+    ? sql`COALESCE(${users.preferences}, '{}'::jsonb) || ${JSON.stringify({ githubUsername: trimmed })}::jsonb`
+    : sql`COALESCE(${users.preferences}, '{}'::jsonb) - 'githubUsername'`;
+  await db
+    .update(users)
+    .set({ preferences: expr, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+
+  revalidatePath("/app/settings/connections");
+  redirect(
+    `/app/settings/connections?github=${trimmed ? "saved" : "cleared"}`
+  );
 }
 
 export async function reactivateIcalSubscriptionAction(formData: FormData) {

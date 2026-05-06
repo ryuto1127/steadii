@@ -143,6 +143,7 @@ describe("applyTriageResult → maybeAutoArchive", () => {
       firstTimeSender: false,
       confidence: 0.96,
       learnedOptOut: false,
+      urgencyExpiresAt: null,
     };
     await applyTriageResult("user-w5-int", "google-acct", input, result);
 
@@ -189,6 +190,7 @@ describe("applyTriageResult → maybeAutoArchive", () => {
       firstTimeSender: false,
       confidence: 0.96,
       learnedOptOut: false,
+      urgencyExpiresAt: null,
     };
     await applyTriageResult("user-w5-toggle-off", "google-acct", input, result);
 
@@ -231,6 +233,7 @@ describe("applyTriageResult → maybeAutoArchive", () => {
       firstTimeSender: false,
       confidence: 0.96,
       learnedOptOut: true,
+      urgencyExpiresAt: null,
     };
     await applyTriageResult("user-w5-optout", "google-acct", input, result);
 
