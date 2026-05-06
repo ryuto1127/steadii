@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils/cn";
 
-type TriggerKey = "caps_lock" | "alt_right";
+type TriggerKey = "caps_lock" | "alt_right" | "meta_right";
 
 export function VoiceSettings({
   initial,
@@ -17,6 +17,7 @@ export function VoiceSettings({
     trigger_label: string;
     trigger_caps: string;
     trigger_alt: string;
+    trigger_meta: string;
     saved: string;
   };
 }) {
@@ -75,6 +76,12 @@ export function VoiceSettings({
           disabled={isPending}
           label={labels.trigger_alt}
           onSelect={() => apply("alt_right")}
+        />
+        <Option
+          checked={value === "meta_right"}
+          disabled={isPending}
+          label={labels.trigger_meta}
+          onSelect={() => apply("meta_right")}
         />
       </div>
     </div>

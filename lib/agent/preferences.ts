@@ -62,7 +62,7 @@ export async function setUserTimezoneIfUnset(
   return updated.length > 0;
 }
 
-export type VoiceTriggerKey = "caps_lock" | "alt_right";
+export type VoiceTriggerKey = "caps_lock" | "alt_right" | "meta_right";
 
 export async function getUserVoiceTriggerKey(
   userId: string
@@ -73,7 +73,8 @@ export async function getUserVoiceTriggerKey(
     .where(eq(users.id, userId))
     .limit(1);
   const key = row?.preferences?.voiceTriggerKey;
-  if (key === "caps_lock" || key === "alt_right") return key;
+  if (key === "caps_lock" || key === "alt_right" || key === "meta_right")
+    return key;
   return "caps_lock";
 }
 
