@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   agentDrafts,
@@ -36,6 +36,29 @@ export const ACTION_NEEDED_ACTIONS: ReadonlyArray<AgentDraftAction> = [
   "draft_reply",
   "ask_clarifying",
 ];
+
+// 2026-05-05 follow-up — Ryuto's "重要 or action 必要" policy. The strict
+// ACTION_NEEDED filter dropped the count to 0 even when the user had
+// objectively important informational items (Stripe action-required
+// portal, AMD verification code, etc.) — those classify to
+// action='notify_only' but bucket='auto_high'. Builds the SQL clause
+// that says: "either draft is action-needed AND pending/edited, OR draft
+// is notify_only on a HIGH-bucket item AND pending/edited". Used by
+// inbox view + sidebar count + bell popover so the three surfaces stay
+// in lockstep.
+export function attentionDraftClause() {
+  return or(
+    and(
+      inArray(agentDrafts.action, ACTION_NEEDED_ACTIONS as AgentDraftAction[]),
+      inArray(agentDrafts.status, ["pending", "edited"])
+    ),
+    and(
+      eq(agentDrafts.action, "notify_only"),
+      inArray(agentDrafts.status, ["pending", "edited"]),
+      eq(inboxItems.bucket, "auto_high")
+    )
+  );
+}
 
 export function isPendingDraft(
   status: AgentDraftStatus | string | null | undefined,
@@ -88,13 +111,14 @@ export function compareInboxRows(
 // reviewed-but-pending items at the top (compareInboxRows group 0), so
 // nothing is forgotten — only the count and bold typography decay.
 export async function countPendingDrafts(userId: string): Promise<number> {
-  // 2026-05-05 strategic shift — the sidebar badge counts ONLY
-  // action-needed drafts (draft_reply / ask_clarifying), excluding
-  // notify_only. Steadii's policy is "the badge must mean genuine
-  // attention required". notify_only items ("FYI but no reply
-  // expected") still surface in /app/inbox?view=all but don't
-  // contribute to the badge count, so 99+ ≈ "stuff Ryuto must act on"
-  // rather than "stuff Steadii had an opinion about".
+  // 2026-05-05 strategic shift (refined later same day) — the sidebar
+  // badge counts items that need user attention per the
+  // "重要 or action 必要" policy. attentionDraftClause covers both
+  // (1) draft_reply / ask_clarifying drafts, AND
+  // (2) notify_only drafts on auto_high bucket (important informational
+  //     — Stripe action-required portal, billing alerts, etc.).
+  // Aligned with /app/inbox default view + bell popover so the three
+  // surfaces never drift.
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(agentDrafts)
@@ -102,12 +126,11 @@ export async function countPendingDrafts(userId: string): Promise<number> {
     .where(
       and(
         eq(agentDrafts.userId, userId),
-        eq(agentDrafts.status, "pending"),
-        inArray(
-          agentDrafts.action,
-          ACTION_NEEDED_ACTIONS as AgentDraftAction[]
-        ),
-        sql`${inboxItems.reviewedAt} IS NULL`
+        eq(inboxItems.status, "open"),
+        isNull(inboxItems.deletedAt),
+        ne(inboxItems.bucket, "ignore"),
+        sql`${inboxItems.reviewedAt} IS NULL`,
+        attentionDraftClause()
       )
     );
   return row?.n ?? 0;
@@ -144,13 +167,13 @@ export async function loadTopHighRiskPending(
     .where(
       and(
         eq(agentDrafts.userId, userId),
-        eq(agentDrafts.status, "pending"),
-        // 2026-05-05 strategic shift — bell popover narrows to
-        // action-needed only, in lockstep with countPendingDrafts.
-        inArray(
-          agentDrafts.action,
-          ACTION_NEEDED_ACTIONS as AgentDraftAction[]
-        )
+        eq(inboxItems.status, "open"),
+        isNull(inboxItems.deletedAt),
+        ne(inboxItems.bucket, "ignore"),
+        // 2026-05-05 strategic shift — bell popover surfaces both
+        // action-needed AND high-risk informational items, in lockstep
+        // with countPendingDrafts and inbox default view.
+        attentionDraftClause()
       )
     )
     .orderBy(desc(inboxItems.receivedAt))
