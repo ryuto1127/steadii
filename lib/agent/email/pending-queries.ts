@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   agentDrafts,
@@ -37,26 +37,22 @@ export const ACTION_NEEDED_ACTIONS: ReadonlyArray<AgentDraftAction> = [
   "ask_clarifying",
 ];
 
-// 2026-05-05 follow-up — Ryuto's "重要 or action 必要" policy. The strict
-// ACTION_NEEDED filter dropped the count to 0 even when the user had
-// objectively important informational items (Stripe action-required
-// portal, AMD verification code, etc.) — those classify to
-// action='notify_only' but bucket='auto_high'. Builds the SQL clause
-// that says: "either draft is action-needed AND pending/edited, OR draft
-// is notify_only on a HIGH-bucket item AND pending/edited". Used by
-// inbox view + sidebar count + bell popover so the three surfaces stay
-// in lockstep.
+// 2026-05-05 — Ryuto's policy refined: the sidebar / bell / inbox
+// "action-needed" filter is STRICT — only drafts that genuinely
+// require the user to act (draft_reply / ask_clarifying). The earlier
+// version of this clause (PR #158) widened to also include
+// notify_only-on-auto_high informational items, but Ryuto pointed
+// out that legacy mis-classifications (Stripe / AMD verification /
+// Vercel deploy notifications all stuck at 高/重要 from before the
+// engineer-32 GitHub-aware routing landed) drowned the signal —
+// "5 件と表示されていながら、actionのものが0". Strict it is.
+//
+// notify_only items still surface via /app/inbox?view=all; they're
+// not lost, just not contributing to the action count.
 export function attentionDraftClause() {
-  return or(
-    and(
-      inArray(agentDrafts.action, ACTION_NEEDED_ACTIONS as AgentDraftAction[]),
-      inArray(agentDrafts.status, ["pending", "edited"])
-    ),
-    and(
-      eq(agentDrafts.action, "notify_only"),
-      inArray(agentDrafts.status, ["pending", "edited"]),
-      eq(inboxItems.bucket, "auto_high")
-    )
+  return and(
+    inArray(agentDrafts.action, ACTION_NEEDED_ACTIONS as AgentDraftAction[]),
+    inArray(agentDrafts.status, ["pending", "edited"])
   );
 }
 
