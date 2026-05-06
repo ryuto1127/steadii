@@ -56,7 +56,17 @@ export const users = pgTable("users", {
     // Voice input hold-to-talk trigger. Caps Lock is the primary; Right
     // Option is a fallback for keyboards/OSes where Caps Lock events are
     // unreliable. Stored only when the user changes it from the default.
-    voiceTriggerKey?: "caps_lock" | "alt_right";
+    // 2026-05-05 — added meta_right for JIS Mac users (Right Option is
+    // intercepted by the kana IME there; Right ⌘ holds cleanly).
+    voiceTriggerKey?: "caps_lock" | "alt_right" | "meta_right";
+    // 2026-05-05 — keyboard layout drives the default voice trigger
+    // key when voiceTriggerKey isn't explicitly set:
+    //   en   → alt_right (Right Option holds, no IME interception)
+    //   jn   → meta_right (Right ⌘ holds; Right Option = "かな" key
+    //          on JIS keyboards triggers IME mode switching)
+    //   auto → derived from navigator.keyboard.getLayoutMap() at
+    //          runtime; fallback to "en" when unsupported.
+    keyboardLayout?: "auto" | "en" | "jn";
     // GitHub login used by the L1 classifier to promote PR notifications
     // out of auto_low when the user is `@`-mentioned. Settings UI to set
     // this is engineer-33 candidate; for now read-only via DB.

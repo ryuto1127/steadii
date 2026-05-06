@@ -944,6 +944,7 @@ type MessagesShape = {
       trigger_label: string;
       trigger_caps: string;
       trigger_alt: string;
+      trigger_meta: string;
       saved: string;
       hint_caps: string;
       hint_alt: string;
@@ -2539,10 +2540,11 @@ export const en: MessagesShape = {
     },
     voice: {
       description:
-        "Hold a key to talk to Steadii — release to send. Caps Lock is the default; switch to the Right Option (⌥) key if your browser doesn't release Caps Lock cleanly.",
+        "Hold a key to talk to Steadii — release to send. Pick the trigger that matches your keyboard: Right Option (⌥) for US/EN keyboards (no IME interception), Right Command (⌘) for JIS/JP keyboards (Right Option there is the かな key and gets eaten by the IME). Caps Lock is the legacy default but most macOS browsers treat it as a toggle.",
       trigger_label: "Trigger key",
-      trigger_caps: "Caps Lock (default)",
-      trigger_alt: "Right Option (⌥)",
+      trigger_caps: "Caps Lock (legacy)",
+      trigger_alt: "Right Option (⌥) — US / EN keyboards",
+      trigger_meta: "Right Command (⌘) — JIS / JP keyboards",
       saved: "Saved",
       hint_caps: "Hold Caps Lock to talk",
       hint_alt: "Hold ⌥ to talk",
