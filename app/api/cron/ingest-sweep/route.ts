@@ -4,6 +4,7 @@ import { and, eq, isNull, like } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { accounts, users } from "@/lib/db/schema";
 import { ingestLast24h } from "@/lib/agent/email/ingest-recent";
+import { decayUrgentInboxItems } from "@/lib/agent/email/urgency-decay";
 import { verifyQStashSignature } from "@/lib/integrations/qstash/verify";
 import { withHeartbeat } from "@/lib/observability/cron-heartbeat";
 
@@ -52,6 +53,7 @@ export async function POST(req: Request) {
 
       let succeeded = 0;
       let failed = 0;
+      let urgencyDecayed = 0;
       const failures: Array<{ userId: string; message: string }> = [];
 
       for (const { userId } of rows) {
@@ -69,6 +71,22 @@ export async function POST(req: Request) {
             user: { id: userId },
           });
         }
+
+        // engineer-33 — OTP / verification-code time-decay. Runs after
+        // the ingest so any rows just stamped get a chance to decay on
+        // the same tick (the 10-min window can elapse mid-tick if the
+        // L1 stamp is at or before the start of the previous cron run).
+        // Failures are isolated from the ingest counter — we record a
+        // separate Sentry breadcrumb but don't bump `failed` since the
+        // ingest itself succeeded.
+        try {
+          urgencyDecayed += await decayUrgentInboxItems(userId);
+        } catch (err) {
+          Sentry.captureException(err, {
+            tags: { feature: "ingest_sweep_cron", phase: "urgency_decay" },
+            user: { id: userId },
+          });
+        }
       }
 
       return NextResponse.json({
@@ -76,6 +94,7 @@ export async function POST(req: Request) {
         users: rows.length,
         succeeded,
         failed,
+        urgencyDecayed,
         ...(failures.length ? { failures } : {}),
       });
       }

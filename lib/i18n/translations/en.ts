@@ -1290,6 +1290,15 @@ type MessagesShape = {
     last_synced_z_suffix: string;
     reactivate: string;
     remove: string;
+    github: {
+      title: string;
+      description: string;
+      save: string;
+      help_text: string;
+      invalid: string;
+      saved_toast: string;
+      cleared_toast: string;
+    };
   };
   agent_thinks_page: {
     settings_back: string;
@@ -2990,6 +2999,17 @@ export const en: MessagesShape = {
     last_synced_z_suffix: "Z",
     reactivate: "Reactivate",
     remove: "Remove",
+    github: {
+      title: "GitHub username",
+      description:
+        "Used to promote PR notifications that mention you out of the auto-low bucket.",
+      save: "Save",
+      help_text:
+        "Find this in github.com/settings/profile. Letters, numbers, and dashes only — max 39 characters.",
+      invalid: "Invalid GitHub username format.",
+      saved_toast: "GitHub username saved.",
+      cleared_toast: "GitHub username removed.",
+    },
   },
   agent_thinks_page: {
     settings_back: "Settings",

@@ -709,6 +709,14 @@ export const inboxItems = pgTable(
       withTimezone: true,
     }),
 
+    // engineer-33 — OTP / verification-code time-decay. Stamped by L1
+    // when an OTP keyword matches; the urgency-decay sweep auto-archives
+    // the row once now() passes this timestamp. Null for non-OTP rows.
+    urgencyExpiresAt: timestamp("urgency_expires_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+
     // Phase 7 W1 — class binding cache. Populated once at ingest by
     // `bindEmailToClass` so the L2 fanout retriever consults a single
     // index probe instead of re-binding per call. Nullable: rows that
@@ -761,6 +769,12 @@ export const inboxItems = pgTable(
     userAutoArchivedIdx: index("inbox_items_user_auto_archived_idx")
       .on(t.userId, t.autoArchived, t.receivedAt)
       .where(sql`deleted_at IS NULL AND auto_archived = true`),
+    // engineer-33 — urgency-decay sweep query path. Only rows that
+    // haven't decayed yet AND haven't been already-archived are
+    // candidates, so the partial index matches exactly the sweep filter.
+    urgencyDecayIdx: index("inbox_urgency_decay_idx")
+      .on(t.urgencyExpiresAt)
+      .where(sql`urgency_expires_at IS NOT NULL AND auto_archived = false`),
   })
 );
 
