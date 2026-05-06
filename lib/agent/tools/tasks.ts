@@ -79,7 +79,7 @@ export const tasksListEvents: ToolExecutor<
   schema: {
     name: "tasks_list",
     description:
-      "List Google Tasks from the primary task list. `dueMin`/`dueMax` are YYYY-MM-DD local dates (end-exclusive). Results are flat — subtasks appear alongside parents but retain their parentId. Reads from the unified event store (synced from Google on demand).",
+      "List the user's tasks (Google Tasks + Microsoft To Do). `dueMin`/`dueMax` are YYYY-MM-DD local dates (end-exclusive). Default window is 30 days OVERDUE through 30 days FORWARD — so a no-arg call surfaces still-pending past-due items the user may have forgotten about, alongside upcoming work. Override `dueMin`/`dueMax` for narrower / wider windows. Results flat; subtasks retain their parentId.",
     mutability: "read",
     parameters: {
       type: "object",
@@ -97,10 +97,21 @@ export const tasksListEvents: ToolExecutor<
     const args = listArgs.parse(rawArgs);
     const userTz = (await getUserTimezone(ctx.userId)) ?? FALLBACK_TZ;
 
-    // Default window: next 30 days in user tz if nothing passed.
+    // Default window: 30 days OVERDUE through 30 days FORWARD. Without
+    // the back-window, no-arg `tasks_list` surfaced no still-pending
+    // past-due items — so when the user said "completes my long-overdue
+    // tasks", the agent saw an empty list and reported "no incomplete
+    // tasks". The home /app and /app/tasks pages already passed
+    // daysBack: 30 (PR #162); aligning the agent tool to the same
+    // backward window keeps the "what tasks do I have" mental model
+    // consistent across surfaces.
     const now = new Date();
-    const defaultFrom = now.toISOString();
-    const defaultTo = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const defaultFrom = new Date(
+      now.getTime() - 30 * 24 * 60 * 60 * 1000
+    ).toISOString();
+    const defaultTo = new Date(
+      now.getTime() + 30 * 24 * 60 * 60 * 1000
+    ).toISOString();
     const fromISO = args.dueMin
       ? localMidnightAsUtc(args.dueMin, userTz).toISOString()
       : defaultFrom;
