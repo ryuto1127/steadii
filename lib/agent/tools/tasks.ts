@@ -79,7 +79,7 @@ export const tasksListEvents: ToolExecutor<
   schema: {
     name: "tasks_list",
     description:
-      "List the user's tasks (Google Tasks + Microsoft To Do). `dueMin`/`dueMax` are YYYY-MM-DD local dates (end-exclusive). Default window is 30 days OVERDUE through 30 days FORWARD — so a no-arg call surfaces still-pending past-due items the user may have forgotten about, alongside upcoming work. Override `dueMin`/`dueMax` for narrower / wider windows. Results flat; subtasks retain their parentId.",
+      "List the user's tasks (Google Tasks + Microsoft To Do). With no args returns ALL tasks the user has — past, present, future — capped at `limit` (default 100). Pass `dueMin`/`dueMax` (YYYY-MM-DD local, end-exclusive) only when narrowing matters. Results flat; subtasks retain their parentId. Use this as the default lookup; the row cap is sized for typical α user volumes (≤100 active tasks).",
     mutability: "read",
     parameters: {
       type: "object",
@@ -97,27 +97,20 @@ export const tasksListEvents: ToolExecutor<
     const args = listArgs.parse(rawArgs);
     const userTz = (await getUserTimezone(ctx.userId)) ?? FALLBACK_TZ;
 
-    // Default window: 30 days OVERDUE through 30 days FORWARD. Without
-    // the back-window, no-arg `tasks_list` surfaced no still-pending
-    // past-due items — so when the user said "completes my long-overdue
-    // tasks", the agent saw an empty list and reported "no incomplete
-    // tasks". The home /app and /app/tasks pages already passed
-    // daysBack: 30 (PR #162); aligning the agent tool to the same
-    // backward window keeps the "what tasks do I have" mental model
-    // consistent across surfaces.
-    const now = new Date();
-    const defaultFrom = new Date(
-      now.getTime() - 30 * 24 * 60 * 60 * 1000
-    ).toISOString();
-    const defaultTo = new Date(
-      now.getTime() + 30 * 24 * 60 * 60 * 1000
-    ).toISOString();
+    // Default window: ALL tasks (epoch → year 2100). The `limit` cap
+    // (default 100) is the real bound. Earlier 30-day-each-side default
+    // missed older overdue items the user wanted to clean up; with the
+    // limit-based cap, returning everything is safe at α scale and the
+    // agent can narrow with explicit dueMin/dueMax when it actually
+    // matters (e.g. "tasks due this week").
+    const farPast = new Date("2000-01-01T00:00:00Z").toISOString();
+    const farFuture = new Date("2100-01-01T00:00:00Z").toISOString();
     const fromISO = args.dueMin
       ? localMidnightAsUtc(args.dueMin, userTz).toISOString()
-      : defaultFrom;
+      : farPast;
     const toISO = args.dueMax
       ? localMidnightAsUtc(args.dueMax, userTz).toISOString()
-      : defaultTo;
+      : farFuture;
 
     if (shouldSync(ctx.userId, fromISO, toISO)) {
       await syncAllForRange(ctx.userId, fromISO, toISO);
