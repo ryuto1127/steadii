@@ -147,6 +147,7 @@ describe("fetchMsUpcomingTasks", () => {
     graphResponses["/me/todo/lists/list-A/tasks"] = {
       value: [
         {
+          id: "task-A-1",
           title: "Pset 5",
           body: { content: "due Friday" },
           dueDateTime: { dateTime: "2026-04-26T00:00:00.0000000", timeZone: "UTC" },
@@ -157,6 +158,7 @@ describe("fetchMsUpcomingTasks", () => {
     graphResponses["/me/todo/lists/list-B/tasks"] = {
       value: [
         {
+          id: "task-B-1",
           title: "Lab report",
           body: null,
           dueDateTime: { dateTime: "2026-04-25T00:00:00.0000000", timeZone: "UTC" },
@@ -166,9 +168,24 @@ describe("fetchMsUpcomingTasks", () => {
     };
     const out = await fetchMsUpcomingTasks("u1", { days: 30, max: 50 });
     // Sorted by due date ascending — Lab report (4/25) before Pset 5 (4/26).
+    // Engineer-37: rows now carry source IDs for the home one-click flow.
     expect(out).toEqual([
-      { title: "Lab report", due: "2026-04-25", notes: null, completed: false },
-      { title: "Pset 5", due: "2026-04-26", notes: "due Friday", completed: false },
+      {
+        title: "Lab report",
+        due: "2026-04-25",
+        notes: null,
+        completed: false,
+        taskId: "task-B-1",
+        taskListId: "list-B",
+      },
+      {
+        title: "Pset 5",
+        due: "2026-04-26",
+        notes: "due Friday",
+        completed: false,
+        taskId: "task-A-1",
+        taskListId: "list-A",
+      },
     ]);
   });
 });

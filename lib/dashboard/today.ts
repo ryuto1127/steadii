@@ -51,20 +51,27 @@ export type DueSoonAssignment = {
   classTitle: string | null;
 };
 
-export async function getTodaysEvents(userId: string): Promise<TodayEvent[]> {
+export async function getTodaysEvents(
+  userId: string,
+  opts: { daysAhead?: number } = {}
+): Promise<TodayEvent[]> {
+  // Engineer-37: widen the default window from 1 day to 7 days so the
+  // home today-briefing surfaces a real week-ahead horizon. Callers
+  // wanting strictly today can pass `daysAhead: 1`.
+  const daysAhead = opts.daysAhead ?? 7;
   try {
     const cal = await getCalendarForUser(userId);
     const tz = (await getUserTimezone(userId)) ?? FALLBACK_TZ;
     const today = todayDateInTz(tz);
     const start = localMidnightAsUtc(today, tz);
-    const end = localMidnightAsUtc(addDaysToDateStr(today, 1), tz);
+    const end = localMidnightAsUtc(addDaysToDateStr(today, daysAhead), tz);
     const resp = await cal.events.list({
       calendarId: "primary",
       timeMin: start.toISOString(),
       timeMax: end.toISOString(),
       singleEvents: true,
       orderBy: "startTime",
-      maxResults: 25,
+      maxResults: 50,
     });
     return (resp.data.items ?? [])
       .filter((e) => e.start?.dateTime || e.start?.date)

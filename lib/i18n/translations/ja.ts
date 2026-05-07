@@ -1325,8 +1325,8 @@ export const ja: Messages = {
   home_v2: {
     queue_label: "キュー",
     today_label: "今日",
-    today_no_events: "今日の予定はありません。",
-    today_no_tasks: "タスクはありません。",
+    today_no_events: "今後7日間に予定はありません。",
+    today_no_tasks: "今週のタスクはありません。",
     today_no_deadlines: "今週の締切はありません。",
     today_calendar_heading: "カレンダー",
     today_tasks_heading: "タスク",
@@ -1347,6 +1347,11 @@ export const ja: Messages = {
       mistake_added: "ノートを追加",
       generic: "アクション",
     },
+    more_this_week: "+ {n} 件 今週中",
+    day_today: "今日",
+    day_tomorrow: "明日",
+    task_complete_aria: "{title} を完了にする",
+    task_complete_failed: "完了にできませんでした — もう一度お試しください",
   },
   activity_page: {
     eyebrow: "監査ログ",
