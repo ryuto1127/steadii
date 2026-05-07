@@ -30,6 +30,7 @@ import { fetchRecentThreadMessages } from "./thread";
 import { logEmailAudit } from "./audit";
 import { fanoutForInbox, type FanoutResult } from "./fanout";
 import { loadRecentFeedbackSummary } from "./feedback";
+import { getUserLocale } from "@/lib/agent/preferences";
 import {
   fetchUpcomingEvents,
   type DraftCalendarEvent,
@@ -273,6 +274,10 @@ async function runPipeline(
       senderDomain: item.senderDomain,
     });
 
+    // 2026-05-06 — thread the user's app locale through to the deep
+    // pass so reasoning is generated in JA for JA users (the
+    // draft-details panel surfaces it user-visibly post PR #167).
+    const locale = await getUserLocale(item.userId);
     deep = await runDeepPass({
       userId: item.userId,
       senderEmail: item.senderEmail,
@@ -287,6 +292,7 @@ async function runPipeline(
       threadRecentMessages: threadMessages,
       fanout: fanoutForDeep,
       recentFeedback,
+      locale,
     });
   }
 
