@@ -1593,6 +1593,14 @@ export const ja: Messages = {
         "L1 分類ルールを開いている全 inbox item に再適用します。Steadii が分類ルールを更新した後、古い分類のままの item を更新するのに便利です (Vercel/GitHub bot 通知が GitHub-aware ルーティング前の HIGH のまま残っているケース等)。",
       done: "再分類完了 — {changed} 件更新、{ignored} 件は無視 (ignore) に変更。",
     },
+    regenerate_drafts: {
+      button: "下書きを最新の AI で再生成",
+      help:
+        "開いている下書きに対して、最新の分類ロジックと現在の言語設定で L2 推論と下書き本文を再実行します。1 回のクリックで最大 10 件。通常の L2 クレジットを消費します。",
+      done: "{refreshed} 件の下書きを再生成しました。",
+      more: "{refreshed} 件の下書きを再生成しました。残りがあります — もう一度クリックして続行してください。",
+      exhausted: "クレジット切れの前に {refreshed} 件を再生成しました。続行するにはトップアップしてください。",
+    },
   },
   agent_thinks_page: {
     settings_back: "設定",

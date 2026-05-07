@@ -17,6 +17,10 @@ export type EmailAuditAction =
   | "email_l2_completed"
   | "email_l2_paused"
   | "email_l2_failed"
+  // engineer-36 — admin "Regenerate AI drafts" sweep. One row per
+  // per-draft refresh attempt (success or failure), so audit + digest
+  // surfaces can distinguish a fresh L2 invocation from a regen.
+  | "email_l2_regenerated"
   // Phase 7 W1 additions — class binding (run at ingest) and the L2-side
   // multi-source fanout retrieval. The fanout shape is logged separately
   // from email_l2_completed so per-source counts/latencies stay
