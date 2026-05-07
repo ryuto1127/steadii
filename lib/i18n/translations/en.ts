@@ -443,6 +443,20 @@ type MessagesShape = {
     due_tomorrow: string;
     due_in_days: string;
     due_short_date: string;
+    create: {
+      open_button: string;
+      form_title: string;
+      field_title: string;
+      field_title_placeholder: string;
+      field_due: string;
+      field_notes: string;
+      field_notes_placeholder: string;
+      submit: string;
+      submitting: string;
+      cancel: string;
+      toast_created: string;
+      toast_failed: string;
+    };
   };
   chats_list: {
     title: string;
@@ -691,6 +705,12 @@ type MessagesShape = {
     shared: {
       dismiss: string;
       verify_recommended: string;
+      take_action: string;
+      open: string;
+      open_thread: string;
+      open_group: string;
+      notify_only_body: string;
+      clarify_fallback: string;
     };
     menu: {
       snooze_1h: string;
@@ -1996,6 +2016,20 @@ export const en: MessagesShape = {
     due_tomorrow: "Due tomorrow",
     due_in_days: "Due in {n}d",
     due_short_date: "Due {date}",
+    create: {
+      open_button: "New task",
+      form_title: "Add a task",
+      field_title: "Title",
+      field_title_placeholder: "What needs to get done?",
+      field_due: "Due date (optional)",
+      field_notes: "Notes (optional)",
+      field_notes_placeholder: "Anything to remember when you do this",
+      submit: "Add task",
+      submitting: "Adding…",
+      cancel: "Cancel",
+      toast_created: "Task added.",
+      toast_failed: "Couldn't add the task. Try again.",
+    },
   },
   chats_list: {
     title: "Chats",
@@ -2262,6 +2296,13 @@ export const en: MessagesShape = {
     shared: {
       dismiss: "Dismiss",
       verify_recommended: "Verify before acting.",
+      take_action: "Take action",
+      open: "Open",
+      open_thread: "Open thread",
+      open_group: "Open group",
+      notify_only_body: "Important from {sender}. No reply expected — review when you can.",
+      clarify_fallback:
+        "Steadii needs more context before drafting a reply to {sender}.",
     },
     menu: {
       snooze_1h: "Snooze 1 hour",

@@ -21,6 +21,8 @@ import { DenseRowLink } from "@/components/ui/dense-row-link";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { CreateTaskForm } from "@/components/tasks/create-task-form";
+import { createTaskAction } from "@/lib/agent/tasks-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +83,9 @@ export default async function TasksPage() {
     return (
       <div className="mx-auto max-w-3xl py-2 md:py-6">
         <h1 className="text-h1 text-[hsl(var(--foreground))]">{t("title")}</h1>
+        <div className="mt-6">
+          <CreateTaskForm action={createTaskAction} />
+        </div>
         <div className="mt-8">
           <EmptyState
             icon={<ListChecks size={18} strokeWidth={1.5} />}
@@ -100,6 +105,10 @@ export default async function TasksPage() {
         <span className="text-small text-[hsl(var(--muted-foreground))]">
           {t("pending_count", { count: rows.length })}
         </span>
+      </div>
+
+      <div className="mt-6">
+        <CreateTaskForm action={createTaskAction} />
       </div>
 
       <section className="mt-6">
