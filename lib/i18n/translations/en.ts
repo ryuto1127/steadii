@@ -757,6 +757,11 @@ type MessagesShape = {
     activity_more: string;
     activity_view_all: string;
     activity_action_label: Record<string, string>;
+    more_this_week: string;
+    day_today: string;
+    day_tomorrow: string;
+    task_complete_aria: string;
+    task_complete_failed: string;
   };
   activity_page: {
     eyebrow: string;
@@ -2322,8 +2327,8 @@ export const en: MessagesShape = {
   home_v2: {
     queue_label: "Queue",
     today_label: "Today",
-    today_no_events: "No events today.",
-    today_no_tasks: "Nothing on the task list.",
+    today_no_events: "Nothing scheduled in the next 7 days.",
+    today_no_tasks: "Nothing on the task list this week.",
     today_no_deadlines: "No deadlines this week.",
     today_calendar_heading: "Calendar",
     today_tasks_heading: "Tasks",
@@ -2344,6 +2349,11 @@ export const en: MessagesShape = {
       mistake_added: "Added note",
       generic: "Action",
     },
+    more_this_week: "+ {n} more this week",
+    day_today: "Today",
+    day_tomorrow: "Tomorrow",
+    task_complete_aria: "Mark {title} done",
+    task_complete_failed: "Couldn't mark task done — try again",
   },
   activity_page: {
     eyebrow: "Audit log",

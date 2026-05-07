@@ -45,6 +45,7 @@ export async function fetchMsUpcomingTasks(
 
   type GraphList = { id?: string | null };
   type GraphTask = {
+    id?: string | null;
     title?: string | null;
     body?: { content?: string | null } | null;
     dueDateTime?: { dateTime?: string | null; timeZone?: string | null } | null;
@@ -89,12 +90,12 @@ export async function fetchMsUpcomingTasks(
           // datetime literal — note no quotes around the value.
           $filter: `status ne 'completed' and dueDateTime/dateTime ge '${fromIso}' and dueDateTime/dateTime lt '${toIso}'`,
           $top: String(max),
-          $select: "title,body,dueDateTime,status",
+          $select: "id,title,body,dueDateTime,status",
         })
         .get()) as { value?: GraphTask[] };
 
       for (const t of tasksResp.value ?? []) {
-        if (!t.title) continue;
+        if (!t.title || !t.id) continue;
         const date = dueDateOnly(t.dueDateTime?.dateTime ?? null);
         if (!date) continue;
         out.push({
@@ -102,6 +103,8 @@ export async function fetchMsUpcomingTasks(
           due: date,
           notes: t.body?.content?.trim() || null,
           completed: t.status === "completed",
+          taskId: t.id,
+          taskListId: listId,
         });
         if (out.length >= max) break;
       }
