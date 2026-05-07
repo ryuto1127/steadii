@@ -99,6 +99,8 @@ describe("buildFanoutContextBlocks", () => {
               due: "2026-04-27",
               notes: null,
               completed: false,
+              taskId: "g-task-ps3",
+              taskListId: "@default",
             },
           ],
           assignments: [

@@ -2,6 +2,9 @@
 
 import { auth } from "@/lib/auth/config";
 import { revalidatePath } from "next/cache";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { assignments } from "@/lib/db/schema";
 import {
   tasksCreateTask,
   tasksUpdateTask,
@@ -97,4 +100,26 @@ export async function deleteTaskAction(args: {
   );
   revalidatePath("/app/calendar");
   return { taskId: args.taskId };
+}
+
+// Engineer-37: Steadii assignments aren't toggleable through
+// `tasks_complete` (that tool routes to external providers via
+// lookupEventSource). This action covers the home one-click flow for
+// kind="steadii" rows. Idempotent — flipping an already-done row to
+// done again is a no-op write that still revalidates the dashboard
+// surfaces the user can see.
+export async function completeAssignmentAction(args: {
+  assignmentId: string;
+}): Promise<{ assignmentId: string }> {
+  const userId = await requireUserId();
+  await db
+    .update(assignments)
+    .set({ status: "done", updatedAt: new Date() })
+    .where(
+      and(eq(assignments.id, args.assignmentId), eq(assignments.userId, userId)),
+    );
+  revalidatePath("/");
+  revalidatePath("/app");
+  revalidatePath("/app/tasks");
+  return { assignmentId: args.assignmentId };
 }

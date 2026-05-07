@@ -73,6 +73,12 @@ export type DraftCalendarTask = {
   due: string; // YYYY-MM-DD, local-date-only
   notes: string | null;
   completed: boolean;
+  // Engineer-37: dashboard one-click complete needs the source IDs to
+  // route a `tasks_complete` call back to the right provider/list. The
+  // fanout consumers of this type don't read these — they're only used
+  // by the home today-tasks pane today.
+  taskId: string;
+  taskListId: string;
 };
 
 // Live fetch of incomplete tasks due in a window around today.
@@ -133,12 +139,14 @@ export async function fetchUpcomingTasks(
       });
       for (const t of resp.data.items ?? []) {
         const date = dueDateOnly(t.due);
-        if (!date || !t.title) continue;
+        if (!date || !t.title || !t.id) continue;
         out.push({
           title: t.title,
           due: date,
           notes: t.notes ?? null,
           completed: t.status === "completed",
+          taskId: t.id,
+          taskListId: id,
         });
         if (out.length >= max) break;
       }
