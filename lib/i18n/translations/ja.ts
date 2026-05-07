@@ -541,6 +541,20 @@ export const ja: Messages = {
     due_tomorrow: "明日が期限",
     due_in_days: "あと {n} 日",
     due_short_date: "期限 {date}",
+    create: {
+      open_button: "新しいタスク",
+      form_title: "タスクを追加",
+      field_title: "タイトル",
+      field_title_placeholder: "何をする必要がありますか?",
+      field_due: "期限 (任意)",
+      field_notes: "メモ (任意)",
+      field_notes_placeholder: "実行するときに思い出したいこと",
+      submit: "追加",
+      submitting: "追加中…",
+      cancel: "キャンセル",
+      toast_created: "タスクを追加しました。",
+      toast_failed: "タスクを追加できませんでした。もう一度試してください。",
+    },
   },
   chats_list: {
     title: "チャット",
@@ -1260,6 +1274,14 @@ export const ja: Messages = {
     shared: {
       dismiss: "却下",
       verify_recommended: "詳細確認推奨",
+      take_action: "対応する",
+      open: "開く",
+      open_thread: "スレッドを開く",
+      open_group: "グループを開く",
+      notify_only_body:
+        "{sender} からの重要な連絡。返信不要 — 余裕があるときに確認してください。",
+      clarify_fallback:
+        "{sender} への返信を書く前に、もう少し情報が必要です。",
     },
     menu: {
       snooze_1h: "1 時間スヌーズ",

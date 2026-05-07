@@ -46,6 +46,15 @@ export async function buildQueueForUser(
   const tIssue = (locale
     ? await getTranslations({ locale, namespace: "queue.issue_title" })
     : await getTranslations("queue.issue_title")) as unknown as IssueTitleFn;
+  // Shared button labels (Take action, Open thread, etc.) — same
+  // localization story as tIssue. Without this, the build was emitting
+  // English literals into card.primaryActionLabel which leaked into JA
+  // home queue cards (Ryuto dogfood 2026-05-07).
+  const tShared = (locale
+    ? await getTranslations({ locale, namespace: "queue.shared" })
+    : await getTranslations("queue.shared")) as unknown as (
+    key: string
+  ) => string;
   // We pull more than the visible cap so the "Show more" expansion has
   // material — the page-level collapse logic is what trims the visible
   // count to QUEUE_VISIBLE_LIMIT.
@@ -64,13 +73,13 @@ export async function buildQueueForUser(
     if (p.issueType === "group_project_detected") {
       eFromProposals.push(proposalToTypeE_GroupDetect(p, tIssue));
     } else if (p.issueType === "group_member_silent") {
-      cFromProposals.push(proposalToTypeC_GroupSilent(p, tIssue));
+      cFromProposals.push(proposalToTypeC_GroupSilent(p, tIssue, tShared));
     } else {
       aCards.push(proposalToTypeA(p, tIssue));
     }
   }
 
-  const { bCards, cCards, eCards } = partitionDrafts(draftRows);
+  const { bCards, cCards, eCards } = partitionDrafts(draftRows, tShared);
   const preBriefCards = preBriefRows.map(({ brief, event, now }) =>
     preBriefToTypeB(brief, event, now)
   );
@@ -127,7 +136,8 @@ function proposalToTypeE_GroupDetect(
 
 function proposalToTypeC_GroupSilent(
   p: AgentProposalRow,
-  tIssue: IssueTitleFn
+  tIssue: IssueTitleFn,
+  tShared: (key: string) => string
 ): QueueCardC {
   // The action_options[0] payload carries the group_project_id so we
   // can deep-link the "Take action" button straight to the detail page.
@@ -146,9 +156,9 @@ function proposalToTypeC_GroupSilent(
     sources: sourceChipsFromRefs(p.sourceRefs ?? []),
     detailHref,
     originHref: detailHref,
-    originLabel: "Open group",
+    originLabel: tShared("open_group"),
     reversible: false,
-    primaryActionLabel: opt?.label ?? "Take action",
+    primaryActionLabel: opt?.label ?? tShared("take_action"),
   };
 }
 
@@ -401,7 +411,10 @@ export function dedupePendingDraftsByThread(
   return deduped;
 }
 
-function partitionDrafts(rows: DraftWithInbox[]): {
+function partitionDrafts(
+  rows: DraftWithInbox[],
+  tShared: (key: string) => string
+): {
   bCards: QueueCardB[];
   cCards: QueueCardC[];
   eCards: QueueCardE[];
@@ -411,14 +424,17 @@ function partitionDrafts(rows: DraftWithInbox[]): {
   const eCards: QueueCardE[] = [];
   for (const row of rows) {
     const action = row.draft.action;
-    if (action === "draft_reply") bCards.push(draftToTypeB(row));
-    else if (action === "ask_clarifying") eCards.push(draftToTypeE(row));
-    else if (action === "notify_only") cCards.push(draftToTypeC(row));
+    if (action === "draft_reply") bCards.push(draftToTypeB(row, tShared));
+    else if (action === "ask_clarifying") eCards.push(draftToTypeE(row, tShared));
+    else if (action === "notify_only") cCards.push(draftToTypeC(row, tShared));
   }
   return { bCards, cCards, eCards };
 }
 
-function draftToTypeB(row: DraftWithInbox): QueueCardB {
+function draftToTypeB(
+  row: DraftWithInbox,
+  tShared: (key: string) => string
+): QueueCardB {
   const { draft, inbox } = row;
   const senderLabel = inbox.senderName ?? inbox.senderEmail;
   return {
@@ -432,7 +448,7 @@ function draftToTypeB(row: DraftWithInbox): QueueCardB {
     sources: sourceChipsFromProvenance(draft.retrievalProvenance ?? null),
     detailHref: `/app/inbox/${draft.id}`,
     originHref: `/app/inbox/${draft.id}`,
-    originLabel: "Open thread",
+    originLabel: tShared("open_thread"),
     reversible: true,
     draftPreview: truncatePreview(draft.draftBody ?? ""),
     subjectLine: draft.draftSubject ?? inbox.subject ?? undefined,
@@ -443,26 +459,32 @@ function draftToTypeB(row: DraftWithInbox): QueueCardB {
   };
 }
 
-function draftToTypeC(row: DraftWithInbox): QueueCardC {
+function draftToTypeC(
+  row: DraftWithInbox,
+  tShared: (key: string) => string
+): QueueCardC {
   const { draft, inbox } = row;
   const senderLabel = inbox.senderName ?? inbox.senderEmail;
   return {
     id: `draft:${draft.id}`,
     archetype: "C",
     title: inbox.subject ?? senderLabel,
-    body: `Important from ${senderLabel}. No reply expected — review when you can.`,
+    body: tShared("notify_only_body").replace("{sender}", senderLabel),
     confidence: confidenceForRiskTier(draft.riskTier),
     createdAt: draft.createdAt.toISOString(),
     sources: sourceChipsFromProvenance(draft.retrievalProvenance ?? null),
     detailHref: `/app/inbox/${draft.id}`,
     originHref: `/app/inbox/${draft.id}`,
-    originLabel: "Open",
+    originLabel: tShared("open"),
     reversible: false,
-    primaryActionLabel: "Take action",
+    primaryActionLabel: tShared("take_action"),
   };
 }
 
-function draftToTypeE(row: DraftWithInbox): QueueCardE {
+function draftToTypeE(
+  row: DraftWithInbox,
+  tShared: (key: string) => string
+): QueueCardE {
   const { draft, inbox } = row;
   const senderLabel = inbox.senderName ?? inbox.senderEmail;
   return {
@@ -471,13 +493,13 @@ function draftToTypeE(row: DraftWithInbox): QueueCardE {
     title: inbox.subject ?? senderLabel,
     body:
       draft.reasoning ??
-      `Steadii needs more context before drafting a reply to ${senderLabel}.`,
+      tShared("clarify_fallback").replace("{sender}", senderLabel),
     confidence: confidenceForRiskTier(draft.riskTier),
     createdAt: draft.createdAt.toISOString(),
     sources: sourceChipsFromProvenance(draft.retrievalProvenance ?? null),
     detailHref: `/app/inbox/${draft.id}`,
     originHref: `/app/inbox/${draft.id}`,
-    originLabel: "Open thread",
+    originLabel: tShared("open_thread"),
     reversible: false,
     // Wave 2 ships a single free-text fallback. Per-draft radio choices
     // would require a structured "questions" payload from the L2 deep
