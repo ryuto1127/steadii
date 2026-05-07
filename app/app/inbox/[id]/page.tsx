@@ -16,8 +16,7 @@ import {
   messages as messagesTable,
   users,
 } from "@/lib/db/schema";
-import { ThinkingBar } from "@/components/agent/thinking-bar";
-import { ReasoningPanel } from "@/components/agent/reasoning-panel";
+import { DraftDetailsPanel } from "@/components/agent/draft-details-panel";
 import { DraftActions } from "@/components/agent/draft-actions";
 import { InlineRolePicker } from "@/components/agent/inline-role-picker";
 import { ContextualSuggestion } from "@/components/suggestions/contextual-suggestion";
@@ -261,11 +260,6 @@ export default async function InboxItemPage({
         </div>
       </header>
 
-      <ThinkingBar
-        provenance={draft.retrievalProvenance}
-        riskTier={draft.riskTier}
-      />
-
       <ContextualSuggestion
         userId={userId}
         source="microsoft"
@@ -295,8 +289,6 @@ export default async function InboxItemPage({
       ) : sent ? null : (
         <NextActionBanner action={draft.action} />
       )}
-
-      <ReasoningPanel reasoning={draft.reasoning} action={draft.action} />
 
       {draft.action === "ask_clarifying" && !paused ? (
         <ClarificationReply
@@ -336,6 +328,17 @@ export default async function InboxItemPage({
         />
       ) : null}
 
+      {/* 2026-05-06 — moved BELOW the draft per Ryuto: the draft is the
+          primary content; reasoning + sources are audit/transparency
+          and live as a collapsed section after the action buttons.
+          DraftDetailsPanel combines what was previously two separate
+          components (ThinkingBar + ReasoningPanel) into one
+          collapsed-by-default detail surface. */}
+      <DraftDetailsPanel
+        reasoning={draft.reasoning}
+        action={draft.action}
+        provenance={draft.retrievalProvenance}
+      />
     </div>
   );
 }
