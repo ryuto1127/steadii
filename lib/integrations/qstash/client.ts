@@ -26,7 +26,14 @@ export function qstash(): Client {
   if (cached) return cached;
   const token = env().QSTASH_TOKEN;
   if (!token) throw new QStashTokenMissingError();
-  cached = new Client({ token });
+  // Region-specific endpoint. The package's default `qstash.upstash.io`
+  // routes to eu-central-1 — accounts in any other region hit 404 on
+  // every publish. Pass `baseUrl` explicitly so the env value is the
+  // single source of truth (the package also reads QSTASH_URL from
+  // process.env, but going through env() keeps the schema audit trail
+  // visible in lib/env.ts and surfaces a typo as a parse error).
+  const baseUrl = env().QSTASH_URL;
+  cached = new Client(baseUrl ? { token, baseUrl } : { token });
   return cached;
 }
 
