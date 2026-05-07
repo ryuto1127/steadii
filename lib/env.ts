@@ -75,6 +75,12 @@ const schema = z.object({
   // local dev short-circuits the publish path so `pnpm dev` doesn't need
   // QStash to function for non-send flows.
   QSTASH_TOKEN: z.string().optional().default(""),
+  // Region-specific QStash endpoint, e.g. https://qstash-us-east-1.upstash.io.
+  // Required in production: the default `qstash.upstash.io` route lands on
+  // eu-central-1 and 404s if the account lives in a different region (Sentry
+  // 2026-05-07, digest 873235542 — every Send broke). Empty falls back to
+  // the package default, fine for local dev.
+  QSTASH_URL: z.string().optional().default(""),
 });
 
 export type Env = z.infer<typeof schema>;
