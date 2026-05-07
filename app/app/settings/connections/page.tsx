@@ -23,6 +23,7 @@ import {
   reactivateIcalSubscriptionAction,
   setGithubUsernameAction,
   reclassifyAllInboxAction,
+  regenerateDraftsAction,
 } from "./actions";
 import { refreshGmailInboxAction } from "../actions";
 
@@ -38,6 +39,10 @@ export default async function ConnectionsPage({
     reclassify?: string;
     changed?: string;
     ignored?: string;
+    regenerate?: string;
+    refreshed?: string;
+    exhausted?: string;
+    more?: string;
   }>;
 }) {
   const session = await auth();
@@ -48,6 +53,10 @@ export default async function ConnectionsPage({
   const reclassifyOk = params.reclassify === "ok";
   const reclassifyChanged = Number(params.changed ?? "0") || 0;
   const reclassifyIgnored = Number(params.ignored ?? "0") || 0;
+  const regenerateOk = params.regenerate === "ok";
+  const regenerateRefreshed = Number(params.refreshed ?? "0") || 0;
+  const regenerateExhausted = params.exhausted === "1";
+  const regenerateMore = params.more === "1";
   const tConn = await getTranslations("settings.connections");
   const t = await getTranslations("connections_page");
 
@@ -234,6 +243,35 @@ export default async function ConnectionsPage({
                   changed: reclassifyChanged,
                   ignored: reclassifyIgnored,
                 })}
+              </p>
+            )}
+          </form>
+        )}
+        {gmailConnected && (
+          <form action={regenerateDraftsAction} className="mt-3">
+            <button
+              type="submit"
+              title={t("regenerate_drafts.help")}
+              className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
+            >
+              {t("regenerate_drafts.button")}
+            </button>
+            <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+              {t("regenerate_drafts.help")}
+            </p>
+            {regenerateOk && (
+              <p className="mt-2 rounded-md bg-[hsl(var(--surface-raised))] p-2 text-xs">
+                {regenerateExhausted
+                  ? t("regenerate_drafts.exhausted", {
+                      refreshed: regenerateRefreshed,
+                    })
+                  : regenerateMore
+                  ? t("regenerate_drafts.more", {
+                      refreshed: regenerateRefreshed,
+                    })
+                  : t("regenerate_drafts.done", {
+                      refreshed: regenerateRefreshed,
+                    })}
               </p>
             )}
           </form>

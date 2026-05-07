@@ -12,6 +12,7 @@ import {
   subscribeToIcal,
 } from "@/lib/integrations/ical/subscribe";
 import { reclassifyAllInboxItems } from "@/lib/agent/email/reclassify";
+import { regenerateAllOpenDrafts } from "@/lib/agent/email/regenerate";
 
 export async function importNotionAction() {
   const session = await auth();
@@ -191,5 +192,28 @@ export async function reclassifyAllInboxAction() {
   revalidatePath("/app/settings/connections");
   redirect(
     `/app/settings/connections?reclassify=ok&scanned=${out.scanned}&changed=${out.changed}&ignored=${out.ignoredAfter}#inbox`
+  );
+}
+
+// engineer-36 — re-runs L2 deep + draft over the user's open agent_drafts.
+// Capped at 10 per click so each invocation stays inside the Vercel
+// server-action timeout. The UI offers "Run again to continue" via the
+// `more=1` param when there's still queue. Bubbles credit exhaustion
+// through `exhausted=1` so the banner can prompt a top-up.
+export async function regenerateDraftsAction() {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  const userId = session.user.id;
+
+  const out = await regenerateAllOpenDrafts(userId, { limit: 10 });
+  revalidatePath("/app/inbox");
+  revalidatePath("/app/settings/connections");
+  redirect(
+    `/app/settings/connections?regenerate=ok` +
+      `&scanned=${out.scanned}` +
+      `&refreshed=${out.refreshed}` +
+      `&exhausted=${out.creditsExhausted ? 1 : 0}` +
+      `&more=${out.hasMore ? 1 : 0}` +
+      `#inbox`
   );
 }
