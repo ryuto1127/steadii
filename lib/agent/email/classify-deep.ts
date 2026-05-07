@@ -43,6 +43,12 @@ export type DeepPassInput = {
   // domain so it can bias toward their revealed preference. Optional so
   // legacy callers + the empty-state path produce the same prompt shape.
   recentFeedback?: RecentFeedbackSummary | null;
+  // 2026-05-06 — user's app locale ("en" / "ja"). Steers the reasoning
+  // string the model produces so the inbox-detail draft-details panel
+  // (post PR #167) shows JP reasoning to JP users instead of English.
+  // Optional / "en" default for back-compat with callers that don't
+  // thread the locale.
+  locale?: "en" | "ja";
 };
 
 // Aggregated counts of how the user has responded to past drafts from
@@ -108,7 +114,9 @@ Examples (concise — full reasoning lives in your output):
 - TA: "Can you confirm you'll attend office hours?" → draft_reply (direct ask).
 - Scholarship office: "Congratulations — you've been awarded the X scholarship." → notify_only (one-way good news, no reply required).
 
-Glass-box transparency is a hard product requirement. Reasoning bullets MUST cite which fanout source informed each conclusion using the per-source tags in the user content (mistake-N, syllabus-N, calendar-N, email-N). Cite at least one source when any are present; ungrounded claims are unacceptable. Reasoning is ALWAYS in English regardless of the email's language; it's an internal transparency string surfaced in a debug panel, not user-facing prose.`;
+Glass-box transparency is a hard product requirement. Reasoning bullets MUST cite which fanout source informed each conclusion using the per-source tags in the user content (mistake-N, syllabus-N, calendar-N, email-N). Cite at least one source when any are present; ungrounded claims are unacceptable.
+
+Reasoning language: write reasoning in the user's app locale specified in the user message ("Reasoning language: en" → write English; "Reasoning language: ja" → write Japanese). The reasoning is surfaced in the inbox-detail draft-details panel (collapsed-by-default, but still user-visible), so localization matters. Default to English when no language hint is present.`;
 
 const DEEP_PASS_JSON_SCHEMA = {
   type: "object",
@@ -220,6 +228,8 @@ export function parseDeepPassOutput(raw: string): {
 
 function buildUserContent(input: DeepPassInput): string {
   const parts: string[] = [];
+  parts.push(`Reasoning language: ${input.locale ?? "en"}`);
+  parts.push("");
   parts.push("=== Current email ===");
   parts.push(`From: ${input.senderEmail} (${input.senderDomain})`);
   if (input.senderRole) parts.push(`Sender role: ${input.senderRole}`);
