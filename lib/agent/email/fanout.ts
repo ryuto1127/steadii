@@ -40,8 +40,95 @@ export const FANOUT_CALENDAR_DAYS_DRAFT = 7;
 export const FANOUT_CALENDAR_MAX_CLASSIFY = 8;
 export const FANOUT_CALENDAR_MAX_DRAFT = 25;
 
-// Similarity floor — drop chunks below this from the prompt blocks. §9.2.
-const SIM_FLOOR = 0.55;
+// Per-source similarity floors. Engineer-35 (2026-05-06) split the single
+// 0.55 floor into class-bound vs class-unbound after a recruiting email
+// surfaced syllabus-1 64% in the draft details panel — at 0.55 the unbound
+// vector search was catching topical-overlap chunks for emails that have
+// nothing to do with any class. Keep the bound floor lenient (the email
+// is already known-academic via the binding); raise the unbound floor so
+// only strong semantic matches survive when there's no class anchor.
+const SYLLABUS_SIM_FLOOR_BOUND = 0.55;
+const SYLLABUS_SIM_FLOOR_UNBOUND = 0.78;
+
+// Engineer-35 — when an email is structurally non-academic (recruiting,
+// billing, OTP, vendor support) AND lacks a class binding, vector search
+// at any threshold is too lossy. We bypass syllabus + vector-mistakes
+// retrieval entirely for these emails. The predicate is keyword-based on
+// (subject + snippet); false-positives intentionally pass through (better
+// to over-retrieve than miss a real class email). Tuned via the
+// fanout-quality-audit regression suite.
+const EMAIL_LIKELY_ACADEMIC_KEYWORDS_EN = [
+  "syllabus",
+  "syllabi",
+  "assignment",
+  "assignments",
+  "homework",
+  "midterm",
+  "midterms",
+  "final exam",
+  "finals",
+  "lecture",
+  "lectures",
+  "professor",
+  "professors",
+  "TA",
+  "TAs",
+  "office hour",
+  "office hours",
+  "class",
+  "classes",
+  "course",
+  "courses",
+  "quiz",
+  "quizzes",
+  "textbook",
+  "textbooks",
+  "problem set",
+  "problem sets",
+];
+
+const EMAIL_LIKELY_ACADEMIC_KEYWORDS_JA = [
+  "シラバス",
+  "課題",
+  "宿題",
+  "中間",
+  "期末",
+  "試験",
+  "講義",
+  "教授",
+  "先生",
+  "オフィスアワー",
+  "授業",
+  "履修",
+  "レポート",
+  "提出",
+];
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// English keywords use \b boundaries so "TA" doesn't match "Toyota" /
+// "data", "class" doesn't match "classify", etc. Japanese has no word
+// boundaries so we substring-match — the JA keywords here are kanji
+// compounds with low collision risk in non-academic Japanese text.
+const ACADEMIC_EN_REGEX = new RegExp(
+  `\\b(?:${EMAIL_LIKELY_ACADEMIC_KEYWORDS_EN.map(escapeRegExp).join("|")})\\b`,
+  "i"
+);
+
+export function isEmailLikelyAcademic(
+  subject: string | null,
+  snippet: string | null
+): boolean {
+  const text = `${subject ?? ""}\n${snippet ?? ""}`;
+  if (!text.trim()) return false;
+  if (ACADEMIC_EN_REGEX.test(text)) return true;
+  for (const kw of EMAIL_LIKELY_ACADEMIC_KEYWORDS_JA) {
+    if (text.includes(kw)) return true;
+  }
+  return false;
+}
 
 // Per-source timeout. §4.6: calendar tolerates 100-500ms; structured/vector
 // branches finish under 50ms but are wrapped for safety.
@@ -189,6 +276,15 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
     classCode = c?.code ?? null;
   }
 
+  // Engineer-35 — derived gates for non-academic / class-unbound emails.
+  // `isClassBound` keys off the binder's verdict (any method other than
+  // "none" means the L1 binding heuristic decided this email belongs to a
+  // class). `shouldGateNonAcademic` short-circuits syllabus + vector
+  // mistakes when the email is both unbound AND lacks academic keywords.
+  const isClassBound = method !== "none";
+  const isAcademic = isEmailLikelyAcademic(input.subject, input.snippet);
+  const shouldGateNonAcademic = !isClassBound && !isAcademic;
+
   const k_emails =
     input.phase === "deep"
       ? FANOUT_K_EMAILS_DEEP
@@ -212,6 +308,10 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
         return loadMistakesByClass(input.userId, classId, FANOUT_K_MISTAKES);
       }
       if (!queryEmbedding) return [];
+      // Engineer-35 — drop vector-mistakes retrieval for unbound +
+      // non-academic emails (recruiting / billing / OTP / vendor
+      // support). Keeps unrelated past mistakes out of the reasoning.
+      if (shouldGateNonAcademic) return [];
       return loadVectorMistakes(
         input.userId,
         queryEmbedding,
@@ -223,6 +323,12 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
         // No embedding → can't rank; skip.
         return [];
       }
+      // Engineer-35 — same gate. Vector similarity at any threshold is
+      // too lossy when the email is structurally non-academic.
+      if (shouldGateNonAcademic) return [];
+      const floor = isClassBound
+        ? SYLLABUS_SIM_FLOOR_BOUND
+        : SYLLABUS_SIM_FLOOR_UNBOUND;
       const rows = classId
         ? await loadSyllabusChunksByClass(
             input.userId,
@@ -235,7 +341,7 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
             queryEmbedding,
             FANOUT_K_SYLLABUS
           );
-      return rows.filter((r) => r.similarity >= SIM_FLOOR);
+      return rows.filter((r) => r.similarity >= floor);
     }, timeouts),
     timed("emails", async () => {
       const queryText =
@@ -302,6 +408,13 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
   const detail = {
     phase: input.phase,
     classBinding: { classId, method, confidence },
+    // Engineer-35 — surface the gate decision so admin metrics can chart
+    // how many ingest cycles short-circuit syllabus/mistakes retrieval.
+    academic_gate: {
+      isClassBound,
+      isAcademic,
+      shouldGateNonAcademic,
+    },
     counts: {
       mistakes: mistakes.value.length,
       syllabus: syllabusChunks.value.length,
