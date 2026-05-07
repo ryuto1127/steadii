@@ -40,6 +40,21 @@ export async function getUserTimezone(userId: string): Promise<string | null> {
   return row?.timezone ?? null;
 }
 
+// 2026-05-06 — locale for downstream prompt construction (L2 deep-pass
+// reasoning lives in the inbox-detail draft-details panel post PR #167,
+// so the LLM's output language must match the user's app locale).
+// Returns "en" by default — most existing users haven't explicitly set
+// the JP toggle.
+export async function getUserLocale(userId: string): Promise<"en" | "ja"> {
+  const [row] = await db
+    .select({ preferences: users.preferences })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const locale = row?.preferences?.locale;
+  return locale === "ja" ? "ja" : "en";
+}
+
 export async function setUserTimezone(userId: string, tz: string): Promise<void> {
   await db
     .update(users)
