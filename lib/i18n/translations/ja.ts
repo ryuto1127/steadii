@@ -653,6 +653,11 @@ export const ja: Messages = {
       collapse: "折りたたむ",
       expand: "展開",
     },
+    draft_details: {
+      expand: "Steadii の判断詳細を見る",
+      collapse: "判断詳細を閉じる",
+      sources_heading: "Steadii が参照したソース",
+    },
     thinking_bar: {
       thinking_complete: "判断 · 完了",
       bound_to: "リンク先:",
