@@ -226,8 +226,20 @@ export default async function QueuePreview({
             },
           ]}
           todayTasks={[
-            { id: "t1", title: "Submit ECO101 problem set 4", classTitle: "ECO101" },
-            { id: "t2", title: "Read MAT223 §5.3", classTitle: "MAT223" },
+            {
+              kind: "steadii",
+              id: "t1",
+              title: "Submit ECO101 problem set 4",
+              classTitle: "ECO101",
+              due: null,
+            },
+            {
+              kind: "steadii",
+              id: "t2",
+              title: "Read MAT223 §5.3",
+              classTitle: "MAT223",
+              due: null,
+            },
           ]}
           upcomingDeadlines={[
             {
