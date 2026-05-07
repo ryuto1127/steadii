@@ -549,6 +549,11 @@ type MessagesShape = {
       collapse: string;
       expand: string;
     };
+    draft_details: {
+      expand: string;
+      collapse: string;
+      sources_heading: string;
+    };
     thinking_bar: {
       thinking_complete: string;
       bound_to: string;
@@ -2088,6 +2093,11 @@ export const en: MessagesShape = {
       header_default: "Steadii's reasoning",
       collapse: "Collapse",
       expand: "Expand",
+    },
+    draft_details: {
+      expand: "Show Steadii's reasoning",
+      collapse: "Hide reasoning",
+      sources_heading: "Sources Steadii referenced",
     },
     thinking_bar: {
       thinking_complete: "Thinking · complete",
