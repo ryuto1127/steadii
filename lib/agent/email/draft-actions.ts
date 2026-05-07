@@ -1,7 +1,7 @@
 "use server";
 
 import * as Sentry from "@sentry/nextjs";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import {
@@ -127,18 +127,99 @@ export async function cancelPendingSendAction(draftId: string): Promise<void> {
   revalidatePath(`/app/inbox/${draft.id}`);
 }
 
+// Cascade a dismiss/snooze across every pending draft in the same Gmail
+// thread. Without this, dismissing one follow-up's draft just exposes the
+// next-newest draft in the same thread (each follow-up email creates its
+// own agent_draft) and the user has to keep clicking Skip on what looks
+// like the same card. The dedup at queue-build time (PR #156's
+// dedupePendingDraftsByThread) collapses to one card visually but doesn't
+// flip the underlying rows — so the next render picks the next pending.
+//
+// `inboxItemMode` is what to set on the inbox_items: "dismissed" mirrors
+// the legacy single-row dismiss behavior, "snoozed" mirrors the legacy
+// 24h-snooze path. resolvedAt = now for dismiss, snooze-until for snooze.
+//
+// Edge: when threadExternalId is null (rare, malformed Gmail headers),
+// fall back to single-row update — dismissing every null-thread draft
+// would over-cascade across unrelated items.
+async function cascadeDismissThread(args: {
+  userId: string;
+  draftId: string;
+  inboxItemId: string;
+  threadExternalId: string | null;
+  inboxItemMode: "dismissed" | "snoozed";
+  inboxItemResolvedAt: Date;
+}): Promise<void> {
+  const now = new Date();
+
+  if (!args.threadExternalId) {
+    await db
+      .update(agentDrafts)
+      .set({ status: "dismissed", updatedAt: now })
+      .where(eq(agentDrafts.id, args.draftId));
+    await db
+      .update(inboxItems)
+      .set({
+        status: args.inboxItemMode,
+        resolvedAt: args.inboxItemResolvedAt,
+        updatedAt: now,
+      })
+      .where(eq(inboxItems.id, args.inboxItemId));
+    return;
+  }
+
+  const threadRows = await db
+    .select({ id: inboxItems.id })
+    .from(inboxItems)
+    .where(
+      and(
+        eq(inboxItems.userId, args.userId),
+        eq(inboxItems.threadExternalId, args.threadExternalId)
+      )
+    );
+  const threadInboxItemIds = threadRows.map((r) => r.id);
+
+  await db
+    .update(agentDrafts)
+    .set({ status: "dismissed", updatedAt: now })
+    .where(
+      and(
+        eq(agentDrafts.userId, args.userId),
+        inArray(agentDrafts.inboxItemId, threadInboxItemIds),
+        eq(agentDrafts.status, "pending")
+      )
+    );
+
+  await db
+    .update(inboxItems)
+    .set({
+      status: args.inboxItemMode,
+      resolvedAt: args.inboxItemResolvedAt,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(inboxItems.userId, args.userId),
+        inArray(inboxItems.id, threadInboxItemIds),
+        eq(inboxItems.status, "open")
+      )
+    );
+}
+
 export async function dismissAgentDraftAction(draftId: string): Promise<void> {
   const userId = await getUserId();
   const { draft, inbox } = await loadDraftAndInbox(userId, draftId);
   const now = new Date();
-  await db
-    .update(agentDrafts)
-    .set({ status: "dismissed", updatedAt: now })
-    .where(eq(agentDrafts.id, draft.id));
-  await db
-    .update(inboxItems)
-    .set({ status: "dismissed", resolvedAt: now, updatedAt: now })
-    .where(eq(inboxItems.id, draft.inboxItemId));
+  await cascadeDismissThread({
+    userId,
+    draftId: draft.id,
+    inboxItemId: draft.inboxItemId,
+    threadExternalId: inbox.threadExternalId,
+    inboxItemMode: "dismissed",
+    inboxItemResolvedAt: now,
+  });
+  // Feedback + audit are scoped to the originating draft only — recording
+  // per-thread-mate would over-bias the sender model toward dismissal.
   await recordSenderFeedback({
     userId,
     senderEmail: inbox.senderEmail,
@@ -164,18 +245,17 @@ export async function snoozeAgentDraftAction(
   untilIso: string
 ): Promise<void> {
   const userId = await getUserId();
-  const { draft } = await loadDraftAndInbox(userId, draftId);
+  const { draft, inbox } = await loadDraftAndInbox(userId, draftId);
   const until = new Date(untilIso);
   if (Number.isNaN(until.getTime())) throw new Error("Invalid snooze date");
-  const now = new Date();
-  await db
-    .update(agentDrafts)
-    .set({ status: "dismissed", updatedAt: now })
-    .where(eq(agentDrafts.id, draft.id));
-  await db
-    .update(inboxItems)
-    .set({ status: "snoozed", resolvedAt: until, updatedAt: now })
-    .where(eq(inboxItems.id, draft.inboxItemId));
+  await cascadeDismissThread({
+    userId,
+    draftId: draft.id,
+    inboxItemId: draft.inboxItemId,
+    threadExternalId: inbox.threadExternalId,
+    inboxItemMode: "snoozed",
+    inboxItemResolvedAt: until,
+  });
   await logEmailAudit({
     userId,
     action: "email_l2_completed",
