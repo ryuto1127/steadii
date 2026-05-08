@@ -993,6 +993,28 @@ export type RetrievalProvenance = {
   } | null;
 };
 
+// engineer-39 — structured action items the deep pass extracted from the
+// inbound email. Persisted on agent_drafts.extracted_action_items. The
+// DraftDetailsPanel surfaces items >= MIN_CONFIDENCE; "Add to my tasks"
+// writes to assignments + Google Tasks and records the index in
+// accepted_action_item_indices for idempotency.
+export type ExtractedActionItem = {
+  // Short imperative ("Submit photo ID", "Reply by Friday with availability").
+  title: string;
+  // Optional ISO date when the email implies a deadline. YYYY-MM-DD.
+  dueDate: string | null;
+  // Confidence 0-1. UI only surfaces items >= 0.6 to suppress noise.
+  confidence: number;
+};
+
+// engineer-39 — pre-send fact-checker output. Persisted so the warning
+// modal can re-render after a route refresh and so analytics can audit
+// how often the check fires per user.
+export type PreSendWarning = {
+  phrase: string;
+  why: string;
+};
+
 // W1 writes no rows; W2 starts populating. The W2-added columns
 // (retrieval_provenance, risk_pass_usage_id, paused_at_step) + the rename of
 // classify_usage_id → deep_pass_usage_id reflect the risk/deep two-pass
@@ -1068,6 +1090,29 @@ export const agentDrafts = pgTable(
     // them.
     qstashMessageId: text("qstash_message_id"),
     gmailDraftId: text("gmail_draft_id"),
+
+    // engineer-39 — structured to-dos the deep pass extracted from the
+    // inbound email. Surfaces in DraftDetailsPanel and is accepted via
+    // acceptDraftActionItemAction (writes to assignments + Google Tasks).
+    // Default empty array so legacy rows pre-migration read consistently.
+    extractedActionItems: jsonb("extracted_action_items")
+      .$type<ExtractedActionItem[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    // engineer-39 — indices into extractedActionItems that the user has
+    // already accepted. Idempotency guard so a double-click on
+    // "Add to my tasks" doesn't dup the assignment / Google Task.
+    acceptedActionItemIndices: jsonb("accepted_action_item_indices")
+      .$type<number[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    // engineer-39 — pre-send fact-checker warnings. Populated by the
+    // approveAgentDraftAction path before enqueueing the send when the
+    // sanity-check returned ok=false. Empty array on the happy path.
+    preSendWarnings: jsonb("pre_send_warnings")
+      .$type<PreSendWarning[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
 
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
       .notNull()
@@ -1153,6 +1198,59 @@ export const agentSenderFeedback = pgTable(
 
 export type AgentSenderFeedback = typeof agentSenderFeedback.$inferSelect;
 export type NewAgentSenderFeedback = typeof agentSenderFeedback.$inferInsert;
+
+// engineer-39 — per-(user, contact) memory. The persona-learner cron
+// distills the relationship label + a short list of facts about the
+// contact from the user's correspondence history with them. Surfaces in
+// the L2 fanout's contactPersona block (so drafts respect the relationship)
+// and in Settings → How your agent thinks (so the user can correct mistakes
+// or wipe a stale persona). User-scoped — never read across users.
+export const agentContactPersonas = pgTable(
+  "agent_contact_personas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    contactEmail: text("contact_email").notNull(),
+    contactName: text("contact_name"),
+    // Free-form short label for the relationship (e.g. "MAT223 instructor",
+    // "Stripe support", "Mom"). Surfaced in draft prompts AND in the
+    // settings surface so the user can correct mistakes.
+    relationship: text("relationship"),
+    // Up to 8 short factual statements about the contact. Strings only;
+    // structured fields would over-engineer the v1 surface.
+    facts: jsonb("facts")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    // Last full extraction timestamp. The cron skips contacts where
+    // last_extracted_at > now() - 7 days OR no new inbox/sent activity
+    // since.
+    lastExtractedAt: timestamp("last_extracted_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userEmailUnique: uniqueIndex("agent_contact_personas_user_email_uniq").on(
+      t.userId,
+      t.contactEmail
+    ),
+    userExtractedIdx: index(
+      "agent_contact_personas_user_extracted_idx"
+    ).on(t.userId, t.lastExtractedAt),
+  })
+);
+
+export type AgentContactPersona = typeof agentContactPersonas.$inferSelect;
+export type NewAgentContactPersona = typeof agentContactPersonas.$inferInsert;
 
 // One row per inbox_item holding the OpenAI `text-embedding-3-small` 1536-dim
 // vector of its subject+body. Used by L2 deep-pass retrieval to surface

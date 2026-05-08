@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/nextjs";
 import { and, desc, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
+  agentContactPersonas,
   agentDrafts,
   assignments,
   classes,
@@ -170,6 +171,17 @@ export type FanoutSenderHistory = {
   source: "steadii" | "gmail_direct";
 };
 
+// engineer-39 — per-(user, contact) persona block. Populated by the
+// persona-learner cron and surfaced in draft / classify / deep prompts
+// as the "Contact persona" block. Null when no row exists yet (first
+// interaction, fresh contact). The relationship label appears in the
+// block header; facts render as a bullet list.
+export type FanoutContactPersona = {
+  relationship: string | null;
+  facts: string[];
+  lastExtractedAt: Date | null;
+};
+
 export type FanoutSyllabusChunk = {
   chunkId: string;
   syllabusId: string;
@@ -220,6 +232,11 @@ export type FanoutResult = {
   // phase; classify + deep phases get an empty list to keep the hot
   // path quota-cheap.
   similarSent: SimilarSentEmail[];
+  // engineer-39 — LLM-distilled persona for the inbox row's sender.
+  // Null when no agent_contact_personas row exists yet for this
+  // (user, contact_email) pair. Cheap DB lookup so populated for all
+  // phases.
+  contactPersona: FanoutContactPersona | null;
   syllabusChunks: FanoutSyllabusChunk[];
   similarEmails: SimilarEmail[];
   totalSimilarCandidates: number;
@@ -230,6 +247,7 @@ export type FanoutResult = {
   timings: {
     senderHistory: number;
     similarSent: number;
+    contactPersona: number;
     syllabus: number;
     emails: number;
     calendar: number;
@@ -350,7 +368,14 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
   // sender are the strongest tone/register signal: vector retrieval
   // never reaches for them and they're the moment Steadii's drafts
   // start sounding like the user wrote them rather than a template.
-  const [senderHistory, similarSent, syllabusChunks, emails, calendar] = await Promise.all([
+  const [
+    senderHistory,
+    similarSent,
+    contactPersona,
+    syllabusChunks,
+    emails,
+    calendar,
+  ] = await Promise.all([
     timed(
       "senderHistory",
       async () => {
@@ -377,6 +402,18 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
           excludeRecipientEmail: input.senderEmail,
           k: FANOUT_K_SIMILAR_SENT,
         });
+      },
+      timeouts
+    ),
+    timed(
+      "contactPersona",
+      async () => {
+        // engineer-39 — single-row lookup keyed on (userId, senderEmail).
+        // Cheap DB read; populated across all phases. Null when the
+        // persona-learner cron hasn't extracted a row yet.
+        if (!input.senderEmail)
+          return null as FanoutContactPersona | null;
+        return loadContactPersona(input.userId, input.senderEmail);
       },
       timeouts
     ),
@@ -480,6 +517,8 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
     counts: {
       senderHistory: senderHistory.value.length,
       similarSent: similarSent.value.length,
+      // engineer-39 — 1 = persona row hit, 0 = first interaction.
+      contactPersona: contactPersona.value ? 1 : 0,
       syllabus: syllabusChunks.value.length,
       emails: emails.value.results.length,
       calendar:
@@ -490,6 +529,7 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
     timings_ms: {
       senderHistory: senderHistory.elapsed,
       similarSent: similarSent.elapsed,
+      contactPersona: contactPersona.elapsed,
       syllabus: syllabusChunks.elapsed,
       emails: emails.elapsed,
       calendar: calendar.elapsed,
@@ -524,6 +564,7 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
     },
     senderHistory: senderHistory.value,
     similarSent: similarSent.value,
+    contactPersona: contactPersona.value,
     syllabusChunks: syllabusChunks.value,
     similarEmails: emails.value.results,
     totalSimilarCandidates: emails.value.totalCandidates,
@@ -531,6 +572,7 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
     timings: {
       senderHistory: senderHistory.elapsed,
       similarSent: similarSent.elapsed,
+      contactPersona: contactPersona.elapsed,
       syllabus: syllabusChunks.elapsed,
       emails: emails.elapsed,
       calendar: calendar.elapsed,
@@ -669,6 +711,35 @@ async function loadSenderHistorySteadii(
       originalSnippet: r.originalSnippet,
       gmailSentMessageId: r.gmailSentMessageId,
     }));
+}
+
+// engineer-39 — single-row persona lookup keyed on (userId, contactEmail).
+// Returns null when no row exists yet (first interaction with this
+// contact, or persona-learner hasn't run yet for this user).
+export async function loadContactPersona(
+  userId: string,
+  contactEmail: string
+): Promise<FanoutContactPersona | null> {
+  const [row] = await db
+    .select({
+      relationship: agentContactPersonas.relationship,
+      facts: agentContactPersonas.facts,
+      lastExtractedAt: agentContactPersonas.lastExtractedAt,
+    })
+    .from(agentContactPersonas)
+    .where(
+      and(
+        eq(agentContactPersonas.userId, userId),
+        eq(agentContactPersonas.contactEmail, contactEmail)
+      )
+    )
+    .limit(1);
+  if (!row) return null;
+  return {
+    relationship: row.relationship,
+    facts: Array.isArray(row.facts) ? row.facts : [],
+    lastExtractedAt: row.lastExtractedAt ?? null,
+  };
 }
 
 async function loadSyllabusChunksByClass(
@@ -949,6 +1020,10 @@ function emptyForSource(source: string): unknown {
   switch (source) {
     case "senderHistory":
       return [] as FanoutSenderHistory[];
+    case "similarSent":
+      return [] as SimilarSentEmail[];
+    case "contactPersona":
+      return null as FanoutContactPersona | null;
     case "syllabus":
       return [] as FanoutSyllabusChunk[];
     case "emails":

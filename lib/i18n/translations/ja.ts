@@ -671,6 +671,22 @@ export const ja: Messages = {
       expand: "Steadii の判断詳細を見る",
       collapse: "判断詳細を閉じる",
       sources_heading: "Steadii が参照したソース",
+      action_items: {
+        heading: "Steadii が検出したアクション項目: {n} 件",
+        heading_empty: "アクション項目はありません",
+        add_to_tasks: "タスクに追加",
+        added: "追加済み",
+        adding: "追加中…",
+        toast_added: "タスクに追加しました。",
+        toast_failed: "タスクの追加に失敗しました。",
+      },
+    },
+    pre_send_check: {
+      modal_title: "送信前に確認したい点があります",
+      modal_body:
+        "次の表現は元のメールにありません。送信前にもう一度確認してください。",
+      send_anyway: "このまま送信",
+      cancel: "下書きを編集",
     },
     thinking_bar: {
       thinking_complete: "判断 · 完了",
@@ -1659,6 +1675,15 @@ export const ja: Messages = {
         "まだルールはありません。下書きを編集してから送信した履歴がたまると、Steadii が好みの言い回しを自動で学習し、ここに表示します。",
       remove: "削除",
       removed_toast: "文体ルールを削除しました。",
+    },
+    contact_personas: {
+      heading: "Steadii が学習した連絡先",
+      description:
+        "やり取りしている各相手について Steadii が覚えていることです。関係ラベルは下書きのトーンに反映され、ファクトは返信内容に活かされます。",
+      empty:
+        "まだ学習した連絡先はありません。何人かとやり取りすると、Steadii が各相手について把握した内容をここにまとめます。",
+      remove: "この連絡先を忘れる",
+      no_facts_yet: "具体的なファクトはまだ学習されていません。",
     },
   },
   syllabus_new_page: {
