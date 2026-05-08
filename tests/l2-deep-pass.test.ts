@@ -287,6 +287,7 @@ describe("runDeepPass", () => {
         },
       ],
       similarSent: [],
+      contactPersona: null,
       syllabusChunks: [],
       similarEmails: [],
       totalSimilarCandidates: 0,
@@ -294,6 +295,7 @@ describe("runDeepPass", () => {
       timings: {
         senderHistory: 1,
         similarSent: 0,
+        contactPersona: 0,
         syllabus: 0,
         emails: 0,
         calendar: 0,

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
+  agentContactPersonas,
   agentDrafts,
   agentRules,
   inboxItems,
@@ -13,7 +14,7 @@ import {
 } from "@/lib/db/schema";
 import { ThinkingBar } from "@/components/agent/thinking-bar";
 import { ReasoningPanel } from "@/components/agent/reasoning-panel";
-import { removeWritingStyleRuleAction } from "./actions";
+import { deletePersonaAction, removeWritingStyleRuleAction } from "./actions";
 
 // Phase 7 W1 — read-only retrospective view of the agent's last N
 // decisions. Fulfils the Phase 6 W4 landing-page promise that the agent
@@ -76,6 +77,24 @@ export default async function HowYourAgentThinksPage() {
     .orderBy(asc(agentRules.createdAt));
   const tStyle = await getTranslations("agent_thinks_page.writing_style");
 
+  // engineer-39 — contact personas. Newest-first by lastExtractedAt so
+  // the user sees the freshest learning at the top of the list.
+  const personas = await db
+    .select({
+      id: agentContactPersonas.id,
+      contactEmail: agentContactPersonas.contactEmail,
+      contactName: agentContactPersonas.contactName,
+      relationship: agentContactPersonas.relationship,
+      facts: agentContactPersonas.facts,
+      lastExtractedAt: agentContactPersonas.lastExtractedAt,
+    })
+    .from(agentContactPersonas)
+    .where(eq(agentContactPersonas.userId, userId))
+    .orderBy(desc(agentContactPersonas.lastExtractedAt));
+  const tPersona = await getTranslations(
+    "agent_thinks_page.contact_personas"
+  );
+
   return (
     <div className="mx-auto max-w-3xl space-y-4 px-4 py-8">
       <div className="flex items-center gap-2 text-small text-[hsl(var(--muted-foreground))]">
@@ -93,6 +112,69 @@ export default async function HowYourAgentThinksPage() {
           {t("description_prefix")} {N_DECISIONS} {t("description_suffix")}
         </p>
       </header>
+
+      <section
+        id="contact-personas"
+        className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4"
+      >
+        <h2 className="text-body font-medium">{tPersona("heading")}</h2>
+        <p className="mt-1 text-small text-[hsl(var(--muted-foreground))]">
+          {tPersona("description")}
+        </p>
+        {personas.length === 0 ? (
+          <p className="mt-3 text-small text-[hsl(var(--muted-foreground))]">
+            {tPersona("empty")}
+          </p>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-3">
+            {personas.map((p) => {
+              const factsArray = Array.isArray(p.facts) ? p.facts : [];
+              return (
+                <li
+                  key={p.id}
+                  className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-small font-medium text-[hsl(var(--foreground))]">
+                        {p.contactName ?? p.contactEmail}
+                      </div>
+                      <div className="text-[12px] text-[hsl(var(--muted-foreground))] break-all">
+                        {p.contactEmail}
+                      </div>
+                    </div>
+                    <form action={deletePersonaAction}>
+                      <input type="hidden" name="id" value={p.id} />
+                      <button
+                        type="submit"
+                        className="rounded border border-[hsl(var(--border))] px-3 py-1 text-[11px] transition-hover hover:bg-[hsl(var(--surface-raised))]"
+                      >
+                        {tPersona("remove")}
+                      </button>
+                    </form>
+                  </div>
+                  {p.relationship ? (
+                    <div className="mt-2 inline-block rounded bg-[hsl(var(--surface-raised))] px-2 py-0.5 text-[11px] text-[hsl(var(--foreground))]">
+                      {p.relationship}
+                    </div>
+                  ) : null}
+                  {factsArray.length > 0 ? (
+                    <ul className="mt-2 list-disc pl-5 text-small text-[hsl(var(--foreground))]">
+                      {factsArray.map((f, i) => (
+                        <li key={i}>{f}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-[12px] text-[hsl(var(--muted-foreground))]">
+                      {tPersona("no_facts_yet")}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <section
         id="writing-style"

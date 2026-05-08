@@ -3,7 +3,10 @@ import * as Sentry from "@sentry/nextjs";
 import { openai } from "@/lib/integrations/openai/client";
 import { selectModel } from "@/lib/agent/models";
 import { recordUsage } from "@/lib/agent/usage";
-import type { RetrievalProvenance } from "@/lib/db/schema";
+import type {
+  ExtractedActionItem,
+  RetrievalProvenance,
+} from "@/lib/db/schema";
 import type { SimilarEmail } from "./retrieval";
 import type { RiskPassResult } from "./classify-risk";
 import {
@@ -66,8 +69,21 @@ export type DeepPassResult = {
   action: DeepAction;
   reasoning: string;
   retrievalProvenance: RetrievalProvenance;
+  // engineer-39 — structured to-dos the model extracted from the email.
+  // Persisted on agent_drafts.extracted_action_items; the inbox detail
+  // page surfaces items >= MIN_ACTION_ITEM_CONFIDENCE in the
+  // DraftDetailsPanel under a collapsible "N action items detected"
+  // section. Empty for non-draft_reply actions and for thin emails the
+  // model couldn't extract anything from.
+  actionItems: ExtractedActionItem[];
   usageId: string | null;
 };
+
+// engineer-39 — UI floor for surfacing extracted items. The model is
+// instructed to emit only "high confidence" items but the schema requires
+// a numeric value; the UI still self-gates so a future prompt change
+// can't quietly fill the panel with low-signal noise.
+export const MIN_ACTION_ITEM_CONFIDENCE = 0.6;
 
 const SYSTEM_PROMPT = `You are Steadii's deep classifier for high-risk emails. You receive:
 - the email envelope + snippet
@@ -116,9 +132,25 @@ Examples (concise — full reasoning lives in your output):
 
 When proposing the action, reuse tone / register / phrase patterns from how the user has historically replied to this same sender (self-N). The "How you usually reply to this sender" block is the single strongest signal for register; treat it as ground truth for what the user wants to send.
 
+When a "Contact persona" block is present, use it to set tone + register and to interpret the request (e.g. a relationship label of "MAT223 instructor" pushes formal-academic; "Mom" pushes casual). Don't echo facts from the persona block back to the contact unless the user explicitly asked — the persona is internal context, not content for the reply.
+
 Glass-box transparency is a hard product requirement. Reasoning bullets MUST cite which fanout source informed each conclusion using the per-source tags in the user content (self-N, syllabus-N, calendar-N, email-N). Cite at least one source when any are present; ungrounded claims are unacceptable.
 
-Reasoning language: write reasoning in the user's app locale specified in the user message ("Reasoning language: en" → write English; "Reasoning language: ja" → write Japanese). The reasoning is surfaced in the inbox-detail draft-details panel (collapsed-by-default, but still user-visible), so localization matters. Default to English when no language hint is present.`;
+Reasoning language: write reasoning in the user's app locale specified in the user message ("Reasoning language: en" → write English; "Reasoning language: ja" → write Japanese). The reasoning is surfaced in the inbox-detail draft-details panel (collapsed-by-default, but still user-visible), so localization matters. Default to English when no language hint is present.
+
+After your reasoning, populate "actionItems" with concrete obligations this email creates for the student — discrete to-dos with optional due dates. Examples of valid action items:
+- "Submit photo ID to registrar" (due 2026-05-15)
+- "Reply to professor with availability for Thursday" (no due date)
+- "Pay $250 enrollment deposit" (due 2026-06-01)
+- "Bring signed waiver to first lecture"
+
+Do NOT extract:
+- vague invitations ("looks forward to seeing you", "let me know if questions")
+- one-way notifications without an obligation ("your grade has been posted", "the syllabus is now available")
+- the act of replying itself (the user knows that — the reply is what Steadii is drafting)
+- speculation ("might want to check…")
+
+Each item carries a confidence score 0–1. Only emit items with confidence ≥ 0.6; below that, omit them. Title is a short imperative (≤ 80 chars). Due date is YYYY-MM-DD only when the email gives a concrete deadline; otherwise null. Output an empty actionItems array when the email has no concrete obligations.`;
 
 const DEEP_PASS_JSON_SCHEMA = {
   type: "object",
@@ -136,8 +168,25 @@ const DEEP_PASS_JSON_SCHEMA = {
       ],
     },
     reasoning: { type: "string", minLength: 1, maxLength: 1500 },
+    // engineer-39 — concrete to-dos the email creates for the student.
+    // See system prompt for inclusion rules. Strict-mode requires
+    // dueDate to allow null (use ["string", "null"]). UI floor is 0.6.
+    actionItems: {
+      type: "array",
+      maxItems: 8,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          title: { type: "string", minLength: 1, maxLength: 200 },
+          dueDate: { type: ["string", "null"] },
+          confidence: { type: "number", minimum: 0, maximum: 1 },
+        },
+        required: ["title", "dueDate", "confidence"],
+      },
+    },
   },
-  required: ["action", "reasoning"],
+  required: ["action", "reasoning", "actionItems"],
 } as const;
 
 export async function runDeepPass(
@@ -192,6 +241,7 @@ export async function runDeepPass(
       return {
         action: parsed.action,
         reasoning: parsed.reasoning,
+        actionItems: parsed.actionItems,
         retrievalProvenance,
         usageId: rec.usageId,
       };
@@ -202,6 +252,7 @@ export async function runDeepPass(
 export function parseDeepPassOutput(raw: string): {
   action: DeepAction;
   reasoning: string;
+  actionItems: ExtractedActionItem[];
 } {
   let j: unknown;
   try {
@@ -225,7 +276,33 @@ export function parseDeepPassOutput(raw: string): {
     typeof o.reasoning === "string" && o.reasoning.trim().length > 0
       ? o.reasoning
       : "Model output was unparseable; deferring to user review.";
-  return { action, reasoning };
+  const actionItems = parseActionItems(o.actionItems);
+  return { action, reasoning, actionItems };
+}
+
+// engineer-39 — defensive parser. Strict-mode JSON-schema enforces shape
+// at the OpenAI side, but we still validate locally because the in-process
+// orchestrator code paths don't depend on schema enforcement (a model-side
+// regression should still degrade safely to "no items extracted").
+function parseActionItems(raw: unknown): ExtractedActionItem[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ExtractedActionItem[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const title =
+      typeof r.title === "string" ? r.title.trim().slice(0, 200) : "";
+    if (title.length === 0) continue;
+    let dueDate: string | null = null;
+    if (typeof r.dueDate === "string") {
+      const m = /^(\d{4}-\d{2}-\d{2})/.exec(r.dueDate.trim());
+      if (m) dueDate = m[1];
+    }
+    const confidenceRaw = typeof r.confidence === "number" ? r.confidence : 0;
+    const confidence = Math.max(0, Math.min(1, confidenceRaw));
+    out.push({ title, dueDate, confidence });
+  }
+  return out;
 }
 
 function buildUserContent(input: DeepPassInput): string {
