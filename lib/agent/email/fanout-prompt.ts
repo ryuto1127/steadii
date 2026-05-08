@@ -9,24 +9,23 @@ export type { FanoutResult } from "./fanout";
 // per locked decision §12.2 — easier to reason about, no cross-source
 // merger truncation logic in v1.
 //
-// The numbers track the scoping doc §5.3 table:
-//   classify: 3×250 mistakes, 3×250 syllabus, ≤8 calendar
-//   draft:    3×500 mistakes, 3×500 syllabus, ≤25 calendar
+// engineer-38 — `senderBody` replaces the prior `mistakeBody` slot. The
+// caps stay the same per phase: 250/500/800 chars per past reply body.
 const CAPS = {
   classify: {
-    mistakeBody: 250,
+    senderBody: 250,
     syllabusChunk: 250,
     calendarRows: 8,
   },
   draft: {
-    mistakeBody: 500,
+    senderBody: 500,
     syllabusChunk: 500,
     calendarRows: 25,
   },
   deep: {
     // High-risk drafts paid for the deep pass already. Per §5.3
     // risk-tier scaling, allow chars-per-row to scale up.
-    mistakeBody: 800,
+    senderBody: 800,
     syllabusChunk: 900,
     calendarRows: 25,
   },
@@ -60,21 +59,26 @@ export function buildFanoutContextBlocks(
     );
   }
 
-  // === Relevant past mistakes (N) ===
+  // === How you usually reply to this sender (N, most-recent first) ===
+  // engineer-38 — replaces the legacy `mistake-N` slot. Per-source tag
+  // is `self-N` so the citation regex (and future feedback UIs) can key
+  // off a stable shape; "self" = past reply written by THIS user.
   lines.push("");
   lines.push(
-    `=== Relevant past mistakes (${fanout.mistakes.length}) ===`
+    `=== How you usually reply to this sender (${fanout.senderHistory.length}, most-recent first) ===`
   );
-  if (fanout.mistakes.length === 0) {
-    lines.push("(none — no past mistakes for this class / topic)");
+  if (fanout.senderHistory.length === 0) {
+    lines.push("(none — no past replies the user has sent to this sender)");
   } else {
-    fanout.mistakes.forEach((m, i) => {
-      const meta = [m.unit ?? null, m.difficulty ?? null]
-        .filter(Boolean)
-        .join(" · ");
-      const head = meta ? `${m.title} [${meta}]` : m.title;
-      const body = m.bodySnippet.replace(/\s+/g, " ").trim().slice(0, caps.mistakeBody);
-      lines.push(`mistake-${i + 1}: ${head} — ${body}`);
+    fanout.senderHistory.forEach((h, i) => {
+      const date = h.sentAt.toISOString().slice(0, 10);
+      const subj = h.draftSubject ?? "(no subject)";
+      const body = (h.draftBody ?? "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, caps.senderBody);
+      lines.push(`self-${i + 1}: [${date}] Subject: "${subj}"`);
+      lines.push(`  Body: "${body}"`);
     });
   }
 
@@ -142,11 +146,11 @@ export function buildFanoutContextBlocks(
   // empty (calendar can be empty for a different reason — disconnected),
   // prepend a hint so the model doesn't over-hedge.
   if (
-    fanout.mistakes.length === 0 &&
+    fanout.senderHistory.length === 0 &&
     fanout.syllabusChunks.length === 0
   ) {
     lines.unshift(
-      "[Empty-corpus hint: this user has no relevant mistakes or syllabus chunks. Reason from the email content alone.]",
+      "[Empty-corpus hint: this user has no past replies to this sender or relevant syllabus chunks. Reason from the email content alone.]",
       ""
     );
   }

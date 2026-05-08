@@ -33,9 +33,20 @@ export type DraftInput = {
   // for backwards-compat with callers that haven't moved to fanout yet.
   calendarEvents: DraftCalendarEvent[];
   // Phase 7 W1 — multi-source fanout context. When set, replaces the
-  // legacy calendar-only block and adds class binding + mistakes +
+  // legacy calendar-only block and adds class binding + sender history +
   // syllabus blocks.
   fanout?: FanoutResult | null;
+  // engineer-38 — one-line writing-voice description ("Gen-Z Vancouver
+  // student writing concise EN/JA mix; signs off with name only.").
+  // Pulled from users.preferences.voiceProfile by the orchestrator and
+  // injected as a single line near the top of the prompt. Optional so
+  // legacy callers keep working with no prompt-shape change.
+  voiceProfile?: string | null;
+  // engineer-38 — short sentences extracted by the style-learner cron
+  // from past edit deltas ("Use 確認 instead of ご確認."). Listed under
+  // "Your writing-style preferences" so the model treats them as soft
+  // rules. Empty array = no learner output yet.
+  writingStyleRules?: string[];
   // Optional — if null, the model picks from the sender's To/From.
   userName: string | null;
   userEmail: string | null;
@@ -90,8 +101,11 @@ Default to "draft" when there is one obviously-correct interpretation. Don't ask
 
 Always populate every field. For "clarify": subject is still 'Re: <original>', body is the question(s), to/cc target the original sender as if you were drafting a reply (because you are — it's an email, just one that asks). 'reasoning' is one or two short sentences explaining why you picked this kind.
 
-Fanout grounding (when "Class binding" / "Relevant past mistakes" / "Relevant syllabus sections" / "Calendar" / "Reference: similar past emails" blocks are present):
-- Use the per-source tags (mistake-N, syllabus-N, calendar-N, email-N) to ground tone, content, and any factual claim. If the syllabus says late submissions lose 10%, cite syllabus-N. If a past mistake shows you've already covered this exact topic with this prof, cite mistake-N.
+Fanout grounding (when "Class binding" / "How you usually reply to this sender" / "Relevant syllabus sections" / "Calendar" / "Reference: similar past emails" blocks are present):
+- Use the per-source tags (self-N, syllabus-N, calendar-N, email-N) to ground tone, content, and any factual claim.
+- The "How you usually reply to this sender" block (self-N) is the strongest tone/register signal: match the user's prior reply tone, length, and register to this same sender. Do NOT echo phrases verbatim — use them as a model for register, not a template.
+- If a "Your writing voice" block is present, treat it as the cold-start anchor: register, language mix, length, signature pattern. The sender-history block, when present, OVERRIDES the voice block for sender-specific style.
+- If a "Your writing-style preferences" block is present, treat each bullet as a soft rule learned from the user's past edits. Apply where natural; don't force them in if a rule clearly doesn't fit the current email.
 - "Reasoning" MUST cite which fanout source(s) informed each conclusion, using those tags. Glass-box transparency is non-negotiable; ungrounded factual claims are unacceptable.
 
 Language rules — keep these distinct:
@@ -227,6 +241,30 @@ export function parseDraftOutput(raw: string): {
 
 function buildUserContent(input: DraftInput): string {
   const parts: string[] = [];
+
+  // engineer-38 — voice profile + writing-style rules render BEFORE the
+  // email itself. Voice = cold-start anchor (always-on identity). Style
+  // rules = soft per-user prefs learned from edit deltas. Sender-history
+  // (inside the fanout block below) takes precedence over both for
+  // sender-specific register; the prompt's grounding rules above tell
+  // the model exactly how to reconcile.
+  const voice = input.voiceProfile?.trim();
+  if (voice) {
+    parts.push("=== Your writing voice ===");
+    parts.push(voice);
+    parts.push("");
+  }
+  const styleRules = (input.writingStyleRules ?? [])
+    .map((r) => r.trim())
+    .filter((r) => r.length > 0);
+  if (styleRules.length > 0) {
+    parts.push(
+      "=== Your writing-style preferences (learned from past edits) ==="
+    );
+    for (const r of styleRules) parts.push(`- ${r}`);
+    parts.push("");
+  }
+
   parts.push("=== Email you're replying to ===");
   parts.push(
     `From: ${input.senderName ? `${input.senderName} <${input.senderEmail}>` : input.senderEmail}`

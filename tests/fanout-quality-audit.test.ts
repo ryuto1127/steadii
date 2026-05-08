@@ -37,6 +37,19 @@ const inboxItemsSchema = {
   classId: tag("inboxItems.classId"),
   classBindingMethod: tag("inboxItems.classBindingMethod"),
   classBindingConfidence: tag("inboxItems.classBindingConfidence"),
+  senderEmail: tag("inboxItems.senderEmail"),
+  subject: tag("inboxItems.subject"),
+  snippet: tag("inboxItems.snippet"),
+};
+
+const agentDraftsSchema = {
+  id: tag("agentDrafts.id"),
+  userId: tag("agentDrafts.userId"),
+  inboxItemId: tag("agentDrafts.inboxItemId"),
+  status: tag("agentDrafts.status"),
+  draftSubject: tag("agentDrafts.draftSubject"),
+  draftBody: tag("agentDrafts.draftBody"),
+  sentAt: tag("agentDrafts.sentAt"),
 };
 
 const emailEmbeddingsSchema = {
@@ -73,12 +86,14 @@ vi.mock("@/lib/db/schema", () => ({
   emailEmbeddings: emailEmbeddingsSchema,
   mistakeNotes: mistakeNotesSchema,
   assignments: assignmentsSchema,
+  agentDrafts: agentDraftsSchema,
 }));
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => ({ kind: "and", args }),
   eq: (col: unknown, val: unknown) => ({ kind: "eq", col, val }),
   isNull: (col: unknown) => ({ kind: "isNull", col }),
+  isNotNull: (col: unknown) => ({ kind: "isNotNull", col }),
   desc: (col: unknown) => ({ kind: "desc", col }),
   gte: (col: unknown, val: unknown) => ({ kind: "gte", col, val }),
   lt: (col: unknown, val: unknown) => ({ kind: "lt", col, val }),
@@ -106,6 +121,7 @@ const mistakesExecuteQueue: Array<{ rows: unknown[] }> = [];
 function chainFor(table: unknown) {
   const c = {
     leftJoin: () => c,
+    innerJoin: () => c,
     where: () => c,
     orderBy: () => c,
     limit: async () => resultsByTable.get(table) ?? [],
@@ -323,10 +339,11 @@ describe("fanoutForInbox — non-academic gate", () => {
         "※要返信※【令和トラベル】明日のグループディスカッション選考のご案内",
       snippet:
         "令和トラベル株式会社の選考にご応募いただきありがとうございます。",
+      senderEmail: null,
     });
 
     expect(out.syllabusChunks).toEqual([]);
-    expect(out.mistakes).toEqual([]);
+    expect(out.senderHistory).toEqual([]);
     // The gate fires before any vector SQL — db.execute is never called
     // by syllabus / mistakes loaders. (searchSimilarEmails is mocked at
     // module level, so it doesn't touch this counter either.)
@@ -351,10 +368,11 @@ describe("fanoutForInbox — non-academic gate", () => {
       subject: "Your Stripe invoice for April 2026",
       snippet:
         "Invoice #INV-12345 total $42.00. Card ending 4242 will be charged.",
+      senderEmail: null,
     });
 
     expect(out.syllabusChunks).toEqual([]);
-    expect(out.mistakes).toEqual([]);
+    expect(out.senderHistory).toEqual([]);
     expect(executeCalls.length).toBe(0);
   });
 
@@ -395,6 +413,7 @@ describe("fanoutForInbox — non-academic gate", () => {
       phase: "deep",
       subject: "Midterm review session this Friday",
       snippet: "We'll be holding a midterm review in BA1230 from 5-7pm.",
+      senderEmail: null,
     });
 
     // Either order — both syllabus and mistakes vector loaders ran.
@@ -437,6 +456,7 @@ describe("fanoutForInbox — non-academic gate", () => {
       phase: "deep",
       subject: "Course updates this week",
       snippet: "A few course-related updates for you.",
+      senderEmail: null,
     });
 
     // EMAIL_LIKELY_ACADEMIC fires (course keyword) so the gate doesn't
@@ -481,6 +501,7 @@ describe("fanoutForInbox — non-academic gate", () => {
       phase: "deep",
       subject: "MAT223 — assignment 3",
       snippet: "Due Friday.",
+      senderEmail: null,
     });
 
     expect(out.classBinding.method).toBe("subject_code");

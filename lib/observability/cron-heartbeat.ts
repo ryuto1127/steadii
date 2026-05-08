@@ -26,6 +26,8 @@ export const CRON_EXPECTED_INTERVAL_MS: Record<string, number> = {
   "scanner": 5 * 60 * 1000, // every 5 minutes
   "groups": 6 * 60 * 60 * 1000, // every 6 hours
   "ical-sync": 30 * 60 * 1000, // every 30 minutes
+  // engineer-38 — writing-style learner. Daily 08:00 UTC.
+  "style-learner": 24 * 60 * 60 * 1000,
 };
 
 const STALE_MULTIPLIER = 2;

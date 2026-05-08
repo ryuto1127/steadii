@@ -29,6 +29,21 @@ const inboxItemsSchema = {
   classId: tag("inboxItems.classId"),
   classBindingMethod: tag("inboxItems.classBindingMethod"),
   classBindingConfidence: tag("inboxItems.classBindingConfidence"),
+  // engineer-38 — sender-history fanout joins inbox_items.senderEmail to
+  // agent_drafts via inboxItemId, so the schema mock needs the column too.
+  senderEmail: tag("inboxItems.senderEmail"),
+  subject: tag("inboxItems.subject"),
+  snippet: tag("inboxItems.snippet"),
+};
+
+const agentDraftsSchema = {
+  id: tag("agentDrafts.id"),
+  userId: tag("agentDrafts.userId"),
+  inboxItemId: tag("agentDrafts.inboxItemId"),
+  status: tag("agentDrafts.status"),
+  draftSubject: tag("agentDrafts.draftSubject"),
+  draftBody: tag("agentDrafts.draftBody"),
+  sentAt: tag("agentDrafts.sentAt"),
 };
 
 const emailEmbeddingsSchema = {
@@ -65,6 +80,7 @@ vi.mock("@/lib/db/schema", () => ({
   emailEmbeddings: emailEmbeddingsSchema,
   mistakeNotes: mistakeNotesSchema,
   assignments: assignmentsSchema,
+  agentDrafts: agentDraftsSchema,
 }));
 
 // Track every column passed to isNull so we can assert that
@@ -79,6 +95,8 @@ vi.mock("drizzle-orm", () => ({
     isNullCalls.push(col);
     return { kind: "isNull", col };
   },
+  // engineer-38 — sender-history loader uses isNotNull(sentAt).
+  isNotNull: (col: unknown) => ({ kind: "isNotNull", col }),
   desc: (col: unknown) => ({ kind: "desc", col }),
   gte: (col: unknown, val: unknown) => ({ kind: "gte", col, val }),
   lt: (col: unknown, val: unknown) => ({ kind: "lt", col, val }),
@@ -96,6 +114,9 @@ const resultsByTable = new Map<unknown, unknown[]>();
 function chainFor(table: unknown) {
   const c = {
     leftJoin: () => c,
+    // engineer-38 — sender-history loader uses innerJoin (agent_drafts ⋈
+    // inbox_items). Chain returns same shape.
+    innerJoin: () => c,
     where: () => c,
     orderBy: () => c,
     limit: async () => resultsByTable.get(table) ?? [],
@@ -169,6 +190,7 @@ describe("runFanout — soft-delete filter on classes", () => {
       phase: "classify",
       subject: "CSC108 — assignment",
       snippet: "ping",
+      senderEmail: null,
     });
 
     expect(isNullCalls).toContain(classesSchema.deletedAt);
@@ -200,6 +222,7 @@ describe("runFanout — soft-delete filter on classes", () => {
       phase: "draft",
       subject: null,
       snippet: null,
+      senderEmail: null,
     });
 
     // classes.deletedAt must show up because safelyFetchSteadiiAssignments
@@ -230,6 +253,7 @@ describe("runFanout — soft-delete filter on classes", () => {
       phase: "classify",
       subject: null,
       snippet: null,
+      senderEmail: null,
     });
 
     expect(out.classBinding.className).toBeNull();

@@ -243,9 +243,19 @@ export async function computeAgentMetrics(
     (r) => r.provenance && r.provenance.fanoutCounts
   );
   const draftsWithFanout = fanoutRows.length;
-  const sumPerSource = { mistakes: 0, syllabus: 0, emails: 0, calendar: 0 };
+  // engineer-38 — `mistakes` was renamed to `senderHistory`. Track both;
+  // pre-rename rows still emit `mistakes` so we tally each independently
+  // and fall back when one is missing.
+  const sumPerSource = {
+    mistakes: 0,
+    senderHistory: 0,
+    syllabus: 0,
+    emails: 0,
+    calendar: 0,
+  };
   const sumTimings = {
     mistakes: 0,
+    senderHistory: 0,
     syllabus: 0,
     emails: 0,
     calendar: 0,
@@ -257,14 +267,16 @@ export async function computeAgentMetrics(
   for (const r of fanoutRows) {
     const c = r.provenance?.fanoutCounts ?? null;
     if (c) {
-      sumPerSource.mistakes += c.mistakes;
+      sumPerSource.mistakes += c.mistakes ?? 0;
+      sumPerSource.senderHistory += c.senderHistory ?? 0;
       sumPerSource.syllabus += c.syllabus;
       sumPerSource.emails += c.emails;
       sumPerSource.calendar += c.calendar;
     }
     const t = r.provenance?.fanoutTimings ?? null;
     if (t) {
-      sumTimings.mistakes += t.mistakes;
+      sumTimings.mistakes += t.mistakes ?? 0;
+      sumTimings.senderHistory += t.senderHistory ?? 0;
       sumTimings.syllabus += t.syllabus;
       sumTimings.emails += t.emails;
       sumTimings.calendar += t.calendar;
@@ -278,14 +290,19 @@ export async function computeAgentMetrics(
     }
   }
   const denom = Math.max(draftsWithFanout, 1);
+  // engineer-38 — `mistakes` field still emitted for legacy dashboards;
+  // it now tracks rows persisted before the senderHistory rename.
+  // `senderHistory` is the active source for new rows.
   const avgPerSource = {
     mistakes: sumPerSource.mistakes / denom,
+    senderHistory: sumPerSource.senderHistory / denom,
     syllabus: sumPerSource.syllabus / denom,
     emails: sumPerSource.emails / denom,
     calendar: sumPerSource.calendar / denom,
   };
   const avgTimingsMs = {
     mistakes: sumTimings.mistakes / denom,
+    senderHistory: sumTimings.senderHistory / denom,
     syllabus: sumTimings.syllabus / denom,
     emails: sumTimings.emails / denom,
     calendar: sumTimings.calendar / denom,

@@ -1,5 +1,6 @@
 "use server";
 
+import * as Sentry from "@sentry/nextjs";
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth, signIn } from "@/lib/auth/config";
@@ -13,6 +14,10 @@ import {
 } from "@/lib/integrations/ical/subscribe";
 import { reclassifyAllInboxItems } from "@/lib/agent/email/reclassify";
 import { regenerateAllOpenDrafts } from "@/lib/agent/email/regenerate";
+import {
+  generateVoiceProfile,
+  VoiceProfileNotEnoughSamplesError,
+} from "@/lib/agent/email/voice-profile";
 
 export async function importNotionAction() {
   const session = await auth();
@@ -216,4 +221,35 @@ export async function regenerateDraftsAction() {
       `&more=${out.hasMore ? 1 : 0}` +
       `#inbox`
   );
+}
+
+// engineer-38 — manual re-trigger for voice-profile extraction. Runs the
+// full Gmail-fetch + GPT-5.4 pass inline (server actions get up to ~60s
+// on Vercel; the call is ~5-10s). Surfaces three end states via query
+// params: ok (saved), insufficient (<3 sent samples), error (caught).
+//
+// Voice-profile bootstrapping at first Gmail OAuth lives in the auth
+// signIn callback (fire-and-forget). This action handles user-driven
+// regeneration when their voice has shifted (e.g. they finished a term
+// and want a refresh).
+export async function regenerateVoiceProfileAction() {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  const userId = session.user.id;
+
+  try {
+    await generateVoiceProfile(userId);
+    redirect("/app/settings/connections?voice=ok#voice");
+  } catch (err) {
+    if (err instanceof VoiceProfileNotEnoughSamplesError) {
+      redirect("/app/settings/connections?voice=insufficient#voice");
+    }
+    // Re-throw redirect signals (Next.js uses thrown redirects).
+    if (err instanceof Error && err.message === "NEXT_REDIRECT") throw err;
+    Sentry.captureException(err, {
+      tags: { feature: "voice_profile", op: "regenerate" },
+      user: { id: userId },
+    });
+    redirect("/app/settings/connections?voice=error#voice");
+  }
 }
