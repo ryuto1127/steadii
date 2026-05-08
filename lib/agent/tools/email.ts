@@ -32,8 +32,13 @@ import type { ToolExecutor } from "./types";
 
 // ---------- email_search ----------
 
-const SEARCH_DAYS_DEFAULT = 30;
-const SEARCH_DAYS_MAX = 180;
+// 2026-05-07 — bumped default 30 → 90. Ryuto's questions routinely
+// reach back further than a month ("did Prof X reply to my exam-prep
+// question last semester?", "did the recruiter follow up after the
+// final round?"). 90 days covers a typical academic semester boundary
+// and the cost of returning extra rows is bounded by `limit`.
+const SEARCH_DAYS_DEFAULT = 90;
+const SEARCH_DAYS_MAX = 365;
 const SEARCH_LIMIT_DEFAULT = 20;
 const SEARCH_LIMIT_MAX = 50;
 
@@ -74,7 +79,7 @@ export const emailSearch: ToolExecutor<
   schema: {
     name: "email_search",
     description:
-      "Search the user's recent inbox (Steadii's classified email store). Use when the user references an email by sender, subject, content keyword, or recency. At least one of `query` / `senderEmail` / `senderDomain` should be set; passing all three narrows further. Returns up to `limit` (default 20) most-recent hits with sender + subject + snippet. For full body text call `email_get_body` with the returned `inboxItemId`. Eager — call without confirmation when the user references email content.",
+      "Search the user's classified inbox (Steadii's email store). Returns EVERY email Steadii has classified for the user regardless of follow-up state — open, replied/sent, dismissed, snoozed, archived all come back. Use when the user references an email by sender, subject, content keyword, or recency. At least one of `query` / `senderEmail` / `senderDomain` should be set; passing all three narrows further. Default lookback is 90 days; pass `sinceDays` up to 365 when the user references something further back. Returns up to `limit` (default 20) most-recent hits with sender + subject + snippet. For full body text call `email_get_body` with the returned `inboxItemId`. Eager — call without confirmation when the user references email content.",
     mutability: "read",
     parameters: {
       type: "object",
