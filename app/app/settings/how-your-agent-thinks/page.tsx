@@ -3,15 +3,17 @@ import { ChevronLeft } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   agentDrafts,
+  agentRules,
   inboxItems,
   type RetrievalProvenance,
 } from "@/lib/db/schema";
 import { ThinkingBar } from "@/components/agent/thinking-bar";
 import { ReasoningPanel } from "@/components/agent/reasoning-panel";
+import { removeWritingStyleRuleAction } from "./actions";
 
 // Phase 7 W1 — read-only retrospective view of the agent's last N
 // decisions. Fulfils the Phase 6 W4 landing-page promise that the agent
@@ -53,6 +55,27 @@ export default async function HowYourAgentThinksPage() {
     .orderBy(desc(agentDrafts.createdAt))
     .limit(N_DECISIONS);
 
+  // engineer-38 — writing-style rules. Read separately so the page
+  // shows them even when the user has no recent decisions yet.
+  const styleRules = await db
+    .select({
+      id: agentRules.id,
+      reason: agentRules.reason,
+      matchValue: agentRules.matchValue,
+      createdAt: agentRules.createdAt,
+    })
+    .from(agentRules)
+    .where(
+      and(
+        eq(agentRules.userId, userId),
+        eq(agentRules.scope, "writing_style"),
+        eq(agentRules.enabled, true),
+        isNull(agentRules.deletedAt)
+      )
+    )
+    .orderBy(asc(agentRules.createdAt));
+  const tStyle = await getTranslations("agent_thinks_page.writing_style");
+
   return (
     <div className="mx-auto max-w-3xl space-y-4 px-4 py-8">
       <div className="flex items-center gap-2 text-small text-[hsl(var(--muted-foreground))]">
@@ -70,6 +93,42 @@ export default async function HowYourAgentThinksPage() {
           {t("description_prefix")} {N_DECISIONS} {t("description_suffix")}
         </p>
       </header>
+
+      <section
+        id="writing-style"
+        className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4"
+      >
+        <h2 className="text-body font-medium">{tStyle("heading")}</h2>
+        {styleRules.length === 0 ? (
+          <p className="mt-2 text-small text-[hsl(var(--muted-foreground))]">
+            {tStyle("empty")}
+          </p>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-2">
+            {styleRules.map((r) => {
+              const text =
+                (r.reason ?? "").trim() || (r.matchValue ?? "").trim();
+              return (
+                <li
+                  key={r.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 text-small"
+                >
+                  <span className="min-w-0 flex-1">{text}</span>
+                  <form action={removeWritingStyleRuleAction}>
+                    <input type="hidden" name="id" value={r.id} />
+                    <button
+                      type="submit"
+                      className="rounded border border-[hsl(var(--border))] px-3 py-1 text-[11px] transition-hover hover:bg-[hsl(var(--surface-raised))]"
+                    >
+                      {tStyle("remove")}
+                    </button>
+                  </form>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       {rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 text-center text-small text-[hsl(var(--muted-foreground))]">

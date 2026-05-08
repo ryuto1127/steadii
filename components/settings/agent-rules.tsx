@@ -311,11 +311,15 @@ function SourceIcon({
   source,
   titles,
 }: {
-  source: "learned" | "manual" | "chat";
+  // engineer-38 added "edit_delta_learner". Render it with the same
+  // brain icon as `learned` (it IS a learner, just edit-delta-driven)
+  // until/unless we want a distinct icon for it.
+  source: "learned" | "manual" | "chat" | "edit_delta_learner";
   titles: { learned: string; manual: string; chat: string };
 }) {
   switch (source) {
     case "learned":
+    case "edit_delta_learner":
       return (
         <span
           title={titles.learned}

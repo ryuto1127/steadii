@@ -72,7 +72,7 @@ export type DeepPassResult = {
 const SYSTEM_PROMPT = `You are Steadii's deep classifier for high-risk emails. You receive:
 - the email envelope + snippet
 - the cheap risk-pass output (tier + its reasoning)
-- a multi-source fanout context: class binding + relevant past mistakes + relevant syllabus chunks + upcoming calendar events/tasks
+- a multi-source fanout context: class binding + how the user usually replies to this sender (self-N) + relevant syllabus chunks + upcoming calendar events/tasks
 - up to 20 retrieved similar past emails (subject + snippet + sender)
 - the immediately prior 2 messages in the same thread (if any)
 - (sometimes) a "Recent feedback from this student for this sender" block: how the student treated past drafts you proposed for the same sender
@@ -114,7 +114,9 @@ Examples (concise — full reasoning lives in your output):
 - TA: "Can you confirm you'll attend office hours?" → draft_reply (direct ask).
 - Scholarship office: "Congratulations — you've been awarded the X scholarship." → notify_only (one-way good news, no reply required).
 
-Glass-box transparency is a hard product requirement. Reasoning bullets MUST cite which fanout source informed each conclusion using the per-source tags in the user content (mistake-N, syllabus-N, calendar-N, email-N). Cite at least one source when any are present; ungrounded claims are unacceptable.
+When proposing the action, reuse tone / register / phrase patterns from how the user has historically replied to this same sender (self-N). The "How you usually reply to this sender" block is the single strongest signal for register; treat it as ground truth for what the user wants to send.
+
+Glass-box transparency is a hard product requirement. Reasoning bullets MUST cite which fanout source informed each conclusion using the per-source tags in the user content (self-N, syllabus-N, calendar-N, email-N). Cite at least one source when any are present; ungrounded claims are unacceptable.
 
 Reasoning language: write reasoning in the user's app locale specified in the user message ("Reasoning language: en" → write English; "Reasoning language: ja" → write Japanese). The reasoning is surfaced in the inbox-detail draft-details panel (collapsed-by-default, but still user-visible), so localization matters. Default to English when no language hint is present.`;
 
@@ -311,12 +313,13 @@ export function buildProvenance(
   const fanout = input.fanout ?? null;
 
   if (fanout) {
-    for (const m of fanout.mistakes) {
+    for (const h of fanout.senderHistory) {
+      const body = (h.draftBody ?? h.draftSubject ?? "").slice(0, 200);
       sources.push({
-        type: "mistake" as const,
-        id: m.mistakeId,
-        classId: m.classId,
-        snippet: (m.bodySnippet || m.title).slice(0, 400),
+        type: "sender_history" as const,
+        id: h.draftId,
+        sentAt: h.sentAt.toISOString(),
+        snippet: body,
       });
     }
     for (const s of fanout.syllabusChunks) {
@@ -385,7 +388,7 @@ export function buildProvenance(
       : null,
     fanoutCounts: fanout
       ? {
-          mistakes: fanout.mistakes.length,
+          senderHistory: fanout.senderHistory.length,
           syllabus: fanout.syllabusChunks.length,
           emails: fanout.similarEmails.length,
           calendar:
@@ -396,7 +399,7 @@ export function buildProvenance(
       : null,
     fanoutTimings: fanout
       ? {
-          mistakes: fanout.timings.mistakes,
+          senderHistory: fanout.timings.senderHistory,
           syllabus: fanout.timings.syllabus,
           emails: fanout.timings.emails,
           calendar: fanout.timings.calendar,

@@ -1,9 +1,10 @@
 import "server-only";
 import * as Sentry from "@sentry/nextjs";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   agentDrafts,
+  agentRules,
   inboxItems,
   users,
   type AgentDraftStatus,
@@ -114,6 +115,7 @@ async function runPipeline(
       email: users.email,
       name: users.name,
       autonomySendEnabled: users.autonomySendEnabled,
+      preferences: users.preferences,
     })
     .from(users)
     .where(eq(users.id, item.userId))
@@ -148,6 +150,7 @@ async function runPipeline(
         phase: "classify",
         subject: item.subject,
         snippet: item.snippet,
+        senderEmail: item.senderEmail,
       });
     } catch (err) {
       Sentry.captureException(err, {
@@ -238,6 +241,7 @@ async function runPipeline(
         phase: "deep",
         subject: item.subject,
         snippet: item.snippet,
+        senderEmail: item.senderEmail,
       });
     } catch (err) {
       Sentry.captureException(err, {
@@ -340,6 +344,7 @@ async function runPipeline(
           phase: "draft",
           subject: item.subject,
           snippet: item.snippet,
+          senderEmail: item.senderEmail,
         });
       } catch (err) {
         Sentry.captureException(err, {
@@ -383,6 +388,42 @@ async function runPipeline(
       }
     }
 
+    // engineer-38 — voice profile + writing-style rules. Voice is read
+    // from users.preferences; style rules come from agent_rules with
+    // scope='writing_style' (populated by the daily style-learner cron).
+    // Both are user-scoped — no cross-user leakage. Failures degrade to
+    // empty / null so the draft path never blocks on a learner outage.
+    const voiceProfile =
+      typeof userRow?.preferences?.voiceProfile === "string"
+        ? userRow.preferences.voiceProfile
+        : null;
+    let writingStyleRules: string[] = [];
+    try {
+      const ruleRows = await db
+        .select({ matchValue: agentRules.matchValue, reason: agentRules.reason })
+        .from(agentRules)
+        .where(
+          and(
+            eq(agentRules.userId, item.userId),
+            eq(agentRules.scope, "writing_style"),
+            eq(agentRules.enabled, true),
+            isNull(agentRules.deletedAt)
+          )
+        );
+      // The rule sentence lives in `reason` (matchValue is "*" for the
+      // global writing-style scope). Older insertions might use either
+      // — fall back gracefully so a one-row data shape drift can't
+      // strip an entire user's prompt block.
+      writingStyleRules = ruleRows
+        .map((r) => (r.reason ?? r.matchValue ?? "").trim())
+        .filter((r) => r.length > 0 && r !== "*");
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { feature: "email_l2", step: "writing_style_rules" },
+        user: { id: item.userId },
+      });
+    }
+
     draft = await runDraft({
       userId: item.userId,
       senderEmail: item.senderEmail,
@@ -396,6 +437,8 @@ async function runPipeline(
       similarEmails: similarForDraft,
       calendarEvents,
       fanout: fanoutForDraft,
+      voiceProfile,
+      writingStyleRules,
       userName: userRow?.name ?? null,
       userEmail: userRow?.email ?? null,
     });
@@ -447,6 +490,10 @@ async function runPipeline(
       deep?.retrievalProvenance ?? mediumTierProvenance ?? null,
     draftSubject: draft?.subject ?? null,
     draftBody: draft?.body ?? null,
+    // engineer-38 — freeze the LLM-first body. saveDraftEditsAction will
+    // overwrite draftBody with the user's edit; this column stays put so
+    // recordSenderFeedback can compute (original, final) at send time.
+    originalDraftBody: draft?.body ?? null,
     draftTo: draft?.to ?? [],
     draftCc: draft?.cc ?? [],
     draftInReplyTo: draft?.inReplyTo ?? null,
