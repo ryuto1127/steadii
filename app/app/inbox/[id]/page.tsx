@@ -335,9 +335,12 @@ export default async function InboxItemPage({
           components (ThinkingBar + ReasoningPanel) into one
           collapsed-by-default detail surface. */}
       <DraftDetailsPanel
+        draftId={draft.id}
         reasoning={draft.reasoning}
         action={draft.action}
         provenance={draft.retrievalProvenance}
+        actionItems={draft.extractedActionItems}
+        acceptedIndices={draft.acceptedActionItemIndices}
       />
     </div>
   );

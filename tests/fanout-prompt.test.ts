@@ -21,6 +21,7 @@ function makeFanout(overrides: Partial<FanoutResult> = {}): FanoutResult {
     },
     senderHistory: [],
     similarSent: [],
+    contactPersona: null,
     syllabusChunks: [],
     similarEmails: [],
     totalSimilarCandidates: 0,
@@ -28,6 +29,7 @@ function makeFanout(overrides: Partial<FanoutResult> = {}): FanoutResult {
     timings: {
       senderHistory: 0,
       similarSent: 0,
+      contactPersona: 0,
       syllabus: 0,
       emails: 0,
       calendar: 0,

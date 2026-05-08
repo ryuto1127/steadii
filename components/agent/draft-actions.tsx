@@ -4,13 +4,55 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
-import { Check, CheckCircle2, Pencil, Archive, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  Pencil,
+  Archive,
+  X,
+} from "lucide-react";
 import {
   approveAgentDraftAction,
   cancelPendingSendAction,
   dismissAgentDraftAction,
   saveDraftEditsAction,
 } from "@/lib/agent/email/draft-actions";
+import type { PreSendWarning } from "@/lib/db/schema";
+
+// engineer-39 — server-action errors don't preserve `instanceof` across
+// the boundary, so the typed PreSendCheckFailedError manifests as a
+// regular Error whose `message` is a JSON envelope keyed by `name`. We
+// pluck the warnings out here and route to the modal.
+const PRE_SEND_CHECK_ERROR_NAME = "PreSendCheckFailedError";
+
+function tryParsePreSendError(
+  err: unknown
+): { warnings: PreSendWarning[] } | null {
+  if (!(err instanceof Error)) return null;
+  if (err.name !== PRE_SEND_CHECK_ERROR_NAME) return null;
+  try {
+    const parsed = JSON.parse(err.message) as {
+      name?: string;
+      warnings?: unknown;
+    };
+    if (parsed?.name !== PRE_SEND_CHECK_ERROR_NAME) return null;
+    if (!Array.isArray(parsed.warnings)) return null;
+    const warnings = parsed.warnings
+      .filter(
+        (w): w is { phrase: unknown; why: unknown } =>
+          !!w && typeof w === "object"
+      )
+      .map((w) => ({
+        phrase: typeof w.phrase === "string" ? w.phrase : "",
+        why: typeof w.why === "string" ? w.why : "",
+      }))
+      .filter((w) => w.phrase.length > 0 && w.why.length > 0);
+    return { warnings };
+  } catch {
+    return null;
+  }
+}
 // `snoozeAgentDraftAction` server action + the LLM's `snooze` action proposal
 // are intentionally kept in the backend. The Snooze BUTTON is removed from
 // the UI for α because we don't yet have auto-resurface (no cron re-opens
@@ -66,12 +108,20 @@ export function DraftActions({
 }) {
   const router = useRouter();
   const t = useTranslations("agent.draft_actions");
+  const tCheck = useTranslations("agent.pre_send_check");
   const [editMode, setEditMode] = useState(false);
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState(initialBody);
   const [isPending, startTransition] = useTransition();
   const [pendingSend, setPendingSend] = useState<null | { until: number }>(
     status === "sent_pending" ? { until: Date.now() + undoWindowSeconds * 1000 } : null
+  );
+  // engineer-39 — pre-send fact-checker modal. Open when the server
+  // action throws PreSendCheckFailedError; warnings are the items the
+  // fact-checker flagged. Closing dismisses the send entirely; "Send
+  // anyway" re-calls the action with skipPreSendCheck.
+  const [preSendWarnings, setPreSendWarnings] = useState<PreSendWarning[] | null>(
+    null
   );
 
   const canSend =
@@ -80,18 +130,30 @@ export function DraftActions({
     body.trim().length > 0 &&
     initialTo.length > 0;
 
-  const onSend = () => {
-    if (!canSend) return;
+  const performSend = (skipPreSendCheck: boolean) => {
     startTransition(async () => {
       try {
-        const { sendAt, undoWindowSeconds: ws } =
-          await approveAgentDraftAction(draftId);
+        const { sendAt, undoWindowSeconds: ws } = await approveAgentDraftAction(
+          draftId,
+          { skipPreSendCheck }
+        );
+        setPreSendWarnings(null);
         setPendingSend({ until: new Date(sendAt).getTime() });
         toast.success(t("toast_sent", { n: ws }), { duration: ws * 1000 });
       } catch (err) {
+        const parsed = tryParsePreSendError(err);
+        if (parsed) {
+          setPreSendWarnings(parsed.warnings);
+          return;
+        }
         toast.error(err instanceof Error ? err.message : t("toast_send_failed"));
       }
     });
+  };
+
+  const onSend = () => {
+    if (!canSend) return;
+    performSend(false);
   };
 
   const onUndo = () => {
@@ -189,6 +251,16 @@ export function DraftActions({
             )}
           </div>
         </section>
+      ) : null}
+
+      {preSendWarnings ? (
+        <PreSendWarningModal
+          warnings={preSendWarnings}
+          onSendAnyway={() => performSend(true)}
+          onCancel={() => setPreSendWarnings(null)}
+          isPending={isPending}
+          tCheck={tCheck}
+        />
       ) : null}
 
       {status === "sent" ? (
@@ -359,3 +431,89 @@ function SentBanner({
 // Keep Archive icon referenced so tree-shaking doesn't strip the import
 // when the action set expands (cheap future-proof).
 void Archive;
+
+// engineer-39 — pre-send fact-checker modal. Backdrop + centered card.
+// Two affordances: "Send anyway" (re-call the action with
+// skipPreSendCheck) or "Edit draft" (cancel — closes the modal so the
+// user can edit). Bare-bones styling since the rest of the app doesn't
+// have a shadcn Dialog primitive yet; matches the look of the
+// inline-role-picker which uses similar surface tokens.
+function PreSendWarningModal({
+  warnings,
+  onSendAnyway,
+  onCancel,
+  isPending,
+  tCheck,
+}: {
+  warnings: PreSendWarning[];
+  onSendAnyway: () => void;
+  onCancel: () => void;
+  isPending: boolean;
+  tCheck: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pre-send-warning-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6"
+      onClick={onCancel}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-5 shadow-xl"
+      >
+        <div className="flex items-start gap-3">
+          <AlertTriangle
+            size={20}
+            strokeWidth={1.75}
+            className="mt-0.5 shrink-0 text-[hsl(38_92%_40%)]"
+          />
+          <div className="min-w-0">
+            <h2
+              id="pre-send-warning-title"
+              className="text-body font-semibold text-[hsl(var(--foreground))]"
+            >
+              {tCheck("modal_title")}
+            </h2>
+            <p className="mt-1 text-small text-[hsl(var(--muted-foreground))]">
+              {tCheck("modal_body")}
+            </p>
+          </div>
+        </div>
+        <ul className="mt-3 flex flex-col gap-2">
+          {warnings.map((w, i) => (
+            <li
+              key={i}
+              className="rounded-md border border-[hsl(38_92%_40%/0.3)] bg-[hsl(38_92%_50%/0.06)] px-3 py-2 text-small"
+            >
+              <div className="font-medium text-[hsl(var(--foreground))]">
+                &ldquo;{w.phrase}&rdquo;
+              </div>
+              <div className="mt-0.5 text-[12px] text-[hsl(var(--muted-foreground))]">
+                {w.why}
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border border-[hsl(var(--border))] px-3 py-1.5 text-small transition-hover hover:bg-[hsl(var(--surface-raised))]"
+          >
+            {tCheck("cancel")}
+          </button>
+          <button
+            type="button"
+            onClick={onSendAnyway}
+            disabled={isPending}
+            className="rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-small font-medium text-[hsl(var(--primary-foreground))] transition-hover hover:opacity-90 disabled:opacity-50"
+          >
+            {tCheck("send_anyway")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

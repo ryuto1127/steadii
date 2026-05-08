@@ -8,6 +8,7 @@ import {
   inboxItems,
   users,
   type AgentDraftAction,
+  type ExtractedActionItem,
   type RetrievalProvenance,
 } from "@/lib/db/schema";
 import {
@@ -117,6 +118,12 @@ export async function regenerateDraft(
   let newReasoning = row.reasoning ?? "";
   let newAction: AgentDraftAction = row.action;
   let newRetrievalProvenance: RetrievalProvenance | null = null;
+  // engineer-39 — action items refresh in lockstep with the deep pass.
+  // Medium-tier paths skip the deep pass entirely so this stays empty
+  // there (mirroring l2.ts), and the row's stale items get cleared so
+  // a regeneration that drops to medium tier doesn't strand the prior
+  // high-tier extraction.
+  let newActionItems: ExtractedActionItem[] = [];
   let draft: DraftResult | null = null;
 
   if (row.riskTier === "high") {
@@ -174,6 +181,7 @@ export async function regenerateDraft(
     newReasoning = deep.reasoning;
     newAction = deep.action;
     newRetrievalProvenance = deep.retrievalProvenance;
+    newActionItems = deep.actionItems;
   } else {
     try {
       fanout = await fanoutForInbox({
@@ -269,6 +277,12 @@ export async function regenerateDraft(
       reasoning: newReasoning,
       retrievalProvenance: newRetrievalProvenance,
       action: newAction,
+      // engineer-39 — refresh extracted items + drop accepted indices
+      // since items list may have shifted. Future-friendly: a simple
+      // "accept again" flow is cheaper than a fragile title-match
+      // dedup across regeneration boundaries.
+      extractedActionItems: newActionItems,
+      acceptedActionItemIndices: [],
       classifyModel:
         row.riskTier === "high"
           ? selectModel("email_classify_deep")
