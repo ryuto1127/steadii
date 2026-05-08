@@ -26,6 +26,7 @@ import {
   searchSimilarEmails,
   type SimilarEmail,
 } from "./retrieval";
+import { fetchSentMessagesToRecipient } from "@/lib/integrations/google/gmail-fetch";
 
 // Per-source caps locked in §12.2 (per-source caps, not a single total
 // budget). k_syllabus=3, k_emails=5 (classify) / 20 (deep).
@@ -142,6 +143,15 @@ export type FanoutPhase = "classify" | "deep" | "draft";
 // Newest-first, capped at FANOUT_K_SENDER_HISTORY. Carries the original
 // inbox subject/snippet so the prompt can show "what they wrote in
 // response to" alongside the reply itself.
+//
+// 2026-05-08 — `source` field added so the merged sender-history can
+// include both Steadii-mediated sends (`agent_drafts.status='sent'`) and
+// Gmail-direct replies fetched via the Gmail API. Direct-Gmail replies
+// don't have an `originalSubject`/`Snippet` because their incoming
+// counterpart isn't necessarily in `inbox_items` (a Steadii-classified
+// thread may have replies from before Steadii was connected, or to
+// senders Steadii's L1 didn't classify). The prompt renders both
+// uniformly via the existing `self-N` slot.
 export type FanoutSenderHistory = {
   draftId: string;
   draftSubject: string | null;
@@ -149,6 +159,7 @@ export type FanoutSenderHistory = {
   sentAt: Date;
   originalSubject: string | null;
   originalSnippet: string | null;
+  source: "steadii" | "gmail_direct";
 };
 
 export type FanoutSyllabusChunk = {
@@ -501,11 +512,92 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
 // `status='sent'` + `sentAt IS NOT NULL` are belt-and-suspenders — both
 // hold today but together make the ordering deterministic even if the
 // status enum drifts later.
+//
+// 2026-05-08 — fuses Steadii-mediated sends with the user's direct-Gmail
+// replies to the same recipient, deduped by gmail message id. Direct
+// replies (Ryuto bypassed Steadii) carried zero per-sender signal before
+// this; voice profile only summarizes globally. Gmail fetch is fail-soft
+// so a Gmail outage degrades to the Steadii-only behavior.
 export async function loadSenderHistory(
   userId: string,
   senderEmail: string,
   k: number
 ): Promise<FanoutSenderHistory[]> {
+  // Pull a wider Gmail window than `k` so dedup against Steadii-sent
+  // rows still leaves enough headroom to fill the slate. K is small
+  // (3 by default), so the +5 buffer keeps the Gmail call bounded.
+  const GMAIL_OVERFETCH = 5;
+
+  const [steadiiRaw, gmailDirectRaw] = await Promise.all([
+    loadSenderHistorySteadii(userId, senderEmail, k),
+    fetchSentMessagesToRecipient(userId, senderEmail, k + GMAIL_OVERFETCH).catch(
+      (err) => {
+        Sentry.captureException(err, {
+          level: "warning",
+          tags: { feature: "email_fanout", source: "sender_history_gmail" },
+          user: { id: userId },
+        });
+        return [] as Awaited<
+          ReturnType<typeof fetchSentMessagesToRecipient>
+        >;
+      }
+    ),
+  ]);
+
+  const steadii: FanoutSenderHistory[] = steadiiRaw.map((r) => ({
+    draftId: r.draftId,
+    draftSubject: r.draftSubject,
+    draftBody: r.draftBody,
+    sentAt: r.sentAt,
+    originalSubject: r.originalSubject,
+    originalSnippet: r.originalSnippet,
+    source: "steadii" as const,
+  }));
+
+  // Dedup: any Gmail message whose id matches a Steadii-sent
+  // gmail_sent_message_id is the SAME physical send. Drop the duplicate
+  // (Steadii path wins because it carries originalSubject/Snippet too).
+  const steadiiGmailIds = new Set(
+    steadiiRaw
+      .map((r) => r.gmailSentMessageId)
+      .filter((id): id is string => typeof id === "string" && id.length > 0)
+  );
+  const gmailDirect: FanoutSenderHistory[] = gmailDirectRaw
+    .filter((g) => !steadiiGmailIds.has(g.messageId))
+    .map((g) => ({
+      draftId: `gmail:${g.messageId}`,
+      draftSubject: g.subject,
+      draftBody: g.body,
+      sentAt: g.sentAt,
+      originalSubject: null,
+      originalSnippet: null,
+      source: "gmail_direct" as const,
+    }));
+
+  const merged = [...steadii, ...gmailDirect];
+  merged.sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime());
+  return merged.slice(0, k);
+}
+
+// Internal — Steadii-only path. Selects gmail_sent_message_id alongside
+// the displayed fields so the merge step can dedup against Gmail-direct
+// hits. Returning the raw shape (with the message-id) instead of the
+// public FanoutSenderHistory keeps the dedup wholly inside loadSenderHistory.
+async function loadSenderHistorySteadii(
+  userId: string,
+  senderEmail: string,
+  k: number
+): Promise<
+  Array<{
+    draftId: string;
+    draftSubject: string | null;
+    draftBody: string | null;
+    sentAt: Date;
+    originalSubject: string | null;
+    originalSnippet: string | null;
+    gmailSentMessageId: string | null;
+  }>
+> {
   const rows = await db
     .select({
       draftId: agentDrafts.id,
@@ -514,6 +606,7 @@ export async function loadSenderHistory(
       sentAt: agentDrafts.sentAt,
       originalSubject: inboxItems.subject,
       originalSnippet: inboxItems.snippet,
+      gmailSentMessageId: agentDrafts.gmailSentMessageId,
     })
     .from(agentDrafts)
     .innerJoin(inboxItems, eq(agentDrafts.inboxItemId, inboxItems.id))
@@ -536,6 +629,7 @@ export async function loadSenderHistory(
       sentAt: r.sentAt,
       originalSubject: r.originalSubject,
       originalSnippet: r.originalSnippet,
+      gmailSentMessageId: r.gmailSentMessageId,
     }));
 }
 

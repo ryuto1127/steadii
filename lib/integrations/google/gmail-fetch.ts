@@ -2,6 +2,7 @@ import "server-only";
 import * as Sentry from "@sentry/nextjs";
 import type { gmail_v1 } from "googleapis";
 import { getGmailForUser } from "./gmail";
+import { extractEmailBody } from "@/lib/agent/email/body-extract";
 
 // Max messages to fetch in one `listRecentMessages` call. Gmail caps
 // maxResults at 500, but the first-24h ingest path almost never needs more
@@ -174,6 +175,126 @@ export function getHeader(
     }
   }
   return null;
+}
+
+// 2026-05-08 — chat agent / sender-history fanout helper. Returns the
+// user's most-recent direct-Gmail replies to a single recipient address,
+// independent of whether they were drafted by Steadii. The fanout's
+// existing senderHistory source only knows about Steadii-mediated sends
+// (`agent_drafts.status='sent'`); when Ryuto replies via Gmail directly
+// to a recurring contact, that signal is invisible to the L2 prompt
+// without this helper.
+//
+// Returns subject + extracted body + sentAt (Date) + the gmail message
+// id so callers can dedupe against `agent_drafts.gmailSentMessageId`.
+// Body is run through `extractEmailBody` + quoted-reply stripping so
+// the prompt sees only the user's own writing.
+export type GmailDirectSentMessage = {
+  messageId: string;
+  threadId: string | null;
+  subject: string | null;
+  body: string;
+  sentAt: Date;
+};
+
+export async function fetchSentMessagesToRecipient(
+  userId: string,
+  recipientEmail: string,
+  k: number
+): Promise<GmailDirectSentMessage[]> {
+  return Sentry.startSpan(
+    {
+      name: "gmail.messages.list_sent_to",
+      op: "http.client",
+      attributes: {
+        "steadii.user_id": userId,
+        "gmail.recipient": recipientEmail,
+      },
+    },
+    async () => {
+      try {
+        const gmail = await getGmailForUser(userId);
+        const list = await requestWithRetry(() =>
+          gmail.users.messages.list({
+            userId: "me",
+            q: `in:sent to:${recipientEmail}`,
+            maxResults: Math.max(1, k),
+          })
+        );
+        const ids = (list.data.messages ?? [])
+          .map((m) => m.id)
+          .filter((id): id is string => typeof id === "string" && id.length > 0);
+        if (ids.length === 0) return [];
+
+        const out: GmailDirectSentMessage[] = [];
+        // Sequential fetch keeps quota predictable. K is small (≤5
+        // typically) so wallclock is bounded; parallelizing here saves
+        // ~200ms total in the rare K=10 case but burns a quota burst.
+        for (const id of ids) {
+          try {
+            const msg = await requestWithRetry(() =>
+              gmail.users.messages.get({
+                userId: "me",
+                id,
+                format: "full",
+              })
+            );
+            const data = msg.data;
+            const subject = getHeader(data, "Subject");
+            const extracted = extractEmailBody(data);
+            const body = stripQuotedReplies(extracted.text ?? "");
+            const sentAt = parseSentAt(data);
+            if (!sentAt) continue;
+            out.push({
+              messageId: id,
+              threadId: data.threadId ?? null,
+              subject,
+              body,
+              sentAt,
+            });
+          } catch (err) {
+            Sentry.captureException(err, {
+              level: "warning",
+              tags: { integration: "gmail", op: "messages.get_sent_to" },
+              user: { id: userId },
+            });
+          }
+        }
+        return out;
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: { integration: "gmail", op: "messages.list_sent_to" },
+          user: { id: userId },
+        });
+        throw err;
+      }
+    }
+  );
+}
+
+function parseSentAt(msg: gmail_v1.Schema$Message): Date | null {
+  // internalDate is the most reliable Gmail-side ordering signal — the
+  // header `Date:` is user-controlled. Fallback to the Date header only
+  // if internalDate is missing (rare).
+  if (msg.internalDate) {
+    const ms = Number(msg.internalDate);
+    if (Number.isFinite(ms) && ms > 0) return new Date(ms);
+  }
+  const dateHeader = getHeader(msg, "Date");
+  if (dateHeader) {
+    const parsed = Date.parse(dateHeader);
+    if (Number.isFinite(parsed)) return new Date(parsed);
+  }
+  return null;
+}
+
+function stripQuotedReplies(body: string): string {
+  // Identical strip rule used by voice-profile.ts. Drops everything
+  // from the first `>` reply marker or "On <date>, <name> wrote:" header
+  // onward so the LLM sees only the user's own writing.
+  const idx = body.search(/^(?:>+|On .+ wrote:)/m);
+  if (idx >= 0) return body.slice(0, idx).trim();
+  return body.trim();
 }
 
 // Parses an RFC-5322 address into `{ email, name }`. We accept the two
