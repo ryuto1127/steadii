@@ -302,21 +302,20 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
 
   // Run all four sources in parallel. Per-source timing tracked individually
   // so admin metrics can surface the long-pole (calendar, usually).
+  //
+  // 2026-05-07 — mistakes source disabled. Per secretary-pivot scope
+  // tightening (`project_secretary_pivot.md`), Steadii is a chief-of-
+  // staff for student schedules, not an academic-content tutor; the
+  // "mistake notes" surface belongs with general AI. Keeping the
+  // source slot in the Promise.all (returning []) so the downstream
+  // tuple destructure + provenance shape stays untouched — easier to
+  // re-enable later if the call reverses than to rip the wiring out.
   const [mistakes, syllabusChunks, emails, calendar] = await Promise.all([
     timed("mistakes", async () => {
-      if (classId) {
-        return loadMistakesByClass(input.userId, classId, FANOUT_K_MISTAKES);
-      }
-      if (!queryEmbedding) return [];
-      // Engineer-35 — drop vector-mistakes retrieval for unbound +
-      // non-academic emails (recruiting / billing / OTP / vendor
-      // support). Keeps unrelated past mistakes out of the reasoning.
-      if (shouldGateNonAcademic) return [];
-      return loadVectorMistakes(
-        input.userId,
-        queryEmbedding,
-        FANOUT_K_MISTAKES
-      );
+      void classId;
+      void queryEmbedding;
+      void shouldGateNonAcademic;
+      return [];
     }, timeouts),
     timed("syllabus", async () => {
       if (!queryEmbedding) {
