@@ -9,6 +9,7 @@ import { CLASSES_TOOLS } from "./tools/classes";
 import { ICAL_TOOLS } from "./tools/ical";
 import { OFFICE_HOURS_TOOLS } from "./tools/office-hours";
 import { EMAIL_TOOLS } from "./tools/email";
+import { EMAIL_THREAD_TOOLS } from "./tools/email-thread";
 import { summarizeWeekTool } from "./tools/summarize-week";
 import { toOpenAIToolDefinition, type ToolExecutor } from "./tools/types";
 
@@ -23,6 +24,7 @@ export const ALL_TOOLS: ToolExecutor[] = [
   ...(ICAL_TOOLS as ToolExecutor[]),
   ...(OFFICE_HOURS_TOOLS as ToolExecutor[]),
   ...(EMAIL_TOOLS as ToolExecutor[]),
+  ...(EMAIL_THREAD_TOOLS as ToolExecutor[]),
   summarizeWeekTool as ToolExecutor,
 ];
 
