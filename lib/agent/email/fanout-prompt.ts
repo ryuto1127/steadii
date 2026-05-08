@@ -14,11 +14,13 @@ export type { FanoutResult } from "./fanout";
 const CAPS = {
   classify: {
     senderBody: 250,
+    similarSentBody: 250,
     syllabusChunk: 250,
     calendarRows: 8,
   },
   draft: {
     senderBody: 500,
+    similarSentBody: 500,
     syllabusChunk: 500,
     calendarRows: 25,
   },
@@ -26,6 +28,7 @@ const CAPS = {
     // High-risk drafts paid for the deep pass already. Per §5.3
     // risk-tier scaling, allow chars-per-row to scale up.
     senderBody: 800,
+    similarSentBody: 800,
     syllabusChunk: 900,
     calendarRows: 25,
   },
@@ -78,6 +81,33 @@ export function buildFanoutContextBlocks(
         .trim()
         .slice(0, caps.senderBody);
       lines.push(`self-${i + 1}: [${date}] Subject: "${subj}"`);
+      lines.push(`  Body: "${body}"`);
+    });
+  }
+
+  // === Similar emails you've written before (N) ===
+  // 2026-05-08 — concrete few-shot examples for tone / register on
+  // first-time recipients. Citation tag is `similar-N` so the model can
+  // reference specific examples in its reasoning. Populated only on the
+  // draft phase (see fanout.ts) — classify + deep get an empty list.
+  lines.push("");
+  lines.push(
+    `=== Similar emails you've written before (${fanout.similarSent.length}) ===`
+  );
+  if (fanout.similarSent.length === 0) {
+    lines.push(
+      "(none — no past sent emails on similar topics, or this is the classify phase)"
+    );
+  } else {
+    fanout.similarSent.forEach((s, i) => {
+      const date = s.sentAt.toISOString().slice(0, 10);
+      const subj = s.subject ?? "(no subject)";
+      const recipient = s.recipientName ?? s.recipientEmail ?? "(unknown)";
+      const body = s.body
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, caps.similarSentBody);
+      lines.push(`similar-${i + 1}: [${date}] To: ${recipient} :: "${subj}"`);
       lines.push(`  Body: "${body}"`);
     });
   }
