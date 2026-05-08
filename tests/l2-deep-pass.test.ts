@@ -283,6 +283,7 @@ describe("runDeepPass", () => {
           sentAt: new Date("2026-04-22T10:00:00Z"),
           originalSubject: "midterm prep",
           originalSnippet: null,
+          source: "steadii" as const,
         },
       ],
       syllabusChunks: [],
