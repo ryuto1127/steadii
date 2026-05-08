@@ -44,7 +44,7 @@ export const classroomListCourses: ToolExecutor<
   schema: {
     name: "classroom_list_courses",
     description:
-      "List the student's Google Classroom courses. `courseStates` defaults to [\"ACTIVE\"]. Returns id, name, section, descriptionHeading, room, courseState.",
+      "List the student's Google Classroom courses. `courseStates` defaults to [\"ACTIVE\", \"ARCHIVED\"] so past-semester courses stay in consideration when the user asks retrospective questions (\"何を取った先学期\", \"去年の物理のシラバス\"). Pass `[\"ACTIVE\"]` explicitly only when the user clearly wants current-only. Returns id, name, section, descriptionHeading, room, courseState.",
     mutability: "read",
     parameters: {
       type: "object",
@@ -60,7 +60,12 @@ export const classroomListCourses: ToolExecutor<
   async execute(ctx, rawArgs) {
     const args = listCoursesArgs.parse(rawArgs);
     const classroom = await getClassroomForUser(ctx.userId);
-    const states = args.courseStates ?? ["ACTIVE"];
+    // 2026-05-07 — include ARCHIVED by default. Past-semester courses
+    // are part of the user's record; silently dropping them broke
+    // retrospective questions like "去年の CS101 のシラバス". The
+    // agent can still narrow with explicit `courseStates: ["ACTIVE"]`
+    // when the user genuinely wants current-only.
+    const states = args.courseStates ?? ["ACTIVE", "ARCHIVED"];
     const resp = await classroom.courses.list({
       courseStates: states,
       studentId: "me",
@@ -131,7 +136,7 @@ export const classroomListCoursework: ToolExecutor<
   schema: {
     name: "classroom_list_coursework",
     description:
-      "List Google Classroom coursework (assignments). If `courseId` is omitted, aggregates across all ACTIVE courses (capped at 200). `dueMin`/`dueMax` are YYYY-MM-DD, filtered client-side (inclusive). Reads from the unified event store (synced from Google on demand).",
+      "List Google Classroom coursework (assignments). If `courseId` is omitted, aggregates across all ACTIVE courses (capped at 200). `dueMin`/`dueMax` are YYYY-MM-DD, filtered client-side (inclusive). Default window covers the past 30 days through the next 90 days so PAST assignments stay in consideration alongside upcoming — pass explicit `dueMin` / `dueMax` only when the user clearly limits the range. Reads from the unified event store (synced from Google on demand).",
     mutability: "read",
     parameters: {
       type: "object",
@@ -149,9 +154,16 @@ export const classroomListCoursework: ToolExecutor<
     const userTz = (await getUserTimezone(ctx.userId)) ?? FALLBACK_TZ;
 
     const now = new Date();
+    // 2026-05-07 — default window widened from "now → +90d" to
+    // "−30d → +90d" so past Classroom assignments stay in the agent's
+    // consideration. Mirrors the calendar / email broadening in #180:
+    // the user's mental model is "Steadii sees my whole record"; the
+    // hard cutoff at `now` was silently dropping past coursework when
+    // the user asked retrospective questions. Explicit dueMin still
+    // wins when the agent narrows on purpose.
     const fromISO = args.dueMin
       ? localMidnightAsUtc(args.dueMin, userTz).toISOString()
-      : now.toISOString();
+      : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
     // End-exclusive: dueMax is inclusive on the UI side, so bump to next day.
     const toISO = args.dueMax
       ? localMidnightAsUtc(addDaysToDateStr(args.dueMax, 1), userTz).toISOString()
