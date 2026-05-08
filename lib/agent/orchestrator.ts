@@ -48,7 +48,20 @@ export type OrchestratorRequest = {
   chatId: string;
 };
 
-const MAX_TOOL_ITERATIONS = 5;
+// 2026-05-07 — bumped from 5 to 10. Cross-source agentic queries (e.g.
+// "does the calendar Meet URL match yesterday's email URL?") routinely
+// need: 1× calendar read + 2-4× email_search (the model often issues
+// sequential narrowing searches) + 1× email_get_body + 1× final text.
+// The old cap of 5 cut the loop off mid-comparison and the final text
+// step never ran, so the user saw a sequence of tool checkmarks with
+// no answer (Ryuto dogfood 2026-05-07).
+const MAX_TOOL_ITERATIONS = 10;
+
+// Below this length the cap-exhaustion path runs a forced text-only
+// completion so the user always gets a summary even when the agent
+// blew through its tool budget. 20 chars is roughly "couldn't finish"
+// — anything shorter is treated as "no real response yet."
+const MIN_USEFUL_FINAL_TEXT_LENGTH = 20;
 
 export async function* streamChatResponse(
   req: OrchestratorRequest
@@ -325,6 +338,68 @@ export async function* streamChatResponse(
         .where(eq(messagesTable.id, assistantId));
       yield { type: "message_end", assistantMessageId: assistantId, text };
       return;
+    }
+  }
+
+  // Cap-exhaustion safety net: if the loop ran out of iterations and
+  // the model never produced a real text response (only tool calls
+  // and short interim narrations), do one final pass with
+  // `tool_choice: "none"` so the user always gets a summary based on
+  // what we already gathered. Without this, hitting MAX_TOOL_ITERATIONS
+  // mid-comparison silently emits an empty answer and the user is
+  // left staring at tool checkmarks with no conclusion.
+  if (
+    iterations >= MAX_TOOL_ITERATIONS &&
+    finalText.trim().length < MIN_USEFUL_FINAL_TEXT_LENGTH
+  ) {
+    try {
+      const stream = await openai().chat.completions.create({
+        model,
+        stream: true,
+        stream_options: { include_usage: true },
+        messages: conversation,
+        tool_choice: "none",
+      });
+      let forcedText = "";
+      let inputTokens = 0;
+      let outputTokens = 0;
+      let cachedTokens = 0;
+      for await (const chunk of stream) {
+        const delta = chunk.choices?.[0]?.delta;
+        if (delta?.content) {
+          forcedText += delta.content;
+          yield { type: "text_delta", delta: delta.content };
+        }
+        if (chunk.usage) {
+          inputTokens = chunk.usage.prompt_tokens ?? 0;
+          outputTokens = chunk.usage.completion_tokens ?? 0;
+          const cacheInfo = (chunk.usage as {
+            prompt_tokens_details?: { cached_tokens?: number };
+          }).prompt_tokens_details;
+          cachedTokens = cacheInfo?.cached_tokens ?? 0;
+        }
+      }
+      if (forcedText.length > 0) {
+        finalText = forcedText;
+        await db
+          .update(messagesTable)
+          .set({ content: forcedText })
+          .where(eq(messagesTable.id, assistantId));
+        await recordUsage({
+          userId: req.userId,
+          chatId: req.chatId,
+          messageId: assistantId,
+          model,
+          taskType: "chat",
+          inputTokens,
+          outputTokens,
+          cachedTokens,
+        });
+      }
+    } catch {
+      // Best-effort: the user already saw the tool calls, so a forced-
+      // pass failure shouldn't error the whole stream. Fall through
+      // and emit message_end with whatever finalText is.
     }
   }
 
