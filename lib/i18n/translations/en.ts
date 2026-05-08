@@ -573,6 +573,7 @@ type MessagesShape = {
       bound_to: string;
       this_class: string;
       fanout_mistake: string;
+      fanout_sender_history: string;
       fanout_syllabus: string;
       fanout_calendar: string;
       fanout_email: string;
@@ -1343,6 +1344,17 @@ type MessagesShape = {
       more: string;
       exhausted: string;
     };
+    voice_profile: {
+      title: string;
+      description: string;
+      empty: string;
+      button: string;
+      help: string;
+      gmail_required: string;
+      saved_toast: string;
+      insufficient_toast: string;
+      error_toast: string;
+    };
   };
   agent_thinks_page: {
     settings_back: string;
@@ -1351,6 +1363,12 @@ type MessagesShape = {
     description_suffix: string;
     empty: string;
     from_label: string;
+    writing_style: {
+      heading: string;
+      empty: string;
+      remove: string;
+      removed_toast: string;
+    };
   };
   syllabus_new_page: {
     title: string;
@@ -2150,6 +2168,7 @@ export const en: MessagesShape = {
       bound_to: "Bound to",
       this_class: "this class",
       fanout_mistake: "{n} note",
+      fanout_sender_history: "{n} prior reply",
       fanout_syllabus: "{n} syllabus",
       fanout_calendar: "{n} calendar",
       fanout_email: "{n} email",
@@ -3101,6 +3120,20 @@ export const en: MessagesShape = {
       more: "Regenerated {refreshed} drafts. More queued — click again to continue.",
       exhausted: "Regenerated {refreshed} drafts before credits ran out. Top up to continue.",
     },
+    voice_profile: {
+      title: "Writing voice",
+      description:
+        "A one-line description of how you write, generated from your last 50 sent emails. Steadii injects it into every draft so first-time-sender replies sound like you instead of generic LLM tone.",
+      empty: "No voice profile yet. Click below once Gmail is connected to generate one.",
+      button: "Re-learn my writing voice",
+      help:
+        "Reads up to 50 sent messages from Gmail, summarizes register / language mix / typical length / signature style. Takes ~10 seconds and costs about $0.05 in credits.",
+      gmail_required: "Connect Gmail above to enable voice-profile extraction.",
+      saved_toast: "Voice profile updated.",
+      insufficient_toast:
+        "Not enough sent mail to extract a voice profile yet. Send a few emails through your Gmail account and try again.",
+      error_toast: "Voice profile generation failed. Try again, or check the integration status.",
+    },
   },
   agent_thinks_page: {
     settings_back: "Settings",
@@ -3109,6 +3142,13 @@ export const en: MessagesShape = {
     description_suffix: "decisions, with the fanout sources that grounded each one. Read-only — see something off? Open the inbox item to give feedback.",
     empty: "The agent hasn't drafted anything yet. Once it does, every decision lands here.",
     from_label: "From",
+    writing_style: {
+      heading: "Writing style learned from your edits",
+      empty:
+        "No style rules yet. Once you've sent a few drafts after editing them, Steadii will learn your phrasing preferences and surface them here.",
+      remove: "Remove",
+      removed_toast: "Style rule removed.",
+    },
   },
   syllabus_new_page: {
     title: "Upload a syllabus",

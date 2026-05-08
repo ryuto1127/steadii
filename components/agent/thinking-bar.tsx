@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   BookOpen,
   Calendar as CalendarIcon,
+  Clock,
   GraduationCap,
 } from "lucide-react";
 import { getTranslations } from "next-intl/server";
@@ -197,7 +198,34 @@ function SourcePill({
           <span className="max-w-[180px] truncate">{source.title}</span>
         </span>
       );
+    case "sender_history": {
+      // engineer-38 — past reply Ryuto sent to the same sender. Compact
+      // "self-N · 4/22" label keeps the pill row scannable on the
+      // /how-your-agent-thinks debug page.
+      const date = formatShortDateFromIso(source.sentAt);
+      const label = `self-${index}${date ? ` · ${date}` : ""}`;
+      return (
+        <span
+          title={source.snippet || "past reply"}
+          className={`${base} border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] text-[hsl(var(--muted-foreground))]`}
+        >
+          <Clock size={11} strokeWidth={1.75} />
+          <span className="font-mono text-[10px] tabular-nums">{label}</span>
+          <span className="max-w-[180px] truncate">
+            {source.snippet || "past reply"}
+          </span>
+        </span>
+      );
+    }
   }
+}
+
+function formatShortDateFromIso(iso: string | null | undefined): string {
+  if (typeof iso !== "string" || iso.length < 10) return "";
+  const m = iso.slice(5, 7).replace(/^0/, "");
+  const d = iso.slice(8, 10).replace(/^0/, "");
+  if (!m || !d) return "";
+  return `${m}/${d}`;
 }
 
 function pillKey(source: RetrievalProvenanceSource, index: number): string {
@@ -227,7 +255,12 @@ function buildFanoutHeadline(
   t: (key: string, values?: Record<string, string | number>) => string
 ): string {
   const parts: string[] = [];
-  if (counts.mistakes > 0) parts.push(t("fanout_mistake", { n: counts.mistakes }));
+  // engineer-38 — sender-history replaced the mistakes slot. Read either
+  // shape for back-compat with rows persisted before the rename.
+  const senderN = counts.senderHistory ?? 0;
+  const mistakeN = counts.mistakes ?? 0;
+  if (senderN > 0) parts.push(t("fanout_sender_history", { n: senderN }));
+  if (mistakeN > 0) parts.push(t("fanout_mistake", { n: mistakeN }));
   if (counts.syllabus > 0) parts.push(t("fanout_syllabus", { n: counts.syllabus }));
   if (counts.calendar > 0) parts.push(t("fanout_calendar", { n: counts.calendar }));
   if (counts.emails > 0) parts.push(t("fanout_email", { n: counts.emails }));

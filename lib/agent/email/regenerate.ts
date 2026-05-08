@@ -1,9 +1,10 @@
 import "server-only";
 import * as Sentry from "@sentry/nextjs";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   agentDrafts,
+  agentRules,
   inboxItems,
   users,
   type AgentDraftAction,
@@ -94,7 +95,11 @@ export async function regenerateDraft(
   await assertCreditsAvailable(row.userId);
 
   const [userRow] = await db
-    .select({ email: users.email, name: users.name })
+    .select({
+      email: users.email,
+      name: users.name,
+      preferences: users.preferences,
+    })
     .from(users)
     .where(eq(users.id, row.userId))
     .limit(1);
@@ -122,6 +127,7 @@ export async function regenerateDraft(
         phase: "deep",
         subject: row.subject,
         snippet: row.snippet,
+        senderEmail: row.senderEmail,
       });
     } catch (err) {
       Sentry.captureException(err, {
@@ -176,6 +182,7 @@ export async function regenerateDraft(
         phase: "draft",
         subject: row.subject,
         snippet: row.snippet,
+        senderEmail: row.senderEmail,
       });
     } catch (err) {
       Sentry.captureException(err, {
@@ -198,6 +205,35 @@ export async function regenerateDraft(
   }
 
   if (newAction === "draft_reply") {
+    // engineer-38 — voice profile + writing-style rules (mirrors l2.ts
+    // path so regenerated drafts get the same prompt context as fresh
+    // ones).
+    const voiceProfile =
+      typeof userRow?.preferences?.voiceProfile === "string"
+        ? userRow.preferences.voiceProfile
+        : null;
+    let writingStyleRules: string[] = [];
+    try {
+      const ruleRows = await db
+        .select({ matchValue: agentRules.matchValue, reason: agentRules.reason })
+        .from(agentRules)
+        .where(
+          and(
+            eq(agentRules.userId, row.userId),
+            eq(agentRules.scope, "writing_style"),
+            eq(agentRules.enabled, true),
+            isNull(agentRules.deletedAt)
+          )
+        );
+      writingStyleRules = ruleRows
+        .map((r) => (r.reason ?? r.matchValue ?? "").trim())
+        .filter((r) => r.length > 0 && r !== "*");
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { feature: "email_regenerate", step: "writing_style_rules" },
+        user: { id: row.userId },
+      });
+    }
     draft = await runDraft({
       userId: row.userId,
       senderEmail: row.senderEmail,
@@ -213,6 +249,8 @@ export async function regenerateDraft(
       // covers events + tasks for both tiers, so this stays empty.
       calendarEvents: [],
       fanout,
+      voiceProfile,
+      writingStyleRules,
       userName: userRow?.name ?? null,
       userEmail: userRow?.email ?? null,
     });
@@ -238,6 +276,10 @@ export async function regenerateDraft(
       draftModel: draft ? selectModel("email_draft") : null,
       draftSubject: draft?.subject ?? null,
       draftBody: draft?.body ?? null,
+      // engineer-38 — refresh the LLM-first body snapshot. Regenerate
+      // overwrites the prior LLM body with a new one, so the
+      // edit-delta baseline must follow.
+      originalDraftBody: draft?.body ?? null,
       draftTo: draft?.to ?? [],
       draftCc: draft?.cc ?? [],
       draftInReplyTo: draft?.inReplyTo ?? null,

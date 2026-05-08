@@ -91,6 +91,11 @@ export async function POST(
           .where(eq(inboxItems.id, draft.inboxItemId))
           .limit(1);
         if (inbox) {
+          // engineer-38 — capture (original, edited) pair when the user
+          // edited the draft before sending. Wrapped in the existing
+          // recordSenderFeedback try/catch (the helper itself never
+          // throws) so a learner-side schema regression cannot block
+          // the send path that already succeeded above.
           await recordSenderFeedback({
             userId: draft.userId,
             senderEmail: inbox.senderEmail,
@@ -99,6 +104,8 @@ export async function POST(
             userResponse: draft.autoSent ? "auto_sent" : "sent",
             inboxItemId: inbox.id,
             agentDraftId: draft.id,
+            originalDraftBody: draft.originalDraftBody ?? null,
+            editedBody: draft.draftBody ?? null,
           });
         }
 

@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   BookOpen,
   Calendar as CalendarIcon,
+  Clock,
 } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -36,9 +37,16 @@ const KNOWN_SOURCE_TYPES = new Set([
   "mistake",
   "syllabus",
   "calendar",
+  // engineer-38 — past replies the user wrote to the same sender.
+  "sender_history",
 ]);
 
-const CITATION_RE = /\((mistake|syllabus|calendar|email)-(\d+)\)/g;
+// engineer-38 — citation tags now include `self-N` (sender history).
+// `mistake-N` stays in the regex so legacy reasoning rows persisted before
+// PR #182 still render their citations correctly even though new fanouts
+// no longer emit that source.
+const CITATION_RE =
+  /\((mistake|syllabus|calendar|email|self)-(\d+)\)/g;
 
 function normalizeSources(
   raw: RetrievalProvenance["sources"] | undefined
@@ -279,7 +287,36 @@ function SourcePill({
         </Link>
       );
     }
+    case "sender_history": {
+      // engineer-38 — past reply Ryuto sent to the same sender. Not
+      // linkable yet (the sent-draft surface lives in the inbox detail
+      // and the link plumbing requires a separate lookup). Compact
+      // "self-N · 4/22" label so the pill row stays scannable.
+      const date = formatShortDate(source.sentAt);
+      const label = `self-${index}${date ? ` · ${date}` : ""}`;
+      return (
+        <span
+          title={source.snippet || "past reply"}
+          className={`${base} border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] text-[hsl(var(--muted-foreground))]`}
+        >
+          <Clock size={11} strokeWidth={1.75} />
+          <span className="font-mono text-[10px] tabular-nums">{label}</span>
+          <span className="max-w-[180px] truncate">
+            {source.snippet || "past reply"}
+          </span>
+        </span>
+      );
+    }
   }
+}
+
+function formatShortDate(iso: string | null | undefined): string {
+  if (typeof iso !== "string" || iso.length < 10) return "";
+  // ISO is "YYYY-MM-DD..." — slice to month/day for a compact pill label.
+  const m = iso.slice(5, 7).replace(/^0/, "");
+  const d = iso.slice(8, 10).replace(/^0/, "");
+  if (!m || !d) return "";
+  return `${m}/${d}`;
 }
 
 function pillKey(source: RetrievalProvenanceSource, index: number): string {

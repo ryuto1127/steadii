@@ -258,4 +258,81 @@ describe("runDeepPass", () => {
       throw new Error("expected first source to be type=email");
     }
   });
+
+  // engineer-38 — when the fanout includes sender history, the prompt
+  // MUST render the "How you usually reply to this sender" block with
+  // self-N tags + the past reply body, and the buildProvenance result
+  // must surface a sender_history source the UI can render as a pill.
+  it("renders sender-history block in the prompt and provenance", async () => {
+    const { runDeepPass, buildProvenance } = await import(
+      "@/lib/agent/email/classify-deep"
+    );
+    const fanout = {
+      classBinding: {
+        classId: null,
+        className: null,
+        classCode: null,
+        method: "none" as const,
+        confidence: 0,
+      },
+      senderHistory: [
+        {
+          draftId: "d-prior",
+          draftSubject: "Re: midterm prep",
+          draftBody: "Thanks — I'll review chapter 7 tonight.",
+          sentAt: new Date("2026-04-22T10:00:00Z"),
+          originalSubject: "midterm prep",
+          originalSnippet: null,
+        },
+      ],
+      syllabusChunks: [],
+      similarEmails: [],
+      totalSimilarCandidates: 0,
+      calendar: { events: [], tasks: [], assignments: [] },
+      timings: {
+        senderHistory: 1,
+        syllabus: 0,
+        emails: 0,
+        calendar: 0,
+        total: 1,
+      },
+      timeouts: [],
+    };
+    await runDeepPass({
+      userId: "u1",
+      senderEmail: "prof@x.edu",
+      senderDomain: "x.edu",
+      senderRole: "professor",
+      subject: "Re: chapter 7",
+      snippet: "How are you finding it?",
+      bodySnippet: "How are you finding it?",
+      riskPass: {
+        riskTier: "high",
+        confidence: 0.9,
+        reasoning: "Direct question",
+        usageId: null,
+      },
+      similarEmails: [],
+      totalCandidates: 0,
+      threadRecentMessages: [],
+      fanout,
+    });
+    const prompt = openaiCalls.at(-1)!.userPrompt;
+    expect(prompt).toContain("How you usually reply to this sender");
+    expect(prompt).toContain("self-1: [2026-04-22] Subject: \"Re: midterm prep\"");
+
+    const prov = buildProvenance({
+      similarEmails: [],
+      totalCandidates: 0,
+      fanout,
+    });
+    const senderSource = prov.sources.find(
+      (s) => s.type === "sender_history"
+    );
+    expect(senderSource).toBeDefined();
+    if (senderSource && senderSource.type === "sender_history") {
+      expect(senderSource.id).toBe("d-prior");
+      expect(senderSource.snippet).toContain("review chapter 7");
+    }
+  });
 });

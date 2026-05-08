@@ -71,6 +71,13 @@ export const users = pgTable("users", {
     // out of auto_low when the user is `@`-mentioned. Settings UI to set
     // this is engineer-33 candidate; for now read-only via DB.
     githubUsername?: string;
+    // engineer-38 — one-line writing-voice description generated from
+    // the user's last 50 sent emails. Injected into the L2 draft prompt
+    // as a cold-start anchor for first-time senders. Generated once at
+    // onboarding (after Gmail OAuth) and re-runnable from
+    // /app/settings/connections. Capped at 200 chars on write so the
+    // prompt budget stays bounded.
+    voiceProfile?: string;
   }>().default({}),
   timezone: text("timezone"),
   onboardingStep: integer("onboarding_step").notNull().default(0),
@@ -795,8 +802,17 @@ export type AgentRuleScope =
   | "sender"
   | "domain"
   | "subject_keyword"
-  | "thread";
-export type AgentRuleSource = "learned" | "manual" | "chat";
+  | "thread"
+  // engineer-38 — global writing-style rules learned from edit-deltas.
+  // matchValue is always "*"; one row per rule sentence. Source is
+  // "edit_delta_learner". Injected into the L2 draft prompt under
+  // "Your writing-style preferences (learned from past edits)".
+  | "writing_style";
+export type AgentRuleSource =
+  | "learned"
+  | "manual"
+  | "chat"
+  | "edit_delta_learner";
 
 // Per-user rules that shape L1 triage. Globals (operator-maintained) stay in
 // code under `lib/agent/email/rules-global.ts`; only user-specific rules
@@ -917,6 +933,16 @@ export type RetrievalProvenanceSource =
       title: string;
       start: string;
       end: string | null;
+    }
+  // engineer-38 — past replies the user sent to the SAME sender. Surfaces
+  // tone / register precedent that no vector retrieval will catch
+  // ("self-N · 4/22"). id is agent_drafts.id; sentAt is the row's sent_at
+  // ISO; snippet capped at 200 chars of the past reply body.
+  | {
+      type: "sender_history";
+      id: string;
+      sentAt: string;
+      snippet: string;
     };
 
 export type ClassBindingProvenance = {
@@ -943,17 +969,23 @@ export type RetrievalProvenance = {
   // with deep-pass-only rows persisted before W1.
   classBinding?: ClassBindingProvenance | null;
   // Per-phase counts for admin dashboards. Optional for the same
-  // backwards-compat reason. mistakes/syllabus reflect chunk counts;
+  // backwards-compat reason. senderHistory/syllabus reflect row counts;
   // calendar = events + tasks + steadii assignments combined.
+  // engineer-38: `mistakes` was renamed to `senderHistory`. Older rows
+  // persisted before the rename keep `mistakes` so we tolerate either
+  // shape on read; new rows always emit `senderHistory`.
   fanoutCounts?: {
-    mistakes: number;
+    senderHistory?: number;
+    mistakes?: number;
     syllabus: number;
     emails: number;
     calendar: number;
   } | null;
   // Per-source timing in ms — surfaced in admin metrics. Optional.
+  // Same rename rule as fanoutCounts above.
   fanoutTimings?: {
-    mistakes: number;
+    senderHistory?: number;
+    mistakes?: number;
     syllabus: number;
     emails: number;
     calendar: number;
@@ -998,6 +1030,12 @@ export const agentDrafts = pgTable(
 
     draftSubject: text("draft_subject"),
     draftBody: text("draft_body"),
+    // engineer-38 — frozen LLM-first body. saveDraftEditsAction overwrites
+    // draftBody with the user's edit; this column keeps the original so
+    // the edit-delta learner can compute (original, final) pairs at send
+    // time. Null on legacy rows pre-migration AND on rows persisted by
+    // pipelines that didn't generate a draft body (paused / no_op).
+    originalDraftBody: text("original_draft_body"),
     draftTo: text("draft_to")
       .array()
       .notNull()
@@ -1089,6 +1127,13 @@ export const agentSenderFeedback = pgTable(
     agentDraftId: uuid("agent_draft_id").references(() => agentDrafts.id, {
       onDelete: "set null",
     }),
+
+    // engineer-38 — edit-delta capture. Both columns are null when the
+    // user sent without editing (the common path); populated only when
+    // the final body diverges from the LLM's original. The style-learner
+    // cron consumes pairs where editedBody IS NOT NULL.
+    originalDraftBody: text("original_draft_body"),
+    editedBody: text("edited_body"),
 
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
       .notNull()

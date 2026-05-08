@@ -119,6 +119,44 @@ export const authConfig = {
               tags: { context: "signin_clear_gmail_revoked" },
             });
           }
+
+          // engineer-38 — bootstrap voice profile on first successful
+          // Gmail consent. Fire-and-forget so sign-in doesn't block on
+          // the ~5-10s LLM call. Skip if a profile already exists (the
+          // user re-consented; the profile they have is good enough).
+          // Manual re-trigger is exposed at /app/settings/connections.
+          try {
+            const [existing] = await db
+              .select({ preferences: users.preferences })
+              .from(users)
+              .where(eq(users.id, user.id))
+              .limit(1);
+            const hasProfile =
+              typeof existing?.preferences?.voiceProfile === "string" &&
+              existing.preferences.voiceProfile.trim().length > 0;
+            if (!hasProfile) {
+              const userId = user.id;
+              void (async () => {
+                const { generateVoiceProfile } = await import(
+                  "@/lib/agent/email/voice-profile"
+                );
+                await generateVoiceProfile(userId);
+              })().catch((err) => {
+                Sentry.captureException(err, {
+                  level: "warning",
+                  tags: {
+                    context: "signin_voice_profile_bootstrap",
+                  },
+                  user: { id: userId },
+                });
+              });
+            }
+          } catch (err) {
+            Sentry.captureException(err, {
+              level: "warning",
+              tags: { context: "signin_voice_profile_check" },
+            });
+          }
         }
 
         // Neon serverless can hiccup on transient `fetch failed` / cold
