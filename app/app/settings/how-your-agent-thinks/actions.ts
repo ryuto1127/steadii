@@ -3,7 +3,7 @@
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
-import { agentRules } from "@/lib/db/schema";
+import { agentContactPersonas, agentRules } from "@/lib/db/schema";
 import { auth } from "@/lib/auth/config";
 
 // engineer-38 — manual override for the writing-style learner. Soft-deletes
@@ -31,6 +31,30 @@ export async function removeWritingStyleRuleAction(
         eq(agentRules.id, id),
         eq(agentRules.userId, userId),
         eq(agentRules.scope, "writing_style")
+      )
+    );
+  revalidatePath("/app/settings/how-your-agent-thinks");
+}
+
+// engineer-39 — wipe a persona row. The next L2 invocation for this
+// contact falls back to the "no learned persona" empty state; the next
+// persona-learner cron will regenerate the row from scratch (so deleting
+// a persona is "wipe + relearn", not "permanently forget"). The user
+// can keep clicking remove if the model keeps proposing a persona they
+// dislike — a permanent allowlist is post-α territory.
+export async function deletePersonaAction(formData: FormData): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  const userId = session.user.id;
+  const id = formData.get("id");
+  if (typeof id !== "string" || id.length === 0) return;
+
+  await db
+    .delete(agentContactPersonas)
+    .where(
+      and(
+        eq(agentContactPersonas.id, id),
+        eq(agentContactPersonas.userId, userId)
       )
     );
   revalidatePath("/app/settings/how-your-agent-thinks");

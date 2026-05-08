@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -8,14 +8,26 @@ import {
   AlertTriangle,
   BookOpen,
   Calendar as CalendarIcon,
+  CheckCircle2,
   Clock,
+  ListTodo,
+  Plus,
 } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import type {
+  ExtractedActionItem,
   RetrievalProvenance,
   RetrievalProvenanceSource,
 } from "@/lib/db/schema";
+import { acceptDraftActionItemAction } from "@/app/app/inbox/[id]/_actions";
+
+// engineer-39 — UI floor mirrors the constant in classify-deep.ts. Items
+// below the floor are dropped here even if the model emitted them, so
+// a future prompt regression can't quietly fill the panel with
+// low-signal noise.
+const MIN_ACTION_ITEM_CONFIDENCE = 0.6;
 
 // Combined reasoning + sources panel for /app/inbox/[id]. Collapsed by
 // default so the draft + send/edit buttons stay primary; expand reveals
@@ -71,13 +83,22 @@ type ReasoningAction =
   | "paused";
 
 export function DraftDetailsPanel({
+  draftId,
   reasoning,
   action,
   provenance,
+  actionItems,
+  acceptedIndices,
 }: {
+  draftId?: string;
   reasoning: string | null;
   action?: ReasoningAction | null;
   provenance: RetrievalProvenance | null;
+  // engineer-39 — extracted to-dos from the deep pass. Optional so
+  // legacy callers (e.g. how-your-agent-thinks history) can omit them
+  // and the panel falls through to its prior reasoning + sources only.
+  actionItems?: ExtractedActionItem[] | null;
+  acceptedIndices?: number[] | null;
 }) {
   const t = useTranslations("agent.draft_details");
   const tReasoning = useTranslations("agent.reasoning_panel");
@@ -87,7 +108,15 @@ export function DraftDetailsPanel({
   const trimmed = (reasoning ?? "").trim();
   const hasReasoning = trimmed.length > 0;
   const hasSources = sources.length > 0;
-  if (!hasReasoning && !hasSources) return null;
+  // engineer-39 — surface the action-items section for any draft that
+  // has at least one item above the confidence floor. Empty or
+  // sub-floor items collapse the section so it doesn't render as a
+  // "0 detected" footnote.
+  const visibleActionItems = (actionItems ?? []).filter(
+    (i) => i.confidence >= MIN_ACTION_ITEM_CONFIDENCE
+  );
+  const hasActionItems = !!draftId && visibleActionItems.length > 0;
+  if (!hasReasoning && !hasSources && !hasActionItems) return null;
 
   const summary = t(
     expanded ? "collapse" : "expand",
@@ -151,9 +180,132 @@ export function DraftDetailsPanel({
               </div>
             </div>
           ) : null}
+          {hasActionItems && draftId ? (
+            <ActionItemsSection
+              draftId={draftId}
+              items={visibleActionItems}
+              accepted={acceptedIndices ?? []}
+              originalIndices={(actionItems ?? []).map((_, i) => i).filter((i) =>
+                ((actionItems ?? [])[i]?.confidence ?? 0) >=
+                MIN_ACTION_ITEM_CONFIDENCE
+              )}
+            />
+          ) : null}
         </div>
       ) : null}
     </section>
+  );
+}
+
+// engineer-39 — action items live inside the same DraftDetailsPanel as
+// reasoning + sources so the user opens one collapsible section and sees
+// "everything Steadii thinks about this email." Each item gets one of
+// two affordances: an "Add to my tasks" button when not yet accepted,
+// or a green ✓ "Added" pill once accepted (idempotent — see the
+// acceptDraftActionItemAction comment).
+function ActionItemsSection({
+  draftId,
+  items,
+  accepted,
+  originalIndices,
+}: {
+  draftId: string;
+  items: ExtractedActionItem[];
+  accepted: number[];
+  // Map from rendered position → original index in the draft row's
+  // `extractedActionItems` array. We filter sub-floor items out before
+  // rendering, but the server action keys on the persisted index, so
+  // the panel needs to thread the original index back to the click
+  // handler.
+  originalIndices: number[];
+}) {
+  const t = useTranslations("agent.draft_details.action_items");
+  return (
+    <div>
+      <h3 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+        <ListTodo size={11} strokeWidth={1.75} />
+        {t("heading", { n: items.length })}
+      </h3>
+      <ul className="flex flex-col gap-1.5">
+        {items.map((item, i) => {
+          const originalIndex = originalIndices[i] ?? i;
+          const isAccepted = accepted.includes(originalIndex);
+          return (
+            <ActionItemRow
+              key={`${originalIndex}-${item.title}`}
+              draftId={draftId}
+              item={item}
+              originalIndex={originalIndex}
+              accepted={isAccepted}
+            />
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function ActionItemRow({
+  draftId,
+  item,
+  originalIndex,
+  accepted,
+}: {
+  draftId: string;
+  item: ExtractedActionItem;
+  originalIndex: number;
+  accepted: boolean;
+}) {
+  const t = useTranslations("agent.draft_details.action_items");
+  const [optimisticAccepted, setOptimisticAccepted] = useState(accepted);
+  const [isPending, startTransition] = useTransition();
+
+  const onAdd = () => {
+    if (optimisticAccepted) return;
+    setOptimisticAccepted(true);
+    startTransition(async () => {
+      try {
+        const res = await acceptDraftActionItemAction(draftId, originalIndex);
+        if (res.ok) {
+          if (!res.alreadyAccepted) toast.success(t("toast_added"));
+        } else {
+          setOptimisticAccepted(false);
+          toast.error(t("toast_failed"));
+        }
+      } catch {
+        setOptimisticAccepted(false);
+        toast.error(t("toast_failed"));
+      }
+    });
+  };
+
+  return (
+    <li className="flex items-start justify-between gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-small">
+      <div className="min-w-0 flex-1">
+        <div className="text-[hsl(var(--foreground))]">{item.title}</div>
+        {item.dueDate ? (
+          <div className="mt-0.5 inline-block rounded bg-[hsl(var(--surface-raised))] px-1.5 py-0.5 text-[11px] tabular-nums text-[hsl(var(--muted-foreground))]">
+            {item.dueDate}
+          </div>
+        ) : null}
+      </div>
+      {optimisticAccepted ? (
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-[hsl(142_76%_36%/0.1)] px-2.5 py-1 text-[11px] font-medium text-[hsl(142_76%_36%)]">
+          <CheckCircle2 size={12} strokeWidth={1.75} />
+          {t("added")}
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={isPending}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2.5 py-1 text-[11px] transition-hover hover:bg-[hsl(var(--surface-raised))] disabled:opacity-50"
+        >
+          <Plus size={12} strokeWidth={1.75} />
+          {isPending ? t("adding") : t("add_to_tasks")}
+        </button>
+      )}
+    </li>
   );
 }
 

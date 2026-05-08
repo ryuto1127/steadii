@@ -62,6 +62,33 @@ export function buildFanoutContextBlocks(
     );
   }
 
+  // === Contact persona (engineer-39) ===
+  // Sets tone + register before any per-message context. The model is
+  // instructed (in classify-deep / draft system prompts) NOT to echo
+  // facts back unless the user asked. When no persona exists yet (first
+  // interaction or persona-learner hasn't run), render a short empty
+  // state so the model knows the absence is data, not a missing block.
+  lines.push("");
+  const persona = fanout.contactPersona;
+  if (persona && (persona.relationship || persona.facts.length > 0)) {
+    const header = persona.relationship
+      ? `=== Contact persona — ${persona.relationship} ===`
+      : "=== Contact persona ===";
+    lines.push(header);
+    if (persona.facts.length === 0) {
+      lines.push("(relationship known, no specific facts learned yet)");
+    } else {
+      for (const f of persona.facts) {
+        lines.push(`- ${f}`);
+      }
+    }
+  } else {
+    lines.push("=== Contact persona ===");
+    lines.push(
+      "(no learned persona — first interaction or fresh contact)"
+    );
+  }
+
   // === How you usually reply to this sender (N, most-recent first) ===
   // engineer-38 — replaces the legacy `mistake-N` slot. Per-source tag
   // is `self-N` so the citation regex (and future feedback UIs) can key
@@ -172,15 +199,21 @@ export function buildFanoutContextBlocks(
     }
   }
 
-  // Empty-corpus hint per §9.1 — when ALL three structured sources are
+  // Empty-corpus hint per §9.1 — when ALL structured signal sources are
   // empty (calendar can be empty for a different reason — disconnected),
-  // prepend a hint so the model doesn't over-hedge.
+  // prepend a hint so the model doesn't over-hedge. engineer-39: persona
+  // joins this gate; it's the strongest sender-context signal for a
+  // first-interaction contact.
+  const personaEmpty =
+    !persona ||
+    (!persona.relationship && persona.facts.length === 0);
   if (
     fanout.senderHistory.length === 0 &&
-    fanout.syllabusChunks.length === 0
+    fanout.syllabusChunks.length === 0 &&
+    personaEmpty
   ) {
     lines.unshift(
-      "[Empty-corpus hint: this user has no past replies to this sender or relevant syllabus chunks. Reason from the email content alone.]",
+      "[Empty-corpus hint: this user has no past replies to this sender, learned persona, or relevant syllabus chunks. Reason from the email content alone.]",
       ""
     );
   }

@@ -488,6 +488,14 @@ async function runPipeline(
     reasoning: finalReasoning,
     retrievalProvenance:
       deep?.retrievalProvenance ?? mediumTierProvenance ?? null,
+    // engineer-39 — surface the deep pass's structured to-dos onto the
+    // draft row so the inbox detail page can render the "N action
+    // items detected" section. The deep pass already filtered to high-
+    // confidence items; the UI does its own MIN_ACTION_ITEM_CONFIDENCE
+    // sanity floor on render. Empty array on medium-tier paths and on
+    // pause/no_op rows; that's the correct behavior — there's no deep
+    // reasoning to mine for obligations.
+    extractedActionItems: deep?.actionItems ?? [],
     draftSubject: draft?.subject ?? null,
     draftBody: draft?.body ?? null,
     // engineer-38 — freeze the LLM-first body. saveDraftEditsAction will

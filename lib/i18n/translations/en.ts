@@ -567,6 +567,21 @@ type MessagesShape = {
       expand: string;
       collapse: string;
       sources_heading: string;
+      action_items: {
+        heading: string;
+        heading_empty: string;
+        add_to_tasks: string;
+        added: string;
+        adding: string;
+        toast_added: string;
+        toast_failed: string;
+      };
+    };
+    pre_send_check: {
+      modal_title: string;
+      modal_body: string;
+      send_anyway: string;
+      cancel: string;
     };
     thinking_bar: {
       thinking_complete: string;
@@ -1369,6 +1384,13 @@ type MessagesShape = {
       remove: string;
       removed_toast: string;
     };
+    contact_personas: {
+      heading: string;
+      description: string;
+      empty: string;
+      remove: string;
+      no_facts_yet: string;
+    };
   };
   syllabus_new_page: {
     title: string;
@@ -2162,6 +2184,22 @@ export const en: MessagesShape = {
       expand: "Show Steadii's reasoning",
       collapse: "Hide reasoning",
       sources_heading: "Sources Steadii referenced",
+      action_items: {
+        heading: "Steadii detected {n} action items",
+        heading_empty: "No action items detected",
+        add_to_tasks: "Add to my tasks",
+        added: "Added",
+        adding: "Adding…",
+        toast_added: "Added to your tasks.",
+        toast_failed: "Couldn't add this task.",
+      },
+    },
+    pre_send_check: {
+      modal_title: "Steadii spotted potential issues",
+      modal_body:
+        "These phrases didn't appear in the original thread. Double-check before sending.",
+      send_anyway: "Send anyway",
+      cancel: "Edit draft",
     },
     thinking_bar: {
       thinking_complete: "Thinking · complete",
@@ -3148,6 +3186,15 @@ export const en: MessagesShape = {
         "No style rules yet. Once you've sent a few drafts after editing them, Steadii will learn your phrasing preferences and surface them here.",
       remove: "Remove",
       removed_toast: "Style rule removed.",
+    },
+    contact_personas: {
+      heading: "Contacts Steadii has learned about",
+      description:
+        "What Steadii remembers about each person you correspond with. The relationship label sets tone in drafts; the facts inform how Steadii replies.",
+      empty:
+        "No contacts learned yet. Once you've corresponded with a few people, Steadii will distill what it knows about each of them here.",
+      remove: "Forget this contact",
+      no_facts_yet: "No specific facts learned yet.",
     },
   },
   syllabus_new_page: {

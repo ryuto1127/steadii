@@ -8,6 +8,7 @@ import {
   agentDrafts,
   inboxItems,
   agentRules,
+  type PreSendWarning,
   type SenderRole,
 } from "@/lib/db/schema";
 import { auth } from "@/lib/auth/config";
@@ -17,6 +18,11 @@ import { qstash } from "@/lib/integrations/qstash/client";
 import { enqueueSendForDraft } from "./send-enqueue";
 import { recordSenderFeedback } from "./feedback";
 import { createClass } from "@/lib/classes/save";
+import { fetchRecentThreadMessages } from "./thread";
+import {
+  checkDraftBeforeSend,
+  PRE_SEND_CHECK_ERROR_NAME,
+} from "./pre-send-check";
 
 async function getUserId(): Promise<string> {
   const session = await auth();
@@ -43,10 +49,56 @@ async function loadDraftAndInbox(userId: string, draftId: string) {
 // Approve → user clicked Send. Delegates to the shared enqueue helper
 // with isAutomatic=false; revalidates the route paths so the UndoBar
 // renders immediately.
+//
+// engineer-39 — runs the pre-send fact-checker first. When it returns
+// ok=false, we persist the warnings on the draft row and throw a typed
+// error the client catches to render the warning modal. The user can:
+//   - "Send anyway": re-call this action with skipPreSendCheck=true
+//   - "Edit draft": cancels the send (no server work, just modal close)
+// The check itself is wrapped to degrade to ok=true on any LLM failure
+// (see pre-send-check.ts) — we'd rather miss a hallucination than block
+// a legitimate send.
 export async function approveAgentDraftAction(
-  draftId: string
-): Promise<{ sendAt: Date; undoWindowSeconds: number }> {
+  draftId: string,
+  options: { skipPreSendCheck?: boolean } = {}
+): Promise<{
+  sendAt: Date;
+  undoWindowSeconds: number;
+}> {
   const userId = await getUserId();
+
+  if (!options.skipPreSendCheck) {
+    const warnings = await runPreSendCheckForDraft({ userId, draftId });
+    if (warnings.length > 0) {
+      // Persist the warnings on the row so the modal can re-hydrate
+      // after a router.refresh and so analytics can audit how often
+      // the check fires per user.
+      await db
+        .update(agentDrafts)
+        .set({ preSendWarnings: warnings, updatedAt: new Date() })
+        .where(eq(agentDrafts.id, draftId));
+      // Server actions surface errors to the client by throwing; we use
+      // a name-keyed Error since `instanceof` doesn't survive the
+      // server→client boundary. The client's DraftActions component
+      // detects the name + parses the JSON-encoded warnings out of the
+      // message.
+      const err = new Error(
+        JSON.stringify({
+          name: PRE_SEND_CHECK_ERROR_NAME,
+          warnings,
+        })
+      );
+      err.name = PRE_SEND_CHECK_ERROR_NAME;
+      throw err;
+    }
+    // Clear any stale warnings from a prior failed check that the user
+    // edited past — keeps the row truthful for analytics.
+    await db
+      .update(agentDrafts)
+      .set({ preSendWarnings: [], updatedAt: new Date() })
+      .where(eq(agentDrafts.id, draftId));
+  }
+
   const result = await enqueueSendForDraft({
     userId,
     draftId,
@@ -55,6 +107,72 @@ export async function approveAgentDraftAction(
   revalidatePath("/app/inbox");
   revalidatePath(`/app/inbox/${draftId}`);
   return result;
+}
+
+// Helper — assembles the thread context (original email body + last 2
+// thread predecessors) and calls the fact-checker. Returns the warnings
+// array; an empty array = ok / nothing to flag.
+async function runPreSendCheckForDraft(args: {
+  userId: string;
+  draftId: string;
+}): Promise<PreSendWarning[]> {
+  const [row] = await db
+    .select({ draft: agentDrafts, inbox: inboxItems })
+    .from(agentDrafts)
+    .innerJoin(inboxItems, eq(agentDrafts.inboxItemId, inboxItems.id))
+    .where(
+      and(
+        eq(agentDrafts.id, args.draftId),
+        eq(agentDrafts.userId, args.userId)
+      )
+    )
+    .limit(1);
+  if (!row) return [];
+  // Don't run the check on incomplete drafts — enqueueSendForDraft will
+  // reject them with its own error and we'd waste an LLM call.
+  const { draft, inbox } = row;
+  if (
+    !draft.draftBody ||
+    !draft.draftSubject ||
+    draft.draftTo.length === 0 ||
+    draft.action !== "draft_reply"
+  ) {
+    return [];
+  }
+
+  const threadMessages = await fetchRecentThreadMessages({
+    userId: args.userId,
+    threadExternalId: inbox.threadExternalId,
+    beforeReceivedAt: inbox.receivedAt,
+    limit: 2,
+  }).catch((err) => {
+    Sentry.captureException(err, {
+      level: "warning",
+      tags: { feature: "pre_send_check", op: "fetch_thread" },
+      user: { id: args.userId },
+    });
+    return [] as Awaited<ReturnType<typeof fetchRecentThreadMessages>>;
+  });
+
+  const contextParts: string[] = [];
+  contextParts.push(`From: ${inbox.senderEmail}`);
+  contextParts.push(`Subject: ${inbox.subject ?? "(none)"}`);
+  contextParts.push(`Body: ${inbox.snippet ?? ""}`);
+  if (threadMessages.length > 0) {
+    contextParts.push("");
+    contextParts.push("Earlier in thread:");
+    for (const m of threadMessages) {
+      contextParts.push(`- ${m.sender}: ${m.snippet}`);
+    }
+  }
+
+  const result = await checkDraftBeforeSend({
+    userId: args.userId,
+    draftSubject: draft.draftSubject,
+    draftBody: draft.draftBody,
+    threadContext: contextParts.join("\n"),
+  });
+  return result.ok ? [] : result.warnings;
 }
 
 // Cancel the pending send. Calls QStash messages.delete to drop the
