@@ -27,6 +27,10 @@ import {
   type SimilarEmail,
 } from "./retrieval";
 import { fetchSentMessagesToRecipient } from "@/lib/integrations/google/gmail-fetch";
+import {
+  findSimilarSentEmails,
+  type SimilarSentEmail,
+} from "./similar-sent-retrieval";
 
 // Per-source caps locked in §12.2 (per-source caps, not a single total
 // budget). k_syllabus=3, k_emails=5 (classify) / 20 (deep).
@@ -36,6 +40,10 @@ export const FANOUT_K_SYLLABUS = 3;
 export const FANOUT_K_EMAILS_CLASSIFY = 5;
 export const FANOUT_K_EMAILS_DEEP = 20;
 export const FANOUT_K_SENDER_HISTORY = 3;
+// 2026-05-08 — k_similar_sent=3. Concrete few-shot examples of past
+// replies on similar topics (different recipients than sender-history's
+// same-recipient slate). Draft-phase only.
+export const FANOUT_K_SIMILAR_SENT = 3;
 
 // Calendar windows. §12.10 locked decision: live both classify and draft.
 export const FANOUT_CALENDAR_DAYS_CLASSIFY = 3;
@@ -204,6 +212,14 @@ export type FanoutResult = {
   // sender-history source carries the user's prior replies to the same
   // sender, which is the strongest tone/register signal we have.
   senderHistory: FanoutSenderHistory[];
+  // 2026-05-08 — past sent emails on similar topics (different
+  // recipients than `senderHistory`'s same-recipient slate). Fills the
+  // gap between voice profile (global summary) and sender history
+  // (per-recipient): "first-time recipient but Ryuto has written lots
+  // of similar-context emails before." Populated only on the draft
+  // phase; classify + deep phases get an empty list to keep the hot
+  // path quota-cheap.
+  similarSent: SimilarSentEmail[];
   syllabusChunks: FanoutSyllabusChunk[];
   similarEmails: SimilarEmail[];
   totalSimilarCandidates: number;
@@ -213,6 +229,7 @@ export type FanoutResult = {
   // sources keep their names so existing dashboards stay readable.
   timings: {
     senderHistory: number;
+    similarSent: number;
     syllabus: number;
     emails: number;
     calendar: number;
@@ -333,7 +350,7 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
   // sender are the strongest tone/register signal: vector retrieval
   // never reaches for them and they're the moment Steadii's drafts
   // start sounding like the user wrote them rather than a template.
-  const [senderHistory, syllabusChunks, emails, calendar] = await Promise.all([
+  const [senderHistory, similarSent, syllabusChunks, emails, calendar] = await Promise.all([
     timed(
       "senderHistory",
       async () => {
@@ -343,6 +360,23 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
           input.senderEmail,
           FANOUT_K_SENDER_HISTORY
         );
+      },
+      timeouts
+    ),
+    timed(
+      "similarSent",
+      async () => {
+        // Draft-phase only — concrete few-shot examples for style
+        // transfer. The classify + deep phases decide actions, not
+        // tone, so the Gmail call would be wasted quota there.
+        if (input.phase !== "draft") return [] as SimilarSentEmail[];
+        return findSimilarSentEmails({
+          userId: input.userId,
+          subject: input.subject,
+          snippet: input.snippet,
+          excludeRecipientEmail: input.senderEmail,
+          k: FANOUT_K_SIMILAR_SENT,
+        });
       },
       timeouts
     ),
@@ -445,6 +479,7 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
     },
     counts: {
       senderHistory: senderHistory.value.length,
+      similarSent: similarSent.value.length,
       syllabus: syllabusChunks.value.length,
       emails: emails.value.results.length,
       calendar:
@@ -454,6 +489,7 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
     },
     timings_ms: {
       senderHistory: senderHistory.elapsed,
+      similarSent: similarSent.elapsed,
       syllabus: syllabusChunks.elapsed,
       emails: emails.elapsed,
       calendar: calendar.elapsed,
@@ -487,12 +523,14 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
       confidence,
     },
     senderHistory: senderHistory.value,
+    similarSent: similarSent.value,
     syllabusChunks: syllabusChunks.value,
     similarEmails: emails.value.results,
     totalSimilarCandidates: emails.value.totalCandidates,
     calendar: calendar.value,
     timings: {
       senderHistory: senderHistory.elapsed,
+      similarSent: similarSent.elapsed,
       syllabus: syllabusChunks.elapsed,
       emails: emails.elapsed,
       calendar: calendar.elapsed,
