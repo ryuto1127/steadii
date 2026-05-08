@@ -79,7 +79,7 @@ export const calendarListEvents: ToolExecutor<
   schema: {
     name: "calendar_list_events",
     description:
-      "List Google Calendar events. `timeMin`/`timeMax` must be RFC3339 timestamps. Defaults to the primary calendar over the next 7 days. Reads from the unified event store (synced from Google on demand).",
+      "List the user's calendar events (Google + Microsoft, unified event store). `timeMin`/`timeMax` must be RFC3339 timestamps. Default window covers the past 30 days through the next 60 days so PAST events are always considered alongside upcoming — pass an explicit `timeMin` / `timeMax` only when the user clearly limits the range. The agent should not silently exclude past events when the user asks open-ended questions about their schedule.",
     mutability: "read",
     parameters: {
       type: "object",
@@ -96,10 +96,19 @@ export const calendarListEvents: ToolExecutor<
   async execute(ctx, rawArgs) {
     const args = listArgs.parse(rawArgs);
     const now = new Date();
-    const timeMin = args.timeMin ?? now.toISOString();
+    // 2026-05-07 — defaults widened from "now → +7d" to "−30d → +60d"
+    // so past events stay in the agent's consideration window. Ryuto
+    // dogfood: the agent was silently excluding past calendar entries
+    // (and by extension cross-source comparisons that need them) when
+    // the user asked open-ended questions. The `limit` cap (default 25)
+    // keeps payload size bounded; explicit timeMin/timeMax still wins
+    // for narrow queries.
+    const timeMin =
+      args.timeMin ??
+      new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const timeMax =
       args.timeMax ??
-      new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString();
     if (shouldSync(ctx.userId, timeMin, timeMax)) {
       await syncAllForRange(ctx.userId, timeMin, timeMax);
     }
