@@ -38,9 +38,17 @@ function fmt(template: string, vars: Record<string, string | number>): string {
 
 export const dynamic = "force-dynamic";
 
+// 2026-05-07 — "mistakes" tab dropped per the secretary-pivot scope
+// tightening. Steadii is a chief-of-staff for student schedules, not
+// an academic-content tutor; mistake-note teaching belongs with
+// general AI tools (ChatGPT/Claude). The tab + grid still render via
+// MistakesTab below for legacy data already in the table, but it's
+// not in TAB_ORDER so users can't reach it through the UI. A direct
+// `?tab=mistakes` URL falls through to the default ("syllabus") via
+// parseTab.
 type Tab = "syllabus" | "assignments" | "mistakes" | "chats";
 
-const TAB_ORDER: Tab[] = ["syllabus", "assignments", "mistakes", "chats"];
+const TAB_ORDER: Tab[] = ["syllabus", "assignments", "chats"];
 
 function toTab(v: string | undefined): Tab {
   if (v && (TAB_ORDER as string[]).includes(v)) return v as Tab;
