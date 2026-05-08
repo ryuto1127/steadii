@@ -24,6 +24,7 @@ import {
   setGithubUsernameAction,
   reclassifyAllInboxAction,
   regenerateDraftsAction,
+  regenerateVoiceProfileAction,
 } from "./actions";
 import { refreshGmailInboxAction } from "../actions";
 
@@ -43,13 +44,14 @@ export default async function ConnectionsPage({
     refreshed?: string;
     exhausted?: string;
     more?: string;
+    voice?: string;
   }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
   const params = await searchParams;
-  const { repaired, imported, ms, ical, github } = params;
+  const { repaired, imported, ms, ical, github, voice } = params;
   const reclassifyOk = params.reclassify === "ok";
   const reclassifyChanged = Number(params.changed ?? "0") || 0;
   const reclassifyIgnored = Number(params.ignored ?? "0") || 0;
@@ -98,6 +100,7 @@ export default async function ConnectionsPage({
     .where(eq(users.id, userId))
     .limit(1);
   const existingGithubUsername = userPrefRow?.preferences?.githubUsername ?? "";
+  const existingVoiceProfile = userPrefRow?.preferences?.voiceProfile ?? "";
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -141,6 +144,21 @@ export default async function ConnectionsPage({
       {github === "invalid" && (
         <div className="mt-6 rounded-lg bg-[hsl(var(--destructive,red)/0.1)] px-4 py-3 text-sm text-[hsl(var(--destructive,red))]">
           {t("github.invalid")}
+        </div>
+      )}
+      {voice === "ok" && (
+        <div className="mt-6 rounded-lg bg-[hsl(var(--primary)/0.1)] px-4 py-3 text-sm text-[hsl(var(--foreground))]">
+          {t("voice_profile.saved_toast")}
+        </div>
+      )}
+      {voice === "insufficient" && (
+        <div className="mt-6 rounded-lg bg-[hsl(var(--surface-raised))] px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+          {t("voice_profile.insufficient_toast")}
+        </div>
+      )}
+      {voice === "error" && (
+        <div className="mt-6 rounded-lg bg-[hsl(var(--destructive,red)/0.1)] px-4 py-3 text-sm text-[hsl(var(--destructive,red))]">
+          {t("voice_profile.error_toast")}
         </div>
       )}
 
@@ -275,6 +293,42 @@ export default async function ConnectionsPage({
               </p>
             )}
           </form>
+        )}
+      </section>
+
+      <section
+        id="voice"
+        className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4"
+      >
+        <h2 className="text-lg font-medium">{t("voice_profile.title")}</h2>
+        <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
+          {t("voice_profile.description")}
+        </p>
+        {existingVoiceProfile ? (
+          <p className="mt-3 rounded-md bg-[hsl(var(--surface-raised))] p-3 text-xs italic text-[hsl(var(--foreground))]">
+            “{existingVoiceProfile}”
+          </p>
+        ) : (
+          <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
+            {t("voice_profile.empty")}
+          </p>
+        )}
+        {gmailConnected ? (
+          <form action={regenerateVoiceProfileAction} className="mt-4">
+            <button
+              type="submit"
+              className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
+            >
+              {t("voice_profile.button")}
+            </button>
+            <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+              {t("voice_profile.help")}
+            </p>
+          </form>
+        ) : (
+          <p className="mt-4 text-xs text-[hsl(var(--muted-foreground))]">
+            {t("voice_profile.gmail_required")}
+          </p>
         )}
       </section>
 

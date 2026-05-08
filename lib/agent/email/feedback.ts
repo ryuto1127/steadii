@@ -90,6 +90,12 @@ export async function loadRecentFeedbackSummary(args: {
 // Insert one feedback row. Caller passes the agent_draft id and inbox
 // item id so the row links back; senderEmail/Domain are denormalized so
 // the read query can hit a btree index without a join.
+//
+// engineer-38 — `originalDraftBody` + `editedBody` are populated when a
+// user-edited body diverges from the LLM's first draft. The send-side
+// caller is responsible for fetching the frozen `agent_drafts.original_
+// draft_body` and the user's final body and passing both; this helper
+// only persists the pair when they differ.
 export async function recordSenderFeedback(args: {
   userId: string;
   senderEmail: string;
@@ -98,8 +104,16 @@ export async function recordSenderFeedback(args: {
   userResponse: AgentSenderFeedbackResponse;
   inboxItemId: string | null;
   agentDraftId: string | null;
+  originalDraftBody?: string | null;
+  editedBody?: string | null;
 }): Promise<void> {
   try {
+    const orig = args.originalDraftBody?.trim() ?? "";
+    const edited = args.editedBody?.trim() ?? "";
+    // Only carry the pair when the edit produced a real difference.
+    // No edit (or whitespace-only diff) → both columns stay null so the
+    // learner doesn't waste signal rows on no-op sends.
+    const changed = orig.length > 0 && edited.length > 0 && orig !== edited;
     await db.insert(agentSenderFeedback).values({
       userId: args.userId,
       senderEmail: args.senderEmail,
@@ -108,6 +122,8 @@ export async function recordSenderFeedback(args: {
       userResponse: args.userResponse,
       inboxItemId: args.inboxItemId,
       agentDraftId: args.agentDraftId,
+      originalDraftBody: changed ? args.originalDraftBody ?? null : null,
+      editedBody: changed ? args.editedBody ?? null : null,
     });
   } catch (err) {
     // Same swallow rationale: writing the feedback row must never block

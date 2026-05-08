@@ -1,13 +1,13 @@
 import "server-only";
 import * as Sentry from "@sentry/nextjs";
-import { and, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
+  agentDrafts,
   assignments,
   classes,
   emailEmbeddings,
   inboxItems,
-  mistakeNotes,
   type ClassBindingMethod,
 } from "@/lib/db/schema";
 import {
@@ -28,11 +28,13 @@ import {
 } from "./retrieval";
 
 // Per-source caps locked in §12.2 (per-source caps, not a single total
-// budget). k_mistakes=3, k_syllabus=3, k_emails=5 (classify) / 20 (deep).
-export const FANOUT_K_MISTAKES = 3;
+// budget). k_syllabus=3, k_emails=5 (classify) / 20 (deep).
+// engineer-38 — k_sender_history=3 (top-3 most-recent past replies to the
+// same sender). Replaces the dead mistakes slot (PR #182).
 export const FANOUT_K_SYLLABUS = 3;
 export const FANOUT_K_EMAILS_CLASSIFY = 5;
 export const FANOUT_K_EMAILS_DEEP = 20;
+export const FANOUT_K_SENDER_HISTORY = 3;
 
 // Calendar windows. §12.10 locked decision: live both classify and draft.
 export const FANOUT_CALENDAR_DAYS_CLASSIFY = 3;
@@ -136,14 +138,17 @@ const SOURCE_TIMEOUT_MS = 500;
 
 export type FanoutPhase = "classify" | "deep" | "draft";
 
-export type FanoutMistake = {
-  mistakeId: string;
-  classId: string | null;
-  title: string;
-  unit: string | null;
-  difficulty: string | null;
-  bodySnippet: string;
-  createdAt: Date;
+// engineer-38 — past sent replies from the user to this same sender.
+// Newest-first, capped at FANOUT_K_SENDER_HISTORY. Carries the original
+// inbox subject/snippet so the prompt can show "what they wrote in
+// response to" alongside the reply itself.
+export type FanoutSenderHistory = {
+  draftId: string;
+  draftSubject: string | null;
+  draftBody: string | null;
+  sentAt: Date;
+  originalSubject: string | null;
+  originalSnippet: string | null;
 };
 
 export type FanoutSyllabusChunk = {
@@ -184,14 +189,19 @@ export type ClassBindingPayload = {
 
 export type FanoutResult = {
   classBinding: ClassBindingPayload;
-  mistakes: FanoutMistake[];
+  // engineer-38 — replaces the empty `mistakes` slot from PR #182. The
+  // sender-history source carries the user's prior replies to the same
+  // sender, which is the strongest tone/register signal we have.
+  senderHistory: FanoutSenderHistory[];
   syllabusChunks: FanoutSyllabusChunk[];
   similarEmails: SimilarEmail[];
   totalSimilarCandidates: number;
   calendar: FanoutCalendar;
   // Per-source timing in ms — surfaced in audit logs + admin metrics.
+  // `senderHistory` replaces the prior `mistakes` timing slot. The other
+  // sources keep their names so existing dashboards stay readable.
   timings: {
-    mistakes: number;
+    senderHistory: number;
     syllabus: number;
     emails: number;
     calendar: number;
@@ -211,6 +221,10 @@ export type FanoutInput = {
   // shouldn't fire today, but the fanout guards anyway).
   subject: string | null;
   snippet: string | null;
+  // engineer-38 — sender email is the join key for sender-history. The
+  // L2 pipeline always has it on the inbox row; threading it through
+  // here saves a redundant inboxItems re-fetch inside fanout.
+  senderEmail: string | null;
 };
 
 // Top-level fanout orchestrator. Runs all four sources in parallel with
@@ -303,20 +317,24 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
   // Run all four sources in parallel. Per-source timing tracked individually
   // so admin metrics can surface the long-pole (calendar, usually).
   //
-  // 2026-05-07 — mistakes source disabled. Per secretary-pivot scope
-  // tightening (`project_secretary_pivot.md`), Steadii is a chief-of-
-  // staff for student schedules, not an academic-content tutor; the
-  // "mistake notes" surface belongs with general AI. Keeping the
-  // source slot in the Promise.all (returning []) so the downstream
-  // tuple destructure + provenance shape stays untouched — easier to
-  // re-enable later if the call reverses than to rip the wiring out.
-  const [mistakes, syllabusChunks, emails, calendar] = await Promise.all([
-    timed("mistakes", async () => {
-      void classId;
-      void queryEmbedding;
-      void shouldGateNonAcademic;
-      return [];
-    }, timeouts),
+  // engineer-38 — replaced the dead mistakes slot (PR #182, secretary
+  // pivot) with sender-history. The user's past replies to the same
+  // sender are the strongest tone/register signal: vector retrieval
+  // never reaches for them and they're the moment Steadii's drafts
+  // start sounding like the user wrote them rather than a template.
+  const [senderHistory, syllabusChunks, emails, calendar] = await Promise.all([
+    timed(
+      "senderHistory",
+      async () => {
+        if (!input.senderEmail) return [];
+        return loadSenderHistory(
+          input.userId,
+          input.senderEmail,
+          FANOUT_K_SENDER_HISTORY
+        );
+      },
+      timeouts
+    ),
     timed("syllabus", async () => {
       if (!queryEmbedding) {
         // No embedding → can't rank; skip.
@@ -415,7 +433,7 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
       shouldGateNonAcademic,
     },
     counts: {
-      mistakes: mistakes.value.length,
+      senderHistory: senderHistory.value.length,
       syllabus: syllabusChunks.value.length,
       emails: emails.value.results.length,
       calendar:
@@ -424,7 +442,7 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
         calendar.value.assignments.length,
     },
     timings_ms: {
-      mistakes: mistakes.elapsed,
+      senderHistory: senderHistory.elapsed,
       syllabus: syllabusChunks.elapsed,
       emails: emails.elapsed,
       calendar: calendar.elapsed,
@@ -457,13 +475,13 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
       method,
       confidence,
     },
-    mistakes: mistakes.value,
+    senderHistory: senderHistory.value,
     syllabusChunks: syllabusChunks.value,
     similarEmails: emails.value.results,
     totalSimilarCandidates: emails.value.totalCandidates,
     calendar: calendar.value,
     timings: {
-      mistakes: mistakes.elapsed,
+      senderHistory: senderHistory.elapsed,
       syllabus: syllabusChunks.elapsed,
       emails: emails.elapsed,
       calendar: calendar.elapsed,
@@ -477,103 +495,48 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
 // Source loaders
 // ---------------------------------------------------------------------------
 
-async function loadMistakesByClass(
+// engineer-38 — top-k most-recent past replies the user has SENT to this
+// same sender, joined through inbox_items so we can match on the
+// inbox row's senderEmail (agent_drafts doesn't denormalize it).
+// `status='sent'` + `sentAt IS NOT NULL` are belt-and-suspenders — both
+// hold today but together make the ordering deterministic even if the
+// status enum drifts later.
+export async function loadSenderHistory(
   userId: string,
-  classId: string,
+  senderEmail: string,
   k: number
-): Promise<FanoutMistake[]> {
-  // §12.4 — pure recency for mistakes. Topical rank deferred until α
-  // observation shows topical-relevance gap (mistakes pulled but not
-  // cited). Logged via email_fanout_completed.detail.counts so the
-  // observation lever is in place from day 1.
+): Promise<FanoutSenderHistory[]> {
   const rows = await db
     .select({
-      id: mistakeNotes.id,
-      classId: mistakeNotes.classId,
-      title: mistakeNotes.title,
-      unit: mistakeNotes.unit,
-      difficulty: mistakeNotes.difficulty,
-      bodyMarkdown: mistakeNotes.bodyMarkdown,
-      createdAt: mistakeNotes.createdAt,
+      draftId: agentDrafts.id,
+      draftSubject: agentDrafts.draftSubject,
+      draftBody: agentDrafts.draftBody,
+      sentAt: agentDrafts.sentAt,
+      originalSubject: inboxItems.subject,
+      originalSnippet: inboxItems.snippet,
     })
-    .from(mistakeNotes)
+    .from(agentDrafts)
+    .innerJoin(inboxItems, eq(agentDrafts.inboxItemId, inboxItems.id))
     .where(
       and(
-        eq(mistakeNotes.userId, userId),
-        eq(mistakeNotes.classId, classId),
-        isNull(mistakeNotes.deletedAt)
+        eq(agentDrafts.userId, userId),
+        eq(agentDrafts.status, "sent"),
+        isNotNull(agentDrafts.sentAt),
+        eq(inboxItems.senderEmail, senderEmail)
       )
     )
-    .orderBy(desc(mistakeNotes.createdAt))
+    .orderBy(desc(agentDrafts.sentAt))
     .limit(k);
-  return rows.map((r) => ({
-    mistakeId: r.id,
-    classId: r.classId,
-    title: r.title,
-    unit: r.unit,
-    difficulty: r.difficulty,
-    bodySnippet: r.bodyMarkdown ?? "",
-    createdAt: r.createdAt,
-  }));
-}
-
-async function loadVectorMistakes(
-  userId: string,
-  queryEmbedding: number[],
-  k: number
-): Promise<FanoutMistake[]> {
-  const vec = `[${queryEmbedding.join(",")}]`;
-  const rowsRes = await db.execute<{
-    mistake_id: string;
-    class_id: string | null;
-    title: string;
-    unit: string | null;
-    difficulty: string | null;
-    body_markdown: string | null;
-    created_at: Date | string;
-    distance: number;
-  }>(sql`
-    SELECT DISTINCT ON (mn.id)
-      mn.id AS mistake_id,
-      mn.class_id AS class_id,
-      mn.title AS title,
-      mn.unit AS unit,
-      mn.difficulty AS difficulty,
-      mn.body_markdown AS body_markdown,
-      mn.created_at AS created_at,
-      (mc.embedding <=> ${vec}::vector(1536)) AS distance
-    FROM mistake_note_chunks mc
-    JOIN mistake_notes mn ON mn.id = mc.mistake_id
-    WHERE mc.user_id = ${userId}
-      AND mn.deleted_at IS NULL
-    ORDER BY mn.id, mc.embedding <=> ${vec}::vector(1536)
-    LIMIT ${k * 4}
-  `);
-  const raw = (rowsRes as unknown as {
-    rows: Array<{
-      mistake_id: string;
-      class_id: string | null;
-      title: string;
-      unit: string | null;
-      difficulty: string | null;
-      body_markdown: string | null;
-      created_at: Date | string;
-      distance: number;
-    }>;
-  }).rows ?? [];
-  // Re-sort by distance ascending across the de-duped mistake set, then
-  // cap at k. The DISTINCT ON above gives us the best chunk per mistake.
-  raw.sort((a, b) => Number(a.distance) - Number(b.distance));
-  return raw.slice(0, k).map((r) => ({
-    mistakeId: r.mistake_id,
-    classId: r.class_id,
-    title: r.title,
-    unit: r.unit,
-    difficulty: r.difficulty,
-    bodySnippet: r.body_markdown ?? "",
-    createdAt:
-      r.created_at instanceof Date ? r.created_at : new Date(r.created_at),
-  }));
+  return rows
+    .filter((r): r is typeof r & { sentAt: Date } => r.sentAt instanceof Date)
+    .map((r) => ({
+      draftId: r.draftId,
+      draftSubject: r.draftSubject,
+      draftBody: r.draftBody,
+      sentAt: r.sentAt,
+      originalSubject: r.originalSubject,
+      originalSnippet: r.originalSnippet,
+    }));
 }
 
 async function loadSyllabusChunksByClass(
@@ -852,8 +815,8 @@ async function timed<T>(
 
 function emptyForSource(source: string): unknown {
   switch (source) {
-    case "mistakes":
-      return [] as FanoutMistake[];
+    case "senderHistory":
+      return [] as FanoutSenderHistory[];
     case "syllabus":
       return [] as FanoutSyllabusChunk[];
     case "emails":

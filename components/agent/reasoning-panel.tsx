@@ -16,7 +16,10 @@ import { useTranslations } from "next-intl";
 // has no collapse — a list is already legible at any length.
 const COLLAPSE_AT = 800;
 
-const CITATION_RE = /\((mistake|syllabus|calendar|email)-(\d+)\)/g;
+// engineer-38 — citation regex now matches `self-N` (sender history).
+// `mistake-N` stays in the alternation so legacy reasoning rows from
+// pre-PR-#182 fanouts still render their superscript markers.
+const CITATION_RE = /\((mistake|syllabus|calendar|email|self)-(\d+)\)/g;
 
 type ReasoningAction =
   | "draft_reply"

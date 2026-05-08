@@ -3,9 +3,12 @@ import { buildFanoutContextBlocks } from "@/lib/agent/email/fanout-prompt";
 import type { FanoutResult } from "@/lib/agent/email/fanout";
 
 // Phase 7 W1 — fanout prompt-shape tests. The model is contracted to
-// cite per-source tags emitted here (mistake-N, syllabus-N, calendar-N),
-// so the tag format is load-bearing. Snapshot-style assertions verify
-// the structure stays stable across refactors.
+// cite per-source tags emitted here (self-N, syllabus-N, calendar-N), so
+// the tag format is load-bearing. Snapshot-style assertions verify the
+// structure stays stable across refactors.
+//
+// engineer-38 — `mistake-N` was renamed to `self-N` (sender-history). The
+// caps stay numeric-equivalent (250/500/800 chars per past-reply body).
 
 function makeFanout(overrides: Partial<FanoutResult> = {}): FanoutResult {
   return {
@@ -16,13 +19,13 @@ function makeFanout(overrides: Partial<FanoutResult> = {}): FanoutResult {
       method: "none",
       confidence: 0,
     },
-    mistakes: [],
+    senderHistory: [],
     syllabusChunks: [],
     similarEmails: [],
     totalSimilarCandidates: 0,
     calendar: { events: [], tasks: [], assignments: [] },
     timings: {
-      mistakes: 0,
+      senderHistory: 0,
       syllabus: 0,
       emails: 0,
       calendar: 0,
@@ -63,15 +66,14 @@ describe("buildFanoutContextBlocks", () => {
   it("emits stable per-source tags the system prompt requires", () => {
     const out = buildFanoutContextBlocks(
       makeFanout({
-        mistakes: [
+        senderHistory: [
           {
-            mistakeId: "m1",
-            classId: null,
-            title: "Off-by-one in induction",
-            unit: "Week 4",
-            difficulty: "medium",
-            bodySnippet: "Forgot the base case",
-            createdAt: new Date("2026-04-01"),
+            draftId: "d1",
+            draftSubject: "Re: midterm prep",
+            draftBody: "Thanks for the heads up — I'll review chapter 7 tonight.",
+            sentAt: new Date("2026-04-22T10:00:00Z"),
+            originalSubject: "midterm prep",
+            originalSnippet: "Reminder…",
           },
         ],
         syllabusChunks: [
@@ -118,9 +120,9 @@ describe("buildFanoutContextBlocks", () => {
       }),
       "draft"
     );
-    // The prompt MUST stamp these tags exactly because the system
-    // prompt + ReasoningPanel citation regex key off them.
-    expect(out).toContain("mistake-1: Off-by-one in induction");
+    // Tags are load-bearing — both the system prompt and the
+    // ReasoningPanel citation regex key off them.
+    expect(out).toContain("self-1: [2026-04-22] Subject: \"Re: midterm prep\"");
     expect(out).toContain("syllabus-1: MAT223 Syllabus");
     expect(out).toContain("calendar-1: 2026-04-26T10:00:00-07:00");
     expect(out).toContain("calendar-2: due 2026-04-27 :: Submit PS3");
@@ -129,53 +131,53 @@ describe("buildFanoutContextBlocks", () => {
     );
   });
 
-  it("respects the classify-phase 250-char mistake cap", () => {
+  it("respects the classify-phase 250-char sender-body cap", () => {
     const long = "a".repeat(2000);
     const out = buildFanoutContextBlocks(
       makeFanout({
-        mistakes: [
+        senderHistory: [
           {
-            mistakeId: "m1",
-            classId: null,
-            title: "T",
-            unit: null,
-            difficulty: null,
-            bodySnippet: long,
-            createdAt: new Date(),
+            draftId: "d1",
+            draftSubject: "T",
+            draftBody: long,
+            sentAt: new Date("2026-04-01T00:00:00Z"),
+            originalSubject: null,
+            originalSnippet: null,
           },
         ],
       }),
       "classify"
     );
-    const line = out.split("\n").find((l) => l.startsWith("mistake-1:")) ?? "";
-    // "mistake-1: T — " (15 chars prefix) + 250 chars of body
-    expect(line.length).toBeLessThanOrEqual(15 + 250 + 5);
-    expect(line).toMatch(/^mistake-1: T — a+/);
+    const bodyLine =
+      out.split("\n").find((l) => l.trim().startsWith("Body:")) ?? "";
+    // `  Body: "` prefix (10 chars) + 250 chars of body + closing `"` (1 char)
+    expect(bodyLine.length).toBeLessThanOrEqual(10 + 250 + 5);
+    expect(bodyLine).toMatch(/^\s*Body: "a+/);
   });
 
-  it("respects the draft-phase 500-char mistake cap", () => {
+  it("respects the draft-phase 500-char sender-body cap", () => {
     const long = "b".repeat(2000);
     const out = buildFanoutContextBlocks(
       makeFanout({
-        mistakes: [
+        senderHistory: [
           {
-            mistakeId: "m1",
-            classId: null,
-            title: "T",
-            unit: null,
-            difficulty: null,
-            bodySnippet: long,
-            createdAt: new Date(),
+            draftId: "d1",
+            draftSubject: "T",
+            draftBody: long,
+            sentAt: new Date("2026-04-01T00:00:00Z"),
+            originalSubject: null,
+            originalSnippet: null,
           },
         ],
       }),
       "draft"
     );
-    const line = out.split("\n").find((l) => l.startsWith("mistake-1:")) ?? "";
-    expect(line.length).toBeLessThanOrEqual(15 + 500 + 5);
+    const bodyLine =
+      out.split("\n").find((l) => l.trim().startsWith("Body:")) ?? "";
+    expect(bodyLine.length).toBeLessThanOrEqual(10 + 500 + 5);
   });
 
-  it("prepends the empty-corpus hint when mistakes + syllabus are both empty", () => {
+  it("prepends the empty-corpus hint when sender-history + syllabus are both empty", () => {
     const out = buildFanoutContextBlocks(makeFanout(), "classify");
     expect(out).toMatch(/^\[Empty-corpus hint:/);
   });
@@ -183,15 +185,14 @@ describe("buildFanoutContextBlocks", () => {
   it("omits the empty-corpus hint when at least one structured source has data", () => {
     const out = buildFanoutContextBlocks(
       makeFanout({
-        mistakes: [
+        senderHistory: [
           {
-            mistakeId: "m1",
-            classId: null,
-            title: "T",
-            unit: null,
-            difficulty: null,
-            bodySnippet: "x",
-            createdAt: new Date(),
+            draftId: "d1",
+            draftSubject: "T",
+            draftBody: "x",
+            sentAt: new Date("2026-04-01T00:00:00Z"),
+            originalSubject: null,
+            originalSnippet: null,
           },
         ],
       }),

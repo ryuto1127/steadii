@@ -677,6 +677,7 @@ export const ja: Messages = {
       bound_to: "リンク先:",
       this_class: "この授業",
       fanout_mistake: "メモ {n} 件",
+      fanout_sender_history: "過去返信 {n} 件",
       fanout_syllabus: "シラバス {n} 件",
       fanout_calendar: "カレンダー {n} 件",
       fanout_email: "メール {n} 件",
@@ -1628,6 +1629,22 @@ export const ja: Messages = {
       more: "{refreshed} 件の下書きを再生成しました。残りがあります — もう一度クリックして続行してください。",
       exhausted: "クレジット切れの前に {refreshed} 件を再生成しました。続行するにはトップアップしてください。",
     },
+    voice_profile: {
+      title: "あなたの文体",
+      description:
+        "直近の送信メール 50 通からあなたの書き方を 1 行に要約したものです。Steadii は下書き生成のたびにこの要約を参照するので、初めての相手への返信も汎用的な AI 口調ではなく、あなたらしいトーンになります。",
+      empty:
+        "まだ文体プロファイルがありません。Gmail を接続したうえで、下のボタンから生成してください。",
+      button: "文体を学習し直す",
+      help:
+        "Gmail から最大 50 通の送信メールを読み取り、敬語/カジュアルの傾向、使用言語、典型的な長さ、署名パターンをまとめます。所要約 10 秒、消費は約 $0.05 相当のクレジットです。",
+      gmail_required: "Gmail を接続すると文体プロファイルを生成できます。",
+      saved_toast: "文体プロファイルを更新しました。",
+      insufficient_toast:
+        "文体を抽出するには送信メールが足りません。Gmail から数通送信したうえで再度お試しください。",
+      error_toast:
+        "文体プロファイルの生成に失敗しました。再試行するか、連携状況を確認してください。",
+    },
   },
   agent_thinks_page: {
     settings_back: "設定",
@@ -1636,6 +1653,13 @@ export const ja: Messages = {
     description_suffix: "件の判断と、それぞれの根拠になったソースです。閲覧専用 — 違和感があれば、受信箱から該当アイテムを開いてフィードバックしてください。",
     empty: "エージェントはまだ何も下書きしていません。下書きを作るたびに、すべての判断がここに記録されます。",
     from_label: "差出人",
+    writing_style: {
+      heading: "あなたの編集から学んだ文体ルール",
+      empty:
+        "まだルールはありません。下書きを編集してから送信した履歴がたまると、Steadii が好みの言い回しを自動で学習し、ここに表示します。",
+      remove: "削除",
+      removed_toast: "文体ルールを削除しました。",
+    },
   },
   syllabus_new_page: {
     title: "シラバスをアップロード",
