@@ -25,38 +25,55 @@ type MessagesShape = {
         absence: { input: string; action: string };
       };
     };
-    steadii_in_motion: {
+    morning_briefing: {
       title: string;
-      body: string;
-      real_screen: string;
-      step1_label: string;
-      step1_sender: string;
-      step1_subject: string;
-      step1_chip_tier: string;
-      step1_chip_time: string;
-      step1_classifying: string;
-      step1_outcome: string;
-      step1_outcome_meta: string;
-      step2_label: string;
-      step2_filter_all: string;
-      step2_filter_hidden: string;
-      step2_restore: string;
-      step2_meta: string;
-      step3_label: string;
-      step3_sender: string;
-      step3_subject: string;
-      step3_chip_tier: string;
-      step3_chip_time: string;
-      step3_status: string;
-      step3_meta: string;
+      subhead: string;
+      card_datetime: string;
+      card_greeting: string;
+      card_intro: string;
+      context_label: string;
+      item1_headline: string;
+      item1_action: string;
+      item1_context: string;
+      item2_headline: string;
+      item2_action: string;
+      item2_context: string;
+      item3_headline: string;
+      item3_action: string;
+      item3_context: string;
+      card_close: string;
+    };
+    week: {
+      title: string;
+      subhead: string;
+      context_label: string;
+      moment1_time: string;
+      moment1_event: string;
+      moment1_action: string;
+      moment1_context: string;
+      moment2_time: string;
+      moment2_event: string;
+      moment2_action: string;
+      moment2_context: string;
+      moment3_time: string;
+      moment3_event: string;
+      moment3_action: string;
+      moment3_context: string;
+      moment4_time: string;
+      moment4_event: string;
+      moment4_action: string;
+      moment4_context: string;
+      moment5_time: string;
+      moment5_event: string;
+      moment5_action: string;
+      moment5_context: string;
     };
     boundaries: {
       title: string;
       subhead: string;
       cards: {
-        learning: { who: string; key: string; body: string };
-        deciding: { who: string; key: string; body: string };
-        doing: { who: string; key: string; body: string };
+        chatgpt: { who: string; key: string; body: string };
+        steadii: { who: string; key: string; body: string };
       };
     };
     founding: {
@@ -1566,54 +1583,76 @@ export const en: MessagesShape = {
         },
       },
     },
-    steadii_in_motion: {
-      title: "And it filters out the noise.",
-      body:
-        "Steadii classifies every inbound email. Clear noise — newsletters, no-reply, marketing — is auto-archived so your queue stays focused on what needs you. The agent learns from anything you restore.",
-      real_screen: "Real surfaces. Mock data.",
-      step1_label: "Inbox · 09:42",
-      step1_sender: "Coursera Newsletter",
-      step1_subject: "Top courses this week",
-      step1_chip_tier: "tier 1",
-      step1_chip_time: "2m",
-      step1_classifying: "Classifying… Tier 1 noise · 96%",
-      step1_outcome: "Auto-archived",
-      step1_outcome_meta:
-        "Queue stayed clean. Logged in this week's digest.",
-      step2_label: "Inbox · later that day",
-      step2_filter_all: "Inbox",
-      step2_filter_hidden: "Hidden ({n})",
-      step2_restore: "Restore — keep these in inbox",
-      step2_meta:
-        "Open the Hidden filter any time to review or restore.",
-      step3_label: "Tomorrow",
-      step3_sender: "Coursera Newsletter",
-      step3_subject: "New course series for you",
-      step3_chip_tier: "review",
-      step3_chip_time: "now",
-      step3_status: "Confidence ↓ · surfaced for review",
-      step3_meta:
-        "Steadii learned from the restore. Similar items now stay visible.",
+    morning_briefing: {
+      title: "Your morning, already organized.",
+      subhead:
+        "Steadii runs 24/7. By the time you check your phone, your day is already briefed — what matters, what's coming, what you owe.",
+      card_datetime: "Wed · May 13 · 7:31 AM",
+      card_greeting: "Good morning, Ryuto.",
+      card_intro: "Three things matter today.",
+      context_label: "Knows",
+      item1_headline:
+        "Prof. Tanaka moved office hours to Friday 2 PM",
+      item1_action:
+        "Reply ready — confirms you can make it, asks your Q3 question.",
+      item1_context: "your last 3 threads with Prof. Tanaka",
+      item2_headline: "CS 348 Assignment 3 — due tomorrow 23:59",
+      item2_action:
+        "You haven't opened it. Syllabus suggests ~4 hours. Blocked 19–23 for you.",
+      item2_context: "your CS 348 syllabus, your calendar",
+      item3_headline: "Group project standup, 3 PM",
+      item3_action:
+        "Brief attached — where you left off Tuesday, what Mei still owes.",
+      item3_context: "your Notion, last meeting transcript",
+      card_close: "This is how every morning starts.",
+    },
+    week: {
+      title: "A week with Steadii.",
+      subhead:
+        "Five moments from one student's week. Steadii is the line connecting them.",
+      context_label: "Knows",
+      moment1_time: "Mon · 8:47 PM",
+      moment1_event: "Prof. Tanaka moves the midterm to Tue 5/20.",
+      moment1_action:
+        "Reply drafted. Conflict with your Tuesday lab surfaced. Suggested moving lab to Wednesday morning.",
+      moment1_context: "the existing thread, your calendar",
+      moment2_time: "Tue · 6:14 AM",
+      moment2_event:
+        "CS 348 PS 3 due Friday — you haven't started.",
+      moment2_action:
+        "Estimated 4 hours from the syllabus weighting. Blocked Wed 7–11 PM. Re-surfaced the prerequisite chapter you skimmed last week.",
+      moment2_context: "your syllabus, your study history",
+      moment3_time: "Wed · 2:58 PM",
+      moment3_event: "Group standup in 2 minutes.",
+      moment3_action:
+        "Brief in your hand: what you finished Monday, what Mei still owes, what the team decided last Thursday.",
+      moment3_context:
+        "your Notion, meeting transcripts, the last 4 Slack threads",
+      moment4_time: "Thu · 11:23 PM",
+      moment4_event: "You: 'I'm sick tomorrow.'",
+      moment4_action:
+        "Drafted 3 absence emails — one per Friday class. Listed missed assignments per class. Suggested asking Tomoko for ECON notes.",
+      moment4_context: "your timetable, your classmates",
+      moment5_time: "Sun · 7:30 AM",
+      moment5_event: "Your week is ready.",
+      moment5_action:
+        "What's coming, what you owe, what slipped last week. Three things to look at before Monday.",
+      moment5_context: "your whole semester",
     },
     boundaries: {
-      title: "What you do, what Steadii does",
+      title: "Not ChatGPT.",
       subhead:
-        "We draw the line clearly. Don't outsource thinking to an AI. Don't spend your day on logistics.",
+        "Everyone uses ChatGPT. But ChatGPT waits for you to ask. Steadii doesn't wait — it understands your classes, your professors, your inbox, and acts the moment something matters.",
       cards: {
-        learning: {
-          who: "You",
-          key: "Learning",
-          body: "Spend time on concepts with ChatGPT, Claude, Gemini. The thing you came here for.",
+        chatgpt: {
+          who: "ChatGPT",
+          key: "Waits to be asked.",
+          body: "Every conversation starts from scratch. It doesn't know your CS 348 syllabus, doesn't see Prof. Tanaka's emails, doesn't watch your week. You drive every turn.",
         },
-        deciding: {
-          who: "You",
-          key: "Deciding",
-          body: "Steadii never moves ahead of you. Every call lands in your hands first.",
-        },
-        doing: {
+        steadii: {
           who: "Steadii",
-          key: "Doing",
-          body: "Replies emails, books rooms, files paperwork, chases group progress.",
+          key: "Already moving.",
+          body: "Knows your syllabi. Watches your inbox. Drafts replies in your voice. Surfaces what matters, hides what doesn't. You approve. It learns.",
         },
       },
     },
