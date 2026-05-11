@@ -272,7 +272,7 @@ function buildUserContent(input: DraftInput): string {
   );
   if (input.senderRole) parts.push(`Sender role: ${input.senderRole}`);
   parts.push(`Subject: ${input.subject ?? "(none)"}`);
-  parts.push(`Body: ${(input.bodySnippet ?? input.snippet ?? "").slice(0, 2500)}`);
+  parts.push(`Body: ${(input.bodySnippet ?? input.snippet ?? "").slice(0, 8000)}`);
   if (input.inReplyTo) parts.push(`In-Reply-To: ${input.inReplyTo}`);
 
   if (input.threadRecentMessages.length > 0) {
