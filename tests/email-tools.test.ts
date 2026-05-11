@@ -185,6 +185,80 @@ describe("emailSearch", () => {
     expect(lastSelect.limit).toBe(11);
   });
 
+  it("splits multi-token query on whitespace and AND-combines the ILIKE clauses (one OR-of-subject-or-snippet per token)", async () => {
+    // 2026-05-10 — regression. Previously the query was a single
+    // literal substring, so "LayerX 返信" required that exact 8-char
+    // string in subject/snippet. Token-level AND matches what the
+    // agent expects from "search".
+    fixture.rows = [];
+    const { emailSearch } = await import("@/lib/agent/tools/email");
+    await emailSearch.execute(
+      { userId: "user-1" },
+      { query: "LayerX 返信" }
+    );
+
+    // The captured conditions is the `and(...)` wrapper; inspect its
+    // children for two OR-of-ILIKE clauses, one per token.
+    const cond = lastSelect.conditions as { __and: unknown[] };
+    expect(cond).toHaveProperty("__and");
+    const orClauses = cond.__and.filter(
+      (c): c is { __or: unknown[] } =>
+        typeof c === "object" && c !== null && "__or" in c
+    );
+    expect(orClauses).toHaveLength(2);
+
+    const patterns = orClauses.flatMap((c) =>
+      (c.__or as Array<{ __ilike: [unknown, string] }>).map(
+        (i) => i.__ilike[1]
+      )
+    );
+    // Each OR clause contributes 2 ILIKEs (subject + snippet); 2 tokens × 2 = 4.
+    expect(patterns).toHaveLength(4);
+    expect(patterns).toContain("%LayerX%");
+    expect(patterns).toContain("%返信%");
+    // Neither token gets concatenated back together.
+    expect(patterns).not.toContain("%LayerX 返信%");
+  });
+
+  it("collapses extra whitespace and skips empty tokens", async () => {
+    fixture.rows = [];
+    const { emailSearch } = await import("@/lib/agent/tools/email");
+    await emailSearch.execute(
+      { userId: "user-1" },
+      { query: "  LayerX   インターン  " }
+    );
+
+    const cond = lastSelect.conditions as { __and: unknown[] };
+    const orClauses = cond.__and.filter(
+      (c): c is { __or: unknown[] } =>
+        typeof c === "object" && c !== null && "__or" in c
+    );
+    expect(orClauses).toHaveLength(2);
+  });
+
+  it("escapes LIKE wildcards within a single token", async () => {
+    fixture.rows = [];
+    const { emailSearch } = await import("@/lib/agent/tools/email");
+    await emailSearch.execute(
+      { userId: "user-1" },
+      { query: "50%_off" }
+    );
+
+    const cond = lastSelect.conditions as { __and: unknown[] };
+    const orClauses = cond.__and.filter(
+      (c): c is { __or: unknown[] } =>
+        typeof c === "object" && c !== null && "__or" in c
+    );
+    expect(orClauses).toHaveLength(1);
+    const patterns = orClauses.flatMap((c) =>
+      (c.__or as Array<{ __ilike: [unknown, string] }>).map(
+        (i) => i.__ilike[1]
+      )
+    );
+    // Both % and _ should be backslash-escaped inside the wrapped %...%.
+    expect(patterns[0]).toBe("%50\\%\\_off%");
+  });
+
   it("rejects empty args (no query / sender) by zod default — both query and sender absent is allowed at schema level", async () => {
     // The schema makes everything optional so the agent can list-recent
     // by default. Behavior parity with tasks_list (which also defaults

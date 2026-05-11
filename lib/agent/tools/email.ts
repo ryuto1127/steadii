@@ -79,7 +79,7 @@ export const emailSearch: ToolExecutor<
   schema: {
     name: "email_search",
     description:
-      "Search the user's classified inbox (Steadii's email store). Returns EVERY email Steadii has classified for the user regardless of follow-up state — open, replied/sent, dismissed, snoozed, archived all come back. Use when the user references an email by sender, subject, content keyword, or recency. At least one of `query` / `senderEmail` / `senderDomain` should be set; passing all three narrows further. Default lookback is 90 days; pass `sinceDays` up to 365 when the user references something further back. Returns up to `limit` (default 20) most-recent hits with sender + subject + snippet. For full body text call `email_get_body` with the returned `inboxItemId`. Eager — call without confirmation when the user references email content.",
+      "Search the user's classified inbox (Steadii's email store). Returns EVERY email Steadii has classified for the user regardless of follow-up state — open, replied/sent, dismissed, snoozed, archived all come back. Use when the user references an email by sender, subject, content keyword, or recency. At least one of `query` / `senderEmail` / `senderDomain` should be set; passing all three narrows further. Default lookback is 90 days; pass `sinceDays` up to 365 when the user references something further back. Returns up to `limit` (default 20) most-recent hits with sender + subject + snippet. For full body text call `email_get_body` with the returned `inboxItemId`. Eager — call without confirmation when the user references email content. STRATEGY: search by ENTITY first (one sender / company / course-code / person token), then call `email_get_body` for details that live in the body (deadlines, day counts, URLs, numbers). `query` performs AND-search across whitespace-separated tokens, so layering specifics on top of the entity (e.g. `LayerX 返信期限`) usually collapses results to zero because the specific keyword rarely appears in subject + snippet.",
     mutability: "read",
     parameters: {
       type: "object",
@@ -87,7 +87,7 @@ export const emailSearch: ToolExecutor<
         query: {
           type: "string",
           description:
-            "Keyword to match against subject + snippet (case-insensitive substring).",
+            "Keyword(s) to match against subject + snippet (case-insensitive substring). Whitespace-separated tokens are AND-combined — every token must appear in subject or snippet (within a token, subject OR snippet still matches). Prefer a SINGLE entity token (sender name, company, course code, person). Adding specifics on top (deadlines, day counts, URLs) usually zeros the result because that detail lives in the body, not the snippet — use `email_get_body` for body-only details after the entity hit.",
         },
         senderEmail: {
           type: "string",
@@ -131,12 +131,22 @@ export const emailSearch: ToolExecutor<
       conditions.push(eq(inboxItems.senderDomain, args.senderDomain));
     }
     if (args.query) {
-      const pattern = `%${args.query.replace(/[%_]/g, "\\$&")}%`;
-      const queryClause = or(
-        ilike(inboxItems.subject, pattern),
-        ilike(inboxItems.snippet, pattern)
-      );
-      if (queryClause) conditions.push(queryClause);
+      // 2026-05-10 — split on whitespace and AND across tokens. The
+      // previous behavior treated `query` as a single literal substring,
+      // which silently mismatched the agent's mental model: any
+      // multi-keyword `query` (e.g. "LayerX 返信") would 0-result
+      // because that exact substring is never in subject + snippet.
+      // Token-level AND matches what "search" means everywhere else.
+      // Within a token, subject OR snippet is still allowed.
+      const tokens = args.query.trim().split(/\s+/).filter(Boolean);
+      for (const token of tokens) {
+        const pattern = `%${token.replace(/[%_]/g, "\\$&")}%`;
+        const tokenClause = or(
+          ilike(inboxItems.subject, pattern),
+          ilike(inboxItems.snippet, pattern)
+        );
+        if (tokenClause) conditions.push(tokenClause);
+      }
     }
 
     const rows = await db
