@@ -1070,6 +1070,14 @@ type MessagesShape = {
       off: string;
       safety_ramp_note: string;
     };
+    beta_features: {
+      section_title: string;
+      description: string;
+      agentic_l2_label: string;
+      agentic_l2_hint: string;
+      on: string;
+      off: string;
+    };
     profile_completion: {
       heading: string;
       missing_name: string;
@@ -2781,6 +2789,16 @@ export const en: MessagesShape = {
       off: "Off — turn on",
       safety_ramp_note:
         "α: defaults off for the first two weeks while we tune the classifier. Toggle changes only apply to new email.",
+    },
+    beta_features: {
+      section_title: "Beta features",
+      description:
+        "Experimental capabilities. Off by default — flip on if you want to dogfood the next generation of Steadii's reasoning. Higher cost per email; some rough edges.",
+      agentic_l2_label: "Agentic L2 — LLM-driven, tool-using email reasoning",
+      agentic_l2_hint:
+        "High-risk emails flow through an agent that checks your calendar, infers sender timezones, and surfaces clarifying questions before drafting. ~3× the cost of the single-shot path; capped to your own account.",
+      on: "On — turn off",
+      off: "Off — turn on",
     },
     profile_completion: {
       heading: "Finish your profile",

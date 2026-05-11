@@ -67,6 +67,25 @@ export async function setAutoArchiveEnabledAction(formData: FormData) {
   revalidatePath("/app/inbox");
 }
 
+// engineer-41 — flip the agentic-L2 Beta opt-in. Stored on
+// users.preferences.agenticL2 (jsonb, no migration). Empty / unset
+// drops the field so the L2 pipeline falls back to the single-shot
+// runDeepPass.
+export async function setAgenticL2EnabledAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  const enabled = formData.get("enabled") === "true";
+  const userId = session.user.id;
+  const expr = enabled
+    ? sql`COALESCE(${users.preferences}, '{}'::jsonb) || ${JSON.stringify({ agenticL2: true })}::jsonb`
+    : sql`COALESCE(${users.preferences}, '{}'::jsonb) - 'agenticL2'`;
+  await db
+    .update(users)
+    .set({ preferences: expr, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+  revalidatePath("/app/settings");
+}
+
 // 2026-05-05 — voice input keyboard layout. Drives the trigger key
 // the useVoiceInput hook listens for: en → Right Option, jn → Right ⌘.
 // Stored on users.preferences.keyboardLayout (jsonb, no migration).

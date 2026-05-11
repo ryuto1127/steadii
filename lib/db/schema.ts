@@ -78,6 +78,11 @@ export const users = pgTable("users", {
     // /app/settings/connections. Capped at 200 chars on write so the
     // prompt budget stays bounded.
     voiceProfile?: string;
+    // engineer-41 — Beta opt-in for the agentic L2 reasoning path. When
+    // true, high-risk emails flow through runAgenticL2 (LLM-driven tool
+    // use) instead of the single-shot runDeepPass. Default off — cost is
+    // ~3x single-shot and the path is still being tuned.
+    agenticL2?: boolean;
   }>().default({}),
   timezone: text("timezone"),
   onboardingStep: integer("onboarding_step").notNull().default(0),
@@ -1224,6 +1229,15 @@ export const agentContactPersonas = pgTable(
       .$type<string[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
+    // engineer-41 — typed values the agentic L2 can read at classify/draft
+    // time without re-parsing the free-form facts[] array. The agentic
+    // loop's infer_sender_timezone + detect_ambiguity tools write here;
+    // the queue_user_confirmation → resolve flow flips confidence to 1.0
+    // and stamps confirmedAt when a user confirms an inferred value.
+    structuredFacts: jsonb("structured_facts")
+      .$type<ContactStructuredFacts>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     // Last full extraction timestamp. The cron skips contacts where
     // last_extracted_at > now() - 7 days OR no new inbox/sent activity
     // since.
@@ -1251,6 +1265,103 @@ export const agentContactPersonas = pgTable(
 
 export type AgentContactPersona = typeof agentContactPersonas.$inferSelect;
 export type NewAgentContactPersona = typeof agentContactPersonas.$inferInsert;
+
+// engineer-41 — typed structured facts the agentic L2 persists into
+// agent_contact_personas.structured_facts. Each field is independently
+// optional: a contact may have a confirmed timezone but no known
+// response-window pattern. `confidence` is 0..1; `source` records which
+// pathway populated it (data-derived vs LLM-inferred vs user-confirmed);
+// `samples` counts how many emails/events the inference drew from;
+// `confirmedAt` flips non-null after a user resolves a Type F card,
+// pinning confidence to 1.0.
+export type StructuredFactEntry<T = string> = {
+  value: T;
+  confidence: number;
+  source:
+    | "calendar_offset_inference"
+    | "domain_heuristic"
+    | "llm_body_analysis"
+    | "persona_locked"
+    | "user_confirmed";
+  samples: number;
+  confirmedAt: string | null;
+};
+
+export type ContactStructuredFacts = {
+  timezone?: StructuredFactEntry<string>;
+  response_window_hours?: StructuredFactEntry<string>;
+  primary_language?: StructuredFactEntry<"en" | "ja">;
+};
+
+// engineer-41 — Agentic L2 user-facing question queue. Rows are written
+// by the queue_user_confirmation tool inside runAgenticL2 when the loop
+// makes an inference it wants to flag for review (timezone, sender role,
+// language preference, etc.). Engineer-42 will render these as Type F
+// cards in the inbox; engineer-41 only writes the rows.
+export type AgentConfirmationStatus =
+  | "pending"
+  | "confirmed"
+  | "corrected"
+  | "dismissed";
+
+export const agentConfirmations = pgTable(
+  "agent_confirmations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Topical category — drives downstream persistence after resolution.
+    // e.g. "timezone" → write back to agent_contact_personas.structured_facts.
+    topic: text("topic").notNull(),
+    // Nullable: some confirmations aren't bound to a specific contact
+    // (e.g. a global "what's your preferred meeting length?" question).
+    senderEmail: text("sender_email"),
+    // LLM-generated question rendered verbatim in the Type F card.
+    question: text("question").notNull(),
+    // The value Steadii inferred and wants the user to confirm/correct.
+    inferredValue: text("inferred_value"),
+    // Structured options when the answer is multi-choice (e.g. timezone
+    // list). null when the answer is free-form.
+    options: jsonb("options").$type<string[] | null>(),
+    status: text("status")
+      .$type<AgentConfirmationStatus>()
+      .notNull()
+      .default("pending"),
+    resolvedValue: text("resolved_value"),
+    resolvedAt: timestamp("resolved_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    // Pointer back to the draft whose run surfaced this question. Set
+    // null when the row is created mid-loop before the draft exists yet,
+    // or when the draft is later deleted (CASCADE → set null).
+    originatingDraftId: uuid("originating_draft_id").references(
+      () => agentDrafts.id,
+      { onDelete: "set null" }
+    ),
+    // Free-form structured context the renderer can use ("topic", "inferred
+    // value source", model-generated rationale). Not strictly typed because
+    // engineer-42 may need to evolve the shape without a migration.
+    context: jsonb("context").$type<Record<string, unknown> | null>(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userStatusIdx: index("agent_confirmations_user_status_idx").on(
+      t.userId,
+      t.status,
+      t.createdAt
+    ),
+  })
+);
+
+export type AgentConfirmation = typeof agentConfirmations.$inferSelect;
+export type NewAgentConfirmation = typeof agentConfirmations.$inferInsert;
 
 // One row per inbox_item holding the OpenAI `text-embedding-3-small` 1536-dim
 // vector of its subject+body. Used by L2 deep-pass retrieval to surface
