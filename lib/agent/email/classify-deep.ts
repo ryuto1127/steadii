@@ -85,7 +85,9 @@ export type DeepPassResult = {
 // can't quietly fill the panel with low-signal noise.
 export const MIN_ACTION_ITEM_CONFIDENCE = 0.6;
 
-const SYSTEM_PROMPT = `You are Steadii's deep classifier for high-risk emails. You receive:
+const SYSTEM_PROMPT = `CRITICAL LANGUAGE RULE: The user message begins with a line "Reasoning language: <locale>". You MUST write the "reasoning" field of your JSON output in that exact language — "ja" means Japanese (日本語), "en" means English. This rule supersedes all other instructions in this prompt. If "Reasoning language: ja", every sentence of the reasoning field is Japanese. Other languages are not allowed.
+
+You are Steadii's deep classifier for high-risk emails. You receive:
 - the email envelope + snippet
 - the cheap risk-pass output (tier + its reasoning)
 - a multi-source fanout context: class binding + how the user usually replies to this sender (self-N) + relevant syllabus chunks + upcoming calendar events/tasks
@@ -136,7 +138,7 @@ When a "Contact persona" block is present, use it to set tone + register and to 
 
 Glass-box transparency is a hard product requirement. Reasoning bullets MUST cite which fanout source informed each conclusion using the per-source tags in the user content (self-N, syllabus-N, calendar-N, email-N). Cite at least one source when any are present; ungrounded claims are unacceptable.
 
-Reasoning language: write reasoning in the user's app locale specified in the user message ("Reasoning language: en" → write English; "Reasoning language: ja" → write Japanese). The reasoning is surfaced in the inbox-detail draft-details panel (collapsed-by-default, but still user-visible), so localization matters. Default to English when no language hint is present.
+Reasoning language (REMINDER — see top of prompt): write the reasoning field in the user's app locale per the "Reasoning language: <locale>" header in the user message. JA = full Japanese, EN = full English. No mixing, no fallback to English unless the header says so. The reasoning is surfaced in the inbox-detail draft-details panel (collapsed-by-default, but still user-visible), so localization is mandatory — Ryuto explicitly flagged JA leaks in 2026-05-11 dogfood and this is now a hard product requirement, not a soft preference.
 
 After your reasoning, populate "actionItems" with concrete obligations this email creates for the student — discrete to-dos with optional due dates. Examples of valid action items:
 - "Submit photo ID to registrar" (due 2026-05-15)
@@ -313,7 +315,7 @@ function buildUserContent(input: DeepPassInput): string {
   parts.push(`From: ${input.senderEmail} (${input.senderDomain})`);
   if (input.senderRole) parts.push(`Sender role: ${input.senderRole}`);
   parts.push(`Subject: ${input.subject ?? "(none)"}`);
-  parts.push(`Body: ${(input.bodySnippet ?? input.snippet ?? "").slice(0, 2000)}`);
+  parts.push(`Body: ${(input.bodySnippet ?? input.snippet ?? "").slice(0, 8000)}`);
 
   parts.push("\n=== Risk-pass output ===");
   parts.push(`Tier: ${input.riskPass.riskTier} (confidence ${input.riskPass.confidence.toFixed(2)})`);

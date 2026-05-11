@@ -392,7 +392,11 @@ async function callExtractionLLM(args: {
   contactName: string | null;
   corpus: string;
 }): Promise<{ relationship: string | null; facts: string[] }> {
-  const model = selectModel("email_draft");
+  // 2026-05-11 — was `email_draft` (GPT-5.4 full). Persona extraction is a
+  // structured short-form JSON output (relationship label + ≤8 facts) — no
+  // deep reasoning required. Mini hits 95%+ quality at ~1/5 the cost. At α
+  // 100 users × 20 contacts × daily, full = ~$1200/mo vs mini = ~$200/mo.
+  const model = selectModel("email_classify_risk");
   const userMsg = [
     `Contact: ${args.contactName ? `${args.contactName} <${args.contactEmail}>` : args.contactEmail}`,
     "",

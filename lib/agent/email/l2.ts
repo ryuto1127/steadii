@@ -32,6 +32,8 @@ import { logEmailAudit } from "./audit";
 import { fanoutForInbox, type FanoutResult } from "./fanout";
 import { loadRecentFeedbackSummary } from "./feedback";
 import { getUserLocale } from "@/lib/agent/preferences";
+import { getMessageFull } from "@/lib/integrations/google/gmail-fetch";
+import { extractEmailBody } from "./body-extract";
 import {
   fetchUpcomingEvents,
   type DraftCalendarEvent,
@@ -43,6 +45,15 @@ import { enqueueSendForDraft } from "./send-enqueue";
 // so we don't need the full 20-item slate — just enough style/tone
 // anchoring for the draft.
 const MEDIUM_DRAFT_TOP_K = 5;
+
+// 2026-05-11 — L2 used to pass `inbox_items.snippet` (~120 char Gmail
+// preview) as the email body to runDeepPass + runDraft. Structured
+// emails (interview scheduling, official notices) have their substance
+// past the snippet boundary so Steadii literally couldn't see the
+// candidate dates / form fields / etc. Fetch the full body once at L2
+// entry, cap at this size to keep token cost predictable, pass through
+// to both phases.
+const FULL_BODY_CHAR_CAP = 8000;
 
 // A concise summary returned to the ingest caller — useful in logs + tests.
 export type L2Outcome = {
@@ -127,6 +138,34 @@ async function runPipeline(
     result: "success",
     resourceId: item.id,
   });
+
+  // 2026-05-11 — fetch the full Gmail body once at L2 entry. Replaces
+  // the snippet-only path that was leaving structured emails (interview
+  // scheduling, official notices) effectively unread to L2 / draft.
+  // Fail-soft: a Gmail outage falls back to the snippet so the
+  // pipeline degrades to the prior behavior instead of failing.
+  let fullBodyText: string | null = null;
+  if (item.sourceType === "gmail") {
+    try {
+      const message = await getMessageFull(item.userId, item.externalId);
+      const extracted = extractEmailBody(message);
+      const raw = (extracted.text ?? "").trim();
+      if (raw.length > 0) {
+        fullBodyText =
+          raw.length > FULL_BODY_CHAR_CAP
+            ? raw.slice(0, FULL_BODY_CHAR_CAP)
+            : raw;
+      }
+    } catch (err) {
+      Sentry.captureException(err, {
+        level: "warning",
+        tags: { feature: "email_l2", step: "fetch_full_body" },
+        user: { id: item.userId },
+        extra: { inboxItemId: item.id },
+      });
+    }
+  }
+  const bodyForPipeline = fullBodyText ?? item.snippet;
 
   // ---- Step 1: risk pass (Mini, always runs — unless forceTier) ----
   //
@@ -289,7 +328,7 @@ async function runPipeline(
       senderRole: item.senderRole,
       subject: item.subject,
       snippet: item.snippet,
-      bodySnippet: item.snippet,
+      bodySnippet: bodyForPipeline,
       riskPass: risk,
       similarEmails: similar,
       totalCandidates,
@@ -431,7 +470,7 @@ async function runPipeline(
       senderRole: item.senderRole,
       subject: item.subject,
       snippet: item.snippet,
-      bodySnippet: item.snippet,
+      bodySnippet: bodyForPipeline,
       inReplyTo: null,
       threadRecentMessages: threadMessages,
       similarEmails: similarForDraft,

@@ -82,7 +82,11 @@ export async function extractWritingStyleRules(
         )
         .join("\n\n");
 
-      const model = selectModel("email_draft");
+      // 2026-05-11 — was `email_draft` (GPT-5.4 full). Style rule extraction
+      // from (original, edited) pairs is a pattern-matching task with short
+      // JSON output (≤5 rules) — mini handles it cleanly. Matches the
+      // persona-learner downgrade rationale.
+      const model = selectModel("email_classify_risk");
       const resp = await openai().chat.completions.create({
         model,
         messages: [
