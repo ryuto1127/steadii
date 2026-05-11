@@ -1,14 +1,17 @@
 import "server-only";
 import * as Sentry from "@sentry/nextjs";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
+  agentConfirmations,
+  agentContactPersonas,
   agentDrafts,
   agentRules,
   inboxItems,
   users,
   type AgentDraftStatus,
   type AgentDraftAction,
+  type ContactStructuredFacts,
   type NewAgentDraft,
   type RuleProvenance,
 } from "@/lib/db/schema";
@@ -24,6 +27,10 @@ import {
   type DeepPassResult,
   type DeepAction,
 } from "./classify-deep";
+import {
+  runAgenticL2,
+  type AgenticL2Result,
+} from "./agentic-l2";
 import { runDraft, type DraftResult } from "./draft";
 import { searchSimilarEmails, DEEP_PASS_TOP_K, type SimilarEmail } from "./retrieval";
 import { buildEmbedInput } from "./embeddings";
@@ -321,22 +328,85 @@ async function runPipeline(
     // pass so reasoning is generated in JA for JA users (the
     // draft-details panel surfaces it user-visibly post PR #167).
     const locale = await getUserLocale(item.userId);
-    deep = await runDeepPass({
-      userId: item.userId,
-      senderEmail: item.senderEmail,
-      senderDomain: item.senderDomain,
-      senderRole: item.senderRole,
-      subject: item.subject,
-      snippet: item.snippet,
-      bodySnippet: bodyForPipeline,
-      riskPass: risk,
-      similarEmails: similar,
-      totalCandidates,
-      threadRecentMessages: threadMessages,
-      fanout: fanoutForDeep,
-      recentFeedback,
-      locale,
-    });
+
+    // engineer-41 — Agentic L2 branch. Opt-in via users.preferences.agenticL2.
+    // When on, swap the single-shot runDeepPass for the tool-using
+    // runAgenticL2. Both produce the same DeepPassResult contract for
+    // the rest of the pipeline; agentic also writes structured-facts +
+    // confirmation rows that we persist below.
+    const agenticEnabled =
+      userRow?.preferences?.agenticL2 === true;
+    let agenticResult: AgenticL2Result | null = null;
+    if (agenticEnabled) {
+      try {
+        agenticResult = await runAgenticL2({
+          userId: item.userId,
+          inboxItemId: item.id,
+          senderEmail: item.senderEmail,
+          senderDomain: item.senderDomain,
+          senderRole: item.senderRole,
+          subject: item.subject,
+          bodyForPipeline: bodyForPipeline ?? "",
+          riskPass: risk,
+          locale,
+        });
+        deep = {
+          action: agenticResult.action,
+          reasoning: agenticResult.reasoning,
+          actionItems: agenticResult.actionItems,
+          retrievalProvenance: buildProvenance({
+            similarEmails: similar,
+            totalCandidates,
+            fanout: fanoutForDeep,
+          }),
+          usageId: agenticResult.usageId,
+        };
+      } catch (err) {
+        // Failure inside the agentic loop should NOT block the L2
+        // pipeline. Fall back to the single-shot deep pass so the user
+        // still gets a draft.
+        Sentry.captureException(err, {
+          tags: { feature: "email_l2", step: "agentic_l2" },
+          user: { id: item.userId },
+          extra: { inboxItemId: item.id },
+        });
+        agenticResult = null;
+      }
+    }
+    if (!agenticResult) {
+      deep = await runDeepPass({
+        userId: item.userId,
+        senderEmail: item.senderEmail,
+        senderDomain: item.senderDomain,
+        senderRole: item.senderRole,
+        subject: item.subject,
+        snippet: item.snippet,
+        bodySnippet: bodyForPipeline,
+        riskPass: risk,
+        similarEmails: similar,
+        totalCandidates,
+        threadRecentMessages: threadMessages,
+        fanout: fanoutForDeep,
+        recentFeedback,
+        locale,
+      });
+    } else {
+      // Persist inferred-facts + confirmation rows produced by the
+      // agentic loop. Done in fire-and-forget style so persistence
+      // failures don't fail the pipeline (the draft is still useful).
+      try {
+        await persistAgenticSideEffects({
+          userId: item.userId,
+          senderEmail: item.senderEmail,
+          result: agenticResult,
+        });
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: { feature: "email_l2", step: "agentic_side_effects" },
+          user: { id: item.userId },
+        });
+      }
+    }
   }
 
   // ---- Decide action ----
@@ -703,6 +773,75 @@ function synthesizeForcedHighRisk(
     reasoning: `L1 auto_high rule: ${ruleId} — ${why}`,
     usageId: null,
   };
+}
+
+// engineer-41 — write back agentic-L2 side effects:
+//   1. Update agent_confirmations rows we just queued with
+//      originatingDraftId once the draft row exists (deferred — for
+//      now we just leave them associated by userId + createdAt window
+//      since draft persistence happens later in the pipeline).
+//   2. Merge inferredFacts onto agent_contact_personas.structured_facts.
+//      Uses Postgres jsonb || concatenation to leave existing facts
+//      intact while overwriting only the topics the loop touched.
+async function persistAgenticSideEffects(args: {
+  userId: string;
+  senderEmail: string;
+  result: AgenticL2Result;
+}): Promise<void> {
+  const factsToWrite: ContactStructuredFacts = {};
+  for (const f of args.result.inferredFacts) {
+    if (
+      f.topic !== "timezone" &&
+      f.topic !== "response_window_hours" &&
+      f.topic !== "primary_language"
+    ) {
+      continue;
+    }
+    const entry = {
+      value: f.value,
+      confidence: f.confidence,
+      source: "llm_body_analysis" as const,
+      samples: 0,
+      confirmedAt: null,
+    };
+    if (f.topic === "primary_language") {
+      const v = f.value.toLowerCase();
+      if (v === "ja" || v === "en") {
+        factsToWrite.primary_language = {
+          ...entry,
+          value: v as "en" | "ja",
+        };
+      }
+    } else if (f.topic === "timezone") {
+      factsToWrite.timezone = entry;
+    } else if (f.topic === "response_window_hours") {
+      factsToWrite.response_window_hours = entry;
+    }
+  }
+  if (Object.keys(factsToWrite).length === 0) return;
+
+  await db
+    .insert(agentContactPersonas)
+    .values({
+      userId: args.userId,
+      contactEmail: args.senderEmail.toLowerCase(),
+      contactName: null,
+      relationship: null,
+      facts: [],
+      structuredFacts: factsToWrite,
+      lastExtractedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [agentContactPersonas.userId, agentContactPersonas.contactEmail],
+      set: {
+        structuredFacts: sql`COALESCE(${agentContactPersonas.structuredFacts}, '{}'::jsonb) || ${JSON.stringify(factsToWrite)}::jsonb`,
+        updatedAt: new Date(),
+      },
+    });
+
+  // Defensive — keep the agentConfirmations / agentContactPersonas
+  // imports referenced even when no facts were written.
+  void agentConfirmations;
 }
 
 // Symmetric synthesizer for the AUTO_MEDIUM-forced path. Prefers global

@@ -14,6 +14,7 @@ import {
   setConfirmationModeAction,
   setAutonomySendEnabledAction,
   setAutoArchiveEnabledAction,
+  setAgenticL2EnabledAction,
 } from "./actions";
 import { getCreditBalance } from "@/lib/billing/credits";
 import { getStorageTotals } from "@/lib/billing/storage";
@@ -104,6 +105,7 @@ export default async function SettingsPage() {
   const tModes = await getTranslations("settings.agent_modes");
   const tUsage = await getTranslations("settings.usage");
   const tInbox = await getTranslations("settings.inbox_auto_archive");
+  const tBeta = await getTranslations("settings.beta_features");
   const tProfile = await getTranslations("settings.profile_completion");
   const dateLocale = currentLocale === "ja" ? "ja-JP" : "en-US";
   const fmt = (template: string, vars: Record<string, string | number>) =>
@@ -291,6 +293,40 @@ export default async function SettingsPage() {
           all_set: tProfile("all_set"),
         }}
       />
+
+      <Section title={tBeta("section_title")}>
+        <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
+          {tBeta("description")}
+        </p>
+        <form
+          action={setAgenticL2EnabledAction}
+          className="flex items-center justify-between gap-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2.5"
+        >
+          <div className="min-w-0">
+            <p className="text-body">{tBeta("agentic_l2_label")}</p>
+            <p className="mt-1 text-[12px] text-[hsl(var(--muted-foreground))]">
+              {tBeta("agentic_l2_hint")}
+            </p>
+          </div>
+          <input
+            type="hidden"
+            name="enabled"
+            value={userPrefs?.preferences?.agenticL2 ? "false" : "true"}
+          />
+          <button
+            type="submit"
+            className={`inline-flex h-9 shrink-0 items-center rounded-md px-4 text-small font-medium transition-hover ${
+              userPrefs?.preferences?.agenticL2
+                ? "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:opacity-90"
+                : "border border-[hsl(var(--border))] hover:bg-[hsl(var(--surface-raised))]"
+            }`}
+          >
+            {userPrefs?.preferences?.agenticL2
+              ? tBeta("on")
+              : tBeta("off")}
+          </button>
+        </form>
+      </Section>
 
       <Section title={tStaged("section_title")}>
         <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
