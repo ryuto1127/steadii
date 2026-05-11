@@ -55,54 +55,74 @@ export const ja: Messages = {
         },
       },
     },
-    steadii_in_motion: {
-      title: "ノイズも、勝手に消える。",
-      body:
-        "Steadii は受信メールを 1 件ずつ分類します。明らかなノイズ — ニュースレター、no-reply、マーケ — は自動でアーカイブされ、キューには本当に必要な案件だけが残ります。あなたが復元したものから学習も走ります。",
-      real_screen: "実 UI。モックデータです。",
-      step1_label: "受信箱 · 09:42",
-      step1_sender: "Coursera Newsletter",
-      step1_subject: "今週の人気講座",
-      step1_chip_tier: "tier 1",
-      step1_chip_time: "2分",
-      step1_classifying: "分類中… Tier 1 ノイズ · 96%",
-      step1_outcome: "自動アーカイブ済み",
-      step1_outcome_meta:
-        "キューはきれいなまま。今週のダイジェストに記録します。",
-      step2_label: "受信箱 · その日の午後",
-      step2_filter_all: "受信箱",
-      step2_filter_hidden: "非表示 ({n})",
-      step2_restore: "復元 — 受信箱に残す",
-      step2_meta:
-        "「非表示」フィルターでいつでも確認・復元できます。",
-      step3_label: "翌日",
-      step3_sender: "Coursera Newsletter",
-      step3_subject: "あなた向けの新シリーズ",
-      step3_chip_tier: "確認",
-      step3_chip_time: "今",
-      step3_status: "信頼度 ↓ · 確認のため表示",
-      step3_meta:
-        "復元から学習しました。同様のメールは表示されるようになります。",
+    morning_briefing: {
+      title: "朝、すでに整っています。",
+      subhead:
+        "Steadii は 24時間動いています。朝スマホを見る頃には、今日大事なこと、これから来るもの、追っているものが、もう整理されています。",
+      card_datetime: "5月13日(水) 7:31",
+      card_greeting: "おはようございます、Ryuto さん。",
+      card_intro: "今日大事なのは3つです。",
+      context_label: "知っているもの",
+      item1_headline:
+        "田中教授がオフィスアワーを金曜14時に変更",
+      item1_action:
+        "返信草稿あります — 出席可と伝え、Q3の質問もまとめました。",
+      item1_context: "田中教授との過去3スレッド",
+      item2_headline: "CS 348 課題3 — 明日23:59 締切",
+      item2_action:
+        "まだ未着手です。シラバス上は約4時間、今夜19-23時を確保しました。",
+      item2_context: "CS 348 シラバス、カレンダー",
+      item3_headline: "15時 グループプロジェクト定例",
+      item3_action:
+        "ブリーフ準備済み — 火曜の進捗、Mei さんのタスク残り。",
+      item3_context: "Notion、前回議事録",
+      card_close: "毎朝、ここから始まります。",
+    },
+    week: {
+      title: "Steadii と過ごす一週間。",
+      subhead:
+        "ある学生の一週間、5つの瞬間。Steadii がそれを繋いでいます。",
+      context_label: "知っているもの",
+      moment1_time: "月 20:47",
+      moment1_event: "田中教授が中間試験を5/20(火)に変更",
+      moment1_action:
+        "返信草稿を用意。火曜のラボとの衝突を検知、水曜午前への移動を提案しました。",
+      moment1_context: "既存スレッド、カレンダー",
+      moment2_time: "火 6:14",
+      moment2_event: "CS 348 PS3 金曜締切 — まだ未着手",
+      moment2_action:
+        "シラバスの配点から4時間と見積もり、水曜19-23時を確保。先週流し読みした前提章も再掲しました。",
+      moment2_context: "シラバス、学習履歴",
+      moment3_time: "水 14:58",
+      moment3_event: "15時のグループ定例まであと2分",
+      moment3_action:
+        "ブリーフ準備完了 — 月曜の進捗、Mei さんの残タスク、先週木曜の合意事項。",
+      moment3_context: "Notion、議事録、過去4 Slack スレッド",
+      moment4_time: "木 23:23",
+      moment4_event: "あなた:「明日休みます」",
+      moment4_action:
+        "金曜3クラス分の欠席連絡草稿、未提出課題リスト、智子さんに ECON ノート依頼の提案も用意しました。",
+      moment4_context: "時間割、クラスメート",
+      moment5_time: "日 7:30",
+      moment5_event: "今週の準備が整いました",
+      moment5_action:
+        "これから来るもの、あなたが追っているもの、先週流れたもの。月曜までに見るべき3点。",
+      moment5_context: "学期のすべて",
     },
     boundaries: {
-      title: "あなたがやること、Steadii がやること",
+      title: "ChatGPT ではありません。",
       subhead:
-        "境界線をはっきりさせています。学びは AI に任せない。動かす作業は学生に任せない。",
+        "みんな ChatGPT を使っています。でも ChatGPT はあなたが聞くのを待ちます。Steadii は待ちません — あなたの授業、教授、受信箱を理解し、何かが起きた瞬間に動きます。",
       cards: {
-        learning: {
-          who: "あなた",
-          key: "学ぶ",
-          body: "ChatGPT や Claude と一緒に、概念に時間を費やす。本当にやりたかったやつ。",
+        chatgpt: {
+          who: "ChatGPT",
+          key: "頼まれないと動きません。",
+          body: "毎回ゼロから会話が始まります。あなたの CS 348 シラバスも、田中教授からのメールも、今週の予定も知りません。すべての一手をあなたが引きます。",
         },
-        deciding: {
-          who: "あなた",
-          key: "判断する",
-          body: "Steadii は前に立ちません。決定は全部、あなたの手元に置いておきます。",
-        },
-        doing: {
+        steadii: {
           who: "Steadii",
-          key: "動かす",
-          body: "メールを返し、ブッキングを取り、書類を整え、進捗を集める。",
+          key: "すでに動いています。",
+          body: "シラバスを知っています。受信箱を見ています。あなたの口調で返信を草稿します。大事なものを浮かせ、ノイズを隠します。承認はあなた、学習は Steadii。",
         },
       },
     },
