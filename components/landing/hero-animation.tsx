@@ -22,8 +22,7 @@ import { Logo } from "@/components/layout/logo";
 // We dropped the `motion` package after install: motion/react v12 hooks
 // didn't kick in under Next 16 + Turbopack + React 19 — components mounted
 // at their `initial` state and never animated. CSS transitions on Tailwind
-// classes are the established pattern in this repo (see
-// app/(marketing)/_components/proactive-mock.tsx) and behave reliably.
+// classes are the established pattern in this repo and behave reliably.
 
 type Phase =
   | "idle"

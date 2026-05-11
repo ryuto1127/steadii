@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { ChatActionCards } from "./_components/chat-action-cards";
-import { ProactiveMock } from "./_components/proactive-mock";
 import { LocaleToggle } from "./_components/locale-toggle";
 import { NavLocaleToggle } from "./_components/nav-locale-toggle";
 import { BoundariesSection } from "./_components/boundaries-section";
+import { MorningBriefing } from "./_components/morning-briefing";
+import { WeekWithSteadii } from "./_components/week-with-steadii";
 import { FoundingCta } from "./_components/founding-cta";
 import { HeroMesh } from "./_components/hero-mesh";
 import HeroAnimation from "@/components/landing/hero-animation";
@@ -29,29 +30,41 @@ export default async function LandingPage() {
     },
   ];
 
-  const proactiveCopy = {
-    step1_label: t("landing.steadii_in_motion.step1_label"),
-    step1_sender: t("landing.steadii_in_motion.step1_sender"),
-    step1_subject: t("landing.steadii_in_motion.step1_subject"),
-    step1_chip_tier: t("landing.steadii_in_motion.step1_chip_tier"),
-    step1_chip_time: t("landing.steadii_in_motion.step1_chip_time"),
-    step1_classifying: t("landing.steadii_in_motion.step1_classifying"),
-    step1_outcome: t("landing.steadii_in_motion.step1_outcome"),
-    step1_outcome_meta: t("landing.steadii_in_motion.step1_outcome_meta"),
-    step2_label: t("landing.steadii_in_motion.step2_label"),
-    step2_filter_all: t("landing.steadii_in_motion.step2_filter_all"),
-    step2_filter_hidden: t("landing.steadii_in_motion.step2_filter_hidden", {
-      n: 12,
-    }),
-    step2_restore: t("landing.steadii_in_motion.step2_restore"),
-    step2_meta: t("landing.steadii_in_motion.step2_meta"),
-    step3_label: t("landing.steadii_in_motion.step3_label"),
-    step3_sender: t("landing.steadii_in_motion.step3_sender"),
-    step3_subject: t("landing.steadii_in_motion.step3_subject"),
-    step3_chip_tier: t("landing.steadii_in_motion.step3_chip_tier"),
-    step3_chip_time: t("landing.steadii_in_motion.step3_chip_time"),
-    step3_status: t("landing.steadii_in_motion.step3_status"),
-    step3_meta: t("landing.steadii_in_motion.step3_meta"),
+  const weekCopy = {
+    context_label: t("landing.week.context_label"),
+    locale,
+    moments: [
+      {
+        time: t("landing.week.moment1_time"),
+        event: t("landing.week.moment1_event"),
+        action: t("landing.week.moment1_action"),
+        context: t("landing.week.moment1_context"),
+      },
+      {
+        time: t("landing.week.moment2_time"),
+        event: t("landing.week.moment2_event"),
+        action: t("landing.week.moment2_action"),
+        context: t("landing.week.moment2_context"),
+      },
+      {
+        time: t("landing.week.moment3_time"),
+        event: t("landing.week.moment3_event"),
+        action: t("landing.week.moment3_action"),
+        context: t("landing.week.moment3_context"),
+      },
+      {
+        time: t("landing.week.moment4_time"),
+        event: t("landing.week.moment4_event"),
+        action: t("landing.week.moment4_action"),
+        context: t("landing.week.moment4_context"),
+      },
+      {
+        time: t("landing.week.moment5_time"),
+        event: t("landing.week.moment5_event"),
+        action: t("landing.week.moment5_action"),
+        context: t("landing.week.moment5_context"),
+      },
+    ],
   };
 
   return (
@@ -114,11 +127,14 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Section 2 — Boundaries (cherry-picked from Claude Design archive) */}
+      {/* Section 2 — Morning Briefing (proof) */}
+      <MorningBriefing />
+
+      {/* Section 3 — Boundaries: "Not ChatGPT." (positioning) */}
       <BoundariesSection />
 
       <main className="mx-auto max-w-6xl px-6">
-        {/* Section 3 — What you do */}
+        {/* Section 4 — What you do */}
         <section className="py-10 md:py-14">
           <div className="landing-strip mb-10 w-full" />
           <div className="mb-10 max-w-2xl">
@@ -146,21 +162,18 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* Section 4 — Steadii in motion */}
+        {/* Section 5 — A week with Steadii (persistence) */}
         <section className="py-10 md:py-14">
           <div className="landing-strip mb-10 w-full" />
           <div className="mb-10 max-w-2xl">
             <h2 className="whitespace-pre-line text-[32px] font-semibold leading-[1.15] tracking-[-0.02em] text-[#1A1814] [word-break:keep-all] md:text-[44px]">
-              {t("landing.steadii_in_motion.title")}
+              {t("landing.week.title")}
             </h2>
             <p className="mt-4 text-[17px] leading-[1.55] text-[#1A1814]/65 md:text-[18px]">
-              {t("landing.steadii_in_motion.body")}
+              {t("landing.week.subhead")}
             </p>
           </div>
-          <ProactiveMock copy={proactiveCopy} />
-          <p className="mt-4 font-mono text-[11px] uppercase tracking-widest text-[#1A1814]/50">
-            {t("landing.steadii_in_motion.real_screen")}
-          </p>
+          <WeekWithSteadii copy={weekCopy} />
         </section>
       </main>
 
