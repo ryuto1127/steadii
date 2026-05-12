@@ -8,6 +8,7 @@ import { registeredResources, users, notionConnections } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { AgentRulesSection } from "@/components/settings/agent-rules";
 import { NotificationSettings } from "@/components/settings/notifications";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { readTierPrefs } from "@/lib/notifications/tier-matrix";
 import { getUserConfirmationMode, getUserTimezone, getUserVoiceTriggerKey } from "@/lib/agent/preferences";
 import {
@@ -211,13 +212,10 @@ export default async function SettingsPage() {
           </ul>
         )}
         <form action={refreshResourcesAction} className="mt-3">
-          <button
-            type="submit"
-            className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
-          >
+          <SubmitButton className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]">
             <RefreshCw size={12} strokeWidth={1.5} />
             {tRes("refresh_from_notion")}
-          </button>
+          </SubmitButton>
         </form>
       </Section>
 

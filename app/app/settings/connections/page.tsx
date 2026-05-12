@@ -27,6 +27,7 @@ import {
   regenerateVoiceProfileAction,
 } from "./actions";
 import { refreshGmailInboxAction } from "../actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function ConnectionsPage({
   searchParams,
@@ -172,20 +173,14 @@ export default async function ConnectionsPage({
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <form action={importNotionAction}>
-                <button
-                  type="submit"
-                  className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))] transition hover:opacity-90"
-                >
+                <SubmitButton className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))] transition hover:opacity-90">
                   {t("import_button")}
-                </button>
+                </SubmitButton>
               </form>
               <form action={repairSetupAction}>
-                <button
-                  type="submit"
-                  className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
-                >
+                <SubmitButton className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]">
                   {t("rerun_setup")}
-                </button>
+                </SubmitButton>
               </form>
               <Link
                 href="/api/integrations/notion/connect"
@@ -234,24 +229,22 @@ export default async function ConnectionsPage({
         </p>
         {gmailConnected && (
           <form action={refreshGmailInboxAction} className="mt-4">
-            <button
-              type="submit"
+            <SubmitButton
               title={tConn("refresh_inbox_title")}
               className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
             >
               {tConn("refresh_inbox")}
-            </button>
+            </SubmitButton>
           </form>
         )}
         {gmailConnected && (
           <form action={reclassifyAllInboxAction} className="mt-3">
-            <button
-              type="submit"
+            <SubmitButton
               title={t("reclassify_inbox.help")}
               className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
             >
               {t("reclassify_inbox.button")}
-            </button>
+            </SubmitButton>
             <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
               {t("reclassify_inbox.help")}
             </p>
@@ -267,13 +260,12 @@ export default async function ConnectionsPage({
         )}
         {gmailConnected && (
           <form action={regenerateDraftsAction} className="mt-3">
-            <button
-              type="submit"
+            <SubmitButton
               title={t("regenerate_drafts.help")}
               className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
             >
               {t("regenerate_drafts.button")}
-            </button>
+            </SubmitButton>
             <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
               {t("regenerate_drafts.help")}
             </p>
@@ -315,12 +307,9 @@ export default async function ConnectionsPage({
         )}
         {gmailConnected ? (
           <form action={regenerateVoiceProfileAction} className="mt-4">
-            <button
-              type="submit"
-              className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
-            >
+            <SubmitButton className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]">
               {t("voice_profile.button")}
-            </button>
+            </SubmitButton>
             <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
               {t("voice_profile.help")}
             </p>
@@ -449,12 +438,9 @@ export default async function ConnectionsPage({
               className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
             />
           </label>
-          <button
-            type="submit"
-            className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))]"
-          >
+          <SubmitButton className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))]">
             {t("add_button")}
-          </button>
+          </SubmitButton>
         </form>
 
         {icalSubs.length > 0 && (
