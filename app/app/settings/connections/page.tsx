@@ -29,6 +29,15 @@ import {
 import { refreshGmailInboxAction } from "../actions";
 import { SubmitButton } from "@/components/ui/submit-button";
 
+// 2026-05-12 — server actions on this route (regenerateDraftsAction,
+// reclassifyAllInboxAction, regenerateVoiceProfileAction,
+// refreshGmailInboxAction, importNotionAction) all drain over the
+// user's queue / inbox / sent history. The Vercel-default 60s budget
+// is too tight for agentic-L2 users whose draft regeneration averages
+// 15-30s per row. 300s is Vercel Pro's hard ceiling and gives enough
+// headroom for a typical α queue without parallelization.
+export const maxDuration = 300;
+
 export default async function ConnectionsPage({
   searchParams,
 }: {
