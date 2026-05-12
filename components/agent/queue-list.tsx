@@ -213,6 +213,10 @@ export function QueueList({
                         pickedKey,
                         freeText,
                       });
+                      // 2026-05-12 — confirm the response was captured.
+                      // Without this toast the card just fades out
+                      // silently and the user thinks the click was lost.
+                      toast.success(t("card_e.submit_toast"));
                     } catch (err) {
                       toast.error(message(err, "Submit failed"));
                     }

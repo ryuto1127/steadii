@@ -1376,7 +1376,8 @@ export const ja: Messages = {
     },
     card_e: {
       free_text_placeholder: "またはここに入力…",
-      submit: "選んで進める",
+      submit: "Steadii に送る",
+      submit_toast: "回答を Steadii に送りました",
       ask_later: "後で聞く",
       reject: "却下",
       response_pending: "応答待ち",

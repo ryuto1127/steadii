@@ -780,6 +780,7 @@ type MessagesShape = {
     card_e: {
       free_text_placeholder: string;
       submit: string;
+      submit_toast: string;
       ask_later: string;
       reject: string;
       response_pending: string;
@@ -2482,6 +2483,7 @@ export const en: MessagesShape = {
     card_e: {
       free_text_placeholder: "Or type something else…",
       submit: "Send to Steadii",
+      submit_toast: "Sent to Steadii",
       ask_later: "Ask later",
       reject: "Reject",
       response_pending: "Awaiting response",
