@@ -16,13 +16,31 @@ import {
   BillingQuotaExceededError,
 } from "@/lib/billing/credits";
 import { selectModel } from "@/lib/agent/models";
-import { buildProvenance, runDeepPass } from "./classify-deep";
+import {
+  buildProvenance,
+  runDeepPass,
+  type DeepPassResult,
+} from "./classify-deep";
 import { runDraft, type DraftResult } from "./draft";
 import { fetchRecentThreadMessages } from "./thread";
 import { logEmailAudit } from "./audit";
 import { fanoutForInbox, type FanoutResult } from "./fanout";
 import { loadRecentFeedbackSummary } from "./feedback";
 import { getUserLocale } from "@/lib/agent/preferences";
+import {
+  runAgenticL2,
+  type AgenticL2Result,
+} from "./agentic-l2";
+import { persistAgenticSideEffects } from "./l2";
+import type { RiskPassResult } from "./classify-risk";
+import { getMessageFull } from "@/lib/integrations/google/gmail-fetch";
+import { extractEmailBody } from "./body-extract";
+
+// 2026-05-12 — full-body cap mirrored from l2.ts. Regenerate fetches the
+// same Gmail body the normal ingest path does so the agentic loop sees
+// the same context (PR #193 wired this for fresh ingest; regenerate was
+// left on snippet-only and quietly degraded the dogfood signal).
+const FULL_BODY_CHAR_CAP = 8000;
 
 // engineer-36 — admin "Regenerate AI drafts" sweep. Re-runs L2 deep + draft
 // over open agent_drafts so legacy rows pick up the latest L2 logic
@@ -64,6 +82,8 @@ export async function regenerateDraft(
       riskTier: agentDrafts.riskTier,
       action: agentDrafts.action,
       reasoning: agentDrafts.reasoning,
+      sourceType: inboxItems.sourceType,
+      externalId: inboxItems.externalId,
       senderEmail: inboxItems.senderEmail,
       senderDomain: inboxItems.senderDomain,
       senderRole: inboxItems.senderRole,
@@ -114,6 +134,33 @@ export async function regenerateDraft(
 
   const locale = await getUserLocale(row.userId);
 
+  // 2026-05-12 — mirror l2.ts's full-body fetch so the agentic loop (and
+  // the legacy deep pass) see the same context the normal ingest path
+  // sees. Fail-soft: a Gmail outage degrades to the snippet rather than
+  // failing the regeneration.
+  let fullBodyText: string | null = null;
+  if (row.sourceType === "gmail") {
+    try {
+      const message = await getMessageFull(row.userId, row.externalId);
+      const extracted = extractEmailBody(message);
+      const raw = (extracted.text ?? "").trim();
+      if (raw.length > 0) {
+        fullBodyText =
+          raw.length > FULL_BODY_CHAR_CAP
+            ? raw.slice(0, FULL_BODY_CHAR_CAP)
+            : raw;
+      }
+    } catch (err) {
+      Sentry.captureException(err, {
+        level: "warning",
+        tags: { feature: "email_regenerate", step: "fetch_full_body" },
+        user: { id: row.userId },
+        extra: { draftId, inboxItemId: row.inboxItemId },
+      });
+    }
+  }
+  const bodyForPipeline = fullBodyText ?? row.snippet;
+
   let fanout: FanoutResult | null = null;
   let newReasoning = row.reasoning ?? "";
   let newAction: AgentDraftAction = row.action;
@@ -150,38 +197,99 @@ export async function regenerateDraft(
       senderDomain: row.senderDomain,
     });
 
-    const deep = await runDeepPass({
-      userId: row.userId,
-      senderEmail: row.senderEmail,
-      senderDomain: row.senderDomain,
-      senderRole: row.senderRole,
-      subject: row.subject,
-      snippet: row.snippet,
-      bodySnippet: row.snippet,
-      // Risk pass is intentionally NOT re-run — synthesize a minimal
-      // RiskPassResult from the stored tier so the deep prompt still
-      // sees a "Tier: high" header. The original reasoning is reused
-      // as a placeholder for the risk-pass reasoning slot; it is
-      // overwritten on the row by the new deep reasoning we compute
-      // immediately below.
-      riskPass: {
-        riskTier: "high",
-        confidence: 1.0,
-        reasoning: row.reasoning ?? "(prior risk reasoning unavailable)",
-        usageId: null,
-      },
-      similarEmails: fanout?.similarEmails ?? [],
-      totalCandidates: fanout?.totalSimilarCandidates ?? 0,
-      threadRecentMessages: threadMessages,
-      fanout,
-      recentFeedback,
-      locale,
-    });
+    // Risk pass is intentionally NOT re-run — synthesize a minimal
+    // RiskPassResult from the stored tier so the downstream prompt
+    // sees a "Tier: high" header. The original reasoning is reused
+    // as a placeholder for the risk-pass reasoning slot; it is
+    // overwritten on the row by the new deep reasoning we compute
+    // immediately below.
+    const syntheticRiskPass: RiskPassResult = {
+      riskTier: "high",
+      confidence: 1.0,
+      reasoning: row.reasoning ?? "(prior risk reasoning unavailable)",
+      usageId: null,
+    };
 
-    newReasoning = deep.reasoning;
-    newAction = deep.action;
-    newRetrievalProvenance = deep.retrievalProvenance;
-    newActionItems = deep.actionItems;
+    // 2026-05-12 — agentic L2 branch. Mirrors l2.ts so the Regenerate
+    // admin button honors users.preferences.agenticL2 the same way
+    // the normal ingest path does. Without this mirror, Regenerate
+    // silently runs the legacy single-shot runDeepPass even for
+    // agentic-opted-in users, so it couldn't be used to dogfood the
+    // agentic loop over existing inbox items.
+    const agenticEnabled =
+      userRow?.preferences?.agenticL2 === true;
+    let agenticResult: AgenticL2Result | null = null;
+    let deep: DeepPassResult | null = null;
+    if (agenticEnabled) {
+      try {
+        agenticResult = await runAgenticL2({
+          userId: row.userId,
+          inboxItemId: row.inboxItemId,
+          senderEmail: row.senderEmail,
+          senderDomain: row.senderDomain,
+          senderRole: row.senderRole,
+          subject: row.subject,
+          bodyForPipeline: bodyForPipeline ?? "",
+          riskPass: syntheticRiskPass,
+          locale,
+        });
+        deep = {
+          action: agenticResult.action,
+          reasoning: agenticResult.reasoning,
+          actionItems: agenticResult.actionItems,
+          shortSummary: agenticResult.shortSummary,
+          retrievalProvenance: buildProvenance({
+            similarEmails: fanout?.similarEmails ?? [],
+            totalCandidates: fanout?.totalSimilarCandidates ?? 0,
+            fanout,
+          }),
+          usageId: agenticResult.usageId,
+        };
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: { feature: "email_regenerate", step: "agentic_l2" },
+          user: { id: row.userId },
+          extra: { draftId, inboxItemId: row.inboxItemId },
+        });
+        agenticResult = null;
+      }
+    }
+    if (!agenticResult) {
+      deep = await runDeepPass({
+        userId: row.userId,
+        senderEmail: row.senderEmail,
+        senderDomain: row.senderDomain,
+        senderRole: row.senderRole,
+        subject: row.subject,
+        snippet: row.snippet,
+        bodySnippet: bodyForPipeline,
+        riskPass: syntheticRiskPass,
+        similarEmails: fanout?.similarEmails ?? [],
+        totalCandidates: fanout?.totalSimilarCandidates ?? 0,
+        threadRecentMessages: threadMessages,
+        fanout,
+        recentFeedback,
+        locale,
+      });
+    } else {
+      try {
+        await persistAgenticSideEffects({
+          userId: row.userId,
+          senderEmail: row.senderEmail,
+          result: agenticResult,
+        });
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: { feature: "email_regenerate", step: "agentic_side_effects" },
+          user: { id: row.userId },
+        });
+      }
+    }
+
+    newReasoning = deep!.reasoning;
+    newAction = deep!.action;
+    newRetrievalProvenance = deep!.retrievalProvenance;
+    newActionItems = deep!.actionItems;
   } else {
     try {
       fanout = await fanoutForInbox({
@@ -249,7 +357,7 @@ export async function regenerateDraft(
       senderRole: row.senderRole,
       subject: row.subject,
       snippet: row.snippet,
-      bodySnippet: row.snippet,
+      bodySnippet: bodyForPipeline,
       inReplyTo: null,
       threadRecentMessages: threadMessages,
       similarEmails: fanout?.similarEmails ?? [],

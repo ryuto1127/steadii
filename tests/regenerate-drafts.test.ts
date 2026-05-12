@@ -23,6 +23,8 @@ type FakeDraft = {
 
 type FakeInbox = {
   id: string;
+  sourceType: string;
+  externalId: string;
   senderEmail: string;
   senderDomain: string;
   senderRole: string | null;
@@ -33,10 +35,16 @@ type FakeInbox = {
   threadExternalId: string | null;
 };
 
+type FakeUser = {
+  email: string;
+  name: string | null;
+  preferences?: { agenticL2?: boolean; voiceProfile?: string | null };
+};
+
 const fixture = {
   drafts: [] as FakeDraft[],
   inboxByItemId: new Map<string, FakeInbox>(),
-  user: { email: "stu@uni.edu", name: "Stu" } as { email: string; name: string | null },
+  user: { email: "stu@uni.edu", name: "Stu" } as FakeUser,
   locale: "en" as "en" | "ja",
 };
 
@@ -70,6 +78,8 @@ vi.mock("@/lib/db/client", () => ({
                   riskTier: draft.riskTier,
                   action: draft.action,
                   reasoning: draft.reasoning,
+                  sourceType: inbox.sourceType,
+                  externalId: inbox.externalId,
                   senderEmail: inbox.senderEmail,
                   senderDomain: inbox.senderDomain,
                   senderRole: inbox.senderRole,
@@ -193,6 +203,32 @@ vi.mock("@/lib/agent/models", () => ({
       : "gpt-5.4",
 }));
 
+// 2026-05-12 — agentic-L2 path. runAgenticL2 returns the same DeepPassResult
+// shape via .reasoning / .action / etc. (plus inferred facts + confirmations
+// the side-effects helper persists). Tests below assert which of
+// runAgenticL2 vs runDeepPass got the call based on users.preferences.agenticL2.
+const runAgenticL2Mock = vi.fn<(arg: unknown) => unknown>();
+vi.mock("@/lib/agent/email/agentic-l2", () => ({
+  runAgenticL2: (a: unknown) => runAgenticL2Mock(a),
+}));
+
+const persistAgenticSideEffectsMock = vi.fn<(arg: unknown) => Promise<void>>(
+  async () => {}
+);
+vi.mock("@/lib/agent/email/l2", () => ({
+  persistAgenticSideEffects: (a: unknown) => persistAgenticSideEffectsMock(a),
+}));
+
+const getMessageFullMock = vi.fn<(uid: string, eid: string) => Promise<unknown>>();
+vi.mock("@/lib/integrations/google/gmail-fetch", () => ({
+  getMessageFull: (uid: string, eid: string) => getMessageFullMock(uid, eid),
+}));
+
+const extractEmailBodyMock = vi.fn<(m: unknown) => { text: string; format: string }>();
+vi.mock("@/lib/agent/email/body-extract", () => ({
+  extractEmailBody: (m: unknown) => extractEmailBodyMock(m),
+}));
+
 // Per-test state — the joined-row branch keys off currentDraftId so each
 // regenerateDraft(id) sees the right fixture row.
 const state: { currentDraftId: string } = { currentDraftId: "" };
@@ -233,6 +269,8 @@ beforeEach(() => {
     reasoning: "deep reasoning v2",
     retrievalProvenance: { sources: [], total_candidates: 0, returned: 0 },
     usageId: "deep-uid",
+    actionItems: [],
+    shortSummary: null,
   });
   runDraftMock.mockReset();
   runDraftMock.mockResolvedValue({
@@ -245,6 +283,27 @@ beforeEach(() => {
     reasoning: "draft reasoning v2",
     usageId: "draft-uid",
   });
+  runAgenticL2Mock.mockReset();
+  runAgenticL2Mock.mockResolvedValue({
+    action: "draft_reply",
+    reasoning: "agentic reasoning v2",
+    actionItems: [],
+    shortSummary: null,
+    retrievalProvenance: null,
+    usageId: "agentic-uid",
+    confirmationQuestions: [],
+    inferredFacts: [],
+    availabilityChecks: [],
+    schedulingDetected: false,
+    iterations: 3,
+    toolCallCount: 2,
+  });
+  persistAgenticSideEffectsMock.mockReset();
+  persistAgenticSideEffectsMock.mockResolvedValue();
+  getMessageFullMock.mockReset();
+  getMessageFullMock.mockResolvedValue({ payload: {} });
+  extractEmailBodyMock.mockReset();
+  extractEmailBodyMock.mockReturnValue({ text: "", format: "empty" });
   fanoutMock.mockClear();
   buildProvenanceMock.mockClear();
   auditMock.mockClear();
@@ -267,6 +326,8 @@ function seedDraft(d: Partial<FakeDraft>): FakeDraft {
   fixture.drafts.push(draft);
   fixture.inboxByItemId.set(draft.inboxItemId, {
     id: draft.inboxItemId,
+    sourceType: "gmail",
+    externalId: `gmail-msg-${draft.inboxItemId}`,
     senderEmail: "prof@uni.edu",
     senderDomain: "uni.edu",
     senderRole: "professor",
@@ -367,6 +428,69 @@ describe("regenerateDraft — single row", () => {
     expect(patch.action).toBe("ask_clarifying");
     expect(patch.reasoning).toBe("subject and body conflict");
   });
+
+  it("agenticL2 flag on (high-risk): routes through runAgenticL2 instead of runDeepPass", async () => {
+    fixture.user = {
+      email: "stu@uni.edu",
+      name: "Stu",
+      preferences: { agenticL2: true },
+    };
+    seedDraft({ id: "draft-agentic", riskTier: "high" });
+    await regenerate("draft-agentic");
+    expect(runAgenticL2Mock).toHaveBeenCalledTimes(1);
+    expect(runDeepPassMock).not.toHaveBeenCalled();
+    expect(persistAgenticSideEffectsMock).toHaveBeenCalledTimes(1);
+    const patch = updates[0].patch;
+    expect(patch.reasoning).toBe("agentic reasoning v2");
+  });
+
+  it("agenticL2 flag on but runAgenticL2 throws: falls back to runDeepPass", async () => {
+    fixture.user = {
+      email: "stu@uni.edu",
+      name: "Stu",
+      preferences: { agenticL2: true },
+    };
+    runAgenticL2Mock.mockRejectedValue(new Error("loop blew up"));
+    seedDraft({ id: "draft-fallback", riskTier: "high" });
+    await regenerate("draft-fallback");
+    expect(runAgenticL2Mock).toHaveBeenCalledTimes(1);
+    expect(runDeepPassMock).toHaveBeenCalledTimes(1);
+    expect(persistAgenticSideEffectsMock).not.toHaveBeenCalled();
+    const patch = updates[0].patch;
+    expect(patch.reasoning).toBe("deep reasoning v2");
+  });
+
+  it("agenticL2 flag off (default): stays on runDeepPass", async () => {
+    seedDraft({ id: "draft-legacy", riskTier: "high" });
+    await regenerate("draft-legacy");
+    expect(runAgenticL2Mock).not.toHaveBeenCalled();
+    expect(runDeepPassMock).toHaveBeenCalledTimes(1);
+    expect(persistAgenticSideEffectsMock).not.toHaveBeenCalled();
+  });
+
+  it("gmail source: fetches full body and threads it into the pipeline", async () => {
+    getMessageFullMock.mockResolvedValue({ payload: {} });
+    extractEmailBodyMock.mockReturnValue({
+      text: "Full body with candidate date 2026-05-20 14:00 JST.",
+      format: "text/plain",
+    });
+    seedDraft({ id: "draft-body", riskTier: "high" });
+    await regenerate("draft-body");
+    expect(getMessageFullMock).toHaveBeenCalledTimes(1);
+    expect(extractEmailBodyMock).toHaveBeenCalledTimes(1);
+    const arg = runDeepPassMock.mock.calls[0][0] as { bodySnippet?: string };
+    expect(arg.bodySnippet).toContain("2026-05-20");
+  });
+
+  it("gmail full-body fetch failure: degrades to snippet without aborting", async () => {
+    getMessageFullMock.mockRejectedValue(new Error("gmail 500"));
+    seedDraft({ id: "draft-bodyfail", riskTier: "high" });
+    const out = await regenerate("draft-bodyfail");
+    expect(out.status).toBe("refreshed");
+    const arg = runDeepPassMock.mock.calls[0][0] as { bodySnippet?: string | null };
+    // snippet from fixture
+    expect(arg.bodySnippet).toBe("Are you free Thursday?");
+  });
 });
 
 describe("regenerateAllOpenDrafts — sweep", () => {
@@ -427,6 +551,8 @@ describe("regenerateAllOpenDrafts — sweep", () => {
                   riskTier: draft.riskTier,
                   action: draft.action,
                   reasoning: draft.reasoning,
+                  sourceType: inbox.sourceType,
+                  externalId: inbox.externalId,
                   senderEmail: inbox.senderEmail,
                   senderDomain: inbox.senderDomain,
                   senderRole: inbox.senderRole,
