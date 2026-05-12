@@ -3262,7 +3262,7 @@ export const en: MessagesShape = {
     regenerate_drafts: {
       button: "Regenerate AI drafts",
       help:
-        "Re-runs L2 reasoning + draft body over your open inbox drafts using the latest classification logic and your current language preference. Up to 25 drafts per click (low-tier rows are skipped automatically). Costs the usual L2 credits.",
+        "Re-runs L2 reasoning + draft body over every actionable draft in your queue using the latest classification logic and your current language preference. Already-sent / dismissed / low-tier rows are skipped automatically. Costs the usual L2 credits.",
       done: "Regenerated {refreshed} drafts.",
       more: "Regenerated {refreshed} drafts. More queued — click again to continue.",
       exhausted: "Regenerated {refreshed} drafts before credits ran out. Top up to continue.",
