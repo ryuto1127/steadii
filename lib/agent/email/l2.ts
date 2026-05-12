@@ -38,7 +38,8 @@ import { fetchRecentThreadMessages } from "./thread";
 import { logEmailAudit } from "./audit";
 import { fanoutForInbox, type FanoutResult } from "./fanout";
 import { loadRecentFeedbackSummary } from "./feedback";
-import { getUserLocale } from "@/lib/agent/preferences";
+import { getUserLocale, getUserTimezone } from "@/lib/agent/preferences";
+import { inferSenderTzFromDomain } from "./sender-timezone-heuristic";
 import { getMessageFull } from "@/lib/integrations/google/gmail-fetch";
 import { extractEmailBody } from "./body-extract";
 import {
@@ -82,6 +83,13 @@ export type L2Outcome = {
 // for medium).
 export type ProcessL2Options = {
   forceTier?: "high" | "medium";
+  // engineer-45 — when the user submits freeText through a Type E
+  // ask_clarifying card, we re-run L2 against the same inbox item with
+  // their clarification threaded into the agentic-L2 user message. The
+  // loop then re-decides the action (typically: drafts a reply that
+  // uses the clarification as authoritative input). Empty / undefined
+  // when the re-run path isn't being used.
+  userClarification?: string;
 };
 
 // Run the L2 pipeline for one inbox item.
@@ -349,6 +357,7 @@ async function runPipeline(
           bodyForPipeline: bodyForPipeline ?? "",
           riskPass: risk,
           locale,
+          userClarification: options.userClarification ?? null,
         });
         deep = {
           action: agenticResult.action,
@@ -534,6 +543,16 @@ async function runPipeline(
       });
     }
 
+    // engineer-45 — thread the student's TZ + the sender's domain-
+    // inferred TZ into the draft prompt so the dual-TZ rendering rule
+    // can fire when the two differ. The domain heuristic is the cheap
+    // first pass; the agentic L2 path may have already overwritten
+    // the persona with a more confident inference, but for the draft
+    // we only need a usable hint — the prompt skips dual-rendering
+    // when senderTz is null.
+    const studentTz = await getUserTimezone(item.userId);
+    const senderTzHint = inferSenderTzFromDomain(item.senderDomain);
+
     draft = await runDraft({
       userId: item.userId,
       senderEmail: item.senderEmail,
@@ -551,6 +570,8 @@ async function runPipeline(
       writingStyleRules,
       userName: userRow?.name ?? null,
       userEmail: userRow?.email ?? null,
+      userTimezone: studentTz,
+      senderTimezone: senderTzHint.tz,
     });
   }
 

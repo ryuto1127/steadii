@@ -3,6 +3,11 @@ export type UserContextPayload = {
   // we haven't captured one yet — callers fall back to UTC and the agent
   // emits a warning so we can see which users still need backfill.
   timezone: string | null;
+  // The user's app locale ("en" / "ja"). Drives the language the agent
+  // replies in by default + tells the agent which side of dual-TZ slot
+  // strings reads naturally. Optional for backwards-compat with stored
+  // fixtures; missing value falls through to "en".
+  locale?: "en" | "ja";
   notion: {
     connected: boolean;
     parentPageId: string | null;
@@ -57,6 +62,23 @@ function formatNowIsoInZone(date: Date, tz: string): string {
   return `${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`;
 }
 
+function formatTzAbbreviation(date: Date, tz: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      timeZoneName: "short",
+    }).formatToParts(date);
+    const abbr = parts.find((p) => p.type === "timeZoneName")?.value;
+    if (!abbr) return tz;
+    // Some zones return "GMT+9" instead of an abbreviation; the IANA name
+    // is more useful in those cases.
+    if (/^GMT[+-]?\d/.test(abbr)) return tz;
+    return abbr;
+  } catch {
+    return tz;
+  }
+}
+
 function formatTodayInZone(date: Date, tz: string): { ymd: string; weekday: string } {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: tz,
@@ -83,6 +105,19 @@ export function serializeContextForPrompt(ctx: UserContextPayload): string {
   }
   const nowIso = formatNowIsoInZone(now, tz);
   const today = formatTodayInZone(now, tz);
+  const tzAbbr = formatTzAbbreviation(now, tz);
+  const locale = ctx.locale ?? "en";
+
+  // engineer-45 — explicit USER CONTEXT block at the top so the model
+  // honours the user's TZ + locale before any other guidance. Mirrors
+  // the system-prompt TIMEZONE RULES section's expectation that the
+  // current local TZ + locale are known facts, not inferences.
+  lines.push(`# USER CONTEXT (always honor)`);
+  lines.push(`Timezone: ${tz} (${tzAbbr}, UTC${nowIso.slice(-6)})`);
+  lines.push(`Current local time: ${nowIso}`);
+  lines.push(`Locale: ${locale}`);
+  lines.push("");
+
   lines.push(`# Time`);
   lines.push(`Now: ${nowIso} (${tz})`);
   lines.push(`Today (user-local): ${today.ymd} (${today.weekday})`);
