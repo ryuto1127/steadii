@@ -67,6 +67,7 @@ export function ChatView({
   blobConfigured = true,
   autoStream = false,
   voiceTriggerKey = "caps_lock",
+  clarificationBanner = null,
 }: {
   chatId: string;
   initialTitle: string | null;
@@ -74,6 +75,15 @@ export function ChatView({
   blobConfigured?: boolean;
   autoStream?: boolean;
   voiceTriggerKey?: VoiceTriggerKey;
+  // engineer-46 — set when the chat was opened from a Type E
+  // clarifying queue card. Renders a banner above the chat header
+  // linking back to /app so the student remembers which card they're
+  // resolving. `resolved=true` flips the banner copy after the
+  // resolve_clarification tool fires.
+  clarificationBanner?: {
+    title: string;
+    resolved: boolean;
+  } | null;
 }) {
   const t = useTranslations();
   const tVoice = useTranslations("voice");
@@ -476,6 +486,24 @@ export function ChatView({
 
   return (
     <>
+      {clarificationBanner ? (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-[12px] text-[hsl(var(--muted-foreground))]">
+          <span className="min-w-0 truncate">
+            <span className="font-medium text-[hsl(var(--foreground))]">
+              {clarificationBanner.resolved
+                ? t("chat.clarification_banner.title_resolved")
+                : t("chat.clarification_banner.title")}
+            </span>
+            <span className="ml-1 truncate">{clarificationBanner.title}</span>
+          </span>
+          <Link
+            href="/app"
+            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium text-[hsl(var(--foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))]"
+          >
+            {t("chat.clarification_banner.back")}
+          </Link>
+        </div>
+      ) : null}
       <header className="flex flex-wrap items-center gap-3 border-b border-[hsl(var(--border))] pb-3">
         <form action={renameChatAction} className="min-w-0 flex-1">
           <input type="hidden" name="id" value={chatId} />

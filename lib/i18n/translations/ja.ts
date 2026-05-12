@@ -918,6 +918,11 @@ export const ja: Messages = {
       preparing: "コンテキストを準備中…",
       open_failed: "ChatGPT を開けませんでした — もう一度試すか、Steadii で続けてください。",
     },
+    clarification_banner: {
+      title: "解決中の確認カード:",
+      title_resolved: "確認カードを解決済み:",
+      back: "↩ キューに戻る",
+    },
   },
   voice: {
     hint_caps: "Caps Lock を長押しで話す・タップでチャットを開く",
@@ -1378,6 +1383,7 @@ export const ja: Messages = {
       free_text_placeholder: "またはここに入力…",
       submit: "Steadii に送る",
       submit_toast: "回答を Steadii に送りました",
+      talk_in_chat: "Steadii と話す",
       ask_later: "後で聞く",
       reject: "却下",
       response_pending: "応答待ち",

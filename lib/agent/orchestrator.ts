@@ -6,15 +6,25 @@ import { recordUsage } from "./usage";
 import { buildUserContext, serializeContextForPrompt } from "./context";
 import { getUserConfirmationMode } from "./preferences";
 import { requiresConfirmation } from "./confirmation";
-import { getToolByName, openAIToolDefs } from "./tool-registry";
+import {
+  getToolByName,
+  openAIToolDefs,
+  type ChatSessionContext,
+} from "./tool-registry";
+import {
+  buildClarificationSeedPrompt,
+  type ClarificationSeed,
+} from "./prompts/clarification-seed";
 import { db } from "@/lib/db/client";
 import {
   messages as messagesTable,
   chats,
+  agentDrafts,
+  inboxItems,
   messageAttachments,
   pendingToolCalls,
 } from "@/lib/db/schema";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import type OpenAI from "openai";
 
 export type StreamEvent =
@@ -87,9 +97,25 @@ export async function* streamChatResponse(
   const confirmationMode = await getUserConfirmationMode(req.userId);
   const model = selectModel("chat");
 
+  // engineer-46 — chat-driven Type E. When the chat was opened from a
+  // clarifying queue card, fetch the seed (original draft + email) and
+  // prepend a focused system block so the agent picks up the
+  // ask_clarifying thread instead of acting like a fresh chat. Tool
+  // list also expands to include resolve_clarification.
+  const sessionCtx = await loadChatSessionContext(req.chatId, req.userId);
+  const clarificationSeed = sessionCtx.clarifyingDraftId
+    ? await loadClarificationSeed(req.userId, sessionCtx.clarifyingDraftId)
+    : null;
+  const clarificationSystem = clarificationSeed
+    ? buildClarificationSeedPrompt(clarificationSeed)
+    : null;
+
   const conversation: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: MAIN_SYSTEM_PROMPT },
     { role: "system", content: contextPrompt },
+    ...(clarificationSystem
+      ? [{ role: "system" as const, content: clarificationSystem }]
+      : []),
     ...repairDanglingToolCalls(history).map(toOpenAIMessage),
   ];
 
@@ -114,7 +140,7 @@ export async function* streamChatResponse(
         stream: true,
         stream_options: { include_usage: true },
         messages: conversation,
-        tools: openAIToolDefs(),
+        tools: openAIToolDefs(sessionCtx),
         tool_choice: "auto",
       });
 
@@ -584,4 +610,52 @@ export async function attachmentsForMessage(messageId: string) {
     .select()
     .from(messageAttachments)
     .where(eq(messageAttachments.messageId, messageId));
+}
+
+// engineer-46 — chat session metadata that gates orchestrator
+// behaviour. Today only `clarifyingDraftId` lives here; future
+// session-scoped flags (e.g. group-detect chats, brief-mode chats)
+// extend this shape.
+async function loadChatSessionContext(
+  chatId: string,
+  userId: string
+): Promise<ChatSessionContext> {
+  const [row] = await db
+    .select({ clarifyingDraftId: chats.clarifyingDraftId })
+    .from(chats)
+    .where(and(eq(chats.id, chatId), eq(chats.userId, userId)))
+    .limit(1);
+  return { clarifyingDraftId: row?.clarifyingDraftId ?? null };
+}
+
+async function loadClarificationSeed(
+  userId: string,
+  draftId: string
+): Promise<ClarificationSeed | null> {
+  const [row] = await db
+    .select({
+      draft: agentDrafts,
+      inbox: inboxItems,
+    })
+    .from(agentDrafts)
+    .innerJoin(inboxItems, eq(agentDrafts.inboxItemId, inboxItems.id))
+    .where(and(eq(agentDrafts.id, draftId), eq(agentDrafts.userId, userId)))
+    .limit(1);
+  if (!row) return null;
+  return {
+    originalDraftId: row.draft.id,
+    reasoning: row.draft.reasoning,
+    draftBody: row.draft.draftBody,
+    senderEmail: row.inbox.senderEmail,
+    senderDomain: row.inbox.senderDomain,
+    senderName: row.inbox.senderName,
+    subject: row.inbox.subject,
+    // Snippet is what L2 sees in the queue card body; the full body
+    // lives behind email_get_body. Passing the snippet here keeps the
+    // seed cheap and avoids leaking 8000-char bodies into every
+    // clarification chat. The agent can call email_get_body itself
+    // when it needs more context.
+    bodyForPipeline: row.inbox.snippet ?? "",
+    receivedAt: row.inbox.receivedAt.toISOString(),
+  };
 }

@@ -29,6 +29,7 @@ import {
   queueSendOfficeHoursAction,
   queueSnoozeAction,
   queueSubmitClarificationAction,
+  startClarificationChatAction,
 } from "./queue-actions";
 
 export const dynamic = "force-dynamic";
@@ -116,6 +117,7 @@ export default async function HomePage() {
             actions={{
               resolveProposal: queueResolveProposalAction,
               submitClarification: queueSubmitClarificationAction,
+              startClarificationChat: startClarificationChatAction,
               dismiss: queueDismissAction,
               snooze: queueSnoozeAction,
               permanentDismiss: queuePermanentDismissAction,
