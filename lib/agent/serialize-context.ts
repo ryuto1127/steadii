@@ -32,6 +32,14 @@ export type UserContextPayload = {
     start: string | null | undefined;
     end: string | null | undefined;
   }>;
+  // engineer-47 — top-N user_facts the agent has remembered, ordered by
+  // lastUsedAt DESC NULLS LAST. Empty array when the user has no saved
+  // facts yet. Capped at TOP_USER_FACTS_LIMIT (12) to keep prompt cost
+  // predictable.
+  userFacts?: Array<{
+    fact: string;
+    category: string | null;
+  }>;
 };
 
 // Format `date` as a full offset-bearing RFC3339 string in `tz`, e.g.
@@ -116,6 +124,22 @@ export function serializeContextForPrompt(ctx: UserContextPayload): string {
   lines.push(`Timezone: ${tz} (${tzAbbr}, UTC${nowIso.slice(-6)})`);
   lines.push(`Current local time: ${nowIso}`);
   lines.push(`Locale: ${locale}`);
+  // engineer-47 — saved user_facts splice. Sits inside USER CONTEXT
+  // because the facts are part of the user's persistent profile, not
+  // session-scoped state. Top-N already cropped by the loader.
+  if (ctx.userFacts && ctx.userFacts.length > 0) {
+    lines.push("");
+    lines.push(
+      "USER FACTS (things Steadii has learned about you across past sessions):"
+    );
+    for (const f of ctx.userFacts) {
+      const tag = f.category ? `[${f.category}] ` : "";
+      lines.push(`- ${tag}${f.fact}`);
+    }
+    lines.push(
+      "Use these as ambient context. Don't re-ask things already covered. If a fact looks stale or wrong, call save_user_fact with the corrected version (the soft-unique index upserts cleanly)."
+    );
+  }
   lines.push("");
 
   lines.push(`# Time`);

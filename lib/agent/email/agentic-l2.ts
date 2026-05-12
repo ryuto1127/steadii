@@ -16,6 +16,7 @@ import {
   buildAgenticL2UserMessage,
 } from "./agentic-l2-prompt";
 import { inferSenderTzFromDomain } from "./sender-timezone-heuristic";
+import { loadTopUserFacts } from "@/lib/agent/user-facts";
 import type { DeepAction } from "./classify-deep";
 import type OpenAI from "openai";
 
@@ -110,6 +111,11 @@ async function runLoop(input: AgenticL2Input): Promise<AgenticL2Result> {
   // infer_sender_timezone. Null when the domain is ambiguous (.com /
   // multi-TZ country).
   const tzHint = inferSenderTzFromDomain(input.senderDomain);
+  // engineer-47 — saved user_facts so the L2 loop knows the student's
+  // persistent profile (TZ, tone, schedule, etc.) when composing the
+  // draft. Same data the chat orchestrator carries; L2 keeps its own
+  // surface because it doesn't share the chat system prompt.
+  const userFacts = await loadTopUserFacts(input.userId).catch(() => []);
   const userMsg = buildAgenticL2UserMessage({
     locale: input.locale,
     senderEmail: input.senderEmail,
@@ -123,6 +129,7 @@ async function runLoop(input: AgenticL2Input): Promise<AgenticL2Result> {
         ? { tz: tzHint.tz, confidence: tzHint.confidence, source: tzHint.source }
         : null,
     userClarification: input.userClarification ?? null,
+    userFacts: userFacts.map((f) => ({ fact: f.fact, category: f.category })),
   });
 
   const conversation: OpenAI.Chat.ChatCompletionMessageParam[] = [
