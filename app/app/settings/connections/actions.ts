@@ -201,16 +201,19 @@ export async function reclassifyAllInboxAction() {
 }
 
 // engineer-36 — re-runs L2 deep + draft over the user's open agent_drafts.
-// Capped at 10 per click so each invocation stays inside the Vercel
-// server-action timeout. The UI offers "Run again to continue" via the
-// `more=1` param when there's still queue. Bubbles credit exhaustion
-// through `exhausted=1` so the banner can prompt a top-up.
+// Capped per click so each invocation stays inside the Vercel
+// server-action timeout. 2026-05-12 — cap raised from 10 → 25 alongside
+// the SELECT-layer tier filter in regenerateAllOpenDrafts; typical α
+// inboxes (< 25 refreshable drafts) now complete in a single click.
+// The UI offers "Run again to continue" via `more=1` for the rare
+// inboxes that exceed the cap. Bubbles credit exhaustion through
+// `exhausted=1` so the banner can prompt a top-up.
 export async function regenerateDraftsAction() {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthenticated");
   const userId = session.user.id;
 
-  const out = await regenerateAllOpenDrafts(userId, { limit: 10 });
+  const out = await regenerateAllOpenDrafts(userId, { limit: 25 });
   revalidatePath("/app/inbox");
   revalidatePath("/app/settings/connections");
   redirect(
