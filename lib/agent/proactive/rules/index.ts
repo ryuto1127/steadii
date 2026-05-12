@@ -6,13 +6,15 @@ import type { ProactiveRule } from "../types";
 import { timeConflictRule } from "./time-conflict";
 import { examConflictRule } from "./exam-conflict";
 import { deadlineDuringTravelRule } from "./deadline-during-travel";
-import { examUnderPreparedRule } from "./exam-under-prepared";
 import { workloadOverCapacityRule } from "./workload-over-capacity";
+import { classroomDeadlineImminentRule } from "./classroom-deadline-imminent";
+import { calendarDoubleBookingRule } from "./calendar-double-booking";
 
 export const ALL_RULES: ProactiveRule[] = [
   timeConflictRule,
   examConflictRule,
   deadlineDuringTravelRule,
-  examUnderPreparedRule,
   workloadOverCapacityRule,
+  classroomDeadlineImminentRule,
+  calendarDoubleBookingRule,
 ];

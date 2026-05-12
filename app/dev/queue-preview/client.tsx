@@ -60,6 +60,8 @@ export function QueuePreviewClient({
             permanentDismiss: NOOP,
             secondaryAction: NOOP,
             sendOfficeHours: NOOP,
+            confirm: NOOP,
+            correct: NOOP,
           }}
         />
       )}

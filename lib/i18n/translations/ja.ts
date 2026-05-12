@@ -1050,6 +1050,16 @@ export const ja: Messages = {
       on: "オン — オフにする",
       off: "オフ — オンにする",
     },
+    queue_ux: {
+      section_title: "キュー",
+      description:
+        "ホームのキューに表示する通知系カードの動作を調整します。リアルタイムの既読判定は Gmail Push 経由で取得します。",
+      hide_read_label: "既読のカードをキューから非表示にする",
+      hide_read_hint:
+        "オンにすると、Gmail で本文を読んでから少しの間で「気づき」カードが消えます。オフにすると、Steadii で却下するまで残ります。",
+      on: "オン — オフにする",
+      off: "オフ — オンにする",
+    },
     profile_completion: {
       heading: "プロフィールを完成させる",
       missing_name:
@@ -1307,6 +1317,7 @@ export const ja: Messages = {
     archetype_c_pill: "気づき",
     archetype_d_pill: "完了",
     archetype_e_pill: "確認",
+    archetype_f_pill: "要確認",
     issue_title: {
       time_conflict: "予定の衝突",
       exam_conflict: "試験の衝突",
@@ -1314,6 +1325,8 @@ export const ja: Messages = {
       exam_under_prepared: "試験準備が間に合わない",
       workload_over_capacity: "作業量が過剰",
       syllabus_calendar_ambiguity: "シラバスの確認が必要",
+      classroom_deadline_imminent: "締切が迫っています",
+      calendar_double_booking: "ダブルブッキング",
       group_project_detected: "グループ課題を検出",
       group_member_silent: "グループメンバーが沈黙中",
       fallback: "Steadii からのお知らせ",
@@ -1365,6 +1378,14 @@ export const ja: Messages = {
       ask_later: "後で聞く",
       reject: "却下",
       response_pending: "応答待ち",
+    },
+    card_f: {
+      confirm: "確定",
+      confirm_with_value: "{value} で確定",
+      correct: "違う値を入力",
+      correct_placeholder: "正しい値を入力…",
+      save: "保存",
+      dismiss: "聞かないで",
     },
   },
   command_palette: {
@@ -1714,6 +1735,19 @@ export const ja: Messages = {
         "まだ学習した連絡先はありません。何人かとやり取りすると、Steadii が各相手について把握した内容をここにまとめます。",
       remove: "この連絡先を忘れる",
       no_facts_yet: "具体的なファクトはまだ学習されていません。",
+    },
+    confirmations: {
+      heading: "Steadii が確認したい質問",
+      description:
+        "タイムゾーン・言語・役割など、Steadii が自信を持てない推測を、連絡先のペルソナに書き込む前に確認します。確定済み・修正済みの回答もここに表示されます。リストから消したい行は削除してください。",
+      empty: "未解決の質問はありません。確認したいことがあれば、ここに表示されます。",
+      delete: "削除",
+      inferred_label: "推測値",
+      resolved_label: "確定値",
+      status_pending: "保留中",
+      status_confirmed: "確定済み",
+      status_corrected: "修正済み",
+      status_dismissed: "却下済み",
     },
   },
   syllabus_new_page: {
