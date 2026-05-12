@@ -20,7 +20,7 @@ import type {
   ProposalSourceRef,
 } from "@/lib/db/schema";
 
-export type QueueArchetype = "A" | "B" | "C" | "D" | "E";
+export type QueueArchetype = "A" | "B" | "C" | "D" | "E" | "F";
 
 // 3-tier confidence visual. Numeric % is intentionally NOT shown (see
 // memory `project_wave_2_home_design.md` "Confidence indicator"). The
@@ -177,12 +177,42 @@ export type QueueCardE = QueueCardBase & {
   choices: QueueClarifyChoice[];
 };
 
+// engineer-42 — Type F: interactive confirmations the agentic L2 loop
+// queued via the `queue_user_confirmation` tool. Each card is a question
+// Steadii is asking ("is this sender in JST?") plus a confirm / correct /
+// dismiss action set. Confirm pins the inferred value into
+// `agent_contact_personas.structured_facts.<topic>` at confidence 1.0;
+// correct accepts the user's value at the same confidence; dismiss flips
+// status to dismissed and writes nothing to the persona.
+export type ConfirmationTopic =
+  | "timezone"
+  | "sender_role"
+  | "primary_language"
+  | "relationship"
+  | "other";
+
+export type ConfirmationOption = {
+  key: string;
+  label: string;
+  type: "confirm" | "correct" | "dismiss";
+};
+
+export type QueueCardF = QueueCardBase & {
+  archetype: "F";
+  topic: ConfirmationTopic;
+  senderEmail: string | null;
+  inferredValue: string | null;
+  options: ConfirmationOption[];
+  originatingDraftId: string | null;
+};
+
 export type QueueCard =
   | QueueCardA
   | QueueCardB
   | QueueCardC
   | QueueCardD
-  | QueueCardE;
+  | QueueCardE
+  | QueueCardF;
 
 // Re-exported so callers (test fixtures, UI props) can import without
 // reaching into schema directly.

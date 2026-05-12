@@ -28,6 +28,10 @@ export const CRON_EXPECTED_INTERVAL_MS: Record<string, number> = {
   "ical-sync": 30 * 60 * 1000, // every 30 minutes
   // engineer-38 — writing-style learner. Daily 08:00 UTC.
   "style-learner": 24 * 60 * 60 * 1000,
+  // engineer-43 — Gmail Push watch refresh. Daily 04:00 UTC; Gmail
+  // watches lapse after 7 days so a missed run silently degrades the
+  // Type C read-filter to "everything shows".
+  "gmail-watch-refresh": 24 * 60 * 60 * 1000,
 };
 
 const STALE_MULTIPLIER = 2;

@@ -40,9 +40,10 @@ const PRE_BRIEF_WINDOW_MAX_FROM_NOW = 18;
 // silently; the daily catch-all picks them up if relevant the next day.
 const MAX_BRIEFS_PER_USER_PER_TICK = 5;
 
-// Skip events whose title or attendee domains scream "non-academic".
-// Conservative — false negatives are cheap (one wasted brief), false
-// positives lose value entirely.
+// Skip events whose title screams "non-academic". Tightened
+// 2026-05-11: prior list included "doctor" / "dentist" which fired
+// on academic contexts ("doctoral defense", "Dental school admissions
+// meeting"). Replaced with strictly non-academic English keywords.
 const SKIP_TITLE_KEYWORDS = [
   "lunch",
   "coffee",
@@ -51,8 +52,8 @@ const SKIP_TITLE_KEYWORDS = [
   "ooo",
   "vacation",
   "haircut",
-  "dentist",
-  "doctor",
+  "dental",
+  "vet",
 ];
 
 export type ScanReport = {
@@ -279,25 +280,74 @@ async function briefEvent(
 
 // ── Helpers (exported for tests) ────────────────────────────────────
 
+// 2026-05-11 — extracts attendees across Google Calendar, MS Graph, and
+// iCal subscription source types. Each provider's `sourceMetadata.attendees`
+// has a different per-item shape:
+//   • google_calendar: { email, displayName?, self? }
+//   • microsoft_graph: { emailAddress: { address, name }, type? }
+//   • ical_subscription: { email, name? } (populated by iCal parser when
+//     ATTENDEE lines are present — TODO follow-up: most public-subscribed
+//     classroom feeds don't carry ATTENDEE so this surface stays empty for
+//     them, by design)
+//
+// Google's `self: true` row is skipped (the brief is for the user, with
+// the others). MS Graph doesn't carry a `self` flag — its events are
+// fetched from /me/events so the organizer is implicit; we don't have a
+// reliable way to drop "self" here, so we keep all addresses and rely on
+// the downstream pre-brief generator to handle a 1-attendee meeting.
 export function extractAttendees(event: EventRow): PreBriefAttendee[] {
-  if (event.sourceType !== "google_calendar") return [];
+  const supported =
+    event.sourceType === "google_calendar" ||
+    event.sourceType === "microsoft_graph" ||
+    event.sourceType === "ical_subscription";
+  if (!supported) return [];
   const meta = (event.sourceMetadata ?? {}) as Record<string, unknown>;
   const raw = meta.attendees;
   if (!Array.isArray(raw)) return [];
   const result: PreBriefAttendee[] = [];
   for (const item of raw as Array<Record<string, unknown>>) {
+    const parsed = parseAttendeeShape(item, event.sourceType);
+    if (!parsed) continue;
+    result.push(parsed);
+  }
+  return result;
+}
+
+function parseAttendeeShape(
+  item: Record<string, unknown>,
+  sourceType: string
+): PreBriefAttendee | null {
+  // Google shape — plus an iCal-style shape that uses the same { email,
+  // name? } keys, so route them through the same branch.
+  if (sourceType === "google_calendar" || sourceType === "ical_subscription") {
     const email = typeof item.email === "string" ? item.email : null;
-    if (!email) continue;
-    // Skip the user's own row in the attendees list — the brief is FOR
-    // them, the meeting is WITH the others.
-    if (item.self === true) continue;
-    const name =
+    if (!email) return null;
+    if (item.self === true) return null;
+    // Google uses `displayName`; iCal uses `name`. Tolerate either.
+    const dn =
       typeof item.displayName === "string" && item.displayName.length > 0
         ? item.displayName
         : null;
-    result.push({ email, name });
+    const nm =
+      typeof item.name === "string" && item.name.length > 0 ? item.name : null;
+    return { email, name: dn ?? nm };
   }
-  return result;
+
+  // MS Graph shape — { emailAddress: { address, name }, type?, status? }.
+  if (sourceType === "microsoft_graph") {
+    const ea = item.emailAddress;
+    if (!ea || typeof ea !== "object") return null;
+    const eaObj = ea as Record<string, unknown>;
+    const email = typeof eaObj.address === "string" ? eaObj.address : null;
+    if (!email) return null;
+    const name =
+      typeof eaObj.name === "string" && eaObj.name.length > 0
+        ? eaObj.name
+        : null;
+    return { email, name };
+  }
+
+  return null;
 }
 
 export function looksNonAcademic(title: string): boolean {

@@ -5,6 +5,12 @@
 // today; PR 2+ may add a manual estimate column. Until then, this
 // rule fires conservatively (heuristic estimate × count), keeping
 // false positives in check.
+//
+// engineer-43 — broadened to include Google Tasks + MS To Do alongside
+// the Steadii-managed `assignments` table so users who don't track
+// homework in Steadii directly still get the overload alert. Each
+// task counts as DEFAULT_ASSIGNMENT_HOURS just like an estimate-less
+// assignment.
 
 import type { ProactiveRule, DetectedIssue } from "../types";
 
@@ -16,9 +22,40 @@ export const workloadOverCapacityRule: ProactiveRule = {
   name: "workload_over_capacity",
   detect(snapshot) {
     const issues: DetectedIssue[] = [];
-    const dueAssignments = snapshot.assignments
-      .filter((a) => a.dueAt && a.dueAt >= snapshot.now)
-      .sort((a, b) => (a.dueAt!.getTime() - b.dueAt!.getTime()));
+
+    // Pull due-bearing tasks from Google Tasks + MS To Do. The events
+    // table stores both with `kind='task'`; the dueDate lives on
+    // startsAt. Classroom coursework is excluded — it already shows in
+    // classroom_deadline_imminent and would double-count workload.
+    const taskItems = snapshot.calendarEvents
+      .filter(
+        (e) =>
+          (e.sourceType === "google_tasks" || e.sourceType === "microsoft_todo") &&
+          e.status !== "completed" &&
+          e.startsAt >= snapshot.now
+      )
+      .map((e) => ({
+        id: e.id,
+        title: e.title,
+        dueAt: e.startsAt,
+      }));
+
+    const dueAssignments = [
+      ...snapshot.assignments
+        .filter((a) => a.dueAt && a.dueAt >= snapshot.now)
+        .map((a) => ({
+          id: a.id,
+          title: a.title,
+          dueAt: a.dueAt as Date,
+          estimatedHours: a.estimatedHours,
+        })),
+      ...taskItems.map((t) => ({
+        id: t.id,
+        title: t.title,
+        dueAt: t.dueAt,
+        estimatedHours: undefined,
+      })),
+    ].sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
 
     if (dueAssignments.length === 0) return issues;
 
@@ -28,12 +65,12 @@ export const workloadOverCapacityRule: ProactiveRule = {
     // per scan (post-α): repeat alerts confuse the user.
     const flagged = new Set<string>();
     for (let i = 0; i < dueAssignments.length; i++) {
-      const start = dueAssignments[i].dueAt!;
+      const start = dueAssignments[i].dueAt;
       const windowEnd = new Date(
         start.getTime() + WINDOW_DAYS * 24 * 3600 * 1000
       );
       const inWindow = dueAssignments.filter(
-        (a) => a.dueAt! >= start && a.dueAt! <= windowEnd
+        (a) => a.dueAt >= start && a.dueAt <= windowEnd
       );
       const totalHours =
         inWindow.reduce(

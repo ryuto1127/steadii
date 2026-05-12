@@ -97,6 +97,14 @@ type GraphEventRow = {
   webLink?: string | null;
   isAllDay?: boolean | null;
   isCancelled?: boolean | null;
+  // 2026-05-11 — engineer-43 pre-brief reach. Graph returns attendees
+  // as { emailAddress: { address, name }, type, status }; we persist
+  // the raw shape on sourceMetadata so the pre-brief scanner can
+  // include MS Outlook meetings.
+  attendees?: Array<{
+    emailAddress?: { address?: string | null; name?: string | null } | null;
+    type?: string | null;
+  }> | null;
 };
 
 // Detect whether a string is a date-only marker (YYYY-MM-DD) the agent
@@ -205,6 +213,23 @@ async function writeThroughMsEvent(args: {
     sourceMetadata: {
       originalStart: { dateTime: ev.start?.dateTime ?? null, timeZone: ev.start?.timeZone ?? null },
       originalEnd: { dateTime: ev.end?.dateTime ?? null, timeZone: ev.end?.timeZone ?? null },
+      // 2026-05-11 — engineer-43. Persist MS Graph attendees verbatim
+      // so lib/agent/pre-brief/scanner.ts:extractAttendees can include
+      // Outlook meetings (drops the prior google_calendar-only gate).
+      attendees: Array.isArray(ev.attendees)
+        ? ev.attendees
+            .filter(
+              (a): a is { emailAddress: { address: string; name: string | null } } =>
+                typeof a?.emailAddress?.address === "string" &&
+                a.emailAddress.address.length > 0
+            )
+            .map((a) => ({
+              emailAddress: {
+                address: a.emailAddress.address,
+                name: a.emailAddress.name ?? null,
+              },
+            }))
+        : [],
     },
     normalizedKey: null,
   });

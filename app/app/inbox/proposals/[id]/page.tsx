@@ -156,6 +156,13 @@ function issueTypeLabelKey(t: AgentProposalIssueType): string {
       return "issue_workload_over_capacity";
     case "syllabus_calendar_ambiguity":
       return "issue_syllabus_calendar_ambiguity";
+    // engineer-43 — new types share the workload visual label; the
+    // Inbox Proposal detail page doesn't currently surface these via
+    // its own translations, so we fall back to the closest fit.
+    case "classroom_deadline_imminent":
+      return "issue_workload_over_capacity";
+    case "calendar_double_booking":
+      return "issue_time_conflict";
     case "auto_action_log":
       return "issue_auto_action_log";
     case "admin_waitlist_pending":
