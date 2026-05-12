@@ -47,9 +47,11 @@ export function SubmitButton({
 }
 
 function Spinner() {
+  // 2026-05-12 — bumped 14px → 18px after Ryuto feedback that the
+  // previous size was too easy to miss during 100s+ regenerate actions.
   return (
     <svg
-      className="h-3.5 w-3.5 animate-spin"
+      className="h-[18px] w-[18px] animate-spin"
       viewBox="0 0 24 24"
       fill="none"
       aria-hidden="true"

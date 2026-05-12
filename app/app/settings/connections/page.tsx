@@ -182,12 +182,18 @@ export default async function ConnectionsPage({
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <form action={importNotionAction}>
-                <SubmitButton className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))] transition hover:opacity-90">
+                <SubmitButton
+                  pendingLabel={t("import_button_pending")}
+                  className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))] transition hover:opacity-90"
+                >
                   {t("import_button")}
                 </SubmitButton>
               </form>
               <form action={repairSetupAction}>
-                <SubmitButton className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]">
+                <SubmitButton
+                  pendingLabel={t("rerun_setup_pending")}
+                  className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
+                >
                   {t("rerun_setup")}
                 </SubmitButton>
               </form>
@@ -240,6 +246,7 @@ export default async function ConnectionsPage({
           <form action={refreshGmailInboxAction} className="mt-4">
             <SubmitButton
               title={tConn("refresh_inbox_title")}
+              pendingLabel={tConn("refresh_inbox_pending")}
               className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
             >
               {tConn("refresh_inbox")}
@@ -250,6 +257,7 @@ export default async function ConnectionsPage({
           <form action={reclassifyAllInboxAction} className="mt-3">
             <SubmitButton
               title={t("reclassify_inbox.help")}
+              pendingLabel={t("reclassify_inbox.pending")}
               className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
             >
               {t("reclassify_inbox.button")}
@@ -271,6 +279,7 @@ export default async function ConnectionsPage({
           <form action={regenerateDraftsAction} className="mt-3">
             <SubmitButton
               title={t("regenerate_drafts.help")}
+              pendingLabel={t("regenerate_drafts.pending")}
               className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
             >
               {t("regenerate_drafts.button")}
@@ -316,7 +325,10 @@ export default async function ConnectionsPage({
         )}
         {gmailConnected ? (
           <form action={regenerateVoiceProfileAction} className="mt-4">
-            <SubmitButton className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]">
+            <SubmitButton
+              pendingLabel={t("voice_profile.pending")}
+              className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm transition hover:bg-[hsl(var(--surface-raised))]"
+            >
               {t("voice_profile.button")}
             </SubmitButton>
             <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
@@ -447,7 +459,10 @@ export default async function ConnectionsPage({
               className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
             />
           </label>
-          <SubmitButton className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))]">
+          <SubmitButton
+            pendingLabel={t("add_button_pending")}
+            className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-[hsl(var(--primary-foreground))]"
+          >
             {t("add_button")}
           </SubmitButton>
         </form>
