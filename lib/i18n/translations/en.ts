@@ -781,6 +781,7 @@ type MessagesShape = {
       free_text_placeholder: string;
       submit: string;
       submit_toast: string;
+      talk_in_chat: string;
       ask_later: string;
       reject: string;
       response_pending: string;
@@ -970,6 +971,11 @@ type MessagesShape = {
       ask_anyway: string;
       preparing: string;
       open_failed: string;
+    };
+    clarification_banner: {
+      title: string;
+      title_resolved: string;
+      back: string;
     };
   };
   voice: {
@@ -2484,6 +2490,7 @@ export const en: MessagesShape = {
       free_text_placeholder: "Or type something else…",
       submit: "Send to Steadii",
       submit_toast: "Sent to Steadii",
+      talk_in_chat: "Talk to Steadii",
       ask_later: "Ask later",
       reject: "Reject",
       response_pending: "Awaiting response",
@@ -2718,6 +2725,11 @@ export const en: MessagesShape = {
       ask_anyway: "No, ask Steadii anyway",
       preparing: "Preparing your context…",
       open_failed: "Couldn't open ChatGPT — try again or ask Steadii.",
+    },
+    clarification_banner: {
+      title: "Resolving clarification:",
+      title_resolved: "Clarification resolved:",
+      back: "↩ Back to queue",
     },
   },
   voice: {

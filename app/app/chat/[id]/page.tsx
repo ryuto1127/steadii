@@ -1,7 +1,13 @@
 import { auth } from "@/lib/auth/config";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db/client";
-import { chats, messages, messageAttachments } from "@/lib/db/schema";
+import {
+  agentDrafts,
+  chats,
+  inboxItems,
+  messages,
+  messageAttachments,
+} from "@/lib/db/schema";
 import { and, asc, eq } from "drizzle-orm";
 import { ChatView } from "@/components/chat/chat-view";
 import { getUserVoiceTriggerKey } from "@/lib/agent/preferences";
@@ -106,6 +112,39 @@ export default async function SingleChatPage({
 
   const voiceTriggerKey = await getUserVoiceTriggerKey(userId);
 
+  // engineer-46 — when the chat was opened from a Type E clarifying
+  // queue card, render a banner at the top of the chat so the student
+  // remembers which card they're resolving and has a one-click route
+  // back to the queue. The link tag identifies the originating draft
+  // by sender / subject (no draft id leaks into the UI). Banner is
+  // suppressed once the draft is no longer pending (resolve_clarification
+  // closed it) — at that point the chat is just a normal post-resolve
+  // conversation.
+  let clarificationBanner: {
+    title: string;
+    resolved: boolean;
+  } | null = null;
+  if (chat.clarifyingDraftId) {
+    const [linked] = await db
+      .select({
+        status: agentDrafts.status,
+        senderName: inboxItems.senderName,
+        senderEmail: inboxItems.senderEmail,
+        subject: inboxItems.subject,
+      })
+      .from(agentDrafts)
+      .innerJoin(inboxItems, eq(agentDrafts.inboxItemId, inboxItems.id))
+      .where(eq(agentDrafts.id, chat.clarifyingDraftId))
+      .limit(1);
+    if (linked) {
+      const senderLabel = linked.senderName ?? linked.senderEmail;
+      clarificationBanner = {
+        title: `${senderLabel} — ${linked.subject ?? "(no subject)"}`,
+        resolved: linked.status !== "pending",
+      };
+    }
+  }
+
   return (
     <div className="mx-auto flex max-w-3xl flex-col">
       <ChatView
@@ -115,6 +154,7 @@ export default async function SingleChatPage({
         blobConfigured={!!process.env.BLOB_READ_WRITE_TOKEN}
         autoStream={stream === "1"}
         voiceTriggerKey={voiceTriggerKey}
+        clarificationBanner={clarificationBanner}
       />
     </div>
   );

@@ -100,6 +100,12 @@ type CardEProps = CommonProps & {
     pickedKey: string | null,
     freeText: string
   ) => Promise<ActionResult> | ActionResult;
+  // engineer-46 — "Steadii と話す" / "Talk to Steadii" affordance. When
+  // provided, the Type E card renders a second primary action that
+  // opens a chat session seeded with the email + the clarifying
+  // question instead of forcing the single-shot textarea path.
+  // Optional so call sites that don't yet wire it stay valid.
+  onTalkInChat?: () => Promise<void> | void;
 };
 
 // engineer-42 — Type F (interactive confirmations). Three actions:
@@ -929,6 +935,7 @@ export function QueueCardDRender({
 export function QueueCardERender({
   card,
   onSubmit,
+  onTalkInChat,
   onDismiss,
   onSnooze,
   onPermanentDismiss,
@@ -949,6 +956,17 @@ export function QueueCardERender({
     startTransition(async () => {
       await onSubmit(picked, freeText.trim());
       setResolved(true);
+    });
+  };
+
+  const talk = () => {
+    if (!onTalkInChat || pending || resolved) return;
+    startTransition(async () => {
+      // engineer-46 — fire-and-forget: the wrapper in queue-list.tsx
+      // pushes the router to /app/chat/<id> after the action resolves;
+      // we don't mark the card "resolved" here because navigation
+      // unmounts the queue and Home re-fetches on return.
+      await onTalkInChat();
     });
   };
 
@@ -1005,6 +1023,17 @@ export function QueueCardERender({
             >
               {t("submit")}
             </button>
+            {onTalkInChat ? (
+              <button
+                type="button"
+                onClick={talk}
+                disabled={pending || resolved}
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-[12px] font-medium text-[hsl(var(--foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] disabled:opacity-50"
+              >
+                <MessageCircleQuestion size={12} strokeWidth={1.75} />
+                {t("talk_in_chat")}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => void onSnooze(24)}
@@ -1218,6 +1247,7 @@ export type QueueCardActions = {
   onSecondaryAction?: CardBProps["onSecondaryAction"];
   onTakeAction?: CardCProps["onTakeAction"];
   onSubmit?: CardEProps["onSubmit"];
+  onTalkInChat?: CardEProps["onTalkInChat"];
   onConfirm?: CardFProps["onConfirm"];
   onCorrect?: CardFProps["onCorrect"];
   onDismiss: CommonProps["onDismiss"];
@@ -1284,6 +1314,7 @@ export function QueueCardRenderer({
         <QueueCardERender
           card={card}
           onSubmit={actions.onSubmit ?? noopSubmit}
+          onTalkInChat={actions.onTalkInChat}
           onDismiss={actions.onDismiss}
           onSnooze={actions.onSnooze}
           onPermanentDismiss={actions.onPermanentDismiss}
