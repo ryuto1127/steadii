@@ -9,6 +9,7 @@ import { deadlineDuringTravelRule } from "./deadline-during-travel";
 import { workloadOverCapacityRule } from "./workload-over-capacity";
 import { classroomDeadlineImminentRule } from "./classroom-deadline-imminent";
 import { calendarDoubleBookingRule } from "./calendar-double-booking";
+import { assignmentDeadlineReminderRule } from "./assignment-deadline-reminder";
 
 export const ALL_RULES: ProactiveRule[] = [
   timeConflictRule,
@@ -17,4 +18,5 @@ export const ALL_RULES: ProactiveRule[] = [
   workloadOverCapacityRule,
   classroomDeadlineImminentRule,
   calendarDoubleBookingRule,
+  assignmentDeadlineReminderRule,
 ];

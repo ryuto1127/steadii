@@ -35,7 +35,7 @@ const SYSTEM_PROMPT = `You generate the action-button menu for a Steadii proacti
 Steadii is a proactive AI agent for university students. The scanner has already detected an issue and written its reasoning. Your job is to pick 2-4 specific actions the student can take in one click — and write the button labels.
 
 INPUT
-- issueType: one of time_conflict, exam_conflict, deadline_during_travel, exam_under_prepared, workload_over_capacity, syllabus_calendar_ambiguity, classroom_deadline_imminent, calendar_double_booking
+- issueType: one of time_conflict, exam_conflict, deadline_during_travel, exam_under_prepared, workload_over_capacity, syllabus_calendar_ambiguity, classroom_deadline_imminent, calendar_double_booking, assignment_deadline_reminder
 - summary, reasoning: 1-line and multi-line context the rule wrote
 - sourceRefs: pointers back to the originating records (calendar event, assignment, exam, class)
 - (sometimes) feedbackHint: how this user has historically responded to this issueType

@@ -2127,6 +2127,12 @@ export type AgentProposalIssueType =
   // from time_conflict (event vs. syllabus lecture block) — this catches
   // the no-syllabus "you accepted two meetings at 2pm" case.
   | "calendar_double_booking"
+  // engineer-44 — multi-tier reminders against `assignments.dueAt`.
+  // Fires escalating cards as the deadline closes: due_in_7d (only
+  // not_started), due_in_3d (both not_started and in_progress, distinct
+  // copy), due_in_1d, due_today. At most one tier per assignment per
+  // scan. Source-agnostic (manual / classroom / chat / future Teams).
+  | "assignment_deadline_reminder"
   // D11 — informational "Steadii did X" log entry. status='resolved' on
   // creation; surfaces in inbox as a muted row until viewed.
   | "auto_action_log"

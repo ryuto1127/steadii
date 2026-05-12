@@ -34,6 +34,7 @@ const SCANNER_RULE_ISSUE_TYPES: AgentProposalIssueType[] = [
   "workload_over_capacity",
   "classroom_deadline_imminent",
   "calendar_double_booking",
+  "assignment_deadline_reminder",
 ];
 
 // 5-minute per-user debounce. Two scans within the window short-circuit
