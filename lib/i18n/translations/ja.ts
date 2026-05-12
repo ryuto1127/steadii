@@ -991,6 +991,7 @@ export const ja: Messages = {
       sign_out_to_reauth: "再認証するにはサインアウト",
       refresh_inbox: "受信箱を再読み込み",
       refresh_inbox_title: "直近 24 時間の Gmail を再取得",
+      refresh_inbox_pending: "再読み込み中…",
       manage_summary: "Notion・Google・Microsoft 365・iCal フィード。",
       manage_link: "連携を管理",
     },
@@ -1006,6 +1007,7 @@ export const ja: Messages = {
       manual: "手動",
       remove: "削除",
       refresh_from_notion: "Notion から再取得",
+      refresh_from_notion_pending: "取得中…",
     },
     agent_thinks: {
       section_title: "エージェントの思考過程",
@@ -1646,7 +1648,9 @@ export const ja: Messages = {
     notion_label: "Notion",
     connected_to: "接続先：",
     import_button: "Notion から取り込み",
+    import_button_pending: "取り込み中…",
     rerun_setup: "セットアップ再実行",
+    rerun_setup_pending: "セットアップ実行中…",
     reconnect: "再接続",
     disconnect: "接続解除",
     notion_blurb: "Notion のクラス・ノート・シラバス・課題を Steadii の Postgres にコピーします（冪等処理。再実行しても安全です）。Notion 側の Steadii ページが削除された場合や、4 つのデータベースの整合性が崩れた場合は、セットアップを再実行してください。",
@@ -1665,6 +1669,7 @@ export const ja: Messages = {
     label_optional_label: "ラベル（任意）",
     label_placeholder: "例：UToronto",
     add_button: "追加",
+    add_button_pending: "追加中…",
     paused_prefix: "一時停止中 —",
     last_error_prefix: "最後のエラー：",
     last_synced_prefix: "最終同期",
@@ -1687,6 +1692,7 @@ export const ja: Messages = {
       help:
         "L1 分類ルールを開いている全 inbox item に再適用します。Steadii が分類ルールを更新した後、古い分類のままの item を更新するのに便利です (Vercel/GitHub bot 通知が GitHub-aware ルーティング前の HIGH のまま残っているケース等)。",
       done: "再分類完了 — {changed} 件更新、{ignored} 件は無視 (ignore) に変更。",
+      pending: "再分類中…",
     },
     regenerate_drafts: {
       button: "下書きを最新の AI で再生成",
@@ -1695,6 +1701,7 @@ export const ja: Messages = {
       done: "{refreshed} 件の下書きを再生成しました。",
       more: "{refreshed} 件の下書きを再生成しました。残りがあります — もう一度クリックして続行してください。",
       exhausted: "クレジット切れの前に {refreshed} 件を再生成しました。続行するにはトップアップしてください。",
+      pending: "下書きを再生成中…",
     },
     voice_profile: {
       title: "あなたの文体",
@@ -1711,6 +1718,7 @@ export const ja: Messages = {
         "文体を抽出するには送信メールが足りません。Gmail から数通送信したうえで再度お試しください。",
       error_toast:
         "文体プロファイルの生成に失敗しました。再試行するか、連携状況を確認してください。",
+      pending: "文体を学習中…",
     },
   },
   agent_thinks_page: {
