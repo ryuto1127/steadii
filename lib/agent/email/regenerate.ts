@@ -430,13 +430,20 @@ export async function regenerateAllOpenDrafts(
   opts: { limit: number }
 ): Promise<RegenerateAllOutcome> {
   const limit = Math.max(1, Math.floor(opts.limit));
+  // 2026-05-12 — tier filter at the SELECT layer. The per-row branch
+  // inside regenerateDraft already skips low/null tiers (they have no
+  // L2 output to refresh), but without filtering here the SELECT burns
+  // its `limit` budget on rows that will be skipped — producing the
+  // "Regenerated 3 drafts. More queued" message even when there's
+  // literally nothing left actionable in the inbox.
   const ids = await db
     .select({ id: agentDrafts.id })
     .from(agentDrafts)
     .where(
       and(
         eq(agentDrafts.userId, userId),
-        inArray(agentDrafts.status, ["pending", "paused"])
+        inArray(agentDrafts.status, ["pending", "paused"]),
+        inArray(agentDrafts.riskTier, ["high", "medium"])
       )
     )
     .orderBy(desc(agentDrafts.createdAt))
