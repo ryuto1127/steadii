@@ -13,7 +13,19 @@ import { EMAIL_TOOLS } from "./tools/email";
 import { EMAIL_THREAD_TOOLS } from "./tools/email-thread";
 import { summarizeWeekTool } from "./tools/summarize-week";
 import { CONVERT_TIMEZONE_TOOLS } from "./tools/convert-timezone";
+import { RESOLVE_CLARIFICATION_TOOLS } from "./tools/resolve-clarification";
 import { toOpenAIToolDefinition, type ToolExecutor } from "./tools/types";
+
+// engineer-46 — tools whose availability depends on the chat session
+// context, not the user. Today the only entry is resolve_clarification,
+// which only makes sense when the session was opened from a Type E
+// clarifying card (chats.clarifyingDraftId IS NOT NULL). The orchestrator
+// merges these into the LLM-visible tool list per turn but
+// getToolByName(...) still finds them so execution after a deferred
+// confirmation works.
+const SESSION_SCOPED_TOOLS: ToolExecutor[] = [
+  ...(RESOLVE_CLARIFICATION_TOOLS as ToolExecutor[]),
+];
 
 export const ALL_TOOLS: ToolExecutor[] = [
   ...(NOTION_TOOLS as ToolExecutor[]),
@@ -30,12 +42,40 @@ export const ALL_TOOLS: ToolExecutor[] = [
   ...(EMAIL_THREAD_TOOLS as ToolExecutor[]),
   ...(CONVERT_TIMEZONE_TOOLS as ToolExecutor[]),
   summarizeWeekTool as ToolExecutor,
+  ...SESSION_SCOPED_TOOLS,
 ];
 
 export function getToolByName(name: string): ToolExecutor | undefined {
   return ALL_TOOLS.find((t) => t.schema.name === name);
 }
 
-export function openAIToolDefs() {
-  return ALL_TOOLS.map((t) => toOpenAIToolDefinition(t.schema));
+export type ChatSessionContext = {
+  // engineer-46 — chat opened from a Type E queue card with this
+  // ask_clarifying agent_drafts.id as the seed.
+  clarifyingDraftId: string | null;
+};
+
+// engineer-46 — turn-level tool list. For a normal chat, returns
+// everything except SESSION_SCOPED_TOOLS. For a clarification chat,
+// includes resolve_clarification so the model can finalize.
+export function toolsForChatSession(
+  ctx: ChatSessionContext
+): ToolExecutor[] {
+  if (ctx.clarifyingDraftId) return ALL_TOOLS;
+  return ALL_TOOLS.filter(
+    (t) => !SESSION_SCOPED_TOOLS.some((s) => s.schema.name === t.schema.name)
+  );
+}
+
+export function openAIToolDefs(ctx?: ChatSessionContext) {
+  // Default (no ctx) = regular chat semantics → drop session-scoped
+  // tools. Callers in tests / other surfaces that genuinely want every
+  // tool pass `{ clarifyingDraftId: "*" }` explicitly via
+  // toolsForChatSession; passing nothing here defends against an
+  // accidental exposure of resolve_clarification on a non-clarification
+  // chat (which would let any agent invocation dismiss arbitrary
+  // drafts).
+  const sessionCtx: ChatSessionContext = ctx ?? { clarifyingDraftId: null };
+  const tools = toolsForChatSession(sessionCtx);
+  return tools.map((t) => toOpenAIToolDefinition(t.schema));
 }

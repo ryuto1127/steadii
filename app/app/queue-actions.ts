@@ -10,9 +10,11 @@ import {
   agentContactPersonas,
   agentDrafts,
   agentProposals,
+  chats,
   eventPreBriefs,
   groupProjects,
   inboxItems,
+  messages,
   officeHoursRequests,
   type ActionOption,
   type AgentConfirmation,
@@ -265,6 +267,92 @@ export async function queueResolveProposalAction(
 
   revalidatePath("/app");
   return { redirectTo: result.redirectTo };
+}
+
+// engineer-46 — Type E "Steadii と話す" entry point. Opens a chat
+// session seeded with the inbox item + the L2 reasoning so the student
+// can resolve the ambiguity collaboratively, not via the single-shot
+// textarea. The orchestrator detects this case via
+// `chats.clarifyingDraftId` and prepends a continuation system prompt
+// + makes the `resolve_clarification` tool available.
+//
+// The first assistant message renders Steadii's clarifying question
+// verbatim from the original draft row, so the chat opens already
+// showing the question instead of a blank canvas.
+export async function startClarificationChatAction(
+  rawCardId: string
+): Promise<{ chatId: string }> {
+  const userId = await getUserId();
+  const { kind, id } = parseCardId(rawCardId);
+  if (kind !== "draft") {
+    throw new Error("Card is not a clarifying draft");
+  }
+
+  const [row] = await db
+    .select({ draft: agentDrafts, inbox: inboxItems })
+    .from(agentDrafts)
+    .innerJoin(inboxItems, eq(agentDrafts.inboxItemId, inboxItems.id))
+    .where(and(eq(agentDrafts.id, id), eq(agentDrafts.userId, userId)))
+    .limit(1);
+  if (!row) throw new Error("Draft not found");
+  if (row.draft.action !== "ask_clarifying") {
+    throw new Error("Draft is not a clarifying-input card");
+  }
+  if (row.draft.status !== "pending") {
+    throw new Error("Draft is no longer pending");
+  }
+
+  // Title makes the /app/chats sidebar entry recognizable instead of
+  // showing the generic "New chat" placeholder. Keep it short — the
+  // queue-driven chat-title cron would also rewrite this later if it
+  // ran, but the seeded value is fine for first paint.
+  const senderLabel = row.inbox.senderName ?? row.inbox.senderEmail;
+  const title = `${senderLabel} — ${row.inbox.subject ?? "(no subject)"}`.slice(
+    0,
+    120
+  );
+
+  const [chat] = await db
+    .insert(chats)
+    .values({
+      userId,
+      title,
+      clarifyingDraftId: row.draft.id,
+    })
+    .returning({ id: chats.id });
+
+  // First assistant turn renders the clarifying question so the chat
+  // doesn't open blank. Card body is built from draft.reasoning today
+  // (see lib/agent/queue/build.ts:594), so we mirror that here. When
+  // a draft has neither reasoning nor body we fall back to a generic
+  // prompt; the orchestrator's seed-system block still carries the
+  // full context so the agent can pick up from there.
+  const seedContent =
+    (row.draft.reasoning?.trim() ||
+      row.draft.draftBody?.trim() ||
+      `${senderLabel} からのメールについて、少し確認させてください。詳しいことを教えてもらえますか?`).slice(
+      0,
+      4000
+    );
+
+  await db.insert(messages).values({
+    chatId: chat.id,
+    role: "assistant",
+    content: seedContent,
+  });
+
+  await logEmailAudit({
+    userId,
+    action: "email_l2_completed",
+    result: "success",
+    resourceId: row.draft.id,
+    detail: {
+      subAction: "clarification_chat_opened",
+      chatId: chat.id,
+    },
+  });
+
+  return { chatId: chat.id };
 }
 
 // Type E — clarifying input. When the user types a free-text answer and

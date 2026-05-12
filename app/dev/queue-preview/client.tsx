@@ -13,6 +13,7 @@ const NOOP_E = async () => {};
 const NOOP_SNOOZE = async () => {};
 const NOOP_SECONDARY = async (_id: string, _key: string) => {};
 void NOOP_SECONDARY;
+const NOOP_START_CLARIFICATION_CHAT = async () => ({ chatId: "preview-chat" });
 
 // Client-side mount for the verification harness. Reuses the real
 // QueueList wrapper so the i18n-aware section heading + show-more
@@ -55,6 +56,7 @@ export function QueuePreviewClient({
           actions={{
             resolveProposal: NOOP_RESOLVE,
             submitClarification: NOOP_E,
+            startClarificationChat: NOOP_START_CLARIFICATION_CHAT,
             dismiss: NOOP,
             snooze: NOOP_SNOOZE,
             permanentDismiss: NOOP,
