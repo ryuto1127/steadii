@@ -11,7 +11,14 @@ import {
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { MistakeNoteDialog } from "./mistake-note-dialog";
+// 2026-05-12 — MistakeNoteDialog removed from chat surface. It saved chat
+// messages into the `mistakes` table from the tutor-era pivot (pre-secretary
+// pivot 2026-05-01); the storage had nowhere it was surfaced after PR #182
+// dropped mistake notes from L2 fanout + class-detail tabs. The "+ Steadii
+// のメモに追加" pill that triggered it gave users no visible feedback, so
+// it was acting as dead UX. The dialog component + /api/mistakes/save +
+// the mistakes table are intentionally left intact — a future "user notes"
+// feature can repurpose them.
 import { MarkdownMessage } from "./markdown-message";
 import { ToolCallCard, type ToolCallStatus } from "./tool-call-card";
 import { parseProposedActions } from "./proposed-actions";
@@ -77,7 +84,6 @@ export function ChatView({
   const [input, setInput] = useState("");
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [streaming, setStreaming] = useState(false);
-  const [mistakeFor, setMistakeFor] = useState<string | null>(null);
   // Per-message-id set of "consumed" proposed-action pill rows. Once the
   // user clicks any pill on a message, the pills hide so they can't fire
   // twice and the chat reads as a normal continuation.
@@ -621,9 +627,6 @@ export function ChatView({
                             {a.label}
                           </ActionPill>
                         ))}
-                        <ActionPill onClick={() => setMistakeFor(m.id)} tone="primary">
-                          {t("chat.actions.add_to_mistakes")}
-                        </ActionPill>
                       </div>
                     )}
                 </div>
@@ -799,12 +802,6 @@ export function ChatView({
         ) : null}
       </div>
 
-      <MistakeNoteDialog
-        chatId={chatId}
-        assistantMessageId={mistakeFor ?? ""}
-        open={!!mistakeFor}
-        onClose={() => setMistakeFor(null)}
-      />
     </div>
     </>
   );
