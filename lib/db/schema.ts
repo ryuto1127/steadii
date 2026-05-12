@@ -12,6 +12,7 @@ import {
   boolean,
   smallint,
   customType,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { AdapterAccountType } from "next-auth/adapters";
@@ -363,6 +364,15 @@ export const chats = pgTable("chats", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   title: text("title"),
+  // engineer-46 — set when the chat was opened from a Type E
+  // ask_clarifying queue card via "Steadii と話す". The orchestrator
+  // reads this to seed the system prompt with the original email + the
+  // clarifying question and to enable the resolve_clarification tool.
+  // SET NULL on draft delete so the chat survives as audit trail.
+  clarifyingDraftId: uuid("clarifying_draft_id").references(
+    (): AnyPgColumn => agentDrafts.id,
+    { onDelete: "set null" }
+  ),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { mode: "date" }),

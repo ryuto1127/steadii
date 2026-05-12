@@ -30,6 +30,10 @@ type ServerActions = {
     cardId: string,
     args: { pickedKey: string | null; freeText: string }
   ) => Promise<void>;
+  // engineer-46 — opens a chat session seeded with the clarifying
+  // card's context. Returns the new chat id so the client can push to
+  // /app/chat/<id> after the server action resolves.
+  startClarificationChat: (cardId: string) => Promise<{ chatId: string }>;
   dismiss: (cardId: string) => Promise<void>;
   snooze: (cardId: string, hours: number) => Promise<void>;
   permanentDismiss: (cardId: string) => Promise<void>;
@@ -221,6 +225,19 @@ export function QueueList({
                       toast.error(message(err, "Submit failed"));
                     }
                     refresh();
+                  }
+                : undefined,
+            onTalkInChat:
+              card.archetype === "E"
+                ? async () => {
+                    try {
+                      const { chatId } = await actions.startClarificationChat(
+                        card.id
+                      );
+                      router.push(`/app/chat/${chatId}`);
+                    } catch (err) {
+                      toast.error(message(err, "Open chat failed"));
+                    }
                   }
                 : undefined,
             onConfirm:
