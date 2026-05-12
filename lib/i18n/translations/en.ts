@@ -1040,6 +1040,7 @@ type MessagesShape = {
       sign_out_to_reauth: string;
       refresh_inbox: string;
       refresh_inbox_title: string;
+      refresh_inbox_pending: string;
       manage_summary: string;
       manage_link: string;
     };
@@ -1053,6 +1054,7 @@ type MessagesShape = {
       manual: string;
       remove: string;
       refresh_from_notion: string;
+      refresh_from_notion_pending: string;
     };
     agent_thinks: {
       section_title: string;
@@ -1357,7 +1359,9 @@ type MessagesShape = {
     notion_label: string;
     connected_to: string;
     import_button: string;
+    import_button_pending: string;
     rerun_setup: string;
+    rerun_setup_pending: string;
     reconnect: string;
     disconnect: string;
     notion_blurb: string;
@@ -1376,6 +1380,7 @@ type MessagesShape = {
     label_optional_label: string;
     label_placeholder: string;
     add_button: string;
+    add_button_pending: string;
     paused_prefix: string;
     last_error_prefix: string;
     last_synced_prefix: string;
@@ -1395,6 +1400,7 @@ type MessagesShape = {
       button: string;
       help: string;
       done: string;
+      pending: string;
     };
     regenerate_drafts: {
       button: string;
@@ -1402,6 +1408,7 @@ type MessagesShape = {
       done: string;
       more: string;
       exhausted: string;
+      pending: string;
     };
     voice_profile: {
       title: string;
@@ -1413,6 +1420,7 @@ type MessagesShape = {
       saved_toast: string;
       insufficient_toast: string;
       error_toast: string;
+      pending: string;
     };
   };
   agent_thinks_page: {
@@ -2782,6 +2790,7 @@ export const en: MessagesShape = {
       sign_out_to_reauth: "Sign out to re-auth",
       refresh_inbox: "Refresh inbox",
       refresh_inbox_title: "Re-ingest the last 24 hours of Gmail",
+      refresh_inbox_pending: "Refreshing…",
       manage_summary:
         "Notion, Google, Microsoft 365, and iCal feeds.",
       manage_link: "Manage connections",
@@ -2798,6 +2807,7 @@ export const en: MessagesShape = {
       manual: "manual",
       remove: "Remove",
       refresh_from_notion: "Refresh from Notion",
+      refresh_from_notion_pending: "Refreshing…",
     },
     agent_thinks: {
       section_title: "How your agent thinks",
@@ -3217,7 +3227,9 @@ export const en: MessagesShape = {
     notion_label: "Notion",
     connected_to: "Connected to",
     import_button: "Import from Notion",
+    import_button_pending: "Importing…",
     rerun_setup: "Re-run setup",
+    rerun_setup_pending: "Running setup…",
     reconnect: "Re-connect",
     disconnect: "Disconnect",
     notion_blurb: "Import copies your Notion classes, mistakes, syllabi, and assignments into Steadii's Postgres store (idempotent — safe to re-run). Re-run setup if the Steadii page has been deleted from Notion or the four databases are out of sync.",
@@ -3236,6 +3248,7 @@ export const en: MessagesShape = {
     label_optional_label: "Label (optional)",
     label_placeholder: "e.g. UToronto",
     add_button: "Add",
+    add_button_pending: "Adding…",
     paused_prefix: "Paused —",
     last_error_prefix: "Last error:",
     last_synced_prefix: "Last synced",
@@ -3258,6 +3271,7 @@ export const en: MessagesShape = {
       help:
         "Re-runs the L1 classifier over every open inbox item. Useful when Steadii ships an updated rule and legacy items are still tagged with the old bucket (e.g. Vercel/GitHub bot notifications stuck at HIGH from before the GitHub-aware routing landed).",
       done: "Re-classified — {changed} items updated, {ignored} now silently ignored.",
+      pending: "Re-classifying inbox…",
     },
     regenerate_drafts: {
       button: "Regenerate AI drafts",
@@ -3266,6 +3280,7 @@ export const en: MessagesShape = {
       done: "Regenerated {refreshed} drafts.",
       more: "Regenerated {refreshed} drafts. More queued — click again to continue.",
       exhausted: "Regenerated {refreshed} drafts before credits ran out. Top up to continue.",
+      pending: "Regenerating drafts…",
     },
     voice_profile: {
       title: "Writing voice",
@@ -3280,6 +3295,7 @@ export const en: MessagesShape = {
       insufficient_toast:
         "Not enough sent mail to extract a voice profile yet. Send a few emails through your Gmail account and try again.",
       error_toast: "Voice profile generation failed. Try again, or check the integration status.",
+      pending: "Learning your writing voice…",
     },
   },
   agent_thinks_page: {
