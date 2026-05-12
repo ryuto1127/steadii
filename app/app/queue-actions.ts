@@ -21,6 +21,7 @@ import {
   dismissAgentDraftAction,
   snoozeAgentDraftAction,
 } from "@/lib/agent/email/draft-actions";
+import { processL2 } from "@/lib/agent/email/l2";
 import { recordProactiveFeedback } from "@/lib/agent/proactive/feedback-bias";
 import { executeProactiveAction } from "@/lib/agent/proactive/action-executor";
 import { logEmailAudit } from "@/lib/agent/email/audit";
@@ -266,11 +267,16 @@ export async function queueResolveProposalAction(
   return { redirectTo: result.redirectTo };
 }
 
-// Type E — clarifying input. Wave 2 stub: we record the user's response
-// as an audit-log entry and dismiss the underlying ask_clarifying draft.
-// The next L2 pass picks up any new context from the audit log when
-// re-classifying. Deeper integration with the orchestrator (the user's
-// answer driving an immediate re-draft) is Wave 3.
+// Type E — clarifying input. When the user types a free-text answer and
+// submits, we (a) log the audit entry, (b) re-run L2 against the same
+// inbox item with the answer threaded into the agentic-L2 user message
+// as authoritative context, then (c) dismiss the original ask_clarifying
+// draft. The re-run typically produces a fresh draft row in the queue
+// within a few seconds — the user no longer has to wait for the next
+// inbound email from the same sender for their input to land.
+//
+// When `freeText` is empty (radio-only clarification), we skip the
+// re-run and fall back to the original audit + dismiss flow.
 //
 // Wave 3.2 adds group_detect cards, which also show as Type E but resolve
 // to a different pipeline (creates a group_projects row on confirm).
@@ -316,10 +322,28 @@ export async function queueSubmitClarificationAction(
     },
   });
 
-  // Mark the draft dismissed — the user's answer is now captured. The
-  // next L2 pass on incoming mail from the same sender will read the
-  // audit context and either auto-draft or re-ask with a different
-  // shape.
+  // engineer-45 — immediate re-run path. When the user supplied free-
+  // text, thread it into a fresh processL2 call so the agentic loop
+  // can re-decide the action with the clarification as authoritative
+  // input. Empty / whitespace-only freeText falls through to the
+  // original audit + dismiss only flow (radio-only clarifications
+  // don't carry new context for the loop).
+  const trimmed = (args.freeText ?? "").trim();
+  if (trimmed.length > 0) {
+    try {
+      await processL2(row.inbox.id, { userClarification: trimmed });
+    } catch (err) {
+      // The re-run is best-effort: a transient failure should not
+      // strip the user's clarification from the audit log or block
+      // the dismissal of the original draft. The error already lives
+      // in Sentry via processL2's own span instrumentation.
+      console.error("[queueSubmitClarificationAction] re-run failed", err);
+    }
+  }
+
+  // Mark the original draft dismissed — the user's answer is captured
+  // in the audit log AND, when present, in the new draft produced by
+  // the re-run above.
   await db
     .update(agentDrafts)
     .set({ status: "dismissed", updatedAt: new Date() })

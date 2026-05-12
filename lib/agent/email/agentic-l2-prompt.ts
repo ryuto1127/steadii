@@ -36,6 +36,20 @@ Good (required style — natural, action-described):
   ja: "過去のやり取りから、送信者が令和トラベルの採用担当者であることを確認しました。本文から面接候補日 (5/15・5/19) を抽出しましたが、いずれも時間帯のみで開始・終了時刻が指定されていません。学生側の判断が必要な点はなかったため、採用担当に具体的な 30 分枠の提示をお願いする返信を作成しました。"
   en: "Confirmed from your past correspondence that the sender is the Reiwa Travel recruiter. Two candidate interview dates (5/15 and 5/19) were proposed but only as time-of-day ranges, not concrete start/end slots. Nothing on the message required your call, so I drafted a reply asking the recruiter to confirm specific 30-minute windows."
 
+TIMEZONE RULES (strict)
+- When the email proposes times, infer the sender's TZ from sender domain (.jp / .co.jp → Asia/Tokyo; .ac.uk → Europe/London; .kr → Asia/Seoul; etc.) AND explicit body markers (JST/PT/GMT/etc.). When uncertain, call infer_sender_timezone — do not guess.
+- When the sender's TZ differs from the student's TZ, use check_availability to obtain pre-formatted dual-timezone display strings, then paste those strings verbatim into the draft body. Do NOT compute timezone offsets yourself — LLM TZ arithmetic across DST boundaries is unreliable.
+- When the sender mentions a time without explicit AM/PM AND the context is ambiguous, surface the ambiguity via queue_user_confirmation rather than silently guessing.
+
+DRAFT BODY TZ DISPLAY
+- Whenever your write_draft call includes specific times AND the sender's TZ differs from the student's TZ, the draft body MUST render each slot in BOTH timezones, e.g. "5月15日(木) 10:00 JST / 5月14日(水) 18:00 PT". This is non-negotiable — students confuse the two sides otherwise. Use the dual-timezone strings returned by check_availability for this; they are already DST-correct.
+
+SCHEDULING DOMAIN RULES
+- When an email proposes a time RANGE (e.g. "10:00〜11:00 の間") AND specifies a meeting DURATION (e.g. "30分想定"), the range is a slot-pool: any sub-range of the specified duration within the range is a valid choice. Treat range endpoints as boundaries, not as the only valid times — "the slot must start at 10:00 sharp" is wrong; "any 30-minute window between 10:00 and 11:00" is right. When you propose a concrete sub-slot to the sender, name it explicitly ("10:00–10:30") rather than re-quoting the full range.
+
+CONTEXT REUSE
+- Do not call the same tool with the same arguments twice in the same loop — each tool's result stays in your conversation. Specifically: don't re-call extract_candidate_dates on the same body, don't re-call check_availability for the same slot set, don't re-call lookup_contact_persona for the same contact.
+
 After tool use, emit a single FINAL message with the JSON structure given in the JSON-schema section. No prose outside the JSON. The "reasoning" field captures your thinking for the inbox-detail panel (user-visible) — write it in the user's app locale.
 
 Output JSON fields:
@@ -123,6 +137,22 @@ export function buildAgenticL2UserMessage(args: {
   subject: string | null;
   body: string;
   riskTierReasoning: string;
+  // engineer-45 — domain-heuristic hint surfaced at the top of the
+  // user message so the loop can skip infer_sender_timezone when the
+  // domain already pins the TZ. Null means "domain doesn't constrain
+  // the TZ" (e.g. .com / multi-TZ country) — loop should still call
+  // infer_sender_timezone when scheduling-relevant.
+  likelySenderTimezone?: {
+    tz: string;
+    confidence: number;
+    source: string;
+  } | null;
+  // engineer-45 — student's clarification text from a freeText queue
+  // submission (Type E). When the student types into the ask_clarifying
+  // input and submits, that text is threaded back as additional context
+  // for an immediate re-classification pass. Empty / undefined when the
+  // re-run isn't triggered.
+  userClarification?: string | null;
 }): string {
   const parts: string[] = [];
   parts.push(`Reasoning language: ${args.locale}`);
@@ -133,7 +163,24 @@ export function buildAgenticL2UserMessage(args: {
   parts.push(`Subject: ${args.subject ?? "(none)"}`);
   parts.push(`Body: ${args.body.slice(0, 8000)}`);
   parts.push("");
+  if (args.likelySenderTimezone) {
+    parts.push("=== Sender timezone hint ===");
+    parts.push(
+      `Likely sender TZ: ${args.likelySenderTimezone.tz} (confidence ${args.likelySenderTimezone.confidence.toFixed(
+        2
+      )}, source ${args.likelySenderTimezone.source}). Treat this as a strong prior; call infer_sender_timezone only if the body contradicts it or you need a different IANA zone.`
+    );
+    parts.push("");
+  }
   parts.push("=== Risk-pass note ===");
   parts.push(args.riskTierReasoning);
+  if (args.userClarification && args.userClarification.trim().length > 0) {
+    parts.push("");
+    parts.push("=== Student's clarification ===");
+    parts.push(
+      "The student previously saw this email as an ask_clarifying card and provided the following clarification. Use it as authoritative additional context — your job now is to re-decide the action (typically: draft a reply that incorporates the student's input). Do NOT re-ask the same question."
+    );
+    parts.push(args.userClarification.trim().slice(0, 2000));
+  }
   return parts.join("\n");
 }

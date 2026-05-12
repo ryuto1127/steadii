@@ -50,6 +50,17 @@ export type DraftInput = {
   // Optional — if null, the model picks from the sender's To/From.
   userName: string | null;
   userEmail: string | null;
+  // engineer-45 — student's IANA timezone, threaded so the prompt can
+  // tell the model whether the dual-TZ rendering rule applies. Optional
+  // for backwards-compat with tests / legacy callers; null falls back
+  // to "TZ unknown" and the model can't dual-render (acceptable degrade).
+  userTimezone?: string | null;
+  // engineer-45 — inferred sender timezone from the domain heuristic
+  // (.co.jp → Asia/Tokyo, etc.). Null when ambiguous — the model then
+  // skips dual-rendering since it can't pick a second side. Including
+  // this in the prompt is cheaper than running infer_sender_timezone
+  // on every medium-tier draft.
+  senderTimezone?: string | null;
 };
 
 // `kind` lets the LLM escalate from "I can answer this" to "I need to ask
@@ -111,7 +122,13 @@ Fanout grounding (when "Class binding" / "Contact persona" / "How you usually re
 
 Language rules — keep these distinct:
 - 'subject' and 'body' MUST match the incoming email's language (the student's working language). Japanese in → Japanese reply; English in → English reply.
-- 'reasoning' is ALWAYS in English regardless of the email's language. It's an internal explanation surfaced in a debug/transparency panel, not user-facing prose. Mixing languages here makes the panel inconsistent across drafts.`;
+- 'reasoning' is ALWAYS in English regardless of the email's language. It's an internal explanation surfaced in a debug/transparency panel, not user-facing prose. Mixing languages here makes the panel inconsistent across drafts.
+
+DRAFT BODY TZ DISPLAY (when the user context block names a sender timezone different from the student's timezone):
+- Whenever the body proposes / accepts / references a specific time slot AND the student's timezone differs from the sender's timezone, render EVERY slot in BOTH timezones, e.g. "5月15日(木) 10:00 JST / 5月14日(水) 18:00 PT". Never show only one side.
+- Use the pre-formatted slot strings from the "Slot timezones (use verbatim)" block when present — they are already DST-correct. Don't recompute the offsets yourself.
+- This rule is non-negotiable: students mis-read JST-only slots as their own local time and miss meetings. The dual-rendering eliminates the ambiguity.
+- When both timezones are the same (sender is in the student's TZ or vice versa), do NOT dual-render — that's noise.`;
 
 const DRAFT_JSON_SCHEMA = {
   type: "object",
@@ -330,6 +347,27 @@ function buildUserContent(input: DraftInput): string {
     parts.push(`\n=== Student ===`);
     parts.push(`Email: ${input.userEmail}`);
     if (input.userName) parts.push(`Name: ${input.userName}`);
+  }
+
+  // engineer-45 — explicit TZ-pair block so the model knows when the
+  // DRAFT BODY TZ DISPLAY rule applies. When both timezones are
+  // present and different, the model must dual-render every slot. When
+  // either is missing or they're equal, the rule is skipped.
+  const userTz = input.userTimezone?.trim();
+  const senderTz = input.senderTimezone?.trim();
+  if (userTz || senderTz) {
+    parts.push("\n=== Timezones ===");
+    parts.push(`Student timezone: ${userTz ?? "(unknown)"}`);
+    parts.push(`Sender timezone: ${senderTz ?? "(unknown — do not dual-render)"}`);
+    if (userTz && senderTz && userTz !== senderTz) {
+      parts.push(
+        "TZ pair differs — apply DRAFT BODY TZ DISPLAY rule: every time slot in the body MUST appear in BOTH timezones (sender side / student side)."
+      );
+    } else if (userTz && senderTz && userTz === senderTz) {
+      parts.push(
+        "TZ pair matches — single-render slots in the shared TZ. Do not dual-render."
+      );
+    }
   }
 
   return parts.join("\n");

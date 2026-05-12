@@ -11,7 +11,7 @@ import {
 } from "@/lib/db/schema";
 import { and, count, eq, isNull } from "drizzle-orm";
 import { getCalendarForUser } from "@/lib/integrations/google/calendar";
-import { getUserTimezone } from "./preferences";
+import { getUserLocale, getUserTimezone } from "./preferences";
 export {
   serializeContextForPrompt,
   type UserContextPayload,
@@ -39,6 +39,7 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
 
   const [
     timezone,
+    locale,
     calendarEventsThisWeek,
     classCount,
     activeAssignmentCount,
@@ -46,6 +47,7 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
     syllabusCount,
   ] = await Promise.all([
     getUserTimezone(userId),
+    getUserLocale(userId),
     safelyFetchWeekEvents(userId),
     countRows(classesTable, userId, true),
     countRows(assignmentsTable, userId, true, "active"),
@@ -55,6 +57,7 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
 
   return {
     timezone,
+    locale,
     notion: {
       connected: !!conn,
       parentPageId: conn?.parentPageId ?? null,
