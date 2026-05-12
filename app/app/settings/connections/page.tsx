@@ -105,12 +105,18 @@ export default async function ConnectionsPage({
     .orderBy(asc(icalSubscriptions.createdAt));
 
   const [userPrefRow] = await db
-    .select({ preferences: users.preferences })
+    .select({ preferences: users.preferences, isAdmin: users.isAdmin })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
   const existingGithubUsername = userPrefRow?.preferences?.githubUsername ?? "";
   const existingVoiceProfile = userPrefRow?.preferences?.voiceProfile ?? "";
+  // 2026-05-12 — re-processing actions (regenerate AI drafts, re-classify
+  // inbox, re-learn voice) burn significant OpenAI tokens because they
+  // re-run LLM passes over historical data. Normal users get latest-AI
+  // quality automatically on new emails — no need to expose the rerun
+  // surface to them. Admins (dogfood / quality-comparison) still see it.
+  const isAdmin = userPrefRow?.isAdmin === true;
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -253,7 +259,7 @@ export default async function ConnectionsPage({
             </SubmitButton>
           </form>
         )}
-        {gmailConnected && (
+        {gmailConnected && isAdmin && (
           <form action={reclassifyAllInboxAction} className="mt-3">
             <SubmitButton
               title={t("reclassify_inbox.help")}
@@ -275,7 +281,7 @@ export default async function ConnectionsPage({
             )}
           </form>
         )}
-        {gmailConnected && (
+        {gmailConnected && isAdmin && (
           <form action={regenerateDraftsAction} className="mt-3">
             <SubmitButton
               title={t("regenerate_drafts.help")}
@@ -323,7 +329,7 @@ export default async function ConnectionsPage({
             {t("voice_profile.empty")}
           </p>
         )}
-        {gmailConnected ? (
+        {gmailConnected && isAdmin ? (
           <form action={regenerateVoiceProfileAction} className="mt-4">
             <SubmitButton
               pendingLabel={t("voice_profile.pending")}
@@ -335,11 +341,11 @@ export default async function ConnectionsPage({
               {t("voice_profile.help")}
             </p>
           </form>
-        ) : (
+        ) : !gmailConnected ? (
           <p className="mt-4 text-xs text-[hsl(var(--muted-foreground))]">
             {t("voice_profile.gmail_required")}
           </p>
-        )}
+        ) : null}
       </section>
 
       <section className="mt-6 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
