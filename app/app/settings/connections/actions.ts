@@ -183,14 +183,31 @@ export async function reactivateIcalSubscriptionAction(formData: FormData) {
   redirect("/app/settings/connections?ical=reactivated#ical");
 }
 
+// 2026-05-12 — Server-side admin guard. The 3 re-processing actions
+// (reclassify / regenerate drafts / regenerate voice) burn significant
+// LLM tokens because they re-run AI passes over the user's historical
+// data. Normal users get latest-AI quality automatically on new
+// emails. Admins (dogfood / quality comparison) still see the buttons
+// on the connections page. Defense-in-depth: even if a non-admin POSTs
+// directly to these endpoints, they get a 403.
+async function assertAdmin(userId: string): Promise<void> {
+  const [row] = await db
+    .select({ isAdmin: users.isAdmin })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (!row?.isAdmin) throw new Error("FORBIDDEN");
+}
+
 // Re-runs L1 over every open inbox_item for the current user. Useful
 // after the classifier shipped new rules (e.g. engineer-32 GitHub-aware
 // routing) that legacy items missed. Per-user scoped — never touches
-// other users' rows.
+// other users' rows. Admin-only (re-processing, expensive).
 export async function reclassifyAllInboxAction() {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthenticated");
   const userId = session.user.id;
+  await assertAdmin(userId);
 
   const out = await reclassifyAllInboxItems(userId);
   revalidatePath("/app/inbox");
@@ -214,6 +231,7 @@ export async function regenerateDraftsAction() {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthenticated");
   const userId = session.user.id;
+  await assertAdmin(userId);
 
   const out = await regenerateAllOpenDrafts(userId, { limit: 1000 });
   revalidatePath("/app/inbox");
@@ -241,6 +259,7 @@ export async function regenerateVoiceProfileAction() {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthenticated");
   const userId = session.user.id;
+  await assertAdmin(userId);
 
   try {
     await generateVoiceProfile(userId);
