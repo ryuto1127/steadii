@@ -790,7 +790,7 @@ function synthesizeForcedHighRisk(
 //   2. Merge inferredFacts onto agent_contact_personas.structured_facts.
 //      Uses Postgres jsonb || concatenation to leave existing facts
 //      intact while overwriting only the topics the loop touched.
-async function persistAgenticSideEffects(args: {
+export async function persistAgenticSideEffects(args: {
   userId: string;
   senderEmail: string;
   result: AgenticL2Result;
