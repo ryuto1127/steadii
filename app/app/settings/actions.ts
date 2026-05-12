@@ -67,6 +67,31 @@ export async function setAutoArchiveEnabledAction(formData: FormData) {
   revalidatePath("/app/inbox");
 }
 
+// engineer-43 — flip the hide-read-from-queue toggle. Stored on
+// users.preferences.hideReadFromQueue (jsonb). Default behavior is
+// "hide read" (handoff spec) so persisting an explicit `false` is the
+// opt-out path; setting `true` removes the field so the default
+// re-applies cleanly.
+export async function setHideReadFromQueueAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  // The hidden input passes "true" / "false" — translated to the
+  // "next state" so a click flips the value.
+  const nextEnabled = formData.get("enabled") === "true";
+  const userId = session.user.id;
+  // We persist `false` only — when the user wants the default we drop
+  // the key so legacy reads stay clean.
+  const expr = nextEnabled
+    ? sql`COALESCE(${users.preferences}, '{}'::jsonb) - 'hideReadFromQueue'`
+    : sql`COALESCE(${users.preferences}, '{}'::jsonb) || ${JSON.stringify({ hideReadFromQueue: false })}::jsonb`;
+  await db
+    .update(users)
+    .set({ preferences: expr, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+  revalidatePath("/app/settings");
+  revalidatePath("/app");
+}
+
 // engineer-41 — flip the agentic-L2 Beta opt-in. Stored on
 // users.preferences.agenticL2 (jsonb, no migration). Empty / unset
 // drops the field so the L2 pipeline falls back to the single-shot

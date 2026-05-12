@@ -31,14 +31,17 @@ export type NotificationTierPrefs = Record<QueueArchetype, NotificationChannel>;
 // Default routing per spec. The defaults are deliberately conservative:
 // only A is set to push (the spec's "Immediate browser push" tier); B
 // and C default to digest so the user gets a daily summary without
-// being interrupted; D and E stay in-app only so the queue itself is
-// the surface the user discovers them in.
+// being interrupted; D / E / F stay in-app only so the queue itself is
+// the surface the user discovers them in. F (engineer-42 confirmations)
+// is intentionally in-app — these are gentle "by the way" questions and
+// should not page the user through push or fill their digest email.
 export const DEFAULT_NOTIFICATION_TIER_PREFS: NotificationTierPrefs = {
   A: "push",
   B: "digest",
   C: "digest",
   D: "in_app",
   E: "in_app",
+  F: "in_app",
 };
 
 // Read a user's effective preferences from the JSONB blob, filling in
@@ -53,7 +56,7 @@ export function readTierPrefs(
     isObject(raw.notificationTiers) ? raw.notificationTiers : null;
   if (!stored) return { ...DEFAULT_NOTIFICATION_TIER_PREFS };
   const out: NotificationTierPrefs = { ...DEFAULT_NOTIFICATION_TIER_PREFS };
-  for (const arch of ["A", "B", "C", "D", "E"] as const) {
+  for (const arch of ["A", "B", "C", "D", "E", "F"] as const) {
     const v = stored[arch];
     if (v === "push" || v === "digest" || v === "in_app") {
       out[arch] = v;

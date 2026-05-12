@@ -20,6 +20,8 @@ import { FALLBACK_TZ, addDaysToDateStr, localMidnightAsUtc } from "@/lib/calenda
 import { fetchUpcomingTasks } from "@/lib/integrations/google/tasks";
 import { fetchMsUpcomingTasks } from "@/lib/integrations/microsoft/tasks";
 import {
+  queueConfirmAction,
+  queueCorrectAction,
   queueDismissAction,
   queuePermanentDismissAction,
   queueResolveProposalAction,
@@ -119,6 +121,8 @@ export default async function HomePage() {
               permanentDismiss: queuePermanentDismissAction,
               secondaryAction: queueSecondaryAction,
               sendOfficeHours: queueSendOfficeHoursAction,
+              confirm: queueConfirmAction,
+              correct: queueCorrectAction,
             }}
           />
         ) : (

@@ -724,6 +724,7 @@ type MessagesShape = {
     archetype_c_pill: string;
     archetype_d_pill: string;
     archetype_e_pill: string;
+    archetype_f_pill: string;
     issue_title: {
       time_conflict: string;
       exam_conflict: string;
@@ -731,6 +732,8 @@ type MessagesShape = {
       exam_under_prepared: string;
       workload_over_capacity: string;
       syllabus_calendar_ambiguity: string;
+      classroom_deadline_imminent: string;
+      calendar_double_booking: string;
       group_project_detected: string;
       group_member_silent: string;
       fallback: string;
@@ -780,6 +783,14 @@ type MessagesShape = {
       ask_later: string;
       reject: string;
       response_pending: string;
+    };
+    card_f: {
+      confirm: string;
+      confirm_with_value: string;
+      correct: string;
+      correct_placeholder: string;
+      save: string;
+      dismiss: string;
     };
   };
   command_palette: {
@@ -1075,6 +1086,14 @@ type MessagesShape = {
       description: string;
       agentic_l2_label: string;
       agentic_l2_hint: string;
+      on: string;
+      off: string;
+    };
+    queue_ux: {
+      section_title: string;
+      description: string;
+      hide_read_label: string;
+      hide_read_hint: string;
       on: string;
       off: string;
     };
@@ -1415,6 +1434,18 @@ type MessagesShape = {
       empty: string;
       remove: string;
       no_facts_yet: string;
+    };
+    confirmations: {
+      heading: string;
+      description: string;
+      empty: string;
+      delete: string;
+      inferred_label: string;
+      resolved_label: string;
+      status_pending: string;
+      status_confirmed: string;
+      status_corrected: string;
+      status_dismissed: string;
     };
   };
   syllabus_new_page: {
@@ -2386,6 +2417,7 @@ export const en: MessagesShape = {
     archetype_c_pill: "Notice",
     archetype_d_pill: "Done",
     archetype_e_pill: "Question",
+    archetype_f_pill: "Confirm",
     issue_title: {
       time_conflict: "Calendar conflict",
       exam_conflict: "Exam clash",
@@ -2393,6 +2425,8 @@ export const en: MessagesShape = {
       exam_under_prepared: "Exam prep gap",
       workload_over_capacity: "Workload overload",
       syllabus_calendar_ambiguity: "Syllabus needs review",
+      classroom_deadline_imminent: "Deadline imminent",
+      calendar_double_booking: "Double-booked",
       group_project_detected: "Group project detected",
       group_member_silent: "Group member silent",
       fallback: "Steadii noticed",
@@ -2443,6 +2477,14 @@ export const en: MessagesShape = {
       ask_later: "Ask later",
       reject: "Reject",
       response_pending: "Awaiting response",
+    },
+    card_f: {
+      confirm: "Confirm",
+      confirm_with_value: "Confirm: {value}",
+      correct: "Correct",
+      correct_placeholder: "Type the correct value…",
+      save: "Save",
+      dismiss: "Don't ask",
     },
   },
   command_palette: {
@@ -2797,6 +2839,16 @@ export const en: MessagesShape = {
       agentic_l2_label: "Agentic L2 — LLM-driven, tool-using email reasoning",
       agentic_l2_hint:
         "High-risk emails flow through an agent that checks your calendar, infers sender timezones, and surfaces clarifying questions before drafting. ~3× the cost of the single-shot path; capped to your own account.",
+      on: "On — turn off",
+      off: "Off — turn on",
+    },
+    queue_ux: {
+      section_title: "Queue",
+      description:
+        "Control which notify-only items surface in your home queue. Real-time read state comes from Gmail Push.",
+      hide_read_label: "Hide already-read items from the queue",
+      hide_read_hint:
+        "When on, FYI cards disappear shortly after you read the underlying message in Gmail. Turn off to keep every notify-only item visible until you dismiss it.",
       on: "On — turn off",
       off: "Off — turn on",
     },
@@ -3252,6 +3304,20 @@ export const en: MessagesShape = {
         "No contacts learned yet. Once you've corresponded with a few people, Steadii will distill what it knows about each of them here.",
       remove: "Forget this contact",
       no_facts_yet: "No specific facts learned yet.",
+    },
+    confirmations: {
+      heading: "Questions Steadii is asking",
+      description:
+        "When Steadii infers something at low confidence (timezone, language, role), it asks before writing the fact into your contact persona. Confirmed and corrected answers show below — delete a row to clear it from this list.",
+      empty:
+        "No outstanding questions. Steadii will surface anything it wants to verify here.",
+      delete: "Delete",
+      inferred_label: "Inferred",
+      resolved_label: "Resolved",
+      status_pending: "Pending",
+      status_confirmed: "Confirmed",
+      status_corrected: "Corrected",
+      status_dismissed: "Dismissed",
     },
   },
   syllabus_new_page: {

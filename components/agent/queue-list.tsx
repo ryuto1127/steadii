@@ -41,6 +41,9 @@ type ServerActions = {
   // provisional calendar event). For non-office-hours B cards the page
   // routes the user to the existing detail page.
   sendOfficeHours: (cardId: string) => Promise<void>;
+  // engineer-42 — Type F (interactive confirmations).
+  confirm: (cardId: string) => Promise<void>;
+  correct: (cardId: string, correctedValue: string) => Promise<void>;
 };
 
 export function QueueList({
@@ -212,6 +215,28 @@ export function QueueList({
                       });
                     } catch (err) {
                       toast.error(message(err, "Submit failed"));
+                    }
+                    refresh();
+                  }
+                : undefined,
+            onConfirm:
+              card.archetype === "F"
+                ? async () => {
+                    try {
+                      await actions.confirm(card.id);
+                    } catch (err) {
+                      toast.error(message(err, "Confirm failed"));
+                    }
+                    refresh();
+                  }
+                : undefined,
+            onCorrect:
+              card.archetype === "F"
+                ? async (correctedValue) => {
+                    try {
+                      await actions.correct(card.id, correctedValue);
+                    } catch (err) {
+                      toast.error(message(err, "Save failed"));
                     }
                     refresh();
                   }

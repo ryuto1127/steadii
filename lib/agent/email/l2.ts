@@ -354,6 +354,7 @@ async function runPipeline(
           action: agenticResult.action,
           reasoning: agenticResult.reasoning,
           actionItems: agenticResult.actionItems,
+          shortSummary: agenticResult.shortSummary,
           retrievalProvenance: buildProvenance({
             similarEmails: similar,
             totalCandidates,
@@ -605,6 +606,12 @@ async function runPipeline(
     // pause/no_op rows; that's the correct behavior — there's no deep
     // reasoning to mine for obligations.
     extractedActionItems: deep?.actionItems ?? [],
+    // engineer-43 — surface the notify_only content summary onto the
+    // draft row so the queue Type C card body carries it. Only set when
+    // the deep pass actually returned one (notify_only path); null on
+    // every other action so the Type C body falls back to the generic
+    // copy.
+    shortSummary: deep?.shortSummary ?? null,
     draftSubject: draft?.subject ?? null,
     draftBody: draft?.body ?? null,
     // engineer-38 — freeze the LLM-first body. saveDraftEditsAction will

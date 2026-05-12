@@ -6,6 +6,8 @@ import { z } from "zod";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
 import {
+  agentConfirmations,
+  agentContactPersonas,
   agentDrafts,
   agentProposals,
   eventPreBriefs,
@@ -13,6 +15,7 @@ import {
   inboxItems,
   officeHoursRequests,
   type ActionOption,
+  type AgentConfirmation,
 } from "@/lib/db/schema";
 import {
   dismissAgentDraftAction,
@@ -26,6 +29,10 @@ import {
   pickOfficeHoursSlot,
   sendOfficeHoursDraft,
 } from "@/lib/agent/office-hours/actions";
+import {
+  applyUserConfirmedFact,
+  normalizeStructuredFactKey,
+} from "@/lib/agent/queue/confirmation-fact-merge";
 
 // Wave 2 — server actions that back the Steadii queue cards on Home.
 // Each action accepts a card id of the form `<kind>:<uuid>`; the prefix
@@ -41,7 +48,8 @@ type CardKind =
   | "draft"
   | "pre_brief"
   | "group_detect"
-  | "office_hours";
+  | "office_hours"
+  | "confirmation";
 
 const CARD_KINDS: readonly CardKind[] = [
   "proposal",
@@ -49,6 +57,7 @@ const CARD_KINDS: readonly CardKind[] = [
   "pre_brief",
   "group_detect",
   "office_hours",
+  "confirmation",
 ];
 
 const cardIdSchema = z
@@ -91,6 +100,8 @@ export async function queueDismissAction(rawCardId: string): Promise<void> {
     });
   } else if (kind === "office_hours") {
     await dismissOfficeHoursRequest(userId, id);
+  } else if (kind === "confirmation") {
+    await dismissConfirmation(userId, id);
   } else {
     await dismissProposalSnooze(userId, id);
   }
@@ -119,6 +130,10 @@ export async function queueSnoozeAction(
     });
   } else if (kind === "office_hours") {
     await dismissOfficeHoursRequest(userId, id);
+  } else if (kind === "confirmation") {
+    // Confirmations auto-stale after 14 days. Treat snooze as dismiss so
+    // we don't leak a half-resolved state into the persona writer.
+    await dismissConfirmation(userId, id);
   } else {
     await dismissProposalSnooze(userId, id, clamped);
   }
@@ -142,6 +157,8 @@ export async function queuePermanentDismissAction(
     });
   } else if (kind === "office_hours") {
     await dismissOfficeHoursRequest(userId, id);
+  } else if (kind === "confirmation") {
+    await dismissConfirmation(userId, id);
   } else {
     await dismissProposalPermanent(userId, id);
   }
@@ -395,4 +412,167 @@ async function dismissProposalPermanent(
     userResponse: "dismissed",
     proposalId,
   });
+}
+
+// ── engineer-42 — Type F confirmations ───────────────────────────────
+
+// Confirm = the inferred value was correct. Flip status, pin the
+// inferred value into agent_contact_personas.structured_facts at
+// confidence 1.0, stamp confirmedAt.
+export async function queueConfirmAction(rawCardId: string): Promise<void> {
+  const userId = await getUserId();
+  const { kind, id } = parseCardId(rawCardId);
+  if (kind !== "confirmation") {
+    throw new Error("Card is not a confirmation");
+  }
+  const row = await loadPendingConfirmation(userId, id);
+  if (!row) return; // already resolved → idempotent no-op
+  const value = (row.inferredValue ?? "").trim();
+  if (!value) {
+    // Nothing to pin; just flip status so the card disappears.
+    await markConfirmationResolved(id, "confirmed", null);
+    revalidatePath("/app");
+    return;
+  }
+  await markConfirmationResolved(id, "confirmed", value);
+  if (row.senderEmail) {
+    await upsertStructuredFact({
+      userId,
+      contactEmail: row.senderEmail,
+      topic: row.topic,
+      value,
+    });
+  }
+  revalidatePath("/app");
+}
+
+// Correct = user supplied a different value. Persona persistence is the
+// same shape as confirm, but with the user's value at confidence 1.0.
+export async function queueCorrectAction(
+  rawCardId: string,
+  correctedValue: string
+): Promise<void> {
+  const userId = await getUserId();
+  const { kind, id } = parseCardId(rawCardId);
+  if (kind !== "confirmation") {
+    throw new Error("Card is not a confirmation");
+  }
+  const trimmed = (correctedValue ?? "").trim();
+  if (!trimmed) {
+    throw new Error("Corrected value is required");
+  }
+  const row = await loadPendingConfirmation(userId, id);
+  if (!row) return;
+  await markConfirmationResolved(id, "corrected", trimmed);
+  if (row.senderEmail) {
+    await upsertStructuredFact({
+      userId,
+      contactEmail: row.senderEmail,
+      topic: row.topic,
+      value: trimmed,
+    });
+  }
+  revalidatePath("/app");
+}
+
+async function loadPendingConfirmation(
+  userId: string,
+  id: string
+): Promise<AgentConfirmation | null> {
+  const [row] = await db
+    .select()
+    .from(agentConfirmations)
+    .where(
+      and(
+        eq(agentConfirmations.id, id),
+        eq(agentConfirmations.userId, userId),
+        eq(agentConfirmations.status, "pending")
+      )
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+async function markConfirmationResolved(
+  id: string,
+  status: "confirmed" | "corrected" | "dismissed",
+  resolvedValue: string | null
+): Promise<void> {
+  const now = new Date();
+  await db
+    .update(agentConfirmations)
+    .set({
+      status,
+      resolvedValue,
+      resolvedAt: now,
+      updatedAt: now,
+    })
+    // Status guard so a concurrent double-click is a no-op rather than a
+    // double-write.
+    .where(
+      and(
+        eq(agentConfirmations.id, id),
+        eq(agentConfirmations.status, "pending")
+      )
+    );
+}
+
+async function dismissConfirmation(
+  userId: string,
+  id: string
+): Promise<void> {
+  const row = await loadPendingConfirmation(userId, id);
+  if (!row) return;
+  // Dismiss = "don't ask me". Persona is NOT written.
+  await markConfirmationResolved(id, "dismissed", null);
+}
+
+// Read existing structured_facts blob, set the targeted key at
+// confidence 1.0, write back. Critical: do not clobber other keys —
+// users may have separately-confirmed timezone + language facts on the
+// same persona row, and we never want one Type F resolve to wipe another.
+async function upsertStructuredFact(args: {
+  userId: string;
+  contactEmail: string;
+  topic: string;
+  value: string;
+}): Promise<void> {
+  const key = normalizeStructuredFactKey(args.topic);
+  if (!key) return;
+  const email = args.contactEmail.trim().toLowerCase();
+  if (!email) return;
+
+  const [existing] = await db
+    .select({
+      id: agentContactPersonas.id,
+      structuredFacts: agentContactPersonas.structuredFacts,
+    })
+    .from(agentContactPersonas)
+    .where(
+      and(
+        eq(agentContactPersonas.userId, args.userId),
+        eq(agentContactPersonas.contactEmail, email)
+      )
+    )
+    .limit(1);
+
+  if (existing) {
+    const merged = applyUserConfirmedFact(
+      existing.structuredFacts ?? {},
+      key,
+      args.value
+    );
+    await db
+      .update(agentContactPersonas)
+      .set({ structuredFacts: merged, updatedAt: new Date() })
+      .where(eq(agentContactPersonas.id, existing.id));
+  } else {
+    const facts = applyUserConfirmedFact({}, key, args.value);
+    await db.insert(agentContactPersonas).values({
+      userId: args.userId,
+      contactEmail: email,
+      facts: [],
+      structuredFacts: facts,
+    });
+  }
 }

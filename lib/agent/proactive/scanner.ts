@@ -27,8 +27,13 @@ const SCANNER_RULE_ISSUE_TYPES: AgentProposalIssueType[] = [
   "time_conflict",
   "exam_conflict",
   "deadline_during_travel",
+  // engineer-43 — retired rule. Kept in the auto-resolve sweep so any
+  // rows persisted before the retirement flip to 'resolved' on the next
+  // scan instead of lingering until their 7d TTL.
   "exam_under_prepared",
   "workload_over_capacity",
+  "classroom_deadline_imminent",
+  "calendar_double_booking",
 ];
 
 // 5-minute per-user debounce. Two scans within the window short-circuit

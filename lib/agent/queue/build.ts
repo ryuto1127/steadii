@@ -1,15 +1,18 @@
 import "server-only";
-import { and, desc, eq, gt, inArray, isNull, lte, ne, or } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNull, lte, ne, or } from "drizzle-orm";
 import { getTranslations } from "next-intl/server";
 import { db } from "@/lib/db/client";
 import {
+  agentConfirmations,
   agentDrafts,
   agentProposals,
   events as eventsTable,
   eventPreBriefs,
   inboxItems,
   officeHoursRequests,
+  users,
   type ActionOption,
+  type AgentConfirmation,
   type AgentDraft,
   type AgentProposalIssueType,
   type AgentProposalRow,
@@ -21,11 +24,14 @@ import {
 } from "@/lib/db/schema";
 import {
   QUEUE_FETCH_LIMIT,
+  type ConfirmationOption,
+  type ConfirmationTopic,
   type QueueCard,
   type QueueCardA,
   type QueueCardB,
   type QueueCardC,
   type QueueCardE,
+  type QueueCardF,
   type QueueConfidence,
   type QueueDecisionOption,
   type QueueSourceChip,
@@ -55,14 +61,26 @@ export async function buildQueueForUser(
     : await getTranslations("queue.shared")) as unknown as (
     key: string
   ) => string;
+  // engineer-43 — read the user's hide-read preference once per build.
+  // Default true: notify_only cards vanish 24h after Gmail push reported
+  // labelRemoved 'UNREAD'. Users who want a complete log opt out via
+  // /app/settings.
+  const hideRead = await loadHideReadFromQueuePref(userId);
   // We pull more than the visible cap so the "Show more" expansion has
   // material — the page-level collapse logic is what trims the visible
   // count to QUEUE_VISIBLE_LIMIT.
-  const [proposalRows, draftRows, preBriefRows, officeHoursRows] = await Promise.all([
+  const [
+    proposalRows,
+    draftRows,
+    preBriefRows,
+    officeHoursRows,
+    confirmationRows,
+  ] = await Promise.all([
     fetchPendingProposals(userId),
-    fetchPendingDrafts(userId),
+    fetchPendingDrafts(userId, { hideRead }),
     fetchPendingPreBriefs(userId),
     fetchPendingOfficeHoursRequests(userId),
+    fetchPendingConfirmations(userId),
   ]);
 
   // Wave 3.2 — proposals split across Type A / C / E by issueType.
@@ -102,10 +120,17 @@ export async function buildQueueForUser(
   const allCCards: QueueCardC[] = [...cCards, ...cFromProposals];
   const allECards: QueueCardE[] = [...eCards, ...eFromProposals];
 
-  // Spec sort: A → B → C → D → E, newest-first within each group.
-  // (D cards fold into Recent activity; the queue surfaces no D cards.)
+  const fCards: QueueCardF[] = confirmationRows.map(confirmationToTypeF);
+
+  // engineer-42 sort: F + A interleave at the top because pending
+  // confirmations block downstream draft generation (the L2 loop reads
+  // structured_facts at classify time). Within the F+A group we sort by
+  // createdAt DESC so the newest question lands first. Then B → C → E
+  // follow the existing order. (D folds into Recent activity, never
+  // appears here.)
+  const allFAndACards = sortByCreatedDesc([...fCards, ...allACards]);
   return [
-    ...sortByCreatedDesc(allACards),
+    ...allFAndACards,
     ...sortByCreatedDesc(allBCards),
     ...sortByCreatedDesc(allCCards),
     ...sortByCreatedDesc(allECards),
@@ -264,6 +289,8 @@ function titleForIssue(
     case "exam_under_prepared":
     case "workload_over_capacity":
     case "syllabus_calendar_ambiguity":
+    case "classroom_deadline_imminent":
+    case "calendar_double_booking":
     case "group_project_detected":
     case "group_member_silent":
       return tIssue(issue);
@@ -284,6 +311,8 @@ function confidenceForIssue(
     case "time_conflict":
     case "exam_conflict":
     case "deadline_during_travel":
+    case "classroom_deadline_imminent":
+    case "calendar_double_booking":
       return "high";
     case "exam_under_prepared":
     case "workload_over_capacity":
@@ -310,6 +339,8 @@ function isReversibleProposal(issue: AgentProposalIssueType): boolean {
     case "time_conflict":
     case "exam_conflict":
     case "deadline_during_travel":
+    case "classroom_deadline_imminent":
+    case "calendar_double_booking":
       // Reschedule / cancel options are reversible.
       return true;
     case "exam_under_prepared":
@@ -334,7 +365,22 @@ type DraftWithInbox = {
   };
 };
 
-async function fetchPendingDrafts(userId: string): Promise<DraftWithInbox[]> {
+type FetchDraftsOptions = {
+  // engineer-43 — when true, notify_only rows whose inbox_items.gmail_read_at
+  // is set AND outside the 24h grace window are filtered out at the DB layer.
+  // draft_reply / ask_clarifying are unaffected — the read-state filter is
+  // specifically for the "FYI" Type C cards.
+  hideRead: boolean;
+};
+
+// 24h grace window: a row marked-as-read within the last 24h stays in
+// the queue so the user can still act on it; afterwards it disappears.
+const TYPE_C_READ_GRACE_HOURS = 24;
+
+async function fetchPendingDrafts(
+  userId: string,
+  options: FetchDraftsOptions
+): Promise<DraftWithInbox[]> {
   const rows = await db
     .select({
       draft: agentDrafts,
@@ -343,6 +389,7 @@ async function fetchPendingDrafts(userId: string): Promise<DraftWithInbox[]> {
       senderName: inboxItems.senderName,
       senderEmail: inboxItems.senderEmail,
       subject: inboxItems.subject,
+      gmailReadAt: inboxItems.gmailReadAt,
     })
     .from(agentDrafts)
     .innerJoin(inboxItems, eq(agentDrafts.inboxItemId, inboxItems.id))
@@ -361,7 +408,48 @@ async function fetchPendingDrafts(userId: string): Promise<DraftWithInbox[]> {
     .orderBy(desc(agentDrafts.createdAt))
     .limit(QUEUE_FETCH_LIMIT);
 
-  return dedupePendingDraftsByThread(rows);
+  const filtered = options.hideRead
+    ? rows.filter((r) => !shouldHideReadNotifyOnly(r))
+    : rows;
+  return dedupePendingDraftsByThread(filtered);
+}
+
+// engineer-43 — Type C read-state filter. Only applies to notify_only:
+// other actions are user-driven (draft_reply needs the user, ask_clarifying
+// needs an answer) and a "read in Gmail" signal is not the same as "done".
+//
+// Grace window — a card stays visible for `TYPE_C_READ_GRACE_HOURS`
+// after the user first marked the underlying message read. The comment
+// in the handoff phrased this as "keeps just-read still showing briefly
+// so the user can act on it"; we measure the grace from gmail_read_at,
+// not created_at, because the latter would hide a freshly-created card
+// the moment it was read instead of giving the brief tail.
+export function shouldHideReadNotifyOnly(
+  row: {
+    draft: { action: AgentDraft["action"] };
+    gmailReadAt: Date | null;
+  },
+  now: Date = new Date()
+): boolean {
+  if (row.draft.action !== "notify_only") return false;
+  if (!row.gmailReadAt) return false;
+  const ageMs = now.getTime() - row.gmailReadAt.getTime();
+  return ageMs > TYPE_C_READ_GRACE_HOURS * 60 * 60 * 1000;
+}
+
+async function loadHideReadFromQueuePref(userId: string): Promise<boolean> {
+  try {
+    const [row] = await db
+      .select({ preferences: users.preferences })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const pref = row?.preferences?.hideReadFromQueue;
+    // Default true — handoff specifies the filter ON by default.
+    return pref === undefined ? true : pref !== false;
+  } catch {
+    return true;
+  }
 }
 
 // Pure helper — exported so unit tests can target the dedup behavior
@@ -465,11 +553,22 @@ function draftToTypeC(
 ): QueueCardC {
   const { draft, inbox } = row;
   const senderLabel = inbox.senderName ?? inbox.senderEmail;
+  // engineer-43 — prefer the deep pass's 1-2 sentence summary when
+  // available so the card body carries actual substance ("Your fall
+  // grade has been posted to the portal — no reply expected.") instead
+  // of the generic "Important from {sender}" fallback. Empty / null
+  // short_summary on legacy rows or non-notify_only drafts falls back
+  // to the prior copy.
+  const summary = (draft.shortSummary ?? "").trim();
+  const body =
+    summary.length > 0
+      ? summary
+      : tShared("notify_only_body").replace("{sender}", senderLabel);
   return {
     id: `draft:${draft.id}`,
     archetype: "C",
     title: inbox.subject ?? senderLabel,
-    body: tShared("notify_only_body").replace("{sender}", senderLabel),
+    body,
     confidence: confidenceForRiskTier(draft.riskTier),
     createdAt: draft.createdAt.toISOString(),
     sources: sourceChipsFromProvenance(draft.retrievalProvenance ?? null),
@@ -926,6 +1025,101 @@ function formatSlotLabel(s: { startsAt: string; endsAt: string }): string {
     hour12: false,
   });
   return `${day} ${tFmt.format(start)}-${tFmt.format(end)} (${date})`;
+}
+
+// ── engineer-42 — pending confirmations → Type F cards ───────────────
+
+const CONFIRMATION_STALE_MS = 14 * 24 * 60 * 60 * 1000;
+
+const KNOWN_CONFIRMATION_TOPICS: readonly ConfirmationTopic[] = [
+  "timezone",
+  "sender_role",
+  "primary_language",
+  "relationship",
+  "other",
+];
+
+async function fetchPendingConfirmations(
+  userId: string
+): Promise<AgentConfirmation[]> {
+  const since = new Date(Date.now() - CONFIRMATION_STALE_MS);
+  try {
+    return await db
+      .select()
+      .from(agentConfirmations)
+      .where(
+        and(
+          eq(agentConfirmations.userId, userId),
+          eq(agentConfirmations.status, "pending"),
+          gte(agentConfirmations.createdAt, since)
+        )
+      )
+      .orderBy(desc(agentConfirmations.createdAt))
+      .limit(QUEUE_FETCH_LIMIT);
+  } catch {
+    // Schema-drift defense — table may not exist on older deploys.
+    return [];
+  }
+}
+
+// Normalize free-form topic strings from the L2 loop into the typed
+// ConfirmationTopic union. The L2 tool accepts arbitrary strings (see
+// queue_user_confirmation tool schema), so an unrecognised topic falls
+// back to "other" — the card still renders but the confirm path writes
+// nothing structured into persona.
+export function normalizeConfirmationTopic(raw: string): ConfirmationTopic {
+  if ((KNOWN_CONFIRMATION_TOPICS as readonly string[]).includes(raw)) {
+    return raw as ConfirmationTopic;
+  }
+  // The L2 tool description lists "language_preference" as an alias for
+  // primary_language; map it explicitly so we don't lose the linkage.
+  if (raw === "language_preference") return "primary_language";
+  return "other";
+}
+
+export function confirmationToTypeF(row: AgentConfirmation): QueueCardF {
+  const topic = normalizeConfirmationTopic(row.topic);
+  const options: ConfirmationOption[] = buildConfirmationOptions();
+  return {
+    id: `confirmation:${row.id}`,
+    archetype: "F",
+    title: row.question,
+    body: buildConfirmationBody(row),
+    confidence: "medium",
+    createdAt: row.createdAt.toISOString(),
+    sources: [],
+    detailHref: undefined,
+    originHref: undefined,
+    reversible: false,
+    topic,
+    senderEmail: row.senderEmail,
+    inferredValue: row.inferredValue,
+    options,
+    originatingDraftId: row.originatingDraftId,
+  };
+}
+
+function buildConfirmationBody(row: AgentConfirmation): string {
+  const parts: string[] = [];
+  if (row.inferredValue) {
+    parts.push(`Steadii inferred: ${row.inferredValue}`);
+  }
+  if (row.senderEmail) {
+    parts.push(`For: ${row.senderEmail}`);
+  }
+  return parts.join(" · ");
+}
+
+function buildConfirmationOptions(): ConfirmationOption[] {
+  // Option labels are i18n keys, not display strings — the renderer
+  // resolves them from queue.card_f.* at render time. We expose the
+  // structured set here so the card component knows which buttons to
+  // show without re-implementing the canonical 3-option flow.
+  return [
+    { key: "confirm", label: "confirm", type: "confirm" },
+    { key: "correct", label: "correct", type: "correct" },
+    { key: "dismiss", label: "dismiss", type: "dismiss" },
+  ];
 }
 
 // ── Re-exports / accessors used by Recent Activity (Scope 5) ─────────

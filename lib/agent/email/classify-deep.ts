@@ -76,8 +76,20 @@ export type DeepPassResult = {
   // section. Empty for non-draft_reply actions and for thin emails the
   // model couldn't extract anything from.
   actionItems: ExtractedActionItem[];
+  // engineer-43 — 1–2 sentence content summary, required only when
+  // `action === 'notify_only'` so the Type C queue card body carries
+  // real substance ("Your fall grade has been posted; no reply
+  // expected.") instead of a generic placeholder. Null for other
+  // actions and for parses that failed to produce one. Capped at 280
+  // chars in the schema + by `SHORT_SUMMARY_MAX_LEN` at write time.
+  shortSummary: string | null;
   usageId: string | null;
 };
+
+// engineer-43 — hard cap on stored short_summary. Mirrors the JSON
+// schema max but enforces it again in the local parser as a defense
+// against future schema drift / non-strict model regressions.
+export const SHORT_SUMMARY_MAX_LEN = 280;
 
 // engineer-39 — UI floor for surfacing extracted items. The model is
 // instructed to emit only "high confidence" items but the schema requires
@@ -152,7 +164,14 @@ Do NOT extract:
 - the act of replying itself (the user knows that — the reply is what Steadii is drafting)
 - speculation ("might want to check…")
 
-Each item carries a confidence score 0–1. Only emit items with confidence ≥ 0.6; below that, omit them. Title is a short imperative (≤ 80 chars). Due date is YYYY-MM-DD only when the email gives a concrete deadline; otherwise null. Output an empty actionItems array when the email has no concrete obligations.`;
+Each item carries a confidence score 0–1. Only emit items with confidence ≥ 0.6; below that, omit them. Title is a short imperative (≤ 80 chars). Due date is YYYY-MM-DD only when the email gives a concrete deadline; otherwise null. Output an empty actionItems array when the email has no concrete obligations.
+
+When action="notify_only", you MUST also write "shortSummary" — 1 to 2 sentences (≤ 280 chars) in the same language as your reasoning, summarizing WHAT the email contains so the student can decide whether to open it without leaving Steadii. Be concrete and content-bearing: include the substantive fact (grade posted, scholarship awarded, deadline reminder, etc.). Do NOT pad with "Important from {sender}" boilerplate; the queue UI already shows the sender. For all other actions, set shortSummary to null.
+
+Examples of good shortSummary values for notify_only:
+- "Fall 2026 grade for MAT223 is now visible in ACORN — A−."
+- "Office of the Registrar reminder: deadline to add Winter courses is Jan 19."
+- "Scholarship office: you've been awarded the Open Doors bursary ($2,500)."`;
 
 const DEEP_PASS_JSON_SCHEMA = {
   type: "object",
@@ -187,8 +206,12 @@ const DEEP_PASS_JSON_SCHEMA = {
         required: ["title", "dueDate", "confidence"],
       },
     },
+    // engineer-43 — 1-2 sentence content summary for notify_only cards.
+    // Strict-mode requires the field to be present; null is acceptable
+    // on other actions.
+    shortSummary: { type: ["string", "null"], maxLength: 280 },
   },
-  required: ["action", "reasoning", "actionItems"],
+  required: ["action", "reasoning", "actionItems", "shortSummary"],
 } as const;
 
 export async function runDeepPass(
@@ -244,6 +267,7 @@ export async function runDeepPass(
         action: parsed.action,
         reasoning: parsed.reasoning,
         actionItems: parsed.actionItems,
+        shortSummary: parsed.shortSummary,
         retrievalProvenance,
         usageId: rec.usageId,
       };
@@ -255,6 +279,7 @@ export function parseDeepPassOutput(raw: string): {
   action: DeepAction;
   reasoning: string;
   actionItems: ExtractedActionItem[];
+  shortSummary: string | null;
 } {
   let j: unknown;
   try {
@@ -279,7 +304,17 @@ export function parseDeepPassOutput(raw: string): {
       ? o.reasoning
       : "Model output was unparseable; deferring to user review.";
   const actionItems = parseActionItems(o.actionItems);
-  return { action, reasoning, actionItems };
+  // engineer-43 — only keep the summary for notify_only actions even
+  // if the model emits one for another action. Cap at 280 chars to
+  // protect Type C card layout. Blank / non-string → null.
+  let shortSummary: string | null = null;
+  if (action === "notify_only" && typeof o.shortSummary === "string") {
+    const trimmed = o.shortSummary.trim();
+    if (trimmed.length > 0) {
+      shortSummary = trimmed.slice(0, SHORT_SUMMARY_MAX_LEN);
+    }
+  }
+  return { action, reasoning, actionItems, shortSummary };
 }
 
 // engineer-39 — defensive parser. Strict-mode JSON-schema enforces shape

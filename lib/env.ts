@@ -81,6 +81,19 @@ const schema = z.object({
   // 2026-05-07, digest 873235542 — every Send broke). Empty falls back to
   // the package default, fine for local dev.
   QSTASH_URL: z.string().optional().default(""),
+  // engineer-43 — Gmail Push (Pub/Sub). Required in production for
+  // real-time read-state filtering of Type C cards.
+  //   - GMAIL_PUBSUB_PROJECT: GCP project containing the Pub/Sub topic.
+  //   - GMAIL_PUBSUB_TOPIC: short topic name; the watch call composes
+  //     "projects/<project>/topics/<topic>" from the two halves.
+  //   - GMAIL_PUSH_VERIFICATION_TOKEN: optional shared secret threaded
+  //     through the push-endpoint URL (?token=...) as a defense-in-depth
+  //     check; Pub/Sub already enforces OIDC-token auth in prod.
+  // Empty in local dev so `pnpm dev` boots without Pub/Sub wired up; the
+  // watch helpers short-circuit when the project + topic pair is missing.
+  GMAIL_PUBSUB_PROJECT: z.string().optional().default(""),
+  GMAIL_PUBSUB_TOPIC: z.string().optional().default(""),
+  GMAIL_PUSH_VERIFICATION_TOKEN: z.string().optional().default(""),
 });
 
 export type Env = z.infer<typeof schema>;

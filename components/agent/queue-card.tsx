@@ -17,6 +17,7 @@ import {
   Clock,
   HelpCircle,
   Mail,
+  MessageCircleQuestion,
   Sparkles,
   Users,
   X,
@@ -30,6 +31,7 @@ import type {
   QueueCardC,
   QueueCardD,
   QueueCardE,
+  QueueCardF,
   QueueSourceChip,
 } from "@/lib/agent/queue/types";
 import { confidenceBorderClass } from "@/lib/agent/queue/visual";
@@ -98,6 +100,20 @@ type CardEProps = CommonProps & {
     pickedKey: string | null,
     freeText: string
   ) => Promise<ActionResult> | ActionResult;
+};
+
+// engineer-42 — Type F (interactive confirmations). Three actions:
+//   confirm   → the inferred value is correct; persona structured fact
+//               pinned at confidence 1.0
+//   correct   → user supplies a different value (free-text inline input);
+//               persona structured fact pinned to the corrected value
+//   dismiss   → user says "don't ask"; status flips to dismissed, persona
+//               is NOT written (engineer-43 may treat this as a signal to
+//               suppress future questions on the same topic)
+type CardFProps = CommonProps & {
+  card: QueueCardF;
+  onConfirm: () => Promise<ActionResult> | ActionResult;
+  onCorrect: (correctedValue: string) => Promise<ActionResult> | ActionResult;
 };
 
 // Source chip — one per origin record the agent referenced. Visual
@@ -1020,6 +1036,173 @@ export function QueueCardERender({
   );
 }
 
+// ── Type F — Interactive confirmation (engineer-42) ──────────────────
+export function QueueCardFRender({
+  card,
+  onConfirm,
+  onCorrect,
+  onDismiss,
+  onSnooze,
+  onPermanentDismiss,
+}: CardFProps) {
+  const t = useTranslations("queue.card_f");
+  const tShared = useTranslations("queue.shared");
+  const locale = useLocaleHint();
+  const [pending, startTransition] = useTransition();
+  const [resolved, setResolved] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
+  const [correctedValue, setCorrectedValue] = useState("");
+  const { bindings, menu } = useQuickMenu({ onSnooze, onPermanentDismiss });
+
+  const confirmLabel = card.inferredValue
+    ? t("confirm_with_value", { value: card.inferredValue })
+    : t("confirm");
+
+  const confirm = () => {
+    if (pending || resolved) return;
+    startTransition(async () => {
+      await onConfirm();
+      setResolved(true);
+    });
+  };
+
+  const submitCorrection = () => {
+    const value = correctedValue.trim();
+    if (!value || pending || resolved) return;
+    startTransition(async () => {
+      await onCorrect(value);
+      setResolved(true);
+      setCorrecting(false);
+    });
+  };
+
+  const dismiss = () => {
+    if (pending || resolved) return;
+    startTransition(async () => {
+      await onDismiss();
+      setResolved(true);
+    });
+  };
+
+  return (
+    <>
+      <CardShell
+        card={card}
+        size="md"
+        variant="decision"
+        onContextMenu={bindings.onContextMenu}
+      >
+        <div
+          {...bindings}
+          aria-disabled={resolved}
+          className={cn(resolved && "opacity-60")}
+        >
+          <header className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-2">
+              <span
+                aria-hidden
+                className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[hsl(var(--surface))] text-[hsl(var(--primary))]"
+              >
+                <MessageCircleQuestion size={14} strokeWidth={2} />
+              </span>
+              <h3 className="text-[15px] font-semibold leading-snug text-[hsl(var(--foreground))]">
+                {card.title}
+              </h3>
+            </div>
+            <span
+              className="shrink-0 font-mono text-[10px] tabular-nums text-[hsl(var(--muted-foreground))]"
+              title={new Date(card.createdAt).toLocaleString()}
+            >
+              {formatRelative(card.createdAt, locale)}
+            </span>
+          </header>
+          {card.body ? (
+            <p className="mt-2 text-[12px] leading-snug text-[hsl(var(--muted-foreground))]">
+              {card.body}
+            </p>
+          ) : null}
+          {correcting ? (
+            <div className="mt-3 flex flex-col gap-2">
+              <input
+                type="text"
+                value={correctedValue}
+                onChange={(e) => setCorrectedValue(e.target.value)}
+                disabled={resolved || pending}
+                placeholder={t("correct_placeholder")}
+                autoFocus
+                className="block w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 py-1.5 text-[13px] text-[hsl(var(--foreground))] focus:border-[hsl(var(--primary))] focus:outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submitCorrection();
+                  else if (e.key === "Escape") {
+                    setCorrecting(false);
+                    setCorrectedValue("");
+                  }
+                }}
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={submitCorrection}
+                  disabled={
+                    correctedValue.trim().length === 0 || pending || resolved
+                  }
+                  className="inline-flex h-8 items-center rounded-full bg-[hsl(var(--foreground))] px-3 text-[12px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90 disabled:opacity-50"
+                >
+                  {t("save")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCorrecting(false);
+                    setCorrectedValue("");
+                  }}
+                  disabled={pending || resolved}
+                  className="inline-flex h-8 items-center rounded-full px-3 text-[12px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+                >
+                  {tShared("dismiss")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={confirm}
+                disabled={pending || resolved}
+                data-testid="queue-card-f-confirm"
+                className="inline-flex h-9 items-center gap-1 rounded-full bg-[hsl(var(--foreground))] px-4 text-[13px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90 disabled:opacity-50"
+              >
+                <Check size={12} strokeWidth={2} />
+                <span>{confirmLabel}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCorrecting(true)}
+                disabled={pending || resolved}
+                data-testid="queue-card-f-correct"
+                className="inline-flex h-9 items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 text-[13px] font-medium text-[hsl(var(--foreground))] transition-default hover:bg-[hsl(var(--surface-raised))]"
+              >
+                {t("correct")}
+              </button>
+              <button
+                type="button"
+                onClick={dismiss}
+                disabled={pending || resolved}
+                data-testid="queue-card-f-dismiss"
+                className="inline-flex h-9 items-center rounded-full px-3 text-[13px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+              >
+                {t("dismiss")}
+              </button>
+            </div>
+          )}
+          <CardFooter card={card} />
+        </div>
+      </CardShell>
+      {menu}
+    </>
+  );
+}
+
 // Dispatcher — picks the right renderer based on archetype and forwards
 // the typed props. Lets parents render a generic `QueueCard` array
 // without per-archetype switch statements.
@@ -1035,6 +1218,8 @@ export type QueueCardActions = {
   onSecondaryAction?: CardBProps["onSecondaryAction"];
   onTakeAction?: CardCProps["onTakeAction"];
   onSubmit?: CardEProps["onSubmit"];
+  onConfirm?: CardFProps["onConfirm"];
+  onCorrect?: CardFProps["onCorrect"];
   onDismiss: CommonProps["onDismiss"];
   onSnooze: CommonProps["onSnooze"];
   onPermanentDismiss: CommonProps["onPermanentDismiss"];
@@ -1104,6 +1289,17 @@ export function QueueCardRenderer({
           onPermanentDismiss={actions.onPermanentDismiss}
         />
       );
+    case "F":
+      return (
+        <QueueCardFRender
+          card={card}
+          onConfirm={actions.onConfirm ?? noopAsync}
+          onCorrect={actions.onCorrect ?? noopAsyncCorrect}
+          onDismiss={actions.onDismiss}
+          onSnooze={actions.onSnooze}
+          onPermanentDismiss={actions.onPermanentDismiss}
+        />
+      );
   }
 }
 
@@ -1119,6 +1315,7 @@ function isUndoResult(value: unknown): value is { undoToken: string } {
 const noop = () => {};
 const noopAsync = async () => {};
 const noopSubmit = async (_picked: string | null, _free: string) => {};
+const noopAsyncCorrect = async (_value: string) => {};
 
 // next-intl's `useTranslations` doesn't expose the active locale; we
 // derive it from `<html lang="…">` so the relative-time rendering and

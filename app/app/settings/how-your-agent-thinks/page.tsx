@@ -3,9 +3,10 @@ import { ChevronLeft } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
+  agentConfirmations,
   agentContactPersonas,
   agentDrafts,
   agentRules,
@@ -14,7 +15,11 @@ import {
 } from "@/lib/db/schema";
 import { ThinkingBar } from "@/components/agent/thinking-bar";
 import { ReasoningPanel } from "@/components/agent/reasoning-panel";
-import { deletePersonaAction, removeWritingStyleRuleAction } from "./actions";
+import {
+  deleteConfirmationAction,
+  deletePersonaAction,
+  removeWritingStyleRuleAction,
+} from "./actions";
 
 // Phase 7 W1 — read-only retrospective view of the agent's last N
 // decisions. Fulfils the Phase 6 W4 landing-page promise that the agent
@@ -95,6 +100,30 @@ export default async function HowYourAgentThinksPage() {
     "agent_thinks_page.contact_personas"
   );
 
+  // engineer-42 — Type F confirmations. Show pending + recently-resolved
+  // so the user can revisit what they confirmed after the fact. We don't
+  // page this; if the list grows huge the user can delete rows via the
+  // per-row form, and the post-α weekly digest will surface stale ones.
+  const confirmations = await db
+    .select({
+      id: agentConfirmations.id,
+      topic: agentConfirmations.topic,
+      senderEmail: agentConfirmations.senderEmail,
+      question: agentConfirmations.question,
+      inferredValue: agentConfirmations.inferredValue,
+      resolvedValue: agentConfirmations.resolvedValue,
+      status: agentConfirmations.status,
+      createdAt: agentConfirmations.createdAt,
+      resolvedAt: agentConfirmations.resolvedAt,
+    })
+    .from(agentConfirmations)
+    .where(eq(agentConfirmations.userId, userId))
+    .orderBy(desc(agentConfirmations.createdAt))
+    .limit(50);
+  const tConfirm = await getTranslations(
+    "agent_thinks_page.confirmations"
+  );
+
   return (
     <div className="mx-auto max-w-3xl space-y-4 px-4 py-8">
       <div className="flex items-center gap-2 text-small text-[hsl(var(--muted-foreground))]">
@@ -112,6 +141,85 @@ export default async function HowYourAgentThinksPage() {
           {t("description_prefix")} {N_DECISIONS} {t("description_suffix")}
         </p>
       </header>
+
+      <section
+        id="confirmations"
+        className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4"
+      >
+        <h2 className="text-body font-medium">{tConfirm("heading")}</h2>
+        <p className="mt-1 text-small text-[hsl(var(--muted-foreground))]">
+          {tConfirm("description")}
+        </p>
+        {confirmations.length === 0 ? (
+          <p className="mt-3 text-small text-[hsl(var(--muted-foreground))]">
+            {tConfirm("empty")}
+          </p>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-3">
+            {confirmations.map((c) => (
+              <li
+                key={c.id}
+                className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-small font-medium text-[hsl(var(--foreground))]">
+                      {c.question}
+                    </div>
+                    {c.senderEmail ? (
+                      <div className="mt-0.5 text-[12px] text-[hsl(var(--muted-foreground))] break-all">
+                        {c.senderEmail}
+                      </div>
+                    ) : null}
+                  </div>
+                  <span
+                    className={
+                      "rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide " +
+                      statusPillClass(c.status)
+                    }
+                  >
+                    {tConfirm(`status_${c.status}`)}
+                  </span>
+                </div>
+                <div className="mt-2 grid grid-cols-1 gap-1 text-[12px] text-[hsl(var(--muted-foreground))] sm:grid-cols-2">
+                  {c.inferredValue ? (
+                    <div>
+                      <span className="font-mono text-[10px] uppercase tracking-wider">
+                        {tConfirm("inferred_label")}
+                      </span>{" "}
+                      <span className="text-[hsl(var(--foreground))]">
+                        {c.inferredValue}
+                      </span>
+                    </div>
+                  ) : null}
+                  {c.resolvedValue ? (
+                    <div>
+                      <span className="font-mono text-[10px] uppercase tracking-wider">
+                        {tConfirm("resolved_label")}
+                      </span>{" "}
+                      <span className="text-[hsl(var(--foreground))]">
+                        {c.resolvedValue}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[11px] text-[hsl(var(--muted-foreground))]">
+                  <span className="font-mono">{formatStamp(c.createdAt)}</span>
+                  <form action={deleteConfirmationAction}>
+                    <input type="hidden" name="id" value={c.id} />
+                    <button
+                      type="submit"
+                      className="rounded border border-[hsl(var(--border))] px-3 py-1 text-[11px] transition-hover hover:bg-[hsl(var(--surface-raised))]"
+                    >
+                      {tConfirm("delete")}
+                    </button>
+                  </form>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section
         id="contact-personas"
@@ -272,4 +380,18 @@ function formatStamp(d: Date): string {
   // hydration mismatches. Manual ISO chunking is fine here.
   const iso = d.toISOString();
   return `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
+}
+
+function statusPillClass(status: string): string {
+  switch (status) {
+    case "confirmed":
+      return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
+    case "corrected":
+      return "bg-violet-500/15 text-violet-700 dark:text-violet-300";
+    case "dismissed":
+      return "bg-[hsl(var(--surface-raised))] text-[hsl(var(--muted-foreground))]";
+    case "pending":
+    default:
+      return "bg-amber-500/15 text-amber-700 dark:text-amber-300";
+  }
 }

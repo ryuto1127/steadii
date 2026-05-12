@@ -36,6 +36,10 @@ export type UserSnapshot = {
     endsAt: Date | null;
     isAllDay: boolean;
     location: string | null;
+    // engineer-43 — used by classroom_deadline_imminent to skip
+    // already-turned-in coursework. Optional because non-Classroom events
+    // don't carry a meaningful status today.
+    status: string | null;
   }>;
 
   assignments: Array<{

@@ -108,7 +108,9 @@ describe("looksNonAcademic", () => {
   it("flags lunch/coffee/dental titles", () => {
     expect(looksNonAcademic("Lunch with mom")).toBe(true);
     expect(looksNonAcademic("Coffee chat")).toBe(true);
-    expect(looksNonAcademic("Dentist appointment")).toBe(true);
+    // engineer-43 — blocklist narrowed: "dentist" / "doctor" removed,
+    // "dental" / "vet" added.
+    expect(looksNonAcademic("Dental appointment")).toBe(true);
     expect(looksNonAcademic("OOO — vacation")).toBe(true);
   });
 

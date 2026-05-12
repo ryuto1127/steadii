@@ -61,6 +61,12 @@ export type AgenticL2Result = {
   action: DeepAction;
   reasoning: string;
   actionItems: ExtractedActionItem[];
+  // engineer-43 — Type C content summary, only populated when action
+  // resolves to notify_only. Agentic path produces no summary today
+  // (the loop doesn't currently emit one) so this stays null; the
+  // queue card falls back to the generic copy when null. Wire up via
+  // a tool-output extension in a follow-up engineer.
+  shortSummary: string | null;
   retrievalProvenance: RetrievalProvenance | null;
   usageId: string | null;
 
@@ -335,6 +341,7 @@ async function runLoop(input: AgenticL2Input): Promise<AgenticL2Result> {
       parsedFinal?.reasoning ??
       "Agentic L2 finished without a structured final pass; deferring to user review.",
     actionItems: parsedFinal?.actionItems ?? [],
+    shortSummary: null,
     retrievalProvenance: null,
     usageId: rec.usageId,
     confirmationQuestions: confirmationsQueued,
