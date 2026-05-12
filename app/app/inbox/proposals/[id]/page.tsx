@@ -163,6 +163,10 @@ function issueTypeLabelKey(t: AgentProposalIssueType): string {
       return "issue_workload_over_capacity";
     case "calendar_double_booking":
       return "issue_time_conflict";
+    // engineer-44 — no dedicated translation yet; fall back to workload
+    // since the visual treatment (Type C / soft notice) is the same family.
+    case "assignment_deadline_reminder":
+      return "issue_workload_over_capacity";
     case "auto_action_log":
       return "issue_auto_action_log";
     case "admin_waitlist_pending":

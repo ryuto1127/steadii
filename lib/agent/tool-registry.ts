@@ -6,6 +6,7 @@ import { CLASSROOM_TOOLS } from "./tools/classroom";
 import { SYLLABUS_TOOLS } from "./tools/syllabus";
 import { SYLLABUS_EXTRACT_TOOLS } from "./tools/syllabus-extract";
 import { CLASSES_TOOLS } from "./tools/classes";
+import { ASSIGNMENTS_TOOLS } from "./tools/assignments";
 import { ICAL_TOOLS } from "./tools/ical";
 import { OFFICE_HOURS_TOOLS } from "./tools/office-hours";
 import { EMAIL_TOOLS } from "./tools/email";
@@ -21,6 +22,7 @@ export const ALL_TOOLS: ToolExecutor[] = [
   ...(SYLLABUS_TOOLS as ToolExecutor[]),
   ...(SYLLABUS_EXTRACT_TOOLS as ToolExecutor[]),
   ...(CLASSES_TOOLS as ToolExecutor[]),
+  ...(ASSIGNMENTS_TOOLS as ToolExecutor[]),
   ...(ICAL_TOOLS as ToolExecutor[]),
   ...(OFFICE_HOURS_TOOLS as ToolExecutor[]),
   ...(EMAIL_TOOLS as ToolExecutor[]),
