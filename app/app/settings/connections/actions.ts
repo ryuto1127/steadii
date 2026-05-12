@@ -201,19 +201,21 @@ export async function reclassifyAllInboxAction() {
 }
 
 // engineer-36 — re-runs L2 deep + draft over the user's open agent_drafts.
-// Capped per click so each invocation stays inside the Vercel
-// server-action timeout. 2026-05-12 — cap raised from 10 → 25 alongside
-// the SELECT-layer tier filter in regenerateAllOpenDrafts; typical α
-// inboxes (< 25 refreshable drafts) now complete in a single click.
-// The UI offers "Run again to continue" via `more=1` for the rare
-// inboxes that exceed the cap. Bubbles credit exhaustion through
-// `exhausted=1` so the banner can prompt a top-up.
+// 2026-05-12 — count cap effectively removed (1000 acts as a defensive
+// upper bound, never expected to hit at α scale). The SELECT-layer
+// filter in regenerateAllOpenDrafts scopes to pending/paused × high/
+// medium rows, so this only ever touches drafts still actionable in
+// the queue — sent / approved / dismissed / expired / edited / low-tier
+// rows are excluded both at SELECT and per-row. maxDuration on the
+// route segment (page.tsx) gives the action 300s to drain the queue;
+// the rare overflow still surfaces "Run again to continue" via
+// `more=1`. Credit exhaustion bubbles via `exhausted=1`.
 export async function regenerateDraftsAction() {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthenticated");
   const userId = session.user.id;
 
-  const out = await regenerateAllOpenDrafts(userId, { limit: 25 });
+  const out = await regenerateAllOpenDrafts(userId, { limit: 1000 });
   revalidatePath("/app/inbox");
   revalidatePath("/app/settings/connections");
   redirect(
