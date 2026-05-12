@@ -12,6 +12,7 @@ import { OFFICE_HOURS_TOOLS } from "./tools/office-hours";
 import { EMAIL_TOOLS } from "./tools/email";
 import { EMAIL_THREAD_TOOLS } from "./tools/email-thread";
 import { summarizeWeekTool } from "./tools/summarize-week";
+import { CONVERT_TIMEZONE_TOOLS } from "./tools/convert-timezone";
 import { toOpenAIToolDefinition, type ToolExecutor } from "./tools/types";
 
 export const ALL_TOOLS: ToolExecutor[] = [
@@ -27,6 +28,7 @@ export const ALL_TOOLS: ToolExecutor[] = [
   ...(OFFICE_HOURS_TOOLS as ToolExecutor[]),
   ...(EMAIL_TOOLS as ToolExecutor[]),
   ...(EMAIL_THREAD_TOOLS as ToolExecutor[]),
+  ...(CONVERT_TIMEZONE_TOOLS as ToolExecutor[]),
   summarizeWeekTool as ToolExecutor,
 ];
 

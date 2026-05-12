@@ -15,6 +15,7 @@ import {
   AGENTIC_L2_FINAL_SCHEMA,
   buildAgenticL2UserMessage,
 } from "./agentic-l2-prompt";
+import { inferSenderTzFromDomain } from "./sender-timezone-heuristic";
 import type { DeepAction } from "./classify-deep";
 import type OpenAI from "openai";
 
@@ -55,6 +56,10 @@ export type AgenticL2Input = {
   bodyForPipeline: string;
   riskPass: RiskPassResult;
   locale: "en" | "ja";
+  // engineer-45 — optional clarification text from a Type E freeText
+  // submission. When set, the agentic loop re-runs against the same
+  // email with the student's input threaded into the user message.
+  userClarification?: string | null;
 };
 
 export type AgenticL2Result = {
@@ -100,6 +105,11 @@ export async function runAgenticL2(
 
 async function runLoop(input: AgenticL2Input): Promise<AgenticL2Result> {
   const model = selectModel("email_classify_deep");
+  // engineer-45 — domain heuristic surfaced once at loop entry so the
+  // LLM has a cheap prior before deciding whether to call
+  // infer_sender_timezone. Null when the domain is ambiguous (.com /
+  // multi-TZ country).
+  const tzHint = inferSenderTzFromDomain(input.senderDomain);
   const userMsg = buildAgenticL2UserMessage({
     locale: input.locale,
     senderEmail: input.senderEmail,
@@ -108,6 +118,11 @@ async function runLoop(input: AgenticL2Input): Promise<AgenticL2Result> {
     subject: input.subject,
     body: input.bodyForPipeline,
     riskTierReasoning: `Risk pass tier=${input.riskPass.riskTier} (confidence ${input.riskPass.confidence.toFixed(2)}). ${input.riskPass.reasoning}`,
+    likelySenderTimezone:
+      tzHint.tz && tzHint.source
+        ? { tz: tzHint.tz, confidence: tzHint.confidence, source: tzHint.source }
+        : null,
+    userClarification: input.userClarification ?? null,
   });
 
   const conversation: OpenAI.Chat.ChatCompletionMessageParam[] = [
