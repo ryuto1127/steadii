@@ -83,6 +83,12 @@ export const users = pgTable("users", {
     // use) instead of the single-shot runDeepPass. Default off — cost is
     // ~3x single-shot and the path is still being tuned.
     agenticL2?: boolean;
+    // engineer-43 — opt-out for the read-state filter on Type C cards.
+    // When undefined or true, the queue hides notify_only drafts whose
+    // underlying inbox_items.gmail_read_at is set (with a 24h grace so
+    // just-read items stay briefly). Setting false surfaces everything
+    // regardless of read state — for users who want a complete log.
+    hideReadFromQueue?: boolean;
   }>().default({}),
   timezone: text("timezone"),
   onboardingStep: integer("onboarding_step").notNull().default(0),
@@ -199,6 +205,18 @@ export const users = pgTable("users", {
     "onboarding_skip_recovery_dismissed_at",
     { mode: "date", withTimezone: true }
   ),
+  // engineer-43 — Gmail Push subscription state. Populated by the
+  // gmail-watch setup path; refreshed by the daily watch-refresh cron.
+  // `historyId` is the cursor we hand to `users.history.list` on every
+  // push payload; `expiresAt` is the Gmail-enforced 7-day expiry the
+  // refresh cron watches for. Null until first watch setup completes;
+  // any value here means a Pub/Sub subscription is active for this
+  // user. Topic is implicit (env-pinned), so we don't store it.
+  gmailWatch: jsonb("gmail_watch").$type<{
+    historyId: string;
+    expiresAt: string; // ISO timestamp
+    setupAt: string; // ISO timestamp of last successful watch call
+  } | null>(),
   // Preferred currency for Stripe checkouts and pricing display. Set on first
   // checkout from the user's locale ('ja' → 'jpy', everything else → 'usd')
   // and persisted via the subscription webhook so future top-ups stay in the
@@ -739,6 +757,19 @@ export const inboxItems = pgTable(
       withTimezone: true,
     }),
 
+    // engineer-43 — Gmail UNREAD-label mirror. Set to now() when the
+    // Gmail push payload reports labelRemoved 'UNREAD' (user read the
+    // message); cleared back to null when labelAdded 'UNREAD' (rare —
+    // marked-unread). Null also means "we never received a read signal"
+    // (older rows pre-Push, or users without the watch set up yet).
+    // The Type C queue filter uses (gmailReadAt IS NOT NULL AND
+    // gmailReadAt < createdAt + 24h) to hide rows the user already
+    // read; the 24h grace keeps just-read items briefly visible.
+    gmailReadAt: timestamp("gmail_read_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+
     // Phase 7 W1 — class binding cache. Populated once at ingest by
     // `bindEmailToClass` so the L2 fanout retriever consults a single
     // index probe instead of re-binding per call. Nullable: rows that
@@ -1118,6 +1149,14 @@ export const agentDrafts = pgTable(
       .$type<PreSendWarning[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
+
+    // engineer-43 — 1–2 sentence content summary the deep pass writes
+    // for `action='notify_only'` rows. Replaces the generic queue Type C
+    // body ("Important from {sender}, no reply expected") so the user
+    // sees actual substance without opening the page. Null for other
+    // actions and for legacy rows pre-migration. Length capped at 280
+    // chars at write time so the queue card body stays readable.
+    shortSummary: text("short_summary"),
 
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
       .notNull()
@@ -2072,9 +2111,22 @@ export type AgentProposalIssueType =
   | "time_conflict"
   | "exam_conflict"
   | "deadline_during_travel"
+  // engineer-43 — kept in the TS enum for back-compat with rows in the
+  // DB persisted before the rule was retired (PR #182 dropped the data
+  // source — mistakes — so the rule could no longer fire). The scanner
+  // does not produce new rows of this type; on next scan, any pending
+  // rows auto-resolve via the absent-pending sweep.
   | "exam_under_prepared"
   | "workload_over_capacity"
   | "syllabus_calendar_ambiguity"
+  // engineer-43 — replaces exam_under_prepared. Detects Google Classroom
+  // coursework due in <24h with no turn-in. Broader because it fires for
+  // any Classroom user, not just syllabus-bound ones.
+  | "classroom_deadline_imminent"
+  // engineer-43 — two calendar events overlap in real time. Distinct
+  // from time_conflict (event vs. syllabus lecture block) — this catches
+  // the no-syllabus "you accepted two meetings at 2pm" case.
+  | "calendar_double_booking"
   // D11 — informational "Steadii did X" log entry. status='resolved' on
   // creation; surfaces in inbox as a muted row until viewed.
   | "auto_action_log"

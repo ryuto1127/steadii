@@ -77,6 +77,7 @@ export async function buildUserSnapshot(
       endsAt: events.endsAt,
       isAllDay: events.isAllDay,
       location: events.location,
+      status: events.status,
     })
     .from(events)
     .where(
@@ -197,6 +198,7 @@ export async function buildUserSnapshot(
       ...r,
       startsAt: new Date(r.startsAt),
       endsAt: r.endsAt ? new Date(r.endsAt) : null,
+      status: r.status ?? null,
     })),
     assignments: assignmentRows.map((a) => ({
       ...a,

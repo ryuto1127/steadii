@@ -24,12 +24,15 @@ export function confidenceBorderClass(tier: QueueConfidence): string {
 
 // Archetype → CSS variant identifier the shell uses to pick chrome
 // (decision-required cards get a tinted border; FYI cards get a subtle
-// muted variant).
+// muted variant). Type F (confirmations) borrows the decision variant —
+// the user has to answer before downstream drafts will use the right
+// inferred value.
 export function archetypeShellVariant(
   archetype: QueueArchetype
 ): "default" | "decision" | "fyi" {
   switch (archetype) {
     case "A":
+    case "F":
       return "decision";
     case "D":
       return "fyi";
@@ -51,5 +54,7 @@ export function archetypePillKey(archetype: QueueArchetype): string {
       return "archetype_d_pill";
     case "E":
       return "archetype_e_pill";
+    case "F":
+      return "archetype_f_pill";
   }
 }

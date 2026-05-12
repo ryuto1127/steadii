@@ -15,6 +15,7 @@ import {
   setAutonomySendEnabledAction,
   setAutoArchiveEnabledAction,
   setAgenticL2EnabledAction,
+  setHideReadFromQueueAction,
 } from "./actions";
 import { getCreditBalance } from "@/lib/billing/credits";
 import { getStorageTotals } from "@/lib/billing/storage";
@@ -106,6 +107,7 @@ export default async function SettingsPage() {
   const tUsage = await getTranslations("settings.usage");
   const tInbox = await getTranslations("settings.inbox_auto_archive");
   const tBeta = await getTranslations("settings.beta_features");
+  const tQueue = await getTranslations("settings.queue_ux");
   const tProfile = await getTranslations("settings.profile_completion");
   const dateLocale = currentLocale === "ja" ? "ja-JP" : "en-US";
   const fmt = (template: string, vars: Record<string, string | number>) =>
@@ -293,6 +295,46 @@ export default async function SettingsPage() {
           all_set: tProfile("all_set"),
         }}
       />
+
+      <Section title={tQueue("section_title")}>
+        <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
+          {tQueue("description")}
+        </p>
+        <form
+          action={setHideReadFromQueueAction}
+          className="flex items-center justify-between gap-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2.5"
+        >
+          <div className="min-w-0">
+            <p className="text-body">{tQueue("hide_read_label")}</p>
+            <p className="mt-1 text-[12px] text-[hsl(var(--muted-foreground))]">
+              {tQueue("hide_read_hint")}
+            </p>
+          </div>
+          {/* userPrefs.preferences.hideReadFromQueue defaults to true when
+              unset; the hidden input carries the value we'd flip to. */}
+          <input
+            type="hidden"
+            name="enabled"
+            value={
+              userPrefs?.preferences?.hideReadFromQueue === false
+                ? "true"
+                : "false"
+            }
+          />
+          <button
+            type="submit"
+            className={`inline-flex h-9 shrink-0 items-center rounded-md px-4 text-small font-medium transition-hover ${
+              userPrefs?.preferences?.hideReadFromQueue !== false
+                ? "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:opacity-90"
+                : "border border-[hsl(var(--border))] hover:bg-[hsl(var(--surface-raised))]"
+            }`}
+          >
+            {userPrefs?.preferences?.hideReadFromQueue !== false
+              ? tQueue("on")
+              : tQueue("off")}
+          </button>
+        </form>
+      </Section>
 
       <Section title={tBeta("section_title")}>
         <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">

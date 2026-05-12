@@ -3,7 +3,11 @@
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
-import { agentContactPersonas, agentRules } from "@/lib/db/schema";
+import {
+  agentConfirmations,
+  agentContactPersonas,
+  agentRules,
+} from "@/lib/db/schema";
 import { auth } from "@/lib/auth/config";
 
 // engineer-38 — manual override for the writing-style learner. Soft-deletes
@@ -55,6 +59,31 @@ export async function deletePersonaAction(formData: FormData): Promise<void> {
       and(
         eq(agentContactPersonas.id, id),
         eq(agentContactPersonas.userId, userId)
+      )
+    );
+  revalidatePath("/app/settings/how-your-agent-thinks");
+}
+
+// engineer-42 — delete a Type F confirmation row from the "Questions
+// Steadii is asking" section. Users come here to revisit answers after
+// the fact; "delete" wipes the row so it can't re-surface and the
+// persona structured_fact written on confirm is left intact (the user
+// is asking us to forget the *question*, not their answer).
+export async function deleteConfirmationAction(
+  formData: FormData
+): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  const userId = session.user.id;
+  const id = formData.get("id");
+  if (typeof id !== "string" || id.length === 0) return;
+
+  await db
+    .delete(agentConfirmations)
+    .where(
+      and(
+        eq(agentConfirmations.id, id),
+        eq(agentConfirmations.userId, userId)
       )
     );
   revalidatePath("/app/settings/how-your-agent-thinks");
