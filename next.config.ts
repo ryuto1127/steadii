@@ -18,14 +18,35 @@ const nextConfig: NextConfig = {
   // and the global is available at runtime as expected.
   //
   // 2026-05-13 — Added node-ical's deps `temporal-polyfill` and
-  // `rrule-temporal` to the external set as well. Without them, Vercel's
-  // file tracer dropped the nested `.pnpm/node-ical@0.26.0/node_modules/
-  // temporal-polyfill/index.js` from the lambda zip, and runtime evaluation
-  // of any chunk that imports node-ical (transitively via the agent
-  // tool-registry) crashed /api/chat with `Failed to load external module
-  // node-ical … Cannot find module … temporal-polyfill/index.js`. Listing
-  // them explicitly forces the tracer to include them.
+  // `rrule-temporal` to the external set + as top-level deps. Neither
+  // alone fixed the 500: Turbopack's `externalRequire` hard-codes the
+  // build-time resolved absolute path (`/var/task/node_modules/.pnpm/
+  // node-ical@0.26.0/node_modules/temporal-polyfill/index.js`) and does
+  // NOT walk parent node_modules at runtime. Vercel's file tracer wasn't
+  // including those nested pnpm paths in the lambda zip. The fix is
+  // `outputFileTracingIncludes` below, which forces the tracer to keep
+  // the exact nested paths.
   serverExternalPackages: ["node-ical", "temporal-polyfill", "rrule-temporal"],
+  // 2026-05-13 — Force-include node-ical's nested pnpm peer paths in the
+  // lambda zip for every route that transitively imports the agent tool-
+  // registry. Turbopack hard-codes `externalRequire(...)` calls to the
+  // absolute path it saw at build time; without these includes, the
+  // tracer drops the files even though they exist locally. Glob covers
+  // any future node-ical version bump.
+  outputFileTracingIncludes: {
+    "/api/chat": [
+      "./node_modules/.pnpm/node-ical@*/node_modules/temporal-polyfill/**",
+      "./node_modules/.pnpm/node-ical@*/node_modules/rrule-temporal/**",
+    ],
+    "/api/cron/ical-sync": [
+      "./node_modules/.pnpm/node-ical@*/node_modules/temporal-polyfill/**",
+      "./node_modules/.pnpm/node-ical@*/node_modules/rrule-temporal/**",
+    ],
+    "/api/cron/pre-brief": [
+      "./node_modules/.pnpm/node-ical@*/node_modules/temporal-polyfill/**",
+      "./node_modules/.pnpm/node-ical@*/node_modules/rrule-temporal/**",
+    ],
+  },
 };
 
 export default withNextIntl(nextConfig);
