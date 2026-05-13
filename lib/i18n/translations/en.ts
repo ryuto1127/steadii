@@ -1062,6 +1062,7 @@ type MessagesShape = {
       section_title: string;
       description: string;
       open: string;
+      activity_log_open: string;
     };
     user_facts: {
       section_title: string;
@@ -1463,6 +1464,26 @@ type MessagesShape = {
       status_dismissed: string;
     };
   };
+  activity_log_page: {
+    settings_back: string;
+    title: string;
+    description: string;
+    summary_heading: string;
+    summary_window: string;
+    stat_emails_triaged: string;
+    stat_drafts_generated: string;
+    stat_drafts_sub: string;
+    stat_chat_turns: string;
+    stat_proposals_shown: string;
+    stat_failures: string;
+    tab_recent: string;
+    tab_failures: string;
+    activity_empty: string;
+    failures_empty: string;
+    page_prev: string;
+    page_next: string;
+    page_label: string;
+  };
   settings_user_facts: {
     settings_back: string;
     title: string;
@@ -1473,6 +1494,10 @@ type MessagesShape = {
     delete: string;
     cancel: string;
     save: string;
+    reconfirm: string;
+    reconfirm_hint: string;
+    lifecycle_next_review: string;
+    lifecycle_expires: string;
     provenance_user: string;
     provenance_agent: string;
     add_heading: string;
@@ -2836,6 +2861,7 @@ export const en: MessagesShape = {
       description:
         "A read-only retrospective view of the agent's last decisions: what it surfaced, why, and which mistakes / syllabus chunks / calendar items / past emails grounded each draft. Glass-box transparency, end to end.",
       open: "Open",
+      activity_log_open: "Activity log",
     },
     user_facts: {
       section_title: "What Steadii remembers about you",
@@ -3364,6 +3390,28 @@ export const en: MessagesShape = {
       status_dismissed: "Dismissed",
     },
   },
+  activity_log_page: {
+    settings_back: "Settings",
+    title: "Steadii activity log",
+    description:
+      "What Steadii did for you this week — triaged emails, drafts written, chat turns, proactive proposals. Everything below is your own data; nothing leaves this account.",
+    summary_heading: "Past 7 days",
+    summary_window: "Rolling 7-day window ending now.",
+    stat_emails_triaged: "Emails triaged",
+    stat_drafts_generated: "Drafts generated",
+    stat_drafts_sub: "{sent} sent ({auto} auto-sent) · {dismissed} dismissed",
+    stat_chat_turns: "Chat turns",
+    stat_proposals_shown: "Proactive proposals",
+    stat_failures: "Failures",
+    tab_recent: "Recent activity",
+    tab_failures: "Failures",
+    activity_empty:
+      "No activity recorded yet. Steadii starts logging here as soon as you send a chat or it triages an email.",
+    failures_empty: "No failures in your recent activity. Nice.",
+    page_prev: "Newer",
+    page_next: "Older",
+    page_label: "Page {page} of {total}",
+  },
   settings_user_facts: {
     settings_back: "Settings",
     title: "What Steadii remembers about you",
@@ -3377,6 +3425,11 @@ export const en: MessagesShape = {
     delete: "Forget",
     cancel: "Cancel",
     save: "Save",
+    reconfirm: "Still right",
+    reconfirm_hint:
+      "Bump the lifecycle clock — Steadii will hold off on re-asking for a while.",
+    lifecycle_next_review: "Next review",
+    lifecycle_expires: "Expires",
     provenance_user: "You told Steadii this",
     provenance_agent: "Steadii inferred this from chat",
     add_heading: "Tell Steadii something to remember",

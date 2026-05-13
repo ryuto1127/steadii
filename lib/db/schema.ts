@@ -2155,7 +2155,11 @@ export type AgentProposalIssueType =
   | "group_project_detected"
   // Wave 3.2 — silence detection. Surfaces as a Type C card; click
   // opens the group detail page where Steadii drafts a check-in.
-  | "group_member_silent";
+  | "group_member_silent"
+  // engineer-48 — periodic re-confirmation of an aging user_fact. The
+  // user-fact-review cron emits one row per fact whose next_review_at
+  // <= now(); the queue surfaces it as a Type F clarifying card.
+  | "user_fact_review";
 
 export type AgentProposalStatus =
   | "pending"
@@ -2657,6 +2661,26 @@ export const userFacts = pgTable(
       withTimezone: true,
       mode: "date",
     }),
+    // engineer-48 — lifecycle metadata. expiresAt enforces a hard cutoff
+    // (semester schedules expire in 4mo; locations are NULL = forever).
+    // nextReviewAt fires the user-fact-review cron that surfaces a Type F
+    // proposal asking the user to reconfirm. reviewedAt tracks the last
+    // explicit user/agent re-confirmation. decayHalfLifeDays softens
+    // injected confidence for facts that haven't been touched (only used
+    // for communication_style today).
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    nextReviewAt: timestamp("next_review_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    reviewedAt: timestamp("reviewed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    decayHalfLifeDays: integer("decay_half_life_days"),
   },
   (t) => ({
     userIdx: index("user_facts_user_idx")
@@ -2669,6 +2693,11 @@ export const userFacts = pgTable(
     userFactSoftUnique: uniqueIndex("user_facts_user_fact_unique")
       .on(t.userId, t.fact)
       .where(sql`deleted_at IS NULL`),
+    // engineer-48 — cron-driven review sweep needs fast scans over
+    // next_review_at <= now() filtered by live rows.
+    nextReviewIdx: index("user_facts_next_review_idx")
+      .on(t.nextReviewAt)
+      .where(sql`deleted_at IS NULL AND next_review_at IS NOT NULL`),
   })
 );
 
