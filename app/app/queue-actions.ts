@@ -25,7 +25,10 @@ import {
 } from "@/lib/agent/email/draft-actions";
 import { processL2 } from "@/lib/agent/email/l2";
 import { recordProactiveFeedback } from "@/lib/agent/proactive/feedback-bias";
-import { executeProactiveAction } from "@/lib/agent/proactive/action-executor";
+import {
+  executeProactiveAction,
+  stampLastMonthlyReviewAt,
+} from "@/lib/agent/proactive/action-executor";
 import { logEmailAudit } from "@/lib/agent/email/audit";
 import { resolveGroupDetectClarification } from "@/lib/agent/groups/detect-actions";
 import {
@@ -447,6 +450,13 @@ async function dismissProposalSnooze(
   hours: number = 24
 ): Promise<void> {
   const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000);
+  const [proposal] = await db
+    .select({ issueType: agentProposals.issueType })
+    .from(agentProposals)
+    .where(
+      and(eq(agentProposals.id, proposalId), eq(agentProposals.userId, userId))
+    )
+    .limit(1);
   await db
     .update(agentProposals)
     .set({
@@ -459,6 +469,11 @@ async function dismissProposalSnooze(
     .where(
       and(eq(agentProposals.id, proposalId), eq(agentProposals.userId, userId))
     );
+  // engineer-49 — monthly check-in dismiss path also stamps the cadence
+  // preference so the rule waits another 30 days before re-firing.
+  if (proposal?.issueType === "monthly_boundary_review") {
+    await stampLastMonthlyReviewAt(userId);
+  }
   // Soft snooze: feedback bias stays neutral — we don't want a snooze
   // to bias the scanner away from this issue type.
 }
@@ -517,6 +532,12 @@ async function dismissProposalPermanent(
     .where(
       and(eq(agentProposals.id, proposalId), eq(agentProposals.userId, userId))
     );
+
+  // engineer-49 — monthly check-in permanent-dismiss also stamps
+  // cadence so the rule honors the user's "looks good" signal.
+  if (proposal.issueType === "monthly_boundary_review") {
+    await stampLastMonthlyReviewAt(userId);
+  }
 
   await recordProactiveFeedback({
     userId,

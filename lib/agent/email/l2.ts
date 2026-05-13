@@ -47,6 +47,7 @@ import {
   type DraftCalendarEvent,
 } from "@/lib/integrations/google/calendar";
 import { enqueueSendForDraft } from "./send-enqueue";
+import { getPromotionState } from "@/lib/agent/learning/sender-confidence";
 
 // Hand-tuned K for the shallower medium-risk draft retrieval. Smaller than
 // DEEP_PASS_TOP_K because medium items don't get the deep reasoning pass,
@@ -657,15 +658,39 @@ async function runPipeline(
   // — auto-send is a nicety; the draft is already persisted in pending
   // state so the worst case is the user sees a normal review queue
   // entry instead of an auto-sent one.
-  const autoSendEligible =
-    persisted &&
-    !!userRow?.autonomySendEnabled &&
-    riskTier === "medium" &&
+  //
+  // engineer-49 — dynamic confirmation thresholds. Layer the learned
+  // per-sender promotion state on top of the static gate:
+  //   - promotionState='auto_send' → bypass the medium-tier-only gate
+  //     so high-tier drafts can also auto-send from a trusted sender,
+  //     gated only on autonomy_send_enabled + complete draft.
+  //   - promotionState='always_review' → force autoSendEligible=false
+  //     even when the static gate would have passed (medium + opted in).
+  const draftComplete =
+    !!persisted &&
     finalAction === "draft_reply" &&
     draft?.kind === "draft" &&
     !!draft.body &&
     !!draft.subject &&
     draft.to.length > 0;
+  const promotionState = draftComplete
+    ? await getPromotionState({
+        userId: item.userId,
+        senderEmail: item.senderEmail,
+        actionType: finalAction,
+      })
+    : "baseline";
+  const baseEligible =
+    draftComplete &&
+    !!userRow?.autonomySendEnabled &&
+    riskTier === "medium";
+  const promotedEligible =
+    draftComplete &&
+    !!userRow?.autonomySendEnabled &&
+    promotionState === "auto_send";
+  const autoSendEligible =
+    promotionState !== "always_review" &&
+    (baseEligible || promotedEligible);
   if (autoSendEligible) {
     try {
       await enqueueSendForDraft({

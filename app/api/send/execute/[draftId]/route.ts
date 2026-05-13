@@ -6,6 +6,7 @@ import { agentDrafts, inboxItems } from "@/lib/db/schema";
 import { sendAndAudit } from "@/lib/agent/tools/gmail";
 import { verifyQStashSignature } from "@/lib/integrations/qstash/verify";
 import { recordSenderFeedback } from "@/lib/agent/email/feedback";
+import { recordSenderEvent } from "@/lib/agent/learning/sender-confidence";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -107,6 +108,27 @@ export async function POST(
             originalDraftBody: draft.originalDraftBody ?? null,
             editedBody: draft.draftBody ?? null,
           });
+          // engineer-49 — feed the dynamic-confirmation learner. A
+          // successful send always bumps the approve counter / streak;
+          // if the user edited the body before sending, also bump
+          // editedCount so the confidence formula counts it as a soft
+          // negative (they trusted us enough to send but corrected).
+          await recordSenderEvent({
+            userId: draft.userId,
+            senderEmail: inbox.senderEmail,
+            actionType: draft.action,
+            event: "approved",
+          });
+          const orig = (draft.originalDraftBody ?? "").trim();
+          const edited = (draft.draftBody ?? "").trim();
+          if (orig.length > 0 && edited.length > 0 && orig !== edited) {
+            await recordSenderEvent({
+              userId: draft.userId,
+              senderEmail: inbox.senderEmail,
+              actionType: draft.action,
+              event: "edited",
+            });
+          }
         }
 
         return NextResponse.json({ sent: true, gmailMessageId });

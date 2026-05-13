@@ -904,6 +904,24 @@ type MessagesShape = {
       done: string;
     };
   };
+  digest: {
+    monthly: {
+      back_to_home: string;
+      back_to_index: string;
+      index_eyebrow: string;
+      index_title: string;
+      index_subtitle: string;
+      index_empty_title: string;
+      index_empty_description: string;
+      index_themes_label: string;
+      detail_eyebrow: string;
+      detail_empty: string;
+      section_themes: string;
+      section_recommendations: string;
+      section_drift: string;
+      suggested_date_label: string;
+    };
+  };
   agent_rules_section: {
     global_rules: string;
     global_rules_caption: string;
@@ -1065,6 +1083,11 @@ type MessagesShape = {
       activity_log_open: string;
     };
     user_facts: {
+      section_title: string;
+      description: string;
+      open: string;
+    };
+    agent_tuning: {
       section_title: string;
       description: string;
       open: string;
@@ -1430,6 +1453,45 @@ type MessagesShape = {
       error_toast: string;
       pending: string;
     };
+  };
+  agent_tuning_page: {
+    settings_back: string;
+    title: string;
+    description: string;
+    monthly_summary_heading: string;
+    monthly_approved: string;
+    monthly_dismissed: string;
+    monthly_rejected: string;
+    auto_send_heading: string;
+    auto_send_description: string;
+    auto_send_empty: string;
+    always_review_heading: string;
+    always_review_description: string;
+    always_review_empty: string;
+    pending_heading: string;
+    pending_description: string;
+    pending_empty: string;
+    column_sender: string;
+    column_action: string;
+    column_confidence: string;
+    column_samples: string;
+    column_last_event: string;
+    column_actions: string;
+    revoke_button: string;
+    forgive_button: string;
+    revoke_pending: string;
+    forgive_pending: string;
+    reset_all_heading: string;
+    reset_all_description: string;
+    reset_all_button: string;
+    reset_all_confirm: string;
+    reset_all_pending: string;
+    empty_state_title: string;
+    empty_state_body: string;
+  };
+  proactive_monthly_review: {
+    open_action: string;
+    dismiss_action: string;
   };
   agent_thinks_page: {
     settings_back: string;
@@ -2678,6 +2740,27 @@ export const en: MessagesShape = {
       done: "Done",
     },
   },
+  digest: {
+    monthly: {
+      back_to_home: "Back to Home",
+      back_to_index: "Back to monthly digests",
+      index_eyebrow: "Steadii · Chief of Staff",
+      index_title: "Monthly digests",
+      index_subtitle:
+        "Once a month, Steadii steps back and connects the dots across your full activity. Pick a month to revisit.",
+      index_empty_title: "No digests yet",
+      index_empty_description:
+        "Your first monthly digest will land on the first Sunday of next month. It covers email, calendar, assignments, drift signals — patterns no daily summary catches.",
+      index_themes_label: "themes",
+      detail_eyebrow: "Steadii · Chief of Staff",
+      detail_empty:
+        "Steadii couldn't find a strong enough pattern this month. We'll try again at the next cycle.",
+      section_themes: "Themes this month",
+      section_recommendations: "Steadii recommends",
+      section_drift: "Worth a look",
+      suggested_date_label: "Suggested",
+    },
+  },
   agent_rules_section: {
     global_rules: "Global rules",
     global_rules_caption: "— operator-maintained, read-only",
@@ -2867,6 +2950,12 @@ export const en: MessagesShape = {
       section_title: "What Steadii remembers about you",
       description:
         "Persistent facts Steadii has saved about you (your timezone, working hours, communication style, schooling, notification preferences). The chat agent injects these at the top of every session so it doesn't re-ask things you've already told it.",
+      open: "Open",
+    },
+    agent_tuning: {
+      section_title: "Agent confidence tuning",
+      description:
+        "Senders Steadii has learned to auto-send for, and senders it has flagged for forced review. Adjust which boundaries Steadii crossed and reset learned signals.",
       open: "Open",
     },
     agent_rules: {
@@ -3351,6 +3440,51 @@ export const en: MessagesShape = {
       error_toast: "Voice profile generation failed. Try again, or check the integration status.",
       pending: "Learning your writing voice…",
     },
+  },
+  agent_tuning_page: {
+    settings_back: "Settings",
+    title: "Agent confidence tuning",
+    description:
+      "Steadii promotes senders to auto-send after a streak of approvals and demotes them after dismissals or explicit rejects. Adjust the learned thresholds here.",
+    monthly_summary_heading: "Past 30 days",
+    monthly_approved: "{n} approved",
+    monthly_dismissed: "{n} dismissed",
+    monthly_rejected: "{n} rejected",
+    auto_send_heading: "Auto-send senders",
+    auto_send_description:
+      "Steadii sends drafts to these senders automatically with the standard 10-second undo. Revoke to require explicit Send again.",
+    auto_send_empty: "No auto-send senders yet.",
+    always_review_heading: "Always-review senders",
+    always_review_description:
+      "Drafts to these senders force the full review UI regardless of L2 tier. Forgive to remove the lock and let Steadii treat the sender like any other.",
+    always_review_empty: "No always-review senders.",
+    pending_heading: "Pending learning",
+    pending_description:
+      "Senders with 2-4 samples — Steadii is still learning your preference. Promotion or demotion fires once enough signal accumulates.",
+    pending_empty: "Nothing pending right now.",
+    column_sender: "Sender",
+    column_action: "Action",
+    column_confidence: "Confidence",
+    column_samples: "Samples",
+    column_last_event: "Last event",
+    column_actions: "Actions",
+    revoke_button: "Revoke",
+    forgive_button: "Forgive",
+    revoke_pending: "Revoking…",
+    forgive_pending: "Forgiving…",
+    reset_all_heading: "Reset all learned signals",
+    reset_all_description:
+      "Clears every per-sender promotion / demotion + the confidence counters. Steadii starts fresh from baseline for everyone.",
+    reset_all_button: "Reset all",
+    reset_all_confirm: "This wipes every learned sender signal. Continue?",
+    reset_all_pending: "Resetting…",
+    empty_state_title: "Nothing learned yet",
+    empty_state_body:
+      "Send or dismiss a few drafts and Steadii will start surfacing learned senders here.",
+  },
+  proactive_monthly_review: {
+    open_action: "Open agent tuning",
+    dismiss_action: "Looks good",
   },
   agent_thinks_page: {
     settings_back: "Settings",
