@@ -45,8 +45,13 @@ const scenario: EvalScenario = {
   expect: [
     { kind: "tool_called", name: "email_get_body" },
     // The agent must acknowledge that 10:30 is within the proposed
-    // range (i.e. valid). The Japanese natural phrasing is "範囲内"
-    // or "可能" or "問題ありません" — accept any of those.
+    // range (i.e. valid). The Japanese natural phrasing varies wildly
+    // ("範囲内", "可能", "問題ありません", "に入っています", "予約できる",
+    // "OKです", "はい") — accept any positive confirmation phrase.
+    // Engineer-53 broadened this list after a 2026-05-13 eval failure
+    // where the model said "に入っています" + "予約できる時間です" — both
+    // semantically "yes 10:30 is bookable", but neither matched the old
+    // narrower keyword list.
     {
       kind: "custom",
       label: "acknowledges 10:30 is bookable within the range",
@@ -56,9 +61,13 @@ const scenario: EvalScenario = {
           t.includes("範囲内") ||
           t.includes("可能") ||
           t.includes("問題") ||
+          t.includes("入っています") ||
+          t.includes("予約できる") ||
           t.includes("OK") ||
+          t.includes("はい") ||
           t.toLowerCase().includes("yes") ||
-          t.toLowerCase().includes("within");
+          t.toLowerCase().includes("within") ||
+          t.toLowerCase().includes("bookable");
         return {
           pass: acknowledges,
           message: acknowledges

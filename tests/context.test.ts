@@ -143,4 +143,83 @@ describe("serializeContextForPrompt", () => {
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });
+
+  // engineer-53 — USER_NAME injection. The system prompt's EMAIL REPLY
+  // WORKFLOW MUST-rule 5 binds the agent to use the user's real name in
+  // sign-offs; this is the data-side anchor that lets it.
+  describe("USER_NAME injection", () => {
+    it("emits a USER_NAME line with the real name when present", () => {
+      const out = serializeContextForPrompt({
+        timezone: "America/Vancouver",
+        notion: {
+          connected: false,
+          parentPageId: null,
+          classesDbId: null,
+          mistakesDbId: null,
+          assignmentsDbId: null,
+          syllabiDbId: null,
+        },
+        registeredResources: [],
+        userName: "畠山 竜都",
+      });
+      expect(out).toMatch(/USER_NAME: 畠山 竜都/);
+    });
+
+    it("emits a USER_NAME line with the unknown-fallback when null", () => {
+      const out = serializeContextForPrompt({
+        timezone: "America/Vancouver",
+        notion: {
+          connected: false,
+          parentPageId: null,
+          classesDbId: null,
+          mistakesDbId: null,
+          assignmentsDbId: null,
+          syllabiDbId: null,
+        },
+        registeredResources: [],
+        userName: null,
+      });
+      expect(out).toMatch(/USER_NAME: \(unknown/);
+      expect(out).toMatch(/ask the user/);
+      expect(out).not.toMatch(/USER_NAME: \n/);
+    });
+
+    it("falls back to the unknown-fallback when userName is empty / whitespace", () => {
+      const out = serializeContextForPrompt({
+        timezone: "America/Vancouver",
+        notion: {
+          connected: false,
+          parentPageId: null,
+          classesDbId: null,
+          mistakesDbId: null,
+          assignmentsDbId: null,
+          syllabiDbId: null,
+        },
+        registeredResources: [],
+        userName: "   ",
+      });
+      expect(out).toMatch(/USER_NAME: \(unknown/);
+    });
+
+    it("USER_NAME line precedes Timezone in the USER CONTEXT block", () => {
+      const out = serializeContextForPrompt({
+        timezone: "America/Vancouver",
+        notion: {
+          connected: false,
+          parentPageId: null,
+          classesDbId: null,
+          mistakesDbId: null,
+          assignmentsDbId: null,
+          syllabiDbId: null,
+        },
+        registeredResources: [],
+        userName: "Ryuto",
+      });
+      const userIdx = out.indexOf("USER_NAME:");
+      const tzIdx = out.indexOf("Timezone:");
+      expect(userIdx).toBeGreaterThan(-1);
+      expect(tzIdx).toBeGreaterThan(-1);
+      expect(userIdx).toBeLessThan(tzIdx);
+    });
+  });
 });

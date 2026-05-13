@@ -40,6 +40,12 @@ export type UserContextPayload = {
     fact: string;
     category: string | null;
   }>;
+  // engineer-53 — the user's display name as captured at signup
+  // (`users.name` on the DB). Surfaced as a labeled `USER_NAME:` line in
+  // the system prompt so the chat agent can sign off email drafts with
+  // the user's real name instead of defaulting to a 〇〇 placeholder.
+  // Null when the user signed up via a flow that didn't capture a name.
+  userName?: string | null;
 };
 
 // Format `date` as a full offset-bearing RFC3339 string in `tz`, e.g.
@@ -121,6 +127,19 @@ export function serializeContextForPrompt(ctx: UserContextPayload): string {
   // the system-prompt TIMEZONE RULES section's expectation that the
   // current local TZ + locale are known facts, not inferences.
   lines.push(`# USER CONTEXT (always honor)`);
+  // engineer-53 — USER_NAME is surfaced first inside the block so the
+  // agent has the user's real name in scope BEFORE any of the email-
+  // reply MUST-rules in main.ts fire. Null/empty falls back to a
+  // graceful "(unknown — ask the user before signing a draft)" so the
+  // EMAIL REPLY WORKFLOW MUST-rule 5 can still execute its "ask the
+  // user" branch instead of papering over with a placeholder.
+  if (ctx.userName && ctx.userName.trim().length > 0) {
+    lines.push(`USER_NAME: ${ctx.userName.trim()}`);
+  } else {
+    lines.push(
+      `USER_NAME: (unknown — ask the user for their name before signing a draft on their behalf, never emit 〇〇)`
+    );
+  }
   lines.push(`Timezone: ${tz} (${tzAbbr}, UTC${nowIso.slice(-6)})`);
   lines.push(`Current local time: ${nowIso}`);
   lines.push(`Locale: ${locale}`);

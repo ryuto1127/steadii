@@ -8,6 +8,7 @@ import {
   notionConnections,
   registeredResources,
   syllabi,
+  users,
 } from "@/lib/db/schema";
 import { and, count, eq, isNull } from "drizzle-orm";
 import { getCalendarForUser } from "@/lib/integrations/google/calendar";
@@ -47,6 +48,7 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
     mistakeCount,
     syllabusCount,
     userFactsList,
+    userRow,
   ] = await Promise.all([
     getUserTimezone(userId),
     getUserLocale(userId),
@@ -56,6 +58,14 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
     countRows(mistakeNotes, userId, true),
     countRows(syllabi, userId, true),
     loadTopUserFacts(userId),
+    // engineer-53 — pull users.name to surface as USER_NAME in the
+    // serialized prompt. Single-row fetch by primary key.
+    db
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
   ]);
 
   return {
@@ -85,6 +95,7 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
       fact: f.fact,
       category: f.category,
     })),
+    userName: userRow?.name ?? null,
   };
 }
 
