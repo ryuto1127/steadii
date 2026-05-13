@@ -1,5 +1,16 @@
 import "server-only";
-import nodeIcal from "node-ical";
+
+// node-ical is lazy-imported inside parseIcal so it stays out of the
+// agent tool-registry's chunk evaluation graph. Eager import here was
+// causing /api/chat to crash at Turbopack runtime with
+// `Failed to load external module node-ical … Cannot find module …
+// temporal-polyfill/index.js` because Turbopack's externalRequire
+// hard-codes the build-time pnpm-nested path and Vercel's tracer
+// can't follow symlinked directories into the lambda zip cleanly.
+// Dynamic import creates a separate lazy chunk that's only evaluated
+// when an iCal sync actually runs (cron / explicit user action), not
+// when the chat orchestrator boots its tool-registry.
+type NodeIcalModule = typeof import("node-ical");
 
 // Flat shape produced by parsing one .ics document. The sync module maps
 // these into NewEventRow inserts; downstream consumers (fanout, the events
@@ -64,10 +75,23 @@ function normaliseStatus(
 // surface any rows at all. Per-instance overrides from `recurrences` win
 // over the master fields for matching dates. EXDATEs are honored by the
 // underlying rrule wrapper.
-export function parseIcal(
+// Cached lazy reference — first call loads the module; subsequent
+// calls reuse it. parseIcal is invoked from a long-running cron / API
+// path, so the per-call cost of the cache check is irrelevant relative
+// to the one-time module load.
+let cachedNodeIcal: NodeIcalModule | null = null;
+async function loadNodeIcal(): Promise<NodeIcalModule> {
+  if (!cachedNodeIcal) {
+    cachedNodeIcal = await import("node-ical");
+  }
+  return cachedNodeIcal;
+}
+
+export async function parseIcal(
   icsBody: string,
   options: { windowStart: Date; windowEnd: Date }
-): ParsedIcalEvent[] {
+): Promise<ParsedIcalEvent[]> {
+  const nodeIcal = await loadNodeIcal();
   const parsed = nodeIcal.parseICS(icsBody);
   const out: ParsedIcalEvent[] = [];
 

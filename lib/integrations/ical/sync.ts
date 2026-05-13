@@ -117,7 +117,7 @@ export async function syncIcalSubscription(
     const windowEnd = new Date(
       now.getTime() + ICAL_SYNC_WINDOW_DAYS * 24 * 60 * 60 * 1000
     );
-    parsed = parseIcal(body, { windowStart: now, windowEnd });
+    parsed = await parseIcal(body, { windowStart: now, windowEnd });
   } catch (err) {
     return await recordFailure(
       sub,
