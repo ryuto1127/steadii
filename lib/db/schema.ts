@@ -2605,3 +2605,72 @@ export const cronHeartbeats = pgTable("cron_heartbeats", {
 });
 
 export type CronHeartbeatRow = typeof cronHeartbeats.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// engineer-47 — user_facts (persistent facts the agent remembers about the
+// user). Sibling to agent_contact_personas.structured_facts: that table
+// holds per-contact typed facts, user_facts holds per-user free-form facts
+// the chat agent picked up (or the user explicitly asked to remember).
+//
+// Each row is one factual sentence. The save_user_fact chat tool inserts
+// here. The chat orchestrator (lib/agent/prompts/main.ts + serialize-
+// context.ts) splices the top-N rows back into the system prompt at
+// session start. The settings UI under /app/settings/facts lets the user
+// view / edit / soft-delete entries.
+// ---------------------------------------------------------------------------
+
+export type UserFactCategory =
+  | "schedule"
+  | "communication_style"
+  | "location_timezone"
+  | "academic"
+  | "personal_pref"
+  | "other";
+
+export type UserFactSource = "user_explicit" | "agent_inferred";
+
+export const userFacts = pgTable(
+  "user_facts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    fact: text("fact").notNull(),
+    category: text("category").$type<UserFactCategory>(),
+    source: text("source").$type<UserFactSource>().notNull(),
+    // 0..1; non-null when source = 'agent_inferred'. NULL for user_explicit
+    // (the user said it, no inference confidence).
+    confidence: real("confidence"),
+    // Engineer-evidence: where this fact came from. Optional pointers used
+    // by the settings UI to surface "Steadii thinks this because…".
+    sourceChatMessageId: uuid("source_chat_message_id"),
+    sourceInboxItemId: uuid("source_inbox_item_id"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    lastUsedAt: timestamp("last_used_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    deletedAt: timestamp("deleted_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (t) => ({
+    userIdx: index("user_facts_user_idx")
+      .on(t.userId, t.lastUsedAt)
+      .where(sql`deleted_at IS NULL`),
+    // Soft-unique on (user_id, fact) so re-saving the same sentence
+    // upserts cleanly instead of creating a duplicate. Partial index
+    // scoped to live rows lets a user re-add a fact they previously
+    // soft-deleted without violating the constraint.
+    userFactSoftUnique: uniqueIndex("user_facts_user_fact_unique")
+      .on(t.userId, t.fact)
+      .where(sql`deleted_at IS NULL`),
+  })
+);
+
+export type UserFactRow = typeof userFacts.$inferSelect;
+export type NewUserFactRow = typeof userFacts.$inferInsert;

@@ -902,11 +902,6 @@ export const ja: Messages = {
     ],
   },
   chat: {
-    actions: {
-      add_to_mistakes: "+ Steadii のメモに追加",
-      generate_similar: "類題を生成",
-      save_mistake: "Steadii のメモに保存",
-    },
     dismiss: "閉じる",
     remove_attachment: "削除",
     tutor_offer: {
@@ -1018,6 +1013,12 @@ export const ja: Messages = {
       section_title: "エージェントの思考過程",
       description:
         "直近の判断の振り返りビュー（読み取り専用）。何を取り上げたか、なぜか、どの Steadii メモ・シラバス断片・カレンダー予定・過去メールを根拠にしたかが見えます。最後までガラス箱。",
+      open: "開く",
+    },
+    user_facts: {
+      section_title: "Steadii があなたについて覚えていること",
+      description:
+        "Steadii が保存している、あなた自身に関する持続的な事実（タイムゾーン、稼働時間、コミュニケーションのトーン、在学情報、通知の好みなど）。チャットエージェントは毎セッションの最初にこれを読み込むので、同じことを聞き直しません。",
       open: "開く",
     },
     agent_rules: {
@@ -1765,6 +1766,35 @@ export const ja: Messages = {
       status_dismissed: "却下済み",
     },
   },
+  settings_user_facts: {
+    settings_back: "設定",
+    title: "Steadii があなたについて覚えていること",
+    description:
+      "チャットエージェントが保存している、あなた自身に関する持続的な事実です。直近に使われたものから順に並んでいます。上位 12 件は毎セッションの system プロンプトに差し込まれるので、Steadii は同じことを聞き直しません。",
+    plaintext_warning:
+      "ファクトは平文で保存されます。パスワードや機密の情報は保存しないでください。",
+    empty:
+      "Steadii はまだあなたに関するファクトを保存していません。チャットで「私はバンクーバーです」「夜は通知しないで」など教えると、ここに表示されます。",
+    edit: "編集",
+    delete: "忘れる",
+    cancel: "キャンセル",
+    save: "保存",
+    provenance_user: "あなたが Steadii に教えた",
+    provenance_agent: "Steadii がチャットから推測した",
+    add_heading: "Steadii に覚えてほしいことを追加",
+    add_description:
+      "セッションをまたいで Steadii に覚えておいてほしいこと — タイムゾーン、稼働時間、トーンの好み、在学コンテキストなど。",
+    add_placeholder: "平日は 13:00〜18:00 PT で動いてます",
+    add_submit: "覚える",
+    categories: {
+      schedule: "スケジュール",
+      communication_style: "コミュニケーションのトーン",
+      location_timezone: "所在地・タイムゾーン",
+      academic: "在学情報",
+      personal_pref: "個人の好み",
+      other: "その他",
+    },
+  },
   syllabus_new_page: {
     title: "シラバスをアップロード",
     subtitle: "PDF か画像をドロップするか、URL を貼り付けてください。構造を解析して、保存前にプレビューを表示します。",
@@ -1790,18 +1820,6 @@ export const ja: Messages = {
   },
   chat_view_v2: {
     blob_token_const: "BLOB_READ_WRITE_TOKEN",
-  },
-  mistake_note_dialog: {
-    title: "ノートに追加",
-    title_label: "タイトル（問題の概要を簡潔に）",
-    title_placeholder: "例：風を考慮した 2D 放物運動",
-    class_label: "クラス",
-    class_none: "（なし）",
-    unit_label: "単元 / 章",
-    difficulty_label: "難易度",
-    tags_label: "タグ（カンマ区切り）",
-    tags_placeholder: "ベクトル, 積分",
-    cancel: "キャンセル",
   },
   new_chat_input: {
     attach_aria: "画像または PDF を添付",

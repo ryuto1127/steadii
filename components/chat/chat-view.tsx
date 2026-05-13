@@ -11,14 +11,11 @@ import {
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-// 2026-05-12 — MistakeNoteDialog removed from chat surface. It saved chat
-// messages into the `mistakes` table from the tutor-era pivot (pre-secretary
-// pivot 2026-05-01); the storage had nowhere it was surfaced after PR #182
-// dropped mistake notes from L2 fanout + class-detail tabs. The "+ Steadii
-// のメモに追加" pill that triggered it gave users no visible feedback, so
-// it was acting as dead UX. The dialog component + /api/mistakes/save +
-// the mistakes table are intentionally left intact — a future "user notes"
-// feature can repurpose them.
+// engineer-47 — chat-driven mistake-save dialog removed entirely. The pill
+// was dropped in PR #210; the dialog + /api/mistakes/save + the
+// `saveMistakeNote` helper are gone too. The new user_facts feature lives
+// at /app/settings/facts + the save_user_fact chat tool, not in chat UI.
+// Handwritten-OCR + class-detail mistake_notes paths remain.
 import { MarkdownMessage } from "./markdown-message";
 import { ToolCallCard, type ToolCallStatus } from "./tool-call-card";
 import { parseProposedActions } from "./proposed-actions";
