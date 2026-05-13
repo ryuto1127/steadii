@@ -2956,3 +2956,36 @@ export const entityLinks = pgTable(
 
 export type EntityLinkRow = typeof entityLinks.$inferSelect;
 export type NewEntityLinkRow = typeof entityLinks.$inferInsert;
+
+// engineer-52 — agent eval suite run history. One row per CI invocation
+// of `pnpm eval:agent`. The raw_report column holds the full per-
+// scenario breakdown (assertion outcomes, tool-call sequence, final
+// text) so trend analysis doesn't need a second table.
+export const agentEvalRuns = pgTable(
+  "agent_eval_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    commitSha: text("commit_sha").notNull(),
+    branch: text("branch").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    finishedAt: timestamp("finished_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    totalScenarios: integer("total_scenarios").notNull(),
+    passed: integer("passed").notNull(),
+    failed: integer("failed").notNull(),
+    durationMs: integer("duration_ms").notNull(),
+    totalCostUsd: real("total_cost_usd"),
+    rawReport: jsonb("raw_report").notNull(),
+  },
+  (t) => ({
+    commitIdx: index("agent_eval_runs_commit_idx").on(t.commitSha),
+    startedIdx: index("agent_eval_runs_started_idx").on(t.startedAt),
+  })
+);
+
+export type AgentEvalRunRow = typeof agentEvalRuns.$inferSelect;
+export type NewAgentEvalRunRow = typeof agentEvalRuns.$inferInsert;

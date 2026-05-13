@@ -1,0 +1,56 @@
+# engineer-52 — agent behavior eval suite.
+#
+# Runs the scenario-based eval harness on PRs that touch the agent's
+# prompts, tools, orchestrator, or self-critique. Other PRs skip the
+# job to avoid burning OpenAI cost on changes that can't affect agent
+# behavior (e.g. CSS-only or billing-only PRs).
+#
+# Requires the OPENAI_API_KEY secret. CI cost: ~$0.01 per run at α
+# (8 scenarios × mini-tier).
+
+name: agent-evals
+
+on:
+  pull_request:
+    paths:
+      - "lib/agent/prompts/**"
+      - "lib/agent/tools/**"
+      - "lib/agent/orchestrator.ts"
+      - "lib/agent/self-critique.ts"
+      - "lib/agent/email/sender-timezone-heuristic.ts"
+      - "tests/agent-evals/**"
+      - ".github/workflows/agent-evals.yml"
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run agent eval suite
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Mini-tier override so the suite stays cheap. Override in
+          # repo secrets if a specific model rollout needs testing.
+          OPENAI_EVAL_MODEL: ${{ vars.OPENAI_EVAL_MODEL || 'gpt-5.4-mini' }}
+        run: pnpm eval:agent
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-eval-report
+          path: tests/agent-evals/last-run.json
+          retention-days: 30
