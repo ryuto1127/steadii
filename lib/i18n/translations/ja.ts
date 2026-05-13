@@ -1014,6 +1014,7 @@ export const ja: Messages = {
       description:
         "直近の判断の振り返りビュー（読み取り専用）。何を取り上げたか、なぜか、どの Steadii メモ・シラバス断片・カレンダー予定・過去メールを根拠にしたかが見えます。最後までガラス箱。",
       open: "開く",
+      activity_log_open: "アクティビティログ",
     },
     user_facts: {
       section_title: "Steadii があなたについて覚えていること",
@@ -1766,6 +1767,29 @@ export const ja: Messages = {
       status_dismissed: "却下済み",
     },
   },
+  activity_log_page: {
+    settings_back: "設定",
+    title: "Steadii のアクティビティログ",
+    description:
+      "今週 Steadii があなたのためにした作業 — メールのトリアージ、ドラフト生成、チャット往復、Proactive 提案の一覧。すべてあなたのデータ専用で、このアカウント外には出ません。",
+    summary_heading: "過去 7 日間",
+    summary_window: "現在から 7 日間のローリングウィンドウ。",
+    stat_emails_triaged: "トリアージしたメール",
+    stat_drafts_generated: "生成したドラフト",
+    stat_drafts_sub:
+      "{sent} 送信済み（うち自動 {auto}）・{dismissed} 却下",
+    stat_chat_turns: "チャット往復",
+    stat_proposals_shown: "Proactive 提案",
+    stat_failures: "失敗",
+    tab_recent: "最近のアクティビティ",
+    tab_failures: "失敗",
+    activity_empty:
+      "まだアクティビティはありません。チャットを送ったりメールがトリアージされたりすると、ここに記録され始めます。",
+    failures_empty: "直近の失敗はありません。",
+    page_prev: "新しい",
+    page_next: "古い",
+    page_label: "{page} / {total} ページ",
+  },
   settings_user_facts: {
     settings_back: "設定",
     title: "Steadii があなたについて覚えていること",
@@ -1779,6 +1803,11 @@ export const ja: Messages = {
     delete: "忘れる",
     cancel: "キャンセル",
     save: "保存",
+    reconfirm: "まだ合ってる",
+    reconfirm_hint:
+      "ライフサイクルをリセット — Steadii はしばらく再確認しません。",
+    lifecycle_next_review: "次回再確認",
+    lifecycle_expires: "有効期限",
     provenance_user: "あなたが Steadii に教えた",
     provenance_agent: "Steadii がチャットから推測した",
     add_heading: "Steadii に覚えてほしいことを追加",

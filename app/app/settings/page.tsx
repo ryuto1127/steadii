@@ -227,13 +227,22 @@ export default async function SettingsPage() {
         <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
           {tThinks("description")}
         </p>
-        <Link
-          href="/app/settings/how-your-agent-thinks"
-          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
-        >
-          {tThinks("open")}
-          <ExternalLink size={12} strokeWidth={1.5} />
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/app/settings/how-your-agent-thinks"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
+          >
+            {tThinks("open")}
+            <ExternalLink size={12} strokeWidth={1.5} />
+          </Link>
+          <Link
+            href="/app/settings/activity-log"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
+          >
+            {tThinks("activity_log_open")}
+            <ExternalLink size={12} strokeWidth={1.5} />
+          </Link>
+        </div>
       </Section>
 
       <Section title={tFacts("section_title")}>

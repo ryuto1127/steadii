@@ -1,11 +1,15 @@
 import "server-only";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
+  auditLog,
   chats,
   messages as messagesTable,
+  userFacts,
   type ActionOption,
   type AgentProposalRow,
 } from "@/lib/db/schema";
+import { lifecycleForCategory } from "@/lib/agent/user-facts-lifecycle";
 
 // Maps a proactive ActionOption → side-effect.
 //
@@ -28,6 +32,15 @@ export async function executeProactiveAction(args: {
   proposal: AgentProposalRow;
 }): Promise<ActionExecutionResult> {
   const { option, userId, proposal } = args;
+
+  // engineer-48 — user_fact_review uses tool='auto' with a payload-driven
+  // op so confirm/delete run inline (no follow-up chat). edit routes
+  // through chat_followup but the underlying action is "open settings"
+  // — we handle that there too so the deep link points to the right
+  // surface.
+  if (proposal.issueType === "user_fact_review") {
+    return await resolveUserFactReview(userId, option);
+  }
 
   switch (option.tool) {
     case "chat_followup":
@@ -53,6 +66,81 @@ export async function executeProactiveAction(args: {
       // Handled by /dismiss route. Should never reach here.
       return {};
   }
+}
+
+// engineer-48 — inline confirm / delete / edit for user_fact_review.
+async function resolveUserFactReview(
+  userId: string,
+  option: ActionOption
+): Promise<ActionExecutionResult> {
+  const factId =
+    typeof option.payload?.factId === "string"
+      ? (option.payload.factId as string)
+      : null;
+  const op =
+    typeof option.payload?.op === "string"
+      ? (option.payload.op as string)
+      : option.key;
+  if (!factId) return {};
+
+  const [existing] = await db
+    .select({
+      id: userFacts.id,
+      category: userFacts.category,
+    })
+    .from(userFacts)
+    .where(
+      and(
+        eq(userFacts.id, factId),
+        eq(userFacts.userId, userId),
+        isNull(userFacts.deletedAt)
+      )
+    )
+    .limit(1);
+  if (!existing) return {};
+
+  const now = new Date();
+  if (op === "confirm") {
+    const lifecycle = lifecycleForCategory(existing.category, now);
+    await db
+      .update(userFacts)
+      .set({
+        reviewedAt: now,
+        lastUsedAt: now,
+        expiresAt: lifecycle.expiresAt,
+        nextReviewAt: lifecycle.nextReviewAt,
+        decayHalfLifeDays: lifecycle.decayHalfLifeDays,
+      })
+      .where(eq(userFacts.id, factId));
+    await db.insert(auditLog).values({
+      userId,
+      action: "user_fact_reconfirmed",
+      resourceType: "user_fact",
+      resourceId: factId,
+      result: "success",
+      detail: { via: "queue_confirm" },
+    });
+    return {};
+  }
+  if (op === "delete") {
+    await db
+      .update(userFacts)
+      .set({ deletedAt: now })
+      .where(eq(userFacts.id, factId));
+    await db.insert(auditLog).values({
+      userId,
+      action: "user_fact_deleted",
+      resourceType: "user_fact",
+      resourceId: factId,
+      result: "success",
+      detail: { via: "queue_review" },
+    });
+    return {};
+  }
+  // edit → take the user to the settings page so they can re-write the
+  // fact inline. The proposal's resolvedAt stamp gets written by the
+  // caller after this returns.
+  return { redirectTo: "/app/settings/facts" };
 }
 
 // Open a chat seeded with the proposal context. The user can iterate
