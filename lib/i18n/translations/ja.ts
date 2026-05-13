@@ -1022,6 +1022,12 @@ export const ja: Messages = {
         "Steadii が保存している、あなた自身に関する持続的な事実（タイムゾーン、稼働時間、コミュニケーションのトーン、在学情報、通知の好みなど）。チャットエージェントは毎セッションの最初にこれを読み込むので、同じことを聞き直しません。",
       open: "開く",
     },
+    entities: {
+      section_title: "エンティティグラフ",
+      description:
+        "メール / カレンダー / タスク / チャットを横断して Steadii が紐づけた人物・プロジェクト・授業・組織・定期イベント。表示名や別名を編集したり、重複を統合したり、不要なものを取り除けます。",
+      open: "開く",
+    },
     agent_tuning: {
       section_title: "エージェントの自動送信チューニング",
       description:
@@ -2000,5 +2006,42 @@ export const ja: Messages = {
   },
   voice_overlay_extra: {
     send_aria: "送信",
+  },
+  entities: {
+    title: "エンティティグラフ",
+    description:
+      "メール / カレンダー / タスク / チャットを横断して Steadii が紐づけた人物・プロジェクト・授業・組織・定期イベント。",
+    empty:
+      "まだ何もありません。Steadii がメール / カレンダー / チャットを処理していく中で、繰り返し登場する人物 / プロジェクト / 授業 / 組織がここに浮上します。",
+    kinds: {
+      person: "人物",
+      project: "プロジェクト",
+      course: "授業",
+      org: "組織",
+      event_series: "定期イベント",
+    },
+    detail_back: "エンティティ一覧に戻る",
+    detail_last_seen: "最終アクセス: {when}",
+    detail_edit_heading: "詳細を編集",
+    detail_field_display_name: "表示名",
+    detail_field_aliases: "別名",
+    detail_field_aliases_placeholder: "1行に1つ、またはカンマ区切り",
+    detail_field_description: "説明",
+    detail_save: "保存",
+    detail_timeline_heading: "紐付いた記録",
+    detail_timeline_description:
+      "このエンティティに紐付いている、すべてのメール・下書き・カレンダー予定・課題・チャットメッセージ。各行から元の記録に飛べます。",
+    detail_timeline_empty: "まだ紐付いた記録はありません。",
+    detail_merge_heading: "別のエンティティと統合",
+    detail_merge_description:
+      "重複しているエンティティを選んで、こちらに統合します。紐付け先はすべてこちらに移り、重複側の別名もまとめて反映されます。",
+    detail_merge_target: "統合する重複エンティティ",
+    detail_merge_pick: "選択…",
+    detail_merge_submit: "統合する",
+    detail_danger_heading: "エンティティを削除",
+    detail_danger_description:
+      "このエンティティをグラフから削除します。紐付いていた元の記録（メールなど）は残り、エンティティとの関連だけが切れます。",
+    detail_delete: "削除する",
+    detail_unlink_aria: "紐付けを外す",
   },
 };

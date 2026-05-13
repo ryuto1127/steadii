@@ -17,6 +17,7 @@ import * as Sentry from "@sentry/nextjs";
 import { applyTriageResult, triageMessage } from "./triage";
 import { logEmailAudit } from "./audit";
 import { processL2 } from "./l2";
+import { resolveEntitiesInBackground } from "@/lib/agent/entity-graph/resolver";
 import type { ClassifyInput } from "./types";
 
 export type IngestSummary = {
@@ -120,6 +121,26 @@ export async function ingestLast24h(
       );
       if (row) {
         created++;
+        // engineer-51 — kick off entity-graph resolution alongside the
+        // L2 pipeline. Fire-and-forget so a slow LLM extract doesn't
+        // hold up the ingest loop. The combined subject + body is the
+        // input text; senderEmail is passed as known context so
+        // person-kind entities are created with primary_email pre-set.
+        resolveEntitiesInBackground({
+          userId,
+          sourceKind: "inbox_item",
+          sourceId: row.id,
+          contentText: [
+            input.subject ?? "",
+            input.bodySnippet ?? input.snippet ?? "",
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+          knownContext: {
+            senderEmail: input.fromEmail,
+            sourceHint: "inbound email",
+          },
+        });
         // Synchronously run the L2 pipeline for ambiguous (l2_pending) and
         // strict-tier (auto_high / auto_medium) messages. auto_high and
         // auto_medium items skip the risk pass — the L1 rule is strict per

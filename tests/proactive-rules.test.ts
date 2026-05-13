@@ -22,6 +22,7 @@ function emptySnapshot(): UserSnapshot {
     examWindows: [],
     recentClassActivityDays: {},
     monthlyReview: null,
+    entitySignals: [],
   };
 }
 

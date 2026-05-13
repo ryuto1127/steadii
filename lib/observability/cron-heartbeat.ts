@@ -32,6 +32,10 @@ export const CRON_EXPECTED_INTERVAL_MS: Record<string, number> = {
   // watches lapse after 7 days so a missed run silently degrades the
   // Type C read-filter to "everything shows".
   "gmail-watch-refresh": 24 * 60 * 60 * 1000,
+  // engineer-51 — entity-graph backfill. Daily 03:00 UTC; chews
+  // through unlinked legacy rows (50 per tick) so the entity graph
+  // catches up on data from before the resolver shipped.
+  "entity-backfill": 24 * 60 * 60 * 1000,
 };
 
 const STALE_MULTIPLIER = 2;
