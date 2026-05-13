@@ -13,6 +13,7 @@ import { EMAIL_TOOLS } from "./tools/email";
 import { EMAIL_THREAD_TOOLS } from "./tools/email-thread";
 import { summarizeWeekTool } from "./tools/summarize-week";
 import { CONVERT_TIMEZONE_TOOLS } from "./tools/convert-timezone";
+import { INFER_SENDER_TIMEZONE_TOOLS } from "./tools/infer-sender-timezone";
 import { RESOLVE_CLARIFICATION_TOOLS } from "./tools/resolve-clarification";
 import { SAVE_USER_FACT_TOOLS } from "./tools/save-user-fact";
 import { LOOKUP_ENTITY_TOOLS } from "./tools/lookup-entity";
@@ -43,6 +44,7 @@ export const ALL_TOOLS: ToolExecutor[] = [
   ...(EMAIL_TOOLS as ToolExecutor[]),
   ...(EMAIL_THREAD_TOOLS as ToolExecutor[]),
   ...(CONVERT_TIMEZONE_TOOLS as ToolExecutor[]),
+  ...(INFER_SENDER_TIMEZONE_TOOLS as ToolExecutor[]),
   ...(SAVE_USER_FACT_TOOLS as ToolExecutor[]),
   ...(LOOKUP_ENTITY_TOOLS as ToolExecutor[]),
   summarizeWeekTool as ToolExecutor,

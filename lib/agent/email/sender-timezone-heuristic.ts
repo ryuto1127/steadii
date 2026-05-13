@@ -130,3 +130,124 @@ export function inferSenderTzFromDomain(
 
   return { tz: null, confidence: 0, source: null };
 }
+
+// 2026-05-12 — body-language signal. JP companies often send from
+// gmail.com / .com (generic) so domain alone misses them. The email
+// body language is a strong sender-TZ signal: a 100% Japanese-language
+// body almost certainly comes from a JST-based sender, even when the
+// domain is generic. Mirror the same shape for other CJK languages.
+//
+// Heuristic: count CJK characters vs total non-whitespace characters.
+// Threshold 30% of CJK = high confidence the sender writes in that
+// language as their primary. Body language alone returns confidence
+// 0.7-0.75 — below domain match (0.85+) so combined signals can still
+// win when both agree, but stronger than null when domain is generic.
+//
+// CJK ranges:
+//   - Japanese: Hiragana U+3040-U+309F, Katakana U+30A0-U+30FF +
+//     CJK Unified (kanji) U+4E00-U+9FFF, full-width forms
+//   - Korean: Hangul U+AC00-U+D7AF
+//   - Simplified Chinese: also U+4E00-U+9FFF, but disambiguate by
+//     presence of kana → JP wins
+//   - Traditional Chinese: same kanji range, disambiguate by
+//     specific traditional characters
+//
+// We don't try to distinguish simplified vs traditional Chinese —
+// returning Asia/Shanghai vs Asia/Taipei is too lossy without more
+// signal. Currently we return null for pure-kanji bodies with no
+// kana / hangul, because the disambiguation isn't reliable enough.
+
+const RE_JP_KANA = /[぀-ゟ゠-ヿ]/;
+const RE_HANGUL = /[가-힯]/;
+const RE_CJK_UNIFIED = /[一-鿿]/;
+const RE_NON_WHITESPACE = /\S/;
+
+export function inferSenderTzFromBody(body: string): SenderTimezoneInference {
+  const text = body ?? "";
+  if (text.length === 0) return { tz: null, confidence: 0, source: null };
+
+  // Quick check: short bodies (< 40 chars) are unreliable for language
+  // detection — auto-replies, signatures, etc. — return null.
+  if (text.length < 40) return { tz: null, confidence: 0, source: null };
+
+  // Sample first 2000 chars (avoid scanning quoted reply history at the
+  // bottom which is usually in another language).
+  const sample = text.slice(0, 2000);
+  let nonWs = 0;
+  let kana = 0;
+  let hangul = 0;
+  let cjk = 0;
+  for (const ch of sample) {
+    if (RE_NON_WHITESPACE.test(ch)) nonWs++;
+    if (RE_JP_KANA.test(ch)) kana++;
+    if (RE_HANGUL.test(ch)) hangul++;
+    if (RE_CJK_UNIFIED.test(ch)) cjk++;
+  }
+  if (nonWs === 0) return { tz: null, confidence: 0, source: null };
+
+  // JP: kana presence is the strongest discriminator. >= 5 kana chars
+  // and any kanji = essentially-certainly JP.
+  if (kana >= 5) {
+    const jpRatio = (kana + cjk) / nonWs;
+    if (jpRatio >= 0.15) {
+      return { tz: "Asia/Tokyo", confidence: 0.8, source: "body-lang:ja" };
+    }
+  }
+
+  // KR: hangul is unique to Korean.
+  if (hangul >= 10) {
+    const krRatio = hangul / nonWs;
+    if (krRatio >= 0.2) {
+      return { tz: "Asia/Seoul", confidence: 0.8, source: "body-lang:ko" };
+    }
+  }
+
+  return { tz: null, confidence: 0, source: null };
+}
+
+// Combined signal — runs domain + body in parallel and returns the
+// stronger inference. When both agree on a TZ, boost confidence; when
+// they disagree, prefer the domain match (more reliable than body
+// content, which can have quoted text in a different language).
+export function inferSenderTimezone(args: {
+  domain?: string | null;
+  body?: string | null;
+}): SenderTimezoneInference {
+  const domainResult = args.domain
+    ? inferSenderTzFromDomain(args.domain)
+    : { tz: null, confidence: 0, source: null };
+  const bodyResult = args.body
+    ? inferSenderTzFromBody(args.body)
+    : { tz: null, confidence: 0, source: null };
+
+  // Both null → null
+  if (!domainResult.tz && !bodyResult.tz) {
+    // Surface non-null source even when tz is null so callers can
+    // distinguish "we tried + found nothing" from "we never checked".
+    return {
+      tz: null,
+      confidence: 0,
+      source: domainResult.source ?? bodyResult.source ?? null,
+    };
+  }
+
+  // Only one of them returned a TZ → use that one.
+  if (!bodyResult.tz) return domainResult;
+  if (!domainResult.tz) return bodyResult;
+
+  // Both returned a TZ. Agreement = boost; disagreement = trust domain.
+  if (domainResult.tz === bodyResult.tz) {
+    return {
+      tz: domainResult.tz,
+      confidence: Math.min(0.98, domainResult.confidence + 0.1),
+      source: `${domainResult.source}+${bodyResult.source}`,
+    };
+  }
+  // Disagreement — domain wins. Lower confidence slightly to signal
+  // ambiguity.
+  return {
+    tz: domainResult.tz,
+    confidence: Math.max(0.6, domainResult.confidence - 0.1),
+    source: `${domainResult.source} (body disagreed: ${bodyResult.source})`,
+  };
+}
