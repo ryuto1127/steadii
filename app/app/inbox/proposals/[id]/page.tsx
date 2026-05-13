@@ -181,6 +181,11 @@ function issueTypeLabelKey(t: AgentProposalIssueType): string {
     // same Type-F visual family.
     case "user_fact_review":
       return "issue_syllabus_calendar_ambiguity";
+    // engineer-49 — monthly boundary check-in. No dedicated translation;
+    // the card body carries the actual summary text inline. Fall back
+    // to the workload-family label since the visual treatment matches.
+    case "monthly_boundary_review":
+      return "issue_workload_over_capacity";
   }
 }
 

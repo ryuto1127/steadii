@@ -17,6 +17,7 @@ function emptySnapshot(): UserSnapshot {
     classTimeBlocks: [],
     examWindows: [],
     recentClassActivityDays: {},
+    monthlyReview: null,
   };
 }
 
