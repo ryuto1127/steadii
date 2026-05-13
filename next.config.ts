@@ -16,7 +16,16 @@ const nextConfig: NextConfig = {
   // references `BigInt` as a global, which Turbopack's CommonJS wrapper
   // doesn't expose to bundled modules. Marking it external skips bundling
   // and the global is available at runtime as expected.
-  serverExternalPackages: ["node-ical"],
+  //
+  // 2026-05-13 — Added node-ical's deps `temporal-polyfill` and
+  // `rrule-temporal` to the external set as well. Without them, Vercel's
+  // file tracer dropped the nested `.pnpm/node-ical@0.26.0/node_modules/
+  // temporal-polyfill/index.js` from the lambda zip, and runtime evaluation
+  // of any chunk that imports node-ical (transitively via the agent
+  // tool-registry) crashed /api/chat with `Failed to load external module
+  // node-ical … Cannot find module … temporal-polyfill/index.js`. Listing
+  // them explicitly forces the tracer to include them.
+  serverExternalPackages: ["node-ical", "temporal-polyfill", "rrule-temporal"],
 };
 
 export default withNextIntl(nextConfig);
