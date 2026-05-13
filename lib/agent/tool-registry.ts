@@ -85,3 +85,17 @@ export function openAIToolDefs(ctx?: ChatSessionContext) {
   const tools = toolsForChatSession(sessionCtx);
   return tools.map((t) => toOpenAIToolDefinition(t.schema));
 }
+
+// Read-only subset for the self-critique retry pass — the orchestrator
+// uses this when a PLACEHOLDER_LEAK is detected and the model needs to
+// fetch missing context. Writes / destructives are excluded so the
+// retry can't have permanent side effects (drafting, scheduling,
+// archiving, etc.) without going through the normal confirmation path.
+// See lib/agent/orchestrator.ts retry block.
+export function openAIToolDefsReadOnly(ctx?: ChatSessionContext) {
+  const sessionCtx: ChatSessionContext = ctx ?? { clarifyingDraftId: null };
+  const tools = toolsForChatSession(sessionCtx).filter(
+    (t) => t.schema.mutability === "read"
+  );
+  return tools.map((t) => toOpenAIToolDefinition(t.schema));
+}
