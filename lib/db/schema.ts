@@ -2171,7 +2171,15 @@ export type AgentProposalIssueType =
   // per user via the proactive scanner; clicking opens
   // /app/settings/agent-tuning so the user can revoke or forgive
   // specific (sender, action) pairs.
-  | "monthly_boundary_review";
+  | "monthly_boundary_review"
+  // engineer-51 — entity that's been quieter than its historical
+  // cadence implies. Fires Type C card "You haven't talked to X in N
+  // days. Used to be every M days. Drifted on purpose?"
+  | "entity_fading"
+  // engineer-51 — entity with 3+ assignments / events linked to it
+  // clustered in the next 7 days. Fires Type C card asking whether to
+  // block time for the cluster.
+  | "entity_deadline_cluster";
 
 export type AgentProposalStatus =
   | "pending"
@@ -2214,7 +2222,9 @@ export type ProposalSourceRef = {
     | "class"
     | "mistake"
     | "inbox_item"
-    | "waitlist_request";
+    | "waitlist_request"
+    // engineer-51 — pointer to /app/entities/[id].
+    | "entity";
   id: string;
   label: string;
 };
@@ -2803,3 +2813,146 @@ export const senderConfidence = pgTable(
 
 export type SenderConfidenceRow = typeof senderConfidence.$inferSelect;
 export type NewSenderConfidenceRow = typeof senderConfidence.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// engineer-51 — cross-source entity graph
+//
+// One row per (user, distinct named thing) — person / project / course /
+// org / event_series. Each entity links back to source rows
+// (inbox_items, agent_drafts, events, assignments, chat_messages,
+// agent_contact_personas) via `entity_links`. The graph bridges silos so
+// the agent can answer "what's the latest on the アクメトラベル thing?" by
+// pulling the email thread + calendar slot + chat history + assignment
+// under one lookup.
+//
+// Match strategy at ingest:
+//   1. LLM extracts candidates from row's text representation
+//   2. exact_match on display_name or alias → link
+//   3. embedding_similar (cosine on display_name + aliases) → rerank,
+//      link if reranker confidence >= 0.7
+//   4. create new → embedding stored, link with method='llm_extract'
+//
+// Soft-merge: `merged_into_entity_id` points to the canonical entity.
+// Reads coalesce on the canonical row; links remain queryable via
+// either side.
+// ---------------------------------------------------------------------------
+
+export type EntityKind =
+  | "person"
+  | "project"
+  | "course"
+  | "org"
+  | "event_series";
+
+export type EntityLinkSourceKind =
+  | "inbox_item"
+  | "agent_draft"
+  | "event"
+  | "assignment"
+  | "chat_session"
+  | "chat_message"
+  | "agent_contact_persona";
+
+export type EntityLinkMethod =
+  | "llm_extract"
+  | "exact_match"
+  | "embedding_similar"
+  | "user_manual";
+
+export const entities = pgTable(
+  "entities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    kind: text("kind").$type<EntityKind>().notNull(),
+    // Canonical short name. User-editable from /app/entities/[id].
+    displayName: text("display_name").notNull(),
+    // Alternate spellings, abbreviations, nicknames. Matched on both
+    // ingest extraction and chat-tool lookup.
+    aliases: text("aliases")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    // 1-2 sentences. LLM-generated at create time, user-editable.
+    description: text("description"),
+
+    // Person-specific helpers — null for non-person kinds.
+    primaryEmail: text("primary_email"),
+    primaryClassId: uuid("primary_class_id").references(() => classes.id, {
+      onDelete: "set null",
+    }),
+
+    // Cosine-similarity match fodder. Built from display_name + aliases +
+    // description; matches text-embedding-3-small dimensions.
+    embedding: vector("embedding", 1536),
+
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    // Soft-merge target. NULL = canonical entity. When set, queries that
+    // care about canonical-only state must coalesce via this column. We
+    // intentionally don't FK back to entities.id so a delete cascade
+    // doesn't tombstone the merged-into row.
+    mergedIntoEntityId: uuid("merged_into_entity_id"),
+  },
+  (t) => ({
+    userKindIdx: index("entities_user_kind_idx").on(t.userId, t.kind),
+    userEmailIdx: index("entities_user_email_idx").on(
+      t.userId,
+      t.primaryEmail
+    ),
+  })
+);
+
+export type EntityRow = typeof entities.$inferSelect;
+export type NewEntityRow = typeof entities.$inferInsert;
+
+// One row per (entity, source row). Keyed by (user, sourceKind, sourceId,
+// entityId) so the same email row can resolve to multiple entities (an
+// email mentions a person AND a project AND an org). Idempotent inserts
+// via the unique index — repeat resolution runs are no-ops.
+export const entityLinks = pgTable(
+  "entity_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    entityId: uuid("entity_id")
+      .notNull()
+      .references(() => entities.id, { onDelete: "cascade" }),
+
+    sourceKind: text("source_kind")
+      .$type<EntityLinkSourceKind>()
+      .notNull(),
+    sourceId: uuid("source_id").notNull(),
+
+    // 0..1 — resolver's confidence at link time. Used by the lookup tool
+    // to rank links and by future learning loops to filter noisy auto-
+    // extracted matches.
+    confidence: real("confidence").notNull(),
+    method: text("method").$type<EntityLinkMethod>().notNull(),
+
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    entityIdx: index("entity_links_entity_idx").on(t.entityId),
+    sourceIdx: uniqueIndex("entity_links_source_unique").on(
+      t.userId,
+      t.sourceKind,
+      t.sourceId,
+      t.entityId
+    ),
+  })
+);
+
+export type EntityLinkRow = typeof entityLinks.$inferSelect;
+export type NewEntityLinkRow = typeof entityLinks.$inferInsert;

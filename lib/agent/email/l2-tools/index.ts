@@ -5,6 +5,7 @@ import {
 import { inferSenderTimezoneTool } from "./infer-sender-timezone";
 import { checkAvailabilityTool } from "./check-availability";
 import { lookupContactPersonaTool } from "./lookup-contact-persona";
+import { lookupEntityL2Tool } from "./lookup-entity";
 import { queueUserConfirmationTool } from "./queue-user-confirmation";
 import { detectAmbiguityTool } from "./detect-ambiguity";
 import { writeDraftTool } from "./write-draft";
@@ -19,6 +20,10 @@ import {
 // "I'll lookup context, then I'll act" sequencing naturally.
 export const L2_TOOLS: Array<L2ToolExecutor<unknown, unknown>> = [
   lookupContactPersonaTool as unknown as L2ToolExecutor<unknown, unknown>,
+  // engineer-51 — cross-source entity graph. Use early in the loop
+  // alongside lookup_contact_persona so subsequent reasoning sees both
+  // sender-level facts AND entity-level history (projects, orgs, etc.).
+  lookupEntityL2Tool as unknown as L2ToolExecutor<unknown, unknown>,
   extractCandidateDatesTool as unknown as L2ToolExecutor<unknown, unknown>,
   inferSenderTimezoneTool as unknown as L2ToolExecutor<unknown, unknown>,
   checkAvailabilityTool as unknown as L2ToolExecutor<unknown, unknown>,
@@ -46,6 +51,7 @@ export {
   inferSenderTimezoneTool,
   checkAvailabilityTool,
   lookupContactPersonaTool,
+  lookupEntityL2Tool,
   queueUserConfirmationTool,
   detectAmbiguityTool,
   writeDraftTool,

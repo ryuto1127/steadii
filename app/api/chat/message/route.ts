@@ -12,6 +12,7 @@ import {
   rateLimitResponse,
 } from "@/lib/utils/rate-limit";
 import { getEffectivePlan } from "@/lib/billing/effective-plan";
+import { resolveEntitiesInBackground } from "@/lib/agent/entity-graph/resolver";
 
 const bodySchema = z.object({
   chatId: z.string().uuid(),
@@ -52,12 +53,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "chat not found" }, { status: 404 });
   }
 
+  const trimmed = parsed.data.content.trim();
   const [msg] = await db
     .insert(messagesTable)
     .values({
       chatId: parsed.data.chatId,
       role: "user",
-      content: parsed.data.content.trim(),
+      content: trimmed,
     })
     .returning({ id: messagesTable.id });
 
@@ -65,6 +67,20 @@ export async function POST(request: NextRequest) {
     .update(chats)
     .set({ updatedAt: new Date() })
     .where(eq(chats.id, parsed.data.chatId));
+
+  // engineer-51 — entity resolution on the user message. The user's
+  // wording is often the canonical surface for an entity reference
+  // (e.g. "what's the latest on アクメトラベル"). Fire-and-forget so the
+  // chat reply doesn't wait on the resolver.
+  if (trimmed.length > 0) {
+    resolveEntitiesInBackground({
+      userId,
+      sourceKind: "chat_message",
+      sourceId: msg.id,
+      contentText: trimmed,
+      knownContext: { sourceHint: "chat user turn" },
+    });
+  }
 
   return NextResponse.json({ messageId: msg.id });
 }
