@@ -32,6 +32,7 @@ import {
   findSimilarSentEmails,
   type SimilarSentEmail,
 } from "./similar-sent-retrieval";
+import { rerank, type RerankerCandidate } from "./reranker";
 
 // Per-source caps locked in §12.2 (per-source caps, not a single total
 // budget). k_syllabus=3, k_emails=5 (classify) / 20 (deep).
@@ -41,6 +42,13 @@ export const FANOUT_K_SYLLABUS = 3;
 export const FANOUT_K_EMAILS_CLASSIFY = 5;
 export const FANOUT_K_EMAILS_DEEP = 20;
 export const FANOUT_K_SENDER_HISTORY = 3;
+// engineer-48 — second-pass reranker tightens the deep-phase email
+// slate from cosine top-20 down to the most directly-relevant 8. The
+// classify phase already pulls a tighter 5; no rerank needed there.
+// Skip the rerank entirely when the cosine slate is small enough that
+// the LLM call's overhead outweighs the precision lift.
+export const FANOUT_K_EMAILS_RERANKED = 8;
+const RERANK_MIN_CANDIDATES = 5;
 // 2026-05-08 — k_similar_sent=3. Concrete few-shot examples of past
 // replies on similar topics (different recipients than sender-history's
 // same-recipient slate). Draft-phase only.
@@ -500,6 +508,93 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
     ),
   ]);
 
+  // engineer-48 — second-pass reranker. Only runs on the deep phase
+  // (cosine slate is top-20 there; classify already pulls top-5 so the
+  // overhead wouldn't pay back). Tightens similar-emails to top-8 and
+  // syllabusChunks when cardinality clears the LLM-call threshold.
+  // Fail-soft: a reranker error returns the candidates unchanged so
+  // the L2 pipeline never blocks on this added step.
+  let rerankedSimilarEmails = emails.value.results;
+  let syllabusChunksRanked = syllabusChunks.value;
+  let rerankAudit: {
+    similarEmails: { before: number; after: number; failed: boolean } | null;
+    syllabusChunks: { before: number; after: number; failed: boolean } | null;
+  } = { similarEmails: null, syllabusChunks: null };
+  if (input.phase === "deep" && emails.value.results.length >= RERANK_MIN_CANDIDATES) {
+    const queryForRerank = `${input.subject ?? ""}\n${input.snippet ?? ""}`.trim();
+    const candidates: RerankerCandidate[] = emails.value.results.map((r) => ({
+      id: r.inboxItemId,
+      text: `${r.subject ?? ""}\n${r.snippet ?? ""}`.trim() || "(empty)",
+      sourceType: "similar_email",
+    }));
+    const out = await rerank({
+      userId: input.userId,
+      query: queryForRerank,
+      candidates,
+      topK: FANOUT_K_EMAILS_RERANKED,
+    });
+    const orderById = new Map(out.ranked.map((r, i) => [r.id, i]));
+    rerankedSimilarEmails = emails.value.results
+      .filter((r) => orderById.has(r.inboxItemId))
+      .sort(
+        (a, b) =>
+          (orderById.get(a.inboxItemId) ?? 0) -
+          (orderById.get(b.inboxItemId) ?? 0)
+      );
+    rerankAudit.similarEmails = {
+      before: out.beforeCount,
+      after: rerankedSimilarEmails.length,
+      failed: out.failed,
+    };
+  }
+  if (
+    input.phase === "deep" &&
+    syllabusChunks.value.length >= RERANK_MIN_CANDIDATES
+  ) {
+    const queryForRerank = `${input.subject ?? ""}\n${input.snippet ?? ""}`.trim();
+    const candidates: RerankerCandidate[] = syllabusChunks.value.map((c) => ({
+      id: c.chunkId,
+      text: `${c.syllabusTitle}: ${c.chunkText}`,
+      sourceType: "syllabus_chunk",
+    }));
+    const out = await rerank({
+      userId: input.userId,
+      query: queryForRerank,
+      candidates,
+      topK: FANOUT_K_SYLLABUS,
+    });
+    const orderById = new Map(out.ranked.map((r, i) => [r.id, i]));
+    syllabusChunksRanked = syllabusChunks.value
+      .filter((c) => orderById.has(c.chunkId))
+      .sort(
+        (a, b) =>
+          (orderById.get(a.chunkId) ?? 0) - (orderById.get(b.chunkId) ?? 0)
+      );
+    rerankAudit.syllabusChunks = {
+      before: out.beforeCount,
+      after: syllabusChunksRanked.length,
+      failed: out.failed,
+    };
+  }
+  // One audit row per rerank pass so the activity log can prove the
+  // precision lift end-to-end.
+  if (rerankAudit.similarEmails || rerankAudit.syllabusChunks) {
+    await logEmailAudit({
+      userId: input.userId,
+      action: "retrieval_reranked",
+      result:
+        (rerankAudit.similarEmails?.failed || rerankAudit.syllabusChunks?.failed)
+          ? "failure"
+          : "success",
+      resourceId: input.inboxItemId,
+      detail: {
+        phase: input.phase,
+        similar_emails: rerankAudit.similarEmails,
+        syllabus_chunks: rerankAudit.syllabusChunks,
+      },
+    });
+  }
+
   const total = Date.now() - startedAt;
 
   // Audit row — joinable to email_l2_completed by resourceId. The detail
@@ -519,13 +614,14 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
       similarSent: similarSent.value.length,
       // engineer-39 — 1 = persona row hit, 0 = first interaction.
       contactPersona: contactPersona.value ? 1 : 0,
-      syllabus: syllabusChunks.value.length,
-      emails: emails.value.results.length,
+      syllabus: syllabusChunksRanked.length,
+      emails: rerankedSimilarEmails.length,
       calendar:
         calendar.value.events.length +
         calendar.value.tasks.length +
         calendar.value.assignments.length,
     },
+    rerank: rerankAudit,
     timings_ms: {
       senderHistory: senderHistory.elapsed,
       similarSent: similarSent.elapsed,
@@ -565,8 +661,8 @@ async function runFanout(input: FanoutInput): Promise<FanoutResult> {
     senderHistory: senderHistory.value,
     similarSent: similarSent.value,
     contactPersona: contactPersona.value,
-    syllabusChunks: syllabusChunks.value,
-    similarEmails: emails.value.results,
+    syllabusChunks: syllabusChunksRanked,
+    similarEmails: rerankedSimilarEmails,
     totalSimilarCandidates: emails.value.totalCandidates,
     calendar: calendar.value,
     timings: {

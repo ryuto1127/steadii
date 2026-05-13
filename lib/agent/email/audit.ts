@@ -34,7 +34,12 @@ export type EmailAuditAction =
   // all read these.
   | "auto_archive"
   | "auto_archive_failed"
-  | "auto_archive_restored";
+  | "auto_archive_restored"
+  // engineer-48 — second-pass reranker over fanout's cosine-recall
+  // slate. Detail payload carries phase + before/after counts +
+  // dropped ids + token cost so the audit log can prove the precision
+  // lift.
+  | "retrieval_reranked";
 
 export async function logEmailAudit(params: {
   userId: string;

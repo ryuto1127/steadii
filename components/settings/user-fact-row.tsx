@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   userFactDeleteAction,
+  userFactReconfirmAction,
   userFactUpsertAction,
 } from "@/app/app/settings/facts/actions";
 import type { UserFactCategory, UserFactSource } from "@/lib/db/schema";
@@ -12,6 +13,9 @@ import type { UserFactCategory, UserFactSource } from "@/lib/db/schema";
 // shows the fact + category tag + provenance line; edit-mode swaps in a
 // textarea + select. Server actions handle the writes; this component
 // is purely a state toggle.
+//
+// engineer-48 — surfaces lifecycle metadata (next review, expiry,
+// last-reviewed) and the manual Reconfirm button.
 
 export type UserFactRowData = {
   id: string;
@@ -20,6 +24,9 @@ export type UserFactRowData = {
   source: UserFactSource;
   createdAt: string;
   sourceChatMessageId: string | null;
+  expiresAt: string | null;
+  nextReviewAt: string | null;
+  reviewedAt: string | null;
 };
 
 const CATEGORIES: UserFactCategory[] = [
@@ -106,8 +113,37 @@ export function UserFactRow({ data }: { data: UserFactRowData }) {
             <span className="mx-1.5">·</span>
             <span className="font-mono">{data.createdAt}</span>
           </p>
+          {data.nextReviewAt || data.expiresAt ? (
+            <p className="mt-1 text-[11px] text-[hsl(var(--muted-foreground))]">
+              {data.nextReviewAt ? (
+                <>
+                  {t("lifecycle_next_review")}{" "}
+                  <span className="font-mono">{data.nextReviewAt}</span>
+                </>
+              ) : null}
+              {data.nextReviewAt && data.expiresAt ? (
+                <span className="mx-1.5">·</span>
+              ) : null}
+              {data.expiresAt ? (
+                <>
+                  {t("lifecycle_expires")}{" "}
+                  <span className="font-mono">{data.expiresAt}</span>
+                </>
+              ) : null}
+            </p>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <form action={userFactReconfirmAction}>
+            <input type="hidden" name="id" value={data.id} />
+            <button
+              type="submit"
+              className="rounded border border-[hsl(var(--border))] px-3 py-1 text-[11px] transition-hover hover:bg-[hsl(var(--surface-raised))]"
+              title={t("reconfirm_hint")}
+            >
+              {t("reconfirm")}
+            </button>
+          </form>
           <button
             type="button"
             onClick={() => setEditing(true)}

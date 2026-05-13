@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { auditLog, userFacts, type UserFactCategory } from "@/lib/db/schema";
+import { lifecycleForCategory } from "@/lib/agent/user-facts-lifecycle";
 import type { ToolExecutor } from "./types";
 
 // engineer-47 — chat-side effector for persisting a user-self fact the
@@ -14,6 +15,11 @@ import type { ToolExecutor } from "./types";
 // re-saving the same sentence upserts: lastUsedAt bumps, deletedAt
 // clears. Strict string match — semantic dedup is a deliberate non-goal
 // (LLM call would be another spend; the index is cheap).
+//
+// engineer-48 — lifecycle aware. The agent can override the per-category
+// defaults via expiresInDays / decayHalfLifeDays. On a re-save, the
+// lifecycle is re-computed from the (possibly updated) category so a
+// schedule fact re-confirmed today gets its 4-month clock reset.
 
 const CATEGORIES = [
   "schedule",
@@ -28,6 +34,11 @@ const args = z.object({
   fact: z.string().trim().min(1).max(500),
   category: z.enum(CATEGORIES).default("other"),
   source: z.enum(["user_explicit", "agent_inferred"]).default("agent_inferred"),
+  // engineer-48 — optional agent-driven overrides. If unset the
+  // category default applies. expiresInDays is a relative-from-now
+  // convenience so the LLM doesn't have to compute absolute dates.
+  expiresInDays: z.number().int().positive().max(3650).optional(),
+  decayHalfLifeDays: z.number().int().positive().max(3650).optional(),
 });
 
 // 2026-05-12 sparring fix — use z.input (not z.infer / z.output) because
@@ -51,7 +62,7 @@ export const saveUserFact: ToolExecutor<
   schema: {
     name: "save_user_fact",
     description:
-      "Save a persistent fact about the user that should be remembered across chat sessions. Call this when the user reveals something Steadii should know for the long term — their schedule, communication style, location/timezone (if they say it explicitly), academic situation, personal preferences (e.g. 'don't notify me at night'). Do NOT save transient state ('I'm tired today'), passwords/secrets, or anything they specifically said is private. The fact is shown back to the user in Settings — write it in their app locale, first-person ('私は…' / 'I…') is fine.",
+      "Save a persistent fact about the user that should be remembered across chat sessions. Call this when the user reveals something Steadii should know for the long term — their schedule, communication style, location/timezone (if they say it explicitly), academic situation, personal preferences (e.g. 'don't notify me at night'). Do NOT save transient state ('I'm tired today'), passwords/secrets, or anything they specifically said is private. The fact is shown back to the user in Settings — write it in their app locale, first-person ('私は…' / 'I…') is fine. The system auto-assigns a lifecycle from category (schedule expires 4mo, academic 1yr, location never, etc.); only set expiresInDays / decayHalfLifeDays if you know the fact has a non-default shelf life.",
     mutability: "write",
     parameters: {
       type: "object",
@@ -73,6 +84,16 @@ export const saveUserFact: ToolExecutor<
           description:
             "'user_explicit' when the user said 'remember that…' or similar. 'agent_inferred' when you picked it up heuristically from their message.",
         },
+        expiresInDays: {
+          type: "number",
+          description:
+            "Optional hard expiry in days from now. Override the category default when you know this fact has a specific shelf life (e.g. 'I'm in Tokyo this summer' → ~90 days).",
+        },
+        decayHalfLifeDays: {
+          type: "number",
+          description:
+            "Optional confidence half-life in days. Use for soft-decaying preferences (communication style, mood-adjacent prefs). Default applies for communication_style.",
+        },
       },
       required: ["fact"],
       additionalProperties: false,
@@ -81,6 +102,17 @@ export const saveUserFact: ToolExecutor<
   async execute(ctx, rawArgs) {
     const parsed = args.parse(rawArgs);
     const now = new Date();
+    const baseLifecycle = lifecycleForCategory(parsed.category, now);
+    // Agent overrides win over category defaults; if neither is set,
+    // the column stays NULL (no expiry / no decay).
+    const expiresAt =
+      parsed.expiresInDays != null
+        ? new Date(now.getTime() + parsed.expiresInDays * 24 * 60 * 60 * 1000)
+        : baseLifecycle.expiresAt;
+    const decayHalfLifeDays =
+      parsed.decayHalfLifeDays ?? baseLifecycle.decayHalfLifeDays;
+    const nextReviewAt = baseLifecycle.nextReviewAt;
+
     const [row] = await db
       .insert(userFacts)
       .values({
@@ -92,6 +124,13 @@ export const saveUserFact: ToolExecutor<
         // user_explicit since the user's word stands.
         confidence: parsed.source === "agent_inferred" ? 0.8 : null,
         lastUsedAt: now,
+        // engineer-48 — lifecycle columns. reviewedAt = now() because
+        // a re-save is a re-confirmation: the user (or the agent
+        // re-inferring) is telling us the fact is current.
+        expiresAt,
+        nextReviewAt,
+        reviewedAt: now,
+        decayHalfLifeDays,
       })
       .onConflictDoUpdate({
         target: [userFacts.userId, userFacts.fact],
@@ -106,6 +145,10 @@ export const saveUserFact: ToolExecutor<
             parsed.source === "agent_inferred" ? 0.8 : null,
           lastUsedAt: now,
           deletedAt: null,
+          expiresAt,
+          nextReviewAt,
+          reviewedAt: now,
+          decayHalfLifeDays,
         },
       })
       .returning({
@@ -126,6 +169,9 @@ export const saveUserFact: ToolExecutor<
         fact: parsed.fact,
         category: parsed.category,
         source: parsed.source,
+        expiresAt: expiresAt ? expiresAt.toISOString() : null,
+        nextReviewAt: nextReviewAt ? nextReviewAt.toISOString() : null,
+        decayHalfLifeDays,
       },
     });
 

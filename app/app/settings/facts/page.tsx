@@ -43,6 +43,9 @@ export default async function FactsSettingsPage() {
       source: userFacts.source,
       createdAt: userFacts.createdAt,
       sourceChatMessageId: userFacts.sourceChatMessageId,
+      expiresAt: userFacts.expiresAt,
+      nextReviewAt: userFacts.nextReviewAt,
+      reviewedAt: userFacts.reviewedAt,
     })
     .from(userFacts)
     .where(and(eq(userFacts.userId, userId), isNull(userFacts.deletedAt)))
@@ -55,6 +58,9 @@ export default async function FactsSettingsPage() {
     source: r.source,
     createdAt: formatStamp(r.createdAt),
     sourceChatMessageId: r.sourceChatMessageId,
+    expiresAt: r.expiresAt ? formatDay(r.expiresAt) : null,
+    nextReviewAt: r.nextReviewAt ? formatDay(r.nextReviewAt) : null,
+    reviewedAt: r.reviewedAt ? formatDay(r.reviewedAt) : null,
   }));
 
   return (
@@ -137,4 +143,8 @@ export default async function FactsSettingsPage() {
 function formatStamp(d: Date): string {
   const iso = d.toISOString();
   return `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
+}
+
+function formatDay(d: Date): string {
+  return d.toISOString().slice(0, 10);
 }
