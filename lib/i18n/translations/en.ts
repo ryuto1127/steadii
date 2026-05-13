@@ -957,11 +957,6 @@ type MessagesShape = {
     example_prompts: string[];
   };
   chat: {
-    actions: {
-      add_to_mistakes: string;
-      generate_similar: string;
-      save_mistake: string;
-    };
     dismiss: string;
     remove_attachment: string;
     tutor_offer: {
@@ -1064,6 +1059,11 @@ type MessagesShape = {
       refresh_from_notion_pending: string;
     };
     agent_thinks: {
+      section_title: string;
+      description: string;
+      open: string;
+    };
+    user_facts: {
       section_title: string;
       description: string;
       open: string;
@@ -1463,6 +1463,31 @@ type MessagesShape = {
       status_dismissed: string;
     };
   };
+  settings_user_facts: {
+    settings_back: string;
+    title: string;
+    description: string;
+    plaintext_warning: string;
+    empty: string;
+    edit: string;
+    delete: string;
+    cancel: string;
+    save: string;
+    provenance_user: string;
+    provenance_agent: string;
+    add_heading: string;
+    add_description: string;
+    add_placeholder: string;
+    add_submit: string;
+    categories: {
+      schedule: string;
+      communication_style: string;
+      location_timezone: string;
+      academic: string;
+      personal_pref: string;
+      other: string;
+    };
+  };
   syllabus_new_page: {
     title: string;
     subtitle: string;
@@ -1488,18 +1513,6 @@ type MessagesShape = {
   };
   chat_view_v2: {
     blob_token_const: string;
-  };
-  mistake_note_dialog: {
-    title: string;
-    title_label: string;
-    title_placeholder: string;
-    class_label: string;
-    class_none: string;
-    unit_label: string;
-    difficulty_label: string;
-    tags_label: string;
-    tags_placeholder: string;
-    cancel: string;
   };
   new_chat_input: {
     attach_aria: string;
@@ -2710,11 +2723,6 @@ export const en: MessagesShape = {
     ],
   },
   chat: {
-    actions: {
-      add_to_mistakes: "+ Add to Steadii's notes",
-      generate_similar: "Generate similar",
-      save_mistake: "Save to Steadii's notes",
-    },
     dismiss: "Dismiss",
     remove_attachment: "Remove",
     tutor_offer: {
@@ -2827,6 +2835,12 @@ export const en: MessagesShape = {
       section_title: "How your agent thinks",
       description:
         "A read-only retrospective view of the agent's last decisions: what it surfaced, why, and which mistakes / syllabus chunks / calendar items / past emails grounded each draft. Glass-box transparency, end to end.",
+      open: "Open",
+    },
+    user_facts: {
+      section_title: "What Steadii remembers about you",
+      description:
+        "Persistent facts Steadii has saved about you (your timezone, working hours, communication style, schooling, notification preferences). The chat agent injects these at the top of every session so it doesn't re-ask things you've already told it.",
       open: "Open",
     },
     agent_rules: {
@@ -3350,6 +3364,35 @@ export const en: MessagesShape = {
       status_dismissed: "Dismissed",
     },
   },
+  settings_user_facts: {
+    settings_back: "Settings",
+    title: "What Steadii remembers about you",
+    description:
+      "Persistent facts the chat agent has saved about you, ordered most-recently-used first. The top 12 land in every chat session's system prompt so Steadii doesn't re-ask things you've already told it.",
+    plaintext_warning:
+      "Facts are stored in plain text. Don't save passwords or sensitive secrets here.",
+    empty:
+      "Steadii hasn't saved any facts about you yet. Tell it something in chat — \"I'm in Vancouver\", \"Don't notify me at night\" — and it'll appear here.",
+    edit: "Edit",
+    delete: "Forget",
+    cancel: "Cancel",
+    save: "Save",
+    provenance_user: "You told Steadii this",
+    provenance_agent: "Steadii inferred this from chat",
+    add_heading: "Tell Steadii something to remember",
+    add_description:
+      "Anything you want Steadii to know across sessions — your timezone, working hours, tone preferences, school context.",
+    add_placeholder: "I'm reachable 13:00–18:00 PT on weekdays",
+    add_submit: "Remember",
+    categories: {
+      schedule: "Schedule",
+      communication_style: "Communication style",
+      location_timezone: "Location / timezone",
+      academic: "Academic",
+      personal_pref: "Personal preference",
+      other: "Other",
+    },
+  },
   syllabus_new_page: {
     title: "Upload a syllabus",
     subtitle: "Drop a PDF, an image, or paste a URL. We'll extract the structure and show you a preview before saving.",
@@ -3375,18 +3418,6 @@ export const en: MessagesShape = {
   },
   chat_view_v2: {
     blob_token_const: "BLOB_READ_WRITE_TOKEN",
-  },
-  mistake_note_dialog: {
-    title: "Add to Mistake Notes",
-    title_label: "Title (short problem summary)",
-    title_placeholder: "e.g. 2D projectile with wind",
-    class_label: "Class",
-    class_none: "(none)",
-    unit_label: "Unit / chapter",
-    difficulty_label: "Difficulty",
-    tags_label: "Tags (comma-separated)",
-    tags_placeholder: "vectors, integration",
-    cancel: "Cancel",
   },
   new_chat_input: {
     attach_aria: "Attach image or PDF",

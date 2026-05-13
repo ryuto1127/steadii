@@ -153,6 +153,12 @@ export function buildAgenticL2UserMessage(args: {
   // for an immediate re-classification pass. Empty / undefined when the
   // re-run isn't triggered.
   userClarification?: string | null;
+  // engineer-47 — top-N saved user_facts so the agentic loop knows the
+  // student's persistent profile (TZ, communication style, etc.) when
+  // composing drafts. Same data the chat orchestrator's USER CONTEXT
+  // block carries, just rendered inside the L2 user message because
+  // L2 doesn't share the chat system prompt.
+  userFacts?: Array<{ fact: string; category: string | null }>;
 }): string {
   const parts: string[] = [];
   parts.push(`Reasoning language: ${args.locale}`);
@@ -163,6 +169,19 @@ export function buildAgenticL2UserMessage(args: {
   parts.push(`Subject: ${args.subject ?? "(none)"}`);
   parts.push(`Body: ${args.body.slice(0, 8000)}`);
   parts.push("");
+  if (args.userFacts && args.userFacts.length > 0) {
+    parts.push(
+      "=== Student profile facts (saved across past sessions) ==="
+    );
+    parts.push(
+      "Use these as ambient context for the draft (TZ, tone, schedule, etc.). Do not re-ask the student about anything covered here."
+    );
+    for (const f of args.userFacts) {
+      const tag = f.category ? `[${f.category}] ` : "";
+      parts.push(`- ${tag}${f.fact}`);
+    }
+    parts.push("");
+  }
   if (args.likelySenderTimezone) {
     parts.push("=== Sender timezone hint ===");
     parts.push(
