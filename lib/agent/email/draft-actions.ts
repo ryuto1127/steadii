@@ -17,6 +17,7 @@ import { deleteGmailDraft } from "@/lib/agent/tools/gmail";
 import { qstash } from "@/lib/integrations/qstash/client";
 import { enqueueSendForDraft } from "./send-enqueue";
 import { recordSenderFeedback } from "./feedback";
+import { recordSenderEvent } from "@/lib/agent/learning/sender-confidence";
 import { createClass } from "@/lib/classes/save";
 import { fetchRecentThreadMessages } from "./thread";
 import {
@@ -347,12 +348,67 @@ export async function dismissAgentDraftAction(draftId: string): Promise<void> {
     inboxItemId: inbox.id,
     agentDraftId: draft.id,
   });
+  // engineer-49 — feed the dynamic-confirmation learner the same
+  // dismiss signal. The recordSenderEvent helper swallows errors so a
+  // learner-side write failure cannot block the dismiss.
+  await recordSenderEvent({
+    userId,
+    senderEmail: inbox.senderEmail,
+    actionType: draft.action,
+    event: "dismissed",
+  });
   await logEmailAudit({
     userId,
     action: "email_l2_completed",
     result: "success",
     resourceId: draft.id,
     detail: { subAction: "dismiss" },
+  });
+  revalidatePath("/app/inbox");
+  revalidatePath(`/app/inbox/${draft.id}`);
+}
+
+// engineer-49 — explicit "don't send things like this again" gesture.
+// Stronger than dismiss: dismiss is one occurrence, reject is a
+// pattern-level "I never want this." Lands in the sender_confidence
+// learner as a hard-negative; two rejects within 30 days auto-demote
+// the sender × action to `always_review`. UI surface for this path
+// (e.g. a long-press menu on Dismiss with a "Reject…" affordance) is
+// engineer-50+ work; the path is exported here so it CAN be called and
+// so the test suite exercises the demote-by-reject branch.
+export async function rejectAgentDraftAction(draftId: string): Promise<void> {
+  const userId = await getUserId();
+  const { draft, inbox } = await loadDraftAndInbox(userId, draftId);
+  const now = new Date();
+  await cascadeDismissThread({
+    userId,
+    draftId: draft.id,
+    inboxItemId: draft.inboxItemId,
+    threadExternalId: inbox.threadExternalId,
+    inboxItemMode: "dismissed",
+    inboxItemResolvedAt: now,
+  });
+  await recordSenderFeedback({
+    userId,
+    senderEmail: inbox.senderEmail,
+    senderDomain: inbox.senderDomain,
+    proposedAction: draft.action,
+    userResponse: "dismissed",
+    inboxItemId: inbox.id,
+    agentDraftId: draft.id,
+  });
+  await recordSenderEvent({
+    userId,
+    senderEmail: inbox.senderEmail,
+    actionType: draft.action,
+    event: "rejected",
+  });
+  await logEmailAudit({
+    userId,
+    action: "email_l2_completed",
+    result: "success",
+    resourceId: draft.id,
+    detail: { subAction: "reject" },
   });
   revalidatePath("/app/inbox");
   revalidatePath(`/app/inbox/${draft.id}`);

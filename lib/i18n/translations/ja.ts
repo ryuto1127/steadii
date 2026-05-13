@@ -1022,6 +1022,12 @@ export const ja: Messages = {
         "Steadii が保存している、あなた自身に関する持続的な事実（タイムゾーン、稼働時間、コミュニケーションのトーン、在学情報、通知の好みなど）。チャットエージェントは毎セッションの最初にこれを読み込むので、同じことを聞き直しません。",
       open: "開く",
     },
+    agent_tuning: {
+      section_title: "エージェントの自動送信チューニング",
+      description:
+        "学習済みで自動送信されている送信先と、強制レビューになっている送信先。Steadii が越えた境界を調整したり、学習を一旦リセットできます。",
+      open: "開く",
+    },
     agent_rules: {
       section_title: "エージェントのルール",
       description:
@@ -1535,6 +1541,27 @@ export const ja: Messages = {
       done: "完了",
     },
   },
+  digest: {
+    monthly: {
+      back_to_home: "ホームへ戻る",
+      back_to_index: "月次レビュー一覧へ",
+      index_eyebrow: "Steadii · Chief of Staff",
+      index_title: "月次レビュー",
+      index_subtitle:
+        "月に一度、Steadii が一歩引いてあなたの活動全体を整理します。月を選んで振り返ってください。",
+      index_empty_title: "まだレビューはありません",
+      index_empty_description:
+        "最初の月次レビューは来月最初の日曜日に届きます。メール・カレンダー・課題・関係性の流れ — 日次の要約では拾えないパターンをまとめます。",
+      index_themes_label: "テーマ",
+      detail_eyebrow: "Steadii · Chief of Staff",
+      detail_empty:
+        "今月は十分なパターンが見つかりませんでした。次のサイクルで再度試みます。",
+      section_themes: "今月のテーマ",
+      section_recommendations: "Steadii からの提案",
+      section_drift: "気になった点",
+      suggested_date_label: "推奨日",
+    },
+  },
   theme_toggle: {
     aria: "テーマ",
     option_light: "ライト",
@@ -1729,6 +1756,51 @@ export const ja: Messages = {
         "文体プロファイルの生成に失敗しました。再試行するか、連携状況を確認してください。",
       pending: "文体を学習中…",
     },
+  },
+  agent_tuning_page: {
+    settings_back: "設定",
+    title: "エージェント信頼度チューニング",
+    description:
+      "Steadii は連続承認で送信先を自動送信モードに昇格し、連続 dismiss や reject で強制レビューに降格します。学習されたしきい値はここで調整できます。",
+    monthly_summary_heading: "直近 30 日",
+    monthly_approved: "承認 {n} 件",
+    monthly_dismissed: "dismiss {n} 件",
+    monthly_rejected: "reject {n} 件",
+    auto_send_heading: "自動送信中の送信先",
+    auto_send_description:
+      "これらの送信先には下書きを 10 秒の undo 付きで自動送信しています。「取り消し」を押すと、再び手動の送信確認に戻ります。",
+    auto_send_empty: "自動送信中の送信先はまだありません。",
+    always_review_heading: "強制レビュー中の送信先",
+    always_review_description:
+      "これらの送信先は L2 の判断にかかわらず必ずレビュー UI を経由します。「解除」を押すと制限が外れ、通常の扱いに戻ります。",
+    always_review_empty: "強制レビュー中の送信先はありません。",
+    pending_heading: "学習中の送信先",
+    pending_description:
+      "サンプル数 2-4 — Steadii はまだ判断を保留中です。サンプルがたまると昇格/降格が発火します。",
+    pending_empty: "現時点で保留中の学習はありません。",
+    column_sender: "送信先",
+    column_action: "アクション",
+    column_confidence: "信頼度",
+    column_samples: "サンプル数",
+    column_last_event: "最終更新",
+    column_actions: "操作",
+    revoke_button: "取り消し",
+    forgive_button: "解除",
+    revoke_pending: "取り消し中…",
+    forgive_pending: "解除中…",
+    reset_all_heading: "すべての学習をリセット",
+    reset_all_description:
+      "送信先ごとの昇格/降格と信頼度カウンタをすべて消去し、Steadii を初期状態から学び直させます。",
+    reset_all_button: "すべてリセット",
+    reset_all_confirm: "送信先ごとの学習をすべて消去します。続行しますか?",
+    reset_all_pending: "リセット中…",
+    empty_state_title: "まだ学習はありません",
+    empty_state_body:
+      "下書きを承認/dismiss すると、学習された送信先がここに表示されます。",
+  },
+  proactive_monthly_review: {
+    open_action: "エージェントの設定を開く",
+    dismiss_action: "問題なし",
   },
   agent_thinks_page: {
     settings_back: "設定",

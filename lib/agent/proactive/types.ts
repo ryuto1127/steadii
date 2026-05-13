@@ -86,6 +86,18 @@ export type UserSnapshot = {
 
   // Prior recent activity per class, keyed by classId. Used by Rule 4.
   recentClassActivityDays: Record<string, number | null>;
+
+  // engineer-49 — monthly boundary-review summary. Used by the
+  // monthly_boundary_review rule. Null when the user has no
+  // sender_confidence rows at all (no signal to surface).
+  monthlyReview: null | {
+    lastReviewAt: Date | null;
+    approvedThisMonth: number;
+    dismissedThisMonth: number;
+    rejectedThisMonth: number;
+    autoSendCount: number;
+    alwaysReviewCount: number;
+  };
 };
 
 // What a rule emits before the proposal generator turns it into a final

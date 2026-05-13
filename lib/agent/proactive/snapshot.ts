@@ -44,7 +44,7 @@ export async function buildUserSnapshot(
   );
 
   const [userRow] = await db
-    .select({ timezone: users.timezone })
+    .select({ timezone: users.timezone, preferences: users.preferences })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
@@ -189,10 +189,39 @@ export async function buildUserSnapshot(
     }
   }
 
+  // engineer-49 — pull the monthly-review summary for the
+  // monthly_boundary_review rule. Read fails (e.g. table missing
+  // pre-migration) degrade to null so the rest of the snapshot loads.
+  let monthlyReview: UserSnapshot["monthlyReview"] = null;
+  try {
+    const { getMonthlySummaryCounts } = await import(
+      "@/lib/agent/learning/sender-confidence"
+    );
+    const summary = await getMonthlySummaryCounts(userId, now);
+    if (summary.hasAnyRow) {
+      const lastIso = userRow?.preferences?.lastMonthlyReviewAt;
+      const lastReviewAt = lastIso ? new Date(lastIso) : null;
+      monthlyReview = {
+        lastReviewAt:
+          lastReviewAt && !Number.isNaN(lastReviewAt.getTime())
+            ? lastReviewAt
+            : null,
+        approvedThisMonth: summary.approvedThisMonth,
+        dismissedThisMonth: summary.dismissedThisMonth,
+        rejectedThisMonth: summary.rejectedThisMonth,
+        autoSendCount: summary.autoSendCount,
+        alwaysReviewCount: summary.alwaysReviewCount,
+      };
+    }
+  } catch {
+    monthlyReview = null;
+  }
+
   return {
     userId,
     now,
     timezone: userRow?.timezone ?? null,
+    monthlyReview,
     classes: classRows,
     calendarEvents: calendarRows.map((r) => ({
       ...r,

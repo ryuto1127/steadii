@@ -10,6 +10,7 @@ import { workloadOverCapacityRule } from "./workload-over-capacity";
 import { classroomDeadlineImminentRule } from "./classroom-deadline-imminent";
 import { calendarDoubleBookingRule } from "./calendar-double-booking";
 import { assignmentDeadlineReminderRule } from "./assignment-deadline-reminder";
+import { monthlyBoundaryReviewRule } from "./monthly-boundary-review";
 
 export const ALL_RULES: ProactiveRule[] = [
   timeConflictRule,
@@ -19,4 +20,5 @@ export const ALL_RULES: ProactiveRule[] = [
   classroomDeadlineImminentRule,
   calendarDoubleBookingRule,
   assignmentDeadlineReminderRule,
+  monthlyBoundaryReviewRule,
 ];
