@@ -10,6 +10,7 @@ import { requiresConfirmation } from "./confirmation";
 import {
   getToolByName,
   openAIToolDefs,
+  openAIToolDefsReadOnly,
   type ChatSessionContext,
 } from "./tool-registry";
 import {
@@ -443,6 +444,18 @@ export async function* streamChatResponse(
   // run ONE more tool-loop iteration so the model can re-fetch the
   // missing values. Cap retries at 1 to avoid infinite loops.
   //
+  // 2026-05-13 (sparring inline) — retry now allows READ-ONLY tool
+  // calls. The 2026-05-12 implementation passed `tools` but ignored
+  // any tool_calls in the response, leaving the model unable to
+  // actually fetch the missing data the corrective message asked for —
+  // it could only re-write the leaky template into a different leaky
+  // template. The アクメトラベル dogfood failure (2026-05-13) proved this
+  // doesn't self-heal. Now: if the retry response contains tool_calls,
+  // execute the read-only ones and make one more text-only pass so the
+  // model can inline the fetched values. Write/destructive tools are
+  // filtered out via `openAIToolDefsReadOnly` since the retry pass
+  // bypasses the confirmation path.
+  //
   // No retry when finalText is empty (different failure path —
   // handled by the forced-final-pass above) or when iterations are
   // already exhausted (model can't call more tools anyway).
@@ -468,21 +481,40 @@ export async function* streamChatResponse(
           stream: true,
           stream_options: { include_usage: true },
           messages: conversation,
-          tools: openAIToolDefs(sessionCtx),
+          tools: openAIToolDefsReadOnly(sessionCtx),
         });
         let retryText = "";
         let inputTokens = 0;
         let outputTokens = 0;
         let cachedTokens = 0;
-        // Note: we don't process tool_calls here — a single retry pass
-        // gives the model one shot to inline values it should have
-        // fetched. If it tries to call MORE tools, it'll get cut off
-        // and forced to emit text instead.
+        const retryPartialToolCalls: Record<
+          number,
+          { id: string; name: string; args: string }
+        > = {};
         for await (const chunk of retryStream) {
           const delta = chunk.choices?.[0]?.delta;
           if (delta?.content) {
             retryText += delta.content;
             yield { type: "text_delta", delta: delta.content };
+          }
+          const deltaToolCalls = delta?.tool_calls;
+          if (deltaToolCalls) {
+            for (const tc of deltaToolCalls) {
+              const idx = tc.index ?? 0;
+              if (!retryPartialToolCalls[idx]) {
+                retryPartialToolCalls[idx] = {
+                  id: tc.id ?? "",
+                  name: tc.function?.name ?? "",
+                  args: tc.function?.arguments ?? "",
+                };
+              } else {
+                if (tc.id) retryPartialToolCalls[idx].id = tc.id;
+                if (tc.function?.name)
+                  retryPartialToolCalls[idx].name = tc.function.name;
+                if (tc.function?.arguments)
+                  retryPartialToolCalls[idx].args += tc.function.arguments;
+              }
+            }
           }
           if (chunk.usage) {
             inputTokens = chunk.usage.prompt_tokens ?? 0;
@@ -493,6 +525,106 @@ export async function* streamChatResponse(
             cachedTokens = cacheInfo?.cached_tokens ?? 0;
           }
         }
+        const retryToolCalls = Object.values(retryPartialToolCalls).filter(
+          (c) => c.id && c.name
+        );
+
+        // If the corrective retry called read-only tools, execute them
+        // and make one more text-only pass so the model can compose a
+        // grounded response from the fetched values. Capped at one
+        // round to avoid runaway cost.
+        if (retryToolCalls.length > 0) {
+          conversation.push({
+            role: "assistant",
+            content: retryText || null,
+            tool_calls: retryToolCalls.map((c) => ({
+              id: c.id,
+              type: "function",
+              function: { name: c.name, arguments: c.args },
+            })),
+          });
+          for (const call of retryToolCalls) {
+            const tool = getToolByName(call.name);
+            if (!tool || tool.schema.mutability !== "read") {
+              // Defensive: openAIToolDefsReadOnly should never surface a
+              // non-read tool, but if some new tool schema slips through,
+              // skip it rather than executing a write without confirmation.
+              conversation.push({
+                role: "tool",
+                tool_call_id: call.id,
+                content: JSON.stringify({
+                  error: "skipped_non_read_in_retry",
+                  name: call.name,
+                }),
+              });
+              continue;
+            }
+            let parsedArgs: unknown;
+            try {
+              parsedArgs = JSON.parse(call.args || "{}");
+            } catch {
+              parsedArgs = {};
+            }
+            yield {
+              type: "tool_call_started",
+              toolName: call.name,
+              toolCallId: call.id,
+              args: parsedArgs,
+            };
+            let resultPayload: unknown;
+            let ok = true;
+            try {
+              resultPayload = await tool.execute(
+                { userId: req.userId },
+                parsedArgs
+              );
+            } catch (err) {
+              ok = false;
+              resultPayload = toolErrorPayload(err);
+            }
+            const serialized = JSON.stringify(resultPayload);
+            conversation.push({
+              role: "tool",
+              tool_call_id: call.id,
+              content: serialized,
+            });
+            yield {
+              type: "tool_call_result",
+              toolName: call.name,
+              toolCallId: call.id,
+              result: resultPayload,
+              ok,
+            };
+          }
+
+          // Re-stream a final text-only completion now that the tool
+          // results are in the conversation. Reset retryText so the
+          // final draft is what we evaluate.
+          retryText = "";
+          const finalStream = await openai().chat.completions.create({
+            model,
+            stream: true,
+            stream_options: { include_usage: true },
+            messages: conversation,
+            tools: openAIToolDefsReadOnly(sessionCtx),
+          });
+          for await (const chunk of finalStream) {
+            const delta = chunk.choices?.[0]?.delta;
+            if (delta?.content) {
+              retryText += delta.content;
+              yield { type: "text_delta", delta: delta.content };
+            }
+            if (chunk.usage) {
+              inputTokens = chunk.usage.prompt_tokens ?? 0;
+              outputTokens = chunk.usage.completion_tokens ?? 0;
+              const cacheInfo = (chunk.usage as {
+                prompt_tokens_details?: { cached_tokens?: number };
+              }).prompt_tokens_details;
+              cachedTokens = cacheInfo?.cached_tokens ?? 0;
+            }
+          }
+        }
+
         if (retryText.trim().length > 0) {
           // Only commit the retry if the leak is gone — otherwise the
           // model failed twice and we ship the original (the corrective
