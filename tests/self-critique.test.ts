@@ -149,6 +149,116 @@ describe("detectPlaceholderLeak", () => {
     });
   });
 
+  // engineer-53 — SUBJECT_LINE_FABRICATED_ON_REPLY detector. Matches
+  // a `件名:` / `Subject:` line at line-start followed by `Re:`. The
+  // pattern is conservative: a `Subject:` without `Re:` may be a
+  // legitimate new-mail draft, so we skip those.
+  describe("件名 fabricated on reply (SUBJECT_LINE_FABRICATED_ON_REPLY)", () => {
+    it("flags `件名: Re: ...` at the top of a draft body", () => {
+      const text = [
+        "件名: Re: 次回面接日程のご連絡",
+        "アクメトラベル",
+        "田中 太郎です。",
+      ].join("\n");
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+      expect(r.matched).toContain("件名 fabricated on reply");
+    });
+
+    it("flags `Subject: Re: ...` (English)", () => {
+      const text = [
+        "Subject: Re: Interview slots",
+        "",
+        "Hi Acme Travel,",
+        "Thanks for the slots.",
+      ].join("\n");
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+      expect(r.matched).toContain("件名 fabricated on reply");
+    });
+
+    it("flags `件名：Re:` with full-width colon", () => {
+      const text = "件名：Re: 面接の件\n本文";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+    });
+
+    it("does NOT flag a standalone `Subject:` (new-mail draft, out of scope)", () => {
+      // No "Re:" on the same line — this could be a legitimate new-mail
+      // draft (out of scope for this MUST rule). The detector deliberately
+      // does NOT fire here.
+      const text = "Subject: Question about MAT223 PS3\n\nHi Prof. Tanaka,";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(false);
+    });
+
+    it("does NOT flag the word 'Subject' inside prose", () => {
+      const text =
+        "The email's subject was about the interview, but the body had three slots.";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(false);
+    });
+
+    it("does NOT flag a quoted reply header that mentions the previous subject", () => {
+      // Mid-body quoted-history headers are a normal email shape and
+      // shouldn't trip the detector. The `件名:` MUST be at line-start
+      // for the regex to fire — quoted blocks usually have a `>` prefix.
+      const text = "Hi,\n\nThanks.\n\n> 件名: Re: 面接の件\n> from: ...";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(false);
+    });
+  });
+
+  // engineer-53 — ACTION_COMMITMENT_VIOLATION trailing variant detector.
+  describe("trailing future action (ACTION_COMMITMENT_VIOLATION trailing)", () => {
+    it("flags `メール本文を確認します` trailing a draft", () => {
+      const text = [
+        "下記のドラフトをご確認ください。",
+        "",
+        "[draft body]",
+        "",
+        "メール本文を確認して、必要な情報を拾います。",
+      ].join("\n");
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+      expect(r.matched).toContain("trailing future action");
+    });
+
+    it("flags `本文を確認します`", () => {
+      const text = "了解しました。本文を確認します。";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+    });
+
+    it("flags `let me check the body` (English)", () => {
+      const text = "Sure, let me check the body and get back to you.";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+    });
+
+    it("flags `reviewing the email` (English)", () => {
+      const text = "Done — I'll send the draft after reviewing the email.";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+    });
+
+    it("does NOT flag past-tense `本文を確認しました`", () => {
+      // Past tense = the agent already did the fetch; not a future-action
+      // narration. Detector explicitly only matches the future form.
+      const text = "本文を確認しました。下記のドラフトをご確認ください。";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(false);
+    });
+
+    it("does NOT flag `確認してください` (asking the user to check)", () => {
+      // The user-directed verb form is the inverse: the agent is asking
+      // the user to verify, not promising to fetch. Should not trip.
+      const text = "下記のドラフトをご確認ください。";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(false);
+    });
+  });
+
   it("returns multiple matches when multiple leak types present", () => {
     const text = "Dear {name},\nMeeting on XX月XX日.\nLocation: [TBD]";
     const r = detectPlaceholderLeak(text);
@@ -176,5 +286,27 @@ describe("buildPlaceholderLeakCorrection", () => {
     const msg = buildPlaceholderLeakCorrection(["〇〇"]);
     expect(msg.toLowerCase()).toContain("tool");
     expect(msg).toContain("Re-do");
+  });
+
+  // engineer-53 — mode-specific corrective notes.
+  it("appends a SUBJECT_LINE_FABRICATED_ON_REPLY note when the 件名 token matches", () => {
+    const msg = buildPlaceholderLeakCorrection([
+      "件名 fabricated on reply",
+    ]);
+    expect(msg).toContain("SUBJECT_LINE_FABRICATED_ON_REPLY");
+    expect(msg.toLowerCase()).toContain("re:");
+    expect(msg).toContain("body");
+  });
+
+  it("appends an ACTION_COMMITMENT_VIOLATION note when the trailing-action token matches", () => {
+    const msg = buildPlaceholderLeakCorrection(["trailing future action"]);
+    expect(msg).toContain("ACTION_COMMITMENT_VIOLATION");
+    expect(msg.toLowerCase()).toContain("trailing");
+  });
+
+  it("does not append mode-specific notes when only generic tokens match", () => {
+    const msg = buildPlaceholderLeakCorrection(["〇〇"]);
+    expect(msg).not.toContain("SUBJECT_LINE_FABRICATED_ON_REPLY");
+    expect(msg).not.toContain("ACTION_COMMITMENT_VIOLATION");
   });
 });
