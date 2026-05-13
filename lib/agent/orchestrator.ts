@@ -16,6 +16,10 @@ import {
   buildClarificationSeedPrompt,
   type ClarificationSeed,
 } from "./prompts/clarification-seed";
+import {
+  detectPlaceholderLeak,
+  buildPlaceholderLeakCorrection,
+} from "./self-critique";
 import { db } from "@/lib/db/client";
 import { resolveEntitiesInBackground } from "@/lib/agent/entity-graph/resolver";
 import {
@@ -428,6 +432,95 @@ export async function* streamChatResponse(
       // Best-effort: the user already saw the tool calls, so a forced-
       // pass failure shouldn't error the whole stream. Fall through
       // and emit message_end with whatever finalText is.
+    }
+  }
+
+  // 2026-05-12 (sparring inline) — self-critique pass. Runs a
+  // deterministic regex check for PLACEHOLDER_LEAK forbidden tokens
+  // (〇〇, {placeholder}, [TBD], xx:xx, XX月XX日, etc. — see
+  // lib/agent/self-critique.ts). When the agent shipped a template
+  // instead of grounded output, push a corrective system message and
+  // run ONE more tool-loop iteration so the model can re-fetch the
+  // missing values. Cap retries at 1 to avoid infinite loops.
+  //
+  // No retry when finalText is empty (different failure path —
+  // handled by the forced-final-pass above) or when iterations are
+  // already exhausted (model can't call more tools anyway).
+  if (
+    finalText.trim().length >= MIN_USEFUL_FINAL_TEXT_LENGTH &&
+    iterations < MAX_TOOL_ITERATIONS - 1
+  ) {
+    const leak = detectPlaceholderLeak(finalText);
+    if (leak.hasLeak) {
+      // Push the failed response + corrective system message onto the
+      // conversation so the agent has full context for the retry.
+      conversation.push({
+        role: "assistant",
+        content: finalText,
+      });
+      conversation.push({
+        role: "system",
+        content: buildPlaceholderLeakCorrection(leak.matched),
+      });
+      try {
+        const retryStream = await openai().chat.completions.create({
+          model,
+          stream: true,
+          stream_options: { include_usage: true },
+          messages: conversation,
+          tools: openAIToolDefs(sessionCtx),
+        });
+        let retryText = "";
+        let inputTokens = 0;
+        let outputTokens = 0;
+        let cachedTokens = 0;
+        // Note: we don't process tool_calls here — a single retry pass
+        // gives the model one shot to inline values it should have
+        // fetched. If it tries to call MORE tools, it'll get cut off
+        // and forced to emit text instead.
+        for await (const chunk of retryStream) {
+          const delta = chunk.choices?.[0]?.delta;
+          if (delta?.content) {
+            retryText += delta.content;
+            yield { type: "text_delta", delta: delta.content };
+          }
+          if (chunk.usage) {
+            inputTokens = chunk.usage.prompt_tokens ?? 0;
+            outputTokens = chunk.usage.completion_tokens ?? 0;
+            const cacheInfo = (chunk.usage as {
+              prompt_tokens_details?: { cached_tokens?: number };
+            }).prompt_tokens_details;
+            cachedTokens = cacheInfo?.cached_tokens ?? 0;
+          }
+        }
+        if (retryText.trim().length > 0) {
+          // Only commit the retry if the leak is gone — otherwise the
+          // model failed twice and we ship the original (the corrective
+          // re-emit wasn't successful so don't double-down).
+          const retryLeak = detectPlaceholderLeak(retryText);
+          if (!retryLeak.hasLeak) {
+            finalText = retryText;
+            await db
+              .update(messagesTable)
+              .set({ content: retryText })
+              .where(eq(messagesTable.id, assistantId));
+            await recordUsage({
+              userId: req.userId,
+              chatId: req.chatId,
+              messageId: assistantId,
+              model,
+              taskType: "chat",
+              inputTokens,
+              outputTokens,
+              cachedTokens,
+            });
+          }
+        }
+      } catch {
+        // Best-effort. If the retry fails, ship the original output —
+        // the user gets a slightly-templated answer rather than no
+        // answer at all.
+      }
     }
   }
 
