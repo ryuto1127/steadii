@@ -98,6 +98,9 @@ importers:
       resend:
         specifier: ^6.12.2
         version: 6.12.2
+      rrule-temporal:
+        specifier: ^1.5.2
+        version: 1.5.2
       server-only:
         specifier: ^0.0.1
         version: 0.0.1
@@ -110,6 +113,9 @@ importers:
       tailwind-merge:
         specifier: ^3.5.0
         version: 3.5.0
+      temporal-polyfill:
+        specifier: ^0.3.2
+        version: 0.3.2
       unpdf:
         specifier: ^1.6.1
         version: 1.6.1
