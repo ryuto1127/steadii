@@ -14,6 +14,7 @@ import { EMAIL_THREAD_TOOLS } from "./tools/email-thread";
 import { summarizeWeekTool } from "./tools/summarize-week";
 import { CONVERT_TIMEZONE_TOOLS } from "./tools/convert-timezone";
 import { RESOLVE_CLARIFICATION_TOOLS } from "./tools/resolve-clarification";
+import { SAVE_USER_FACT_TOOLS } from "./tools/save-user-fact";
 import { toOpenAIToolDefinition, type ToolExecutor } from "./tools/types";
 
 // engineer-46 — tools whose availability depends on the chat session
@@ -41,6 +42,7 @@ export const ALL_TOOLS: ToolExecutor[] = [
   ...(EMAIL_TOOLS as ToolExecutor[]),
   ...(EMAIL_THREAD_TOOLS as ToolExecutor[]),
   ...(CONVERT_TIMEZONE_TOOLS as ToolExecutor[]),
+  ...(SAVE_USER_FACT_TOOLS as ToolExecutor[]),
   summarizeWeekTool as ToolExecutor,
   ...SESSION_SCOPED_TOOLS,
 ];

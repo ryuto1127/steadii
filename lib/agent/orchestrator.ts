@@ -4,6 +4,7 @@ import { MAIN_SYSTEM_PROMPT } from "./prompts/main";
 import { selectModel } from "./models";
 import { recordUsage } from "./usage";
 import { buildUserContext, serializeContextForPrompt } from "./context";
+import { markUserFactsUsed } from "./user-facts";
 import { getUserConfirmationMode } from "./preferences";
 import { requiresConfirmation } from "./confirmation";
 import {
@@ -433,6 +434,20 @@ export async function* streamChatResponse(
     .update(chats)
     .set({ updatedAt: new Date() })
     .where(eq(chats.id, req.chatId));
+
+  // engineer-47 — bump lastUsedAt on facts that were injected into this
+  // turn's prompt. Reordering side effect for the next session's top-N.
+  // Fire-and-forget; failure shouldn't disturb the user-visible response.
+  if (ctx.userFacts && ctx.userFacts.length > 0) {
+    try {
+      await markUserFactsUsed(
+        req.userId,
+        ctx.userFacts.map((f) => f.fact)
+      );
+    } catch (err) {
+      console.error("[orchestrator] markUserFactsUsed failed", err);
+    }
+  }
 
   yield { type: "message_end", assistantMessageId: assistantId, text: finalText };
 }

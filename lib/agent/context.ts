@@ -12,6 +12,7 @@ import {
 import { and, count, eq, isNull } from "drizzle-orm";
 import { getCalendarForUser } from "@/lib/integrations/google/calendar";
 import { getUserLocale, getUserTimezone } from "./preferences";
+import { loadTopUserFacts } from "./user-facts";
 export {
   serializeContextForPrompt,
   type UserContextPayload,
@@ -45,6 +46,7 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
     activeAssignmentCount,
     mistakeCount,
     syllabusCount,
+    userFactsList,
   ] = await Promise.all([
     getUserTimezone(userId),
     getUserLocale(userId),
@@ -53,6 +55,7 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
     countRows(assignmentsTable, userId, true, "active"),
     countRows(mistakeNotes, userId, true),
     countRows(syllabi, userId, true),
+    loadTopUserFacts(userId),
   ]);
 
   return {
@@ -78,6 +81,10 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
       syllabi: syllabusCount,
     },
     calendarEventsThisWeek,
+    userFacts: userFactsList.map((f) => ({
+      fact: f.fact,
+      category: f.category,
+    })),
   };
 }
 
