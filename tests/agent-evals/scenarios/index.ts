@@ -16,6 +16,11 @@ import actionCommitmentFollowthrough from "./action-commitment-followthrough";
 import rangeAsSlotPool from "./range-as-slot-pool";
 import happyPathWeekSummary from "./happy-path-week-summary";
 import happyPathAbsenceMail from "./happy-path-absence-mail";
+// engineer-53 — three real-world reply-hardening scenarios derived
+// from the 2026-05-13 dogfood failure.
+import emailReplyTerseTypo from "./email-reply-terse-typo";
+import subjectLineFabricated from "./subject-line-fabricated";
+import trailingActionNarration from "./trailing-action-narration";
 
 export const ALL_SCENARIOS: EvalScenario[] = [
   placeholderLeakEmailReply,
@@ -26,4 +31,7 @@ export const ALL_SCENARIOS: EvalScenario[] = [
   rangeAsSlotPool,
   happyPathWeekSummary,
   happyPathAbsenceMail,
+  emailReplyTerseTypo,
+  subjectLineFabricated,
+  trailingActionNarration,
 ];
