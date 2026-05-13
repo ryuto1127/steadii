@@ -35,6 +35,12 @@ const SCANNER_RULE_ISSUE_TYPES: AgentProposalIssueType[] = [
   "classroom_deadline_imminent",
   "calendar_double_booking",
   "assignment_deadline_reminder",
+  // engineer-49 — once the user views or dismisses the monthly check-
+  // in card, `preferences.lastMonthlyReviewAt` is stamped and the rule
+  // stops firing. The auto-resolve sweep then flips the lingering
+  // pending row to 'resolved' on the next scan so the queue doesn't
+  // show a stale boundary-review entry.
+  "monthly_boundary_review",
 ];
 
 // 5-minute per-user debounce. Two scans within the window short-circuit

@@ -1,11 +1,12 @@
 import "server-only";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   auditLog,
   chats,
   messages as messagesTable,
   userFacts,
+  users,
   type ActionOption,
   type AgentProposalRow,
 } from "@/lib/db/schema";
@@ -42,6 +43,18 @@ export async function executeProactiveAction(args: {
     return await resolveUserFactReview(userId, option);
   }
 
+  // engineer-49 — monthly check-in: stamp the lastMonthlyReviewAt
+  // preference (so the rule short-circuits for the next 30 days) and
+  // redirect to the tuning page when the user picked "review."
+  if (proposal.issueType === "monthly_boundary_review") {
+    await stampLastMonthlyReviewAt(userId);
+    const href =
+      typeof option.payload?.href === "string"
+        ? (option.payload.href as string)
+        : null;
+    return href ? { redirectTo: href } : {};
+  }
+
   switch (option.tool) {
     case "chat_followup":
       return await spawnFollowupChat(userId, option, proposal);
@@ -65,6 +78,27 @@ export async function executeProactiveAction(args: {
     case "dismiss":
       // Handled by /dismiss route. Should never reach here.
       return {};
+  }
+}
+
+// engineer-49 — Postgres jsonb merge so we don't clobber other
+// preferences keys when stamping lastMonthlyReviewAt. Failure is
+// swallowed: the worst case is the rule re-fires on the next scan,
+// which is recoverable.
+export async function stampLastMonthlyReviewAt(userId: string): Promise<void> {
+  try {
+    const nowIso = new Date().toISOString();
+    await db
+      .update(users)
+      .set({
+        preferences: sql`COALESCE(${users.preferences}, '{}'::jsonb) || ${JSON.stringify(
+          { lastMonthlyReviewAt: nowIso }
+        )}::jsonb`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+  } catch {
+    // Best-effort; the next scan will re-evaluate cadence.
   }
 }
 

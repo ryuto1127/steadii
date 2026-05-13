@@ -281,6 +281,13 @@
       "when": 1778600000000,
       "tag": "0039_user_facts_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1778700000000,
+      "tag": "0040_sender_confidence",
+      "breakpoints": true
     }
   ]
 }

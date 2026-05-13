@@ -103,6 +103,7 @@ export default async function SettingsPage() {
   const tRes = await getTranslations("settings.resources");
   const tThinks = await getTranslations("settings.agent_thinks");
   const tFacts = await getTranslations("settings.user_facts");
+  const tTuning = await getTranslations("settings.agent_tuning");
   const tRules = await getTranslations("settings.agent_rules");
   const tStaged = await getTranslations("settings.staged_autonomy");
   const tModes = await getTranslations("settings.agent_modes");
@@ -254,6 +255,19 @@ export default async function SettingsPage() {
           className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
         >
           {tFacts("open")}
+          <ExternalLink size={12} strokeWidth={1.5} />
+        </Link>
+      </Section>
+
+      <Section title={tTuning("section_title")}>
+        <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
+          {tTuning("description")}
+        </p>
+        <Link
+          href="/app/settings/agent-tuning"
+          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
+        >
+          {tTuning("open")}
           <ExternalLink size={12} strokeWidth={1.5} />
         </Link>
       </Section>

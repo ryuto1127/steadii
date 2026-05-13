@@ -90,6 +90,12 @@ export const users = pgTable("users", {
     // just-read items stay briefly). Setting false surfaces everything
     // regardless of read state — for users who want a complete log.
     hideReadFromQueue?: boolean;
+    // engineer-49 — last time the monthly_boundary_review rule fired
+    // for this user. Drives the once-per-month cadence check inside the
+    // rule's detect() so we don't re-surface the card faster than 30d.
+    // ISO timestamp; null/missing = never fired (rule eligible on next
+    // scan after the user has any sender_confidence rows).
+    lastMonthlyReviewAt?: string;
   }>().default({}),
   timezone: text("timezone"),
   onboardingStep: integer("onboarding_step").notNull().default(0),
@@ -2159,7 +2165,13 @@ export type AgentProposalIssueType =
   // engineer-48 — periodic re-confirmation of an aging user_fact. The
   // user-fact-review cron emits one row per fact whose next_review_at
   // <= now(); the queue surfaces it as a Type F clarifying card.
-  | "user_fact_review";
+  | "user_fact_review"
+  // engineer-49 — monthly check-in card surfacing learned per-sender
+  // promotion/demotion state for user review. Fires once per ~30 days
+  // per user via the proactive scanner; clicking opens
+  // /app/settings/agent-tuning so the user can revoke or forgive
+  // specific (sender, action) pairs.
+  | "monthly_boundary_review";
 
 export type AgentProposalStatus =
   | "pending"
@@ -2703,3 +2715,91 @@ export const userFacts = pgTable(
 
 export type UserFactRow = typeof userFacts.$inferSelect;
 export type NewUserFactRow = typeof userFacts.$inferInsert;
+
+// engineer-49 — per-(user, sender, action) confidence signal that
+// drives dynamic confirmation thresholds.
+//
+// Rolled-up state on top of `agent_sender_feedback` (the raw event log):
+// counts + consecutive streaks + cached `learned_confidence` so the L2
+// fast path doesn't recount every classify. `promotion_state` is the
+// effective tier override the L2 reads:
+//   - 'baseline'      → defer to L1/L2 + autonomy_send_enabled (no override)
+//   - 'auto_send'     → bypass medium-tier confirm, auto-send with 10s undo
+//   - 'always_review' → force high-tier UI even if L2 picks medium
+//
+// `promotion_locked_at` + `promotion_locked_reason` document when and
+// why the row was last promoted/demoted so the agent-tuning settings
+// page can render an explanation ("auto-promoted after 5 consecutive
+// approvals on 2026-05-12").
+export type SenderConfidencePromotionState =
+  | "baseline"
+  | "auto_send"
+  | "always_review";
+
+export const senderConfidence = pgTable(
+  "sender_confidence",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    // Lowercased at write time so the unique index can match without a
+    // functional expression.
+    senderEmail: text("sender_email").notNull(),
+    actionType: text("action_type").$type<AgentDraftAction>().notNull(),
+
+    approvedCount: integer("approved_count").notNull().default(0),
+    editedCount: integer("edited_count").notNull().default(0),
+    dismissedCount: integer("dismissed_count").notNull().default(0),
+    rejectedCount: integer("rejected_count").notNull().default(0),
+
+    consecutiveApprovedCount: integer("consecutive_approved_count")
+      .notNull()
+      .default(0),
+    consecutiveDismissedCount: integer("consecutive_dismissed_count")
+      .notNull()
+      .default(0),
+
+    // 0.0..1.0 — cached at signal-update time. Higher = more autonomy.
+    learnedConfidence: real("learned_confidence").notNull().default(0.5),
+
+    promotionState: text("promotion_state")
+      .$type<SenderConfidencePromotionState>()
+      .notNull()
+      .default("baseline"),
+    promotionLockedAt: timestamp("promotion_locked_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    promotionLockedReason: text("promotion_locked_reason"),
+
+    // Stamped on every reject event so the "rejected_count >= 2 within
+    // past 30 days" demote rule has a clean read path. Older rejects
+    // outside the 30d window are still in the cumulative count for
+    // history; the demote rule clamps on this column.
+    lastRejectedAt: timestamp("last_rejected_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userSenderActionIdx: uniqueIndex(
+      "sender_confidence_user_sender_action_idx"
+    ).on(t.userId, t.senderEmail, t.actionType),
+    userPromotionIdx: index("sender_confidence_user_promotion_idx").on(
+      t.userId,
+      t.promotionState
+    ),
+  })
+);
+
+export type SenderConfidenceRow = typeof senderConfidence.$inferSelect;
+export type NewSenderConfidenceRow = typeof senderConfidence.$inferInsert;
