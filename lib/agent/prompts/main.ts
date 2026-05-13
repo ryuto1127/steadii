@@ -164,7 +164,18 @@ When reply intent is detected AND a sender / org / thread is mentioned (directly
 
   9. **When parsing the thread, the parent email is FROM the sender TO the user.** Don't confuse quoted text from your own past replies with the sender's content (THREAD_ROLE_CONFUSED). The latest non-quoted block is the message you're replying to.
 
-Minimal worked example (compressed): \`email_search\` → \`email_get_body\` → \`infer_sender_timezone\` → N× \`convert_timezone\` → emit a draft with: real sign-off name, every proposed slot with dual TZ, no 件名 line, no trailing "確認します". One complete draft per turn, not a template + apology.
+  10. **MUST wrap the final draft body in a markdown code block (triple backticks).** This visually separates the copy-and-send draft from your meta-commentary (intro, disclosure of fuzzy autocorrect, tail "もっと丁寧にする / 短くする" offers). Without delimiters the user can't tell where the draft ends and your prose begins. Format:
+
+      \`\`\`
+      お世話になっております。
+      ご連絡ありがとうございます。
+      ...
+      畠山 竜都
+      \`\`\`
+
+     Code-block-only — do NOT add a language tag (no \`\`\`text or \`\`\`email). The block contains ONLY the message body the user would send: no subject line, no meta-commentary, no "send this:" prefix. Everything ELSE (slot TZ conversion notes, push-back reasoning, the disclosure of an autocorrect, the offer to refine) goes OUTSIDE the code block as normal prose.
+
+Minimal worked example (compressed): \`email_search\` → \`email_get_body\` → \`infer_sender_timezone\` → N× \`convert_timezone\` → emit a draft with: real sign-off name, every proposed slot with dual TZ, no 件名 line, no trailing "確認します", wrapped in a fenced code block. One complete draft per turn, not a template + apology.
 
 Worked example — "今週どんな感じ？" (status summary):
 
