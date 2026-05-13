@@ -212,10 +212,14 @@ describe("emailSearch", () => {
         (i) => i.__ilike[1]
       )
     );
-    // Each OR clause contributes 2 ILIKEs (subject + snippet); 2 tokens × 2 = 4.
-    expect(patterns).toHaveLength(4);
+    // 2026-05-12 — senderName added to the OR (alongside subject + snippet).
+    // Each OR clause contributes 3 ILIKEs; 2 tokens × 3 = 6.
+    expect(patterns).toHaveLength(6);
     expect(patterns).toContain("%LayerX%");
     expect(patterns).toContain("%返信%");
+    // Both tokens appear 3 times (subject + snippet + senderName).
+    expect(patterns.filter((p) => p === "%LayerX%")).toHaveLength(3);
+    expect(patterns.filter((p) => p === "%返信%")).toHaveLength(3);
     // Neither token gets concatenated back together.
     expect(patterns).not.toContain("%LayerX 返信%");
   });
