@@ -87,13 +87,48 @@ async function discoverProdConnectionString(): Promise<string> {
   if (!projectId) {
     type Proj = { id: string; name: string };
     type Projects = { projects: Proj[] };
-    const { projects } = await neonApi<Projects>("/projects");
-    const matched = projects.find((p) =>
+
+    // Neon accounts often live under an organization rather than as a
+    // personal account. `/projects` without `org_id` works for personal
+    // accounts but returns 400 when the user is in an org. Probe both
+    // surfaces: list orgs first; if any orgs exist, query projects per
+    // org. Else fall back to personal.
+    type Org = { id: string; name: string };
+    type Orgs = { organizations: Org[] };
+    let orgs: Org[] = [];
+    try {
+      const r = await neonApi<Orgs>("/users/me/organizations");
+      orgs = r.organizations ?? [];
+    } catch {
+      // Some accounts return 404 on /users/me/organizations — fall
+      // through to personal-account probe below.
+    }
+
+    const projectCandidates: Proj[] = [];
+    if (orgs.length > 0) {
+      for (const org of orgs) {
+        try {
+          const r = await neonApi<Projects>(
+            `/projects?org_id=${encodeURIComponent(org.id)}`
+          );
+          projectCandidates.push(...(r.projects ?? []));
+        } catch (e) {
+          console.warn(`Skipping org ${org.name}: ${String(e)}`);
+        }
+      }
+    } else {
+      const r = await neonApi<Projects>("/projects");
+      projectCandidates.push(...(r.projects ?? []));
+    }
+
+    const matched = projectCandidates.find((p) =>
       p.name.toLowerCase().includes("steadii")
     );
     if (!matched) {
       throw new Error(
-        `No 'steadii' project found among Neon projects. Available: ${projects
+        `No 'steadii' project found. Searched ${
+          orgs.length > 0 ? `${orgs.length} org(s)` : "personal account"
+        }. Available: ${projectCandidates
           .map((p) => p.name)
           .join(", ")}. Set NEON_PROJECT_ID explicitly.`
       );
