@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "eval:agent": "NODE_OPTIONS='--max-old-space-size=8192' tsx tests/agent-evals/run.ts",
     "i18n:audit": "tsx scripts/i18n-audit.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx lib/db/migrate.ts",
