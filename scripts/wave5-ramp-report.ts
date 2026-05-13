@@ -100,42 +100,42 @@ async function main() {
   //    (lib/agent/email/urgency-decay.ts, not auto-archive.ts).
   //    Wave 5 rows have detail->bucket='auto_low'; urgency_decay rows
   //    have detail->reason='urgency_decay'.
-  const totalRows = await sql<{ count: string }[]>`
+  const totalRows = (await sql`
     SELECT COUNT(*)::text AS count
     FROM audit_log
     WHERE action = 'auto_archive'
       AND result = 'success'
       AND created_at >= ${RAMP_START}
       AND (detail->>'bucket') = 'auto_low'
-  `;
+  `) as { count: string }[];
   const totalArchives = Number(totalRows[0]?.count ?? 0);
 
-  const urgencyRows = await sql<{ count: string }[]>`
+  const urgencyRows = (await sql`
     SELECT COUNT(*)::text AS count
     FROM audit_log
     WHERE action = 'auto_archive'
       AND result = 'success'
       AND created_at >= ${RAMP_START}
       AND (detail->>'reason') = 'urgency_decay'
-  `;
+  `) as { count: string }[];
   const urgencyDecays = Number(urgencyRows[0]?.count ?? 0);
 
-  const optInRows = await sql<{ enabled: string; disabled: string }[]>`
+  const optInRows = (await sql`
     SELECT
       SUM(CASE WHEN auto_archive_enabled THEN 1 ELSE 0 END)::text AS enabled,
       SUM(CASE WHEN NOT auto_archive_enabled THEN 1 ELSE 0 END)::text AS disabled
     FROM users WHERE deleted_at IS NULL
-  `;
+  `) as { enabled: string; disabled: string }[];
   const optedIn = Number(optInRows[0]?.enabled ?? 0);
   const optedOut = Number(optInRows[0]?.disabled ?? 0);
 
   // 2. Restores since ramp start (FPs)
-  const restoreRows = await sql<{ count: string }[]>`
+  const restoreRows = (await sql`
     SELECT COUNT(*)::text AS count
     FROM inbox_items
     WHERE user_restored_at IS NOT NULL
       AND user_restored_at >= ${RAMP_START}
-  `;
+  `) as { count: string }[];
   const totalRestores = Number(restoreRows[0]?.count ?? 0);
 
   const fpRate = totalArchives > 0 ? (totalRestores / totalArchives) * 100 : 0;
@@ -151,7 +151,7 @@ async function main() {
 
   // 3. Per-day breakdown
   console.log(`--- Daily breakdown ---`);
-  const daily = await sql<{ day: string; archives: string; restores: string }[]>`
+  const daily = (await sql`
     WITH a AS (
       SELECT DATE_TRUNC('day', created_at)::date AS day, COUNT(*) AS archives
       FROM audit_log
@@ -171,7 +171,7 @@ async function main() {
     FROM a
     FULL OUTER JOIN r ON a.day = r.day
     ORDER BY 1
-  `;
+  `) as { day: string; archives: string; restores: string }[];
   for (const d of daily) {
     const arc = Number(d.archives);
     const res = Number(d.restores);
@@ -181,20 +181,20 @@ async function main() {
   console.log(``);
 
   // 4. Distinct users affected
-  const userRows = await sql<{ archived_users: string; restored_users: string }[]>`
+  const userRows = (await sql`
     SELECT
       (SELECT COUNT(DISTINCT user_id)::text FROM audit_log
         WHERE action = 'auto_archive' AND result = 'success' AND created_at >= ${RAMP_START}) AS archived_users,
       (SELECT COUNT(DISTINCT user_id)::text FROM inbox_items
         WHERE user_restored_at IS NOT NULL AND user_restored_at >= ${RAMP_START}) AS restored_users
-  `;
+  `) as { archived_users: string; restored_users: string }[];
   console.log(`Distinct users with auto-archives:  ${userRows[0]?.archived_users ?? 0}`);
   console.log(`Distinct users with restores:       ${userRows[0]?.restored_users ?? 0}`);
   console.log(``);
 
   // 5. Top sender domains auto-archived (sanity check the targeting)
   console.log(`--- Top 10 auto-archived sender domains ---`);
-  const domains = await sql<{ domain: string; n: string }[]>`
+  const domains = (await sql`
     SELECT
       (detail->>'senderDomain') AS domain,
       COUNT(*)::text AS n
@@ -206,7 +206,7 @@ async function main() {
     GROUP BY 1
     ORDER BY COUNT(*) DESC
     LIMIT 10
-  `;
+  `) as { domain: string; n: string }[];
   for (const d of domains) {
     console.log(`  ${d.n.padStart(4)}  ${d.domain}`);
   }
