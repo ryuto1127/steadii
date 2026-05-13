@@ -295,6 +295,13 @@
 			"when": 1778800000000,
 			"tag": "0041_monthly_digests",
 			"breakpoints": true
+		},
+		{
+			"idx": 42,
+			"version": "7",
+			"when": 1778900000000,
+			"tag": "0042_entity_graph",
+			"breakpoints": true
 		}
 	]
 }

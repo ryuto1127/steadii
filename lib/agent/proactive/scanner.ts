@@ -41,6 +41,9 @@ const SCANNER_RULE_ISSUE_TYPES: AgentProposalIssueType[] = [
   // pending row to 'resolved' on the next scan so the queue doesn't
   // show a stale boundary-review entry.
   "monthly_boundary_review",
+  // engineer-51 — entity-graph proactive cards.
+  "entity_fading",
+  "entity_deadline_cluster",
 ];
 
 // 5-minute per-user debounce. Two scans within the window short-circuit

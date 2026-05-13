@@ -17,6 +17,7 @@ import {
   type ClarificationSeed,
 } from "./prompts/clarification-seed";
 import { db } from "@/lib/db/client";
+import { resolveEntitiesInBackground } from "@/lib/agent/entity-graph/resolver";
 import {
   messages as messagesTable,
   chats,
@@ -447,6 +448,20 @@ export async function* streamChatResponse(
     } catch (err) {
       console.error("[orchestrator] markUserFactsUsed failed", err);
     }
+  }
+
+  // engineer-51 — entity resolution on the assistant turn. The model
+  // routinely surfaces entities the user only alluded to (e.g. the user
+  // types "the trip" and the assistant expands it to the canonical
+  // event name). Fire-and-forget; failure must not disturb the response.
+  if (finalText.trim().length > 0) {
+    resolveEntitiesInBackground({
+      userId: req.userId,
+      sourceKind: "chat_message",
+      sourceId: assistantId,
+      contentText: finalText,
+      knownContext: { sourceHint: "chat assistant turn" },
+    });
   }
 
   yield { type: "message_end", assistantMessageId: assistantId, text: finalText };
