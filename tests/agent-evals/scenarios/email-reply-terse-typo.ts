@@ -226,6 +226,38 @@ const scenario: EvalScenario = {
         };
       },
     },
+    // (k) Draft visual delimitation. When a draft body is emitted, it
+    // MUST be wrapped in a fenced code block so the UI shows the
+    // copy-and-send content separately from meta-commentary. Same
+    // "conditional on draft emitted" gate as (i) — clarification-only
+    // turns don't need a code block.
+    {
+      kind: "custom",
+      label:
+        "draft body is wrapped in a fenced code block (when a draft is emitted)",
+      check: (r) => {
+        const t = r.finalText;
+        const hasDraftBody =
+          (t.includes("お世話になっております") ||
+            t.includes("お疲れ様") ||
+            /Hi\s+\S/.test(t)) &&
+          (t.includes("よろしくお願い") ||
+            t.includes("Best,") ||
+            t.includes("Sincerely") ||
+            t.includes("Regards"));
+        if (!hasDraftBody) return { pass: true };
+        // Fenced code blocks open and close with ``` on their own lines.
+        // Need at least one PAIR.
+        const fenceCount = (t.match(/^```/gm) ?? []).length;
+        const pass = fenceCount >= 2;
+        return {
+          pass,
+          message: pass
+            ? undefined
+            : `A draft body was emitted but it isn't wrapped in a fenced code block (\`\`\`). Found ${fenceCount} fence markers; need ≥2 for a complete open+close. Without the delimiter the user can't tell where the copy-and-send body ends and meta-commentary begins.`,
+        };
+      },
+    },
   ],
 };
 
