@@ -30,7 +30,12 @@ const args = z.object({
   source: z.enum(["user_explicit", "agent_inferred"]).default("agent_inferred"),
 });
 
-export type SaveUserFactArgs = z.infer<typeof args>;
+// 2026-05-12 sparring fix — use z.input (not z.infer / z.output) because
+// `category` and `source` have .default() values; the OUTPUT type (used
+// by z.infer) marks them required, but at the boundary (LLM tool call
+// JSON or unit-test call site) they're optional and the .parse() inside
+// execute() fills the defaults. Mismatch broke typecheck on the test.
+export type SaveUserFactArgs = z.input<typeof args>;
 
 export type SaveUserFactResult = {
   id: string;
