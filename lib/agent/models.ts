@@ -35,7 +35,15 @@ export type TaskType =
   // 2026-04-30: switched from Mini to Nano for first-character latency
   // (Mini was ~700ms cold; Nano is ~200-300ms). Phase 2's locked prompt
   // + few-shot examples mitigate the smaller-model quality risk.
-  | "voice_cleanup";
+  | "voice_cleanup"
+  // engineer-48 — retrieval reranker. GPT-5.4 Mini scores cosine-recall
+  // candidates 0..1 for relevance to the current query. One call per
+  // fanout phase (when there are >=2 candidates), capped at 30
+  // candidates each. Mini tier because precision lift comes from a
+  // proper scoring head, not raw capability — a small model with
+  // structured output is enough. Logged for analytics; treated as 0
+  // credit at α (precision is the value, not metered token spend).
+  | "rerank";
 
 // Canonical model defaults. These are the target IDs; the operator can
 // override them at runtime with OPENAI_CHAT_MODEL / OPENAI_COMPLEX_MODEL /
@@ -99,6 +107,7 @@ export function selectModel(
     case "tool_call":
     case "email_classify_risk":
     case "proactive_proposal":
+    case "rerank":
       return env.OPENAI_CHAT_MODEL?.trim() || DEFAULTS.chat;
     case "mistake_explain":
     case "syllabus_extract":
@@ -176,6 +185,7 @@ export function taskTypeMetersCredits(t: TaskType): boolean {
     case "chat_title":
     case "tag_suggest":
     case "voice_cleanup":
+    case "rerank":
       return false;
   }
 }

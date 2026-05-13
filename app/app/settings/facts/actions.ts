@@ -9,6 +9,7 @@ import {
   type UserFactCategory,
 } from "@/lib/db/schema";
 import { auth } from "@/lib/auth/config";
+import { lifecycleForCategory } from "@/lib/agent/user-facts-lifecycle";
 
 // engineer-47 — settings server actions for /app/settings/facts.
 //
@@ -50,6 +51,10 @@ export async function userFactUpsertAction(formData: FormData): Promise<void> {
   if (factText.length === 0 || factText.length > 500) return;
   const category = coerceCategory(formData.get("category"));
   const now = new Date();
+  // engineer-48 — lifecycle defaults seeded from category. Settings
+  // edits count as a user re-confirmation, so reviewedAt = now and
+  // nextReviewAt/expiresAt re-base off the category cadence.
+  const lifecycle = lifecycleForCategory(category, now);
 
   if (idStr) {
     // Edit path — only the owner can update their row. Soft-deleted rows
@@ -73,10 +78,17 @@ export async function userFactUpsertAction(formData: FormData): Promise<void> {
       return;
     }
     if (existing.fact === factText) {
-      // Category-only edit; no soft-unique churn needed.
+      // Category-only edit; no soft-unique churn needed. Also a
+      // re-confirmation, so refresh the lifecycle clock.
       await db
         .update(userFacts)
-        .set({ category })
+        .set({
+          category,
+          expiresAt: lifecycle.expiresAt,
+          nextReviewAt: lifecycle.nextReviewAt,
+          reviewedAt: now,
+          decayHalfLifeDays: lifecycle.decayHalfLifeDays,
+        })
         .where(eq(userFacts.id, idStr));
     } else {
       // Fact text changed — upsert via the same onConflict path the chat
@@ -92,6 +104,10 @@ export async function userFactUpsertAction(formData: FormData): Promise<void> {
           source: "user_explicit",
           confidence: null,
           lastUsedAt: now,
+          expiresAt: lifecycle.expiresAt,
+          nextReviewAt: lifecycle.nextReviewAt,
+          reviewedAt: now,
+          decayHalfLifeDays: lifecycle.decayHalfLifeDays,
         })
         .onConflictDoUpdate({
           target: [userFacts.userId, userFacts.fact],
@@ -101,6 +117,10 @@ export async function userFactUpsertAction(formData: FormData): Promise<void> {
             confidence: null,
             lastUsedAt: now,
             deletedAt: null,
+            expiresAt: lifecycle.expiresAt,
+            nextReviewAt: lifecycle.nextReviewAt,
+            reviewedAt: now,
+            decayHalfLifeDays: lifecycle.decayHalfLifeDays,
           },
         })
         .returning({ id: userFacts.id });
@@ -136,6 +156,10 @@ export async function userFactUpsertAction(formData: FormData): Promise<void> {
         source: "user_explicit",
         confidence: null,
         lastUsedAt: now,
+        expiresAt: lifecycle.expiresAt,
+        nextReviewAt: lifecycle.nextReviewAt,
+        reviewedAt: now,
+        decayHalfLifeDays: lifecycle.decayHalfLifeDays,
       })
       .onConflictDoUpdate({
         target: [userFacts.userId, userFacts.fact],
@@ -145,6 +169,10 @@ export async function userFactUpsertAction(formData: FormData): Promise<void> {
           confidence: null,
           lastUsedAt: now,
           deletedAt: null,
+          expiresAt: lifecycle.expiresAt,
+          nextReviewAt: lifecycle.nextReviewAt,
+          reviewedAt: now,
+          decayHalfLifeDays: lifecycle.decayHalfLifeDays,
         },
       })
       .returning({ id: userFacts.id });
@@ -157,6 +185,54 @@ export async function userFactUpsertAction(formData: FormData): Promise<void> {
       detail: { fact: factText, category, source: "user_explicit" },
     });
   }
+  revalidatePath("/app/settings/facts");
+}
+
+// engineer-48 — manual re-confirmation. Bumps reviewedAt to now and
+// recomputes nextReviewAt/expiresAt from the current category. Used by
+// the "Reconfirm" button on the settings row + the Type F card's
+// Confirm action.
+export async function userFactReconfirmAction(formData: FormData): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthenticated");
+  const userId = session.user.id;
+  const id = formData.get("id");
+  if (typeof id !== "string" || id.length === 0) return;
+
+  const [existing] = await db
+    .select({
+      id: userFacts.id,
+      category: userFacts.category,
+    })
+    .from(userFacts)
+    .where(
+      and(
+        eq(userFacts.id, id),
+        eq(userFacts.userId, userId),
+        isNull(userFacts.deletedAt)
+      )
+    )
+    .limit(1);
+  if (!existing) return;
+  const now = new Date();
+  const lifecycle = lifecycleForCategory(existing.category, now);
+  await db
+    .update(userFacts)
+    .set({
+      reviewedAt: now,
+      lastUsedAt: now,
+      expiresAt: lifecycle.expiresAt,
+      nextReviewAt: lifecycle.nextReviewAt,
+      decayHalfLifeDays: lifecycle.decayHalfLifeDays,
+    })
+    .where(eq(userFacts.id, id));
+  await db.insert(auditLog).values({
+    userId,
+    action: "user_fact_reconfirmed",
+    resourceType: "user_fact",
+    resourceId: id,
+    result: "success",
+  });
   revalidatePath("/app/settings/facts");
 }
 

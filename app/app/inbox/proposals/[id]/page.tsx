@@ -175,6 +175,12 @@ function issueTypeLabelKey(t: AgentProposalIssueType): string {
       return "issue_group_project_detected";
     case "group_member_silent":
       return "issue_group_member_silent";
+    // engineer-48 — user_fact_review surfaces a re-confirmation card; no
+    // dedicated translation yet (the queue card carries the fact text
+    // inline). Fall back to syllabus_calendar_ambiguity which has the
+    // same Type-F visual family.
+    case "user_fact_review":
+      return "issue_syllabus_calendar_ambiguity";
   }
 }
 
