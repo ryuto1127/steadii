@@ -10,3 +10,4 @@ tsconfig.tsbuildinfo
 claude-*.log
 .handoffs/
 .vercel
+tests/agent-evals/last-run.json
