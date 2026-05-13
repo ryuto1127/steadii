@@ -110,6 +110,7 @@ export type EvalAssertion =
   | { kind: "response_does_not_contain"; text: string; caseSensitive?: boolean }
   | { kind: "response_no_placeholder_leak" }
   | { kind: "response_matches"; regex: RegExp }
+  | { kind: "response_does_not_match"; regex: RegExp }
   | {
       kind: "custom";
       label: string;
@@ -670,6 +671,12 @@ function serializeFixtureContext(fixture: EvalFixture): string {
   const { user, facts } = fixture;
   const lines: string[] = [];
   lines.push("=== USER CONTEXT ===");
+  // engineer-53 — emit USER_NAME with the same labeling the prod
+  // serialize-context.ts uses, so the EMAIL REPLY WORKFLOW MUST-rule 5
+  // (sign-off grounding) finds the same hook in eval scenarios as in
+  // prod. The fixture always provides a name; the prod path falls back
+  // to "(unknown — ask the user…)" when users.name is null.
+  lines.push(`USER_NAME: ${user.name}`);
   lines.push(`Name: ${user.name}`);
   lines.push(`Timezone: ${user.timezone}`);
   lines.push(`Locale: ${user.locale}`);
@@ -985,6 +992,19 @@ function evaluateOne(
         message: pass
           ? undefined
           : `Final text did not match regex.\n   Actual: ${truncate(
+              result.finalText,
+              400
+            )}`,
+      };
+    }
+    case "response_does_not_match": {
+      const pass = !assertion.regex.test(result.finalText);
+      return {
+        label: `response_does_not_match: ${assertion.regex.toString()}`,
+        pass,
+        message: pass
+          ? undefined
+          : `Final text matched a forbidden regex.\n   Actual: ${truncate(
               result.finalText,
               400
             )}`,
