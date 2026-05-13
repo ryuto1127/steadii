@@ -186,6 +186,12 @@ function issueTypeLabelKey(t: AgentProposalIssueType): string {
     // to the workload-family label since the visual treatment matches.
     case "monthly_boundary_review":
       return "issue_workload_over_capacity";
+    // engineer-51 — entity-graph cards. No dedicated translation yet;
+    // both surface as Type C and share the workload-family label since
+    // the visual treatment matches.
+    case "entity_fading":
+    case "entity_deadline_cluster":
+      return "issue_workload_over_capacity";
   }
 }
 

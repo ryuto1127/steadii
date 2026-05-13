@@ -1087,6 +1087,11 @@ type MessagesShape = {
       description: string;
       open: string;
     };
+    entities: {
+      section_title: string;
+      description: string;
+      open: string;
+    };
     agent_tuning: {
       section_title: string;
       description: string;
@@ -1679,6 +1684,38 @@ type MessagesShape = {
   };
   voice_overlay_extra: {
     send_aria: string;
+  };
+  entities: {
+    title: string;
+    description: string;
+    empty: string;
+    kinds: {
+      person: string;
+      project: string;
+      course: string;
+      org: string;
+      event_series: string;
+    };
+    detail_back: string;
+    detail_last_seen: string;
+    detail_edit_heading: string;
+    detail_field_display_name: string;
+    detail_field_aliases: string;
+    detail_field_aliases_placeholder: string;
+    detail_field_description: string;
+    detail_save: string;
+    detail_timeline_heading: string;
+    detail_timeline_description: string;
+    detail_timeline_empty: string;
+    detail_merge_heading: string;
+    detail_merge_description: string;
+    detail_merge_target: string;
+    detail_merge_pick: string;
+    detail_merge_submit: string;
+    detail_danger_heading: string;
+    detail_danger_description: string;
+    detail_delete: string;
+    detail_unlink_aria: string;
   };
 };
 
@@ -2952,6 +2989,12 @@ export const en: MessagesShape = {
         "Persistent facts Steadii has saved about you (your timezone, working hours, communication style, schooling, notification preferences). The chat agent injects these at the top of every session so it doesn't re-ask things you've already told it.",
       open: "Open",
     },
+    entities: {
+      section_title: "Entity graph",
+      description:
+        "People, projects, courses, organizations, and recurring events Steadii has cross-linked across your email, calendar, tasks, and chats. Edit names / aliases, merge duplicates, or remove ones that shouldn't be tracked.",
+      open: "Open",
+    },
     agent_tuning: {
       section_title: "Agent confidence tuning",
       description:
@@ -3684,6 +3727,43 @@ export const en: MessagesShape = {
   },
   voice_overlay_extra: {
     send_aria: "Send",
+  },
+  entities: {
+    title: "Entity graph",
+    description:
+      "People, projects, courses, organizations, and recurring events Steadii has linked across your email, calendar, tasks, and chats.",
+    empty:
+      "Nothing here yet. As Steadii processes your email, calendar, and chats, it'll surface the people, projects, courses, and organizations you keep coming back to.",
+    kinds: {
+      person: "People",
+      project: "Projects",
+      course: "Courses",
+      org: "Organizations",
+      event_series: "Recurring events",
+    },
+    detail_back: "Back to entities",
+    detail_last_seen: "Last seen {when}",
+    detail_edit_heading: "Edit details",
+    detail_field_display_name: "Display name",
+    detail_field_aliases: "Aliases",
+    detail_field_aliases_placeholder: "One alias per line, or comma-separated",
+    detail_field_description: "Description",
+    detail_save: "Save",
+    detail_timeline_heading: "Linked records",
+    detail_timeline_description:
+      "Every email, draft, calendar event, assignment, and chat message Steadii has linked to this entity. Click any row to jump back to the source.",
+    detail_timeline_empty: "No linked records yet.",
+    detail_merge_heading: "Merge with another entity",
+    detail_merge_description:
+      "Pick a duplicate to fold into this one. All linked records move over and the duplicate's aliases get added here.",
+    detail_merge_target: "Duplicate to fold in",
+    detail_merge_pick: "Pick one…",
+    detail_merge_submit: "Merge",
+    detail_danger_heading: "Delete entity",
+    detail_danger_description:
+      "Removes this entity from the graph. Linked records keep their underlying source rows — only the entity-graph connection disappears.",
+    detail_delete: "Delete entity",
+    detail_unlink_aria: "Unlink",
   },
 };
 

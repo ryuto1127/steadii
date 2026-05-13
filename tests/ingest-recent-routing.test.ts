@@ -65,6 +65,12 @@ vi.mock("@sentry/nextjs", () => ({
   captureException: () => {},
 }));
 
+// engineer-51 — resolver module pulls in db + entity-graph deps; the
+// ingest path only needs the fire-and-forget no-op behavior here.
+vi.mock("@/lib/agent/entity-graph/resolver", () => ({
+  resolveEntitiesInBackground: () => {},
+}));
+
 beforeEach(() => {
   processL2Mock.mockClear();
   triageMock.mockReset();

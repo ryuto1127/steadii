@@ -48,6 +48,7 @@ import {
 } from "@/lib/integrations/google/calendar";
 import { enqueueSendForDraft } from "./send-enqueue";
 import { getPromotionState } from "@/lib/agent/learning/sender-confidence";
+import { resolveEntitiesInBackground } from "@/lib/agent/entity-graph/resolver";
 
 // Hand-tuned K for the shallower medium-risk draft retrieval. Smaller than
 // DEEP_PASS_TOP_K because medium items don't get the deep reasoning pass,
@@ -650,6 +651,30 @@ async function runPipeline(
   const [persisted] = await db.insert(agentDrafts).values(row).returning({
     id: agentDrafts.id,
   });
+
+  // engineer-51 — entity resolution on the L2-finished draft body. L2's
+  // full-body deep pass often surfaces entities the inbox-snippet pass
+  // missed (a recruiter's company name buried below the greeting, a
+  // project codename in the third paragraph). Fire-and-forget — failure
+  // doesn't block the auto-send / queue flow.
+  if (persisted && draft?.body) {
+    resolveEntitiesInBackground({
+      userId: item.userId,
+      sourceKind: "agent_draft",
+      sourceId: persisted.id,
+      contentText: [
+        item.subject ?? "",
+        draft.body ?? "",
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+      knownContext: {
+        senderEmail: item.senderEmail,
+        classId: item.classId,
+        sourceHint: "agent draft (L2 output)",
+      },
+    });
+  }
 
   // W4.3 staged-autonomy auto-send. When the user has opted in AND the
   // draft is eligible, enqueue it directly into send_queue with the

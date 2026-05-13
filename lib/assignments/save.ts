@@ -4,6 +4,7 @@ import { assignments, auditLog } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { triggerScanInBackground } from "@/lib/agent/proactive/scanner";
+import { resolveEntitiesInBackground } from "@/lib/agent/entity-graph/resolver";
 
 export const assignmentSaveSchema = z.object({
   title: z.string().min(1).max(300),
@@ -53,6 +54,22 @@ export async function createAssignment(args: {
   triggerScanInBackground(args.userId, {
     source: "assignment.created",
     recordId: row.id,
+  });
+
+  // engineer-51 — entity-graph resolution for the new assignment. The
+  // title alone is usually enough to surface the relevant course / org /
+  // project entity. Notes go in if present.
+  resolveEntitiesInBackground({
+    userId: args.userId,
+    sourceKind: "assignment",
+    sourceId: row.id,
+    contentText: [args.input.title, args.input.notes ?? ""]
+      .filter(Boolean)
+      .join("\n\n"),
+    knownContext: {
+      classId: args.input.classId ?? null,
+      sourceHint: "assignment",
+    },
   });
 
   return { id: row.id };

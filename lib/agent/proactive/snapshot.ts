@@ -4,6 +4,8 @@ import { db } from "@/lib/db/client";
 import {
   assignments,
   classes,
+  entities,
+  entityLinks,
   events,
   mistakeNotes,
   syllabi,
@@ -217,11 +219,18 @@ export async function buildUserSnapshot(
     monthlyReview = null;
   }
 
+  // engineer-51 — entity signals for entity_fading +
+  // entity_deadline_cluster rules. Wrapped in try/catch so the snapshot
+  // still loads if the entities/entity_links tables haven't been
+  // migrated yet (stage-mismatch between code and prod schema).
+  const entitySignals = await buildEntitySignals(userId, now, assignmentRows, calendarRows).catch(() => []);
+
   return {
     userId,
     now,
     timezone: userRow?.timezone ?? null,
     monthlyReview,
+    entitySignals,
     classes: classRows,
     calendarEvents: calendarRows.map((r) => ({
       ...r,
@@ -281,6 +290,152 @@ function parseScheduleDate(input: string): Date | null {
     );
   }
   return null;
+}
+
+// engineer-51 — build the per-entity signal block for the fading +
+// deadline-cluster rules. Pulled into its own helper for clarity.
+//
+// Cadence math: gather the last 30 entity_links per entity, sort by
+// createdAt asc, compute consecutive gaps in days, then mean + stddev.
+// daysSinceLastLink is the gap from the latest link to now.
+//
+// Upcoming items: join entity_links → events / assignments for rows
+// in [now, now+7d]. Used by the deadline-cluster detector.
+async function buildEntitySignals(
+  userId: string,
+  now: Date,
+  assignmentRows: Array<{ id: string; title: string; dueAt: Date | null; classId: string | null; status: string }>,
+  calendarRows: Array<{ id: string; title: string; startsAt: Date }>
+): Promise<UserSnapshot["entitySignals"]> {
+  // Pull all live entities for the user. Tiny query — entity count
+  // per α user is O(100), no need for a window filter.
+  const entityRows = await db
+    .select({
+      id: entities.id,
+      kind: entities.kind,
+      displayName: entities.displayName,
+    })
+    .from(entities)
+    .where(and(eq(entities.userId, userId), isNull(entities.mergedIntoEntityId)));
+
+  if (entityRows.length === 0) return [];
+
+  // Latest 30 link timestamps per entity. We pull all link rows for
+  // the user in one query (entity_links is small-ish per user) and
+  // bucket client-side — Drizzle's lateral-join story is painful.
+  const linkRows = await db
+    .select({
+      entityId: entityLinks.entityId,
+      createdAt: entityLinks.createdAt,
+      sourceKind: entityLinks.sourceKind,
+      sourceId: entityLinks.sourceId,
+    })
+    .from(entityLinks)
+    .where(eq(entityLinks.userId, userId))
+    .orderBy(desc(entityLinks.createdAt));
+
+  const linksByEntity = new Map<
+    string,
+    Array<{ createdAt: Date; sourceKind: string; sourceId: string }>
+  >();
+  for (const row of linkRows) {
+    const bucket = linksByEntity.get(row.entityId) ?? [];
+    if (bucket.length >= 30) continue;
+    bucket.push({
+      createdAt: new Date(row.createdAt),
+      sourceKind: row.sourceKind,
+      sourceId: row.sourceId,
+    });
+    linksByEntity.set(row.entityId, bucket);
+  }
+
+  // Index upcoming-7d assignments + events by id so we can resolve
+  // entity links → upcoming items without another DB call.
+  const horizon7 = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
+  const upcomingById = new Map<
+    string,
+    {
+      kind: "assignment" | "calendar_event";
+      title: string;
+      occursAt: Date;
+    }
+  >();
+  for (const a of assignmentRows) {
+    if (!a.dueAt) continue;
+    if (a.dueAt < now || a.dueAt > horizon7) continue;
+    if (a.status === "done") continue;
+    upcomingById.set(a.id, {
+      kind: "assignment",
+      title: a.title,
+      occursAt: a.dueAt,
+    });
+  }
+  for (const e of calendarRows) {
+    if (e.startsAt < now || e.startsAt > horizon7) continue;
+    upcomingById.set(e.id, {
+      kind: "calendar_event",
+      title: e.title,
+      occursAt: e.startsAt,
+    });
+  }
+
+  const out: UserSnapshot["entitySignals"] = [];
+  for (const ent of entityRows) {
+    const links = linksByEntity.get(ent.id) ?? [];
+    if (links.length === 0) continue;
+
+    const sortedAsc = [...links].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
+    );
+    const newest = sortedAsc[sortedAsc.length - 1].createdAt;
+    const daysSinceLastLink = Math.floor(
+      (now.getTime() - newest.getTime()) / (24 * 3600 * 1000)
+    );
+
+    let meanGapDays: number | null = null;
+    let stddevGapDays: number | null = null;
+    if (sortedAsc.length >= 4) {
+      const gaps: number[] = [];
+      for (let i = 1; i < sortedAsc.length; i++) {
+        const gap =
+          (sortedAsc[i].createdAt.getTime() -
+            sortedAsc[i - 1].createdAt.getTime()) /
+          (24 * 3600 * 1000);
+        gaps.push(gap);
+      }
+      const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+      const variance =
+        gaps.reduce((a, b) => a + (b - mean) ** 2, 0) / gaps.length;
+      meanGapDays = mean;
+      stddevGapDays = Math.sqrt(variance);
+    }
+
+    const upcomingRefs: UserSnapshot["entitySignals"][number]["upcomingItemRefs"] = [];
+    for (const l of sortedAsc) {
+      if (l.sourceKind !== "assignment" && l.sourceKind !== "event") continue;
+      const it = upcomingById.get(l.sourceId);
+      if (!it) continue;
+      if (upcomingRefs.some((u) => u.id === l.sourceId)) continue;
+      upcomingRefs.push({
+        kind: it.kind,
+        id: l.sourceId,
+        title: it.title,
+        occursAt: it.occursAt,
+      });
+    }
+
+    out.push({
+      entityId: ent.id,
+      kind: ent.kind,
+      displayName: ent.displayName,
+      daysSinceLastLink,
+      meanGapDays,
+      stddevGapDays,
+      upcomingItemCount: upcomingRefs.length,
+      upcomingItemRefs: upcomingRefs,
+    });
+  }
+  return out;
 }
 
 // Exposed for tests.

@@ -98,6 +98,32 @@ export type UserSnapshot = {
     autoSendCount: number;
     alwaysReviewCount: number;
   };
+
+  // engineer-51 — entity-graph signals consumed by the entity_fading +
+  // entity_deadline_cluster rules. Built lazily inside snapshot.ts so a
+  // missing entities table (pre-migration) doesn't crash the build.
+  entitySignals: Array<{
+    entityId: string;
+    kind: string;
+    displayName: string;
+    // Days since the most recent link to this entity.
+    daysSinceLastLink: number;
+    // Mean gap (in days) between consecutive links, computed from the
+    // last 30 links. Used as the "normal cadence" for the fading
+    // detector. Null when fewer than 4 links — not enough signal.
+    meanGapDays: number | null;
+    // Stddev of consecutive link gaps. Same source as meanGapDays.
+    stddevGapDays: number | null;
+    // Count of assignments / events tied to this entity in the next
+    // 7-day forward window. Drives the deadline-cluster rule.
+    upcomingItemCount: number;
+    upcomingItemRefs: Array<{
+      kind: "assignment" | "calendar_event";
+      id: string;
+      title: string;
+      occursAt: Date;
+    }>;
+  }>;
 };
 
 // What a rule emits before the proposal generator turns it into a final
