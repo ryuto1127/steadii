@@ -221,7 +221,7 @@ export async function* streamChatResponse(
       const message = err instanceof Error ? err.message : "Unknown OpenAI error";
       await db
         .update(messagesTable)
-        .set({ content: `(error: ${message})` })
+        .set({ content: `(error: ${message})`, status: "error" })
         .where(eq(messagesTable.id, assistantId));
       yield { type: "error", code: "OPENAI_FAILED", message };
       return;
@@ -241,7 +241,10 @@ export async function* streamChatResponse(
     finalText = text;
 
     if (toolCalls.length === 0) {
-      // plain response — done
+      // plain response — done. status is flipped to 'done' at the end of
+      // streamChatResponse (after self-critique / facts / entity-graph),
+      // so the polling client doesn't drop the in-progress UI before
+      // those tail steps have a chance to overwrite the message.
       await db
         .update(messagesTable)
         .set({ content: text })
@@ -390,9 +393,14 @@ export async function* streamChatResponse(
     }
 
     if (pausedForConfirmation) {
+      // engineer-58 — paused for user confirmation. The assistant's text
+      // + tool_calls are fully persisted, so from the polling UI's
+      // perspective this row is 'done'; the next stream (triggered after
+      // the user confirms) will create a NEW assistant row with
+      // status='processing'.
       await db
         .update(messagesTable)
-        .set({ content: text })
+        .set({ content: text, status: "done" })
         .where(eq(messagesTable.id, assistantId));
       yield { type: "message_end", assistantMessageId: assistantId, text };
       return;
@@ -681,6 +689,11 @@ export async function* streamChatResponse(
     }
   }
 
+  // engineer-58 — terminal status flip. Done LAST so the polling client
+  // doesn't drop the in-progress UI before the message body, tool calls,
+  // and self-critique retry text are all committed.
+  await markAssistantStatus(assistantId, "done");
+
   await db
     .update(chats)
     .set({ updatedAt: new Date() })
@@ -834,11 +847,33 @@ async function loadHistory(chatId: string): Promise<StoredMessage[]> {
 }
 
 async function insertPendingAssistant(chatId: string, model: string): Promise<string> {
+  // engineer-58 — `status: 'processing'` marks the row as in-flight so the
+  // UI can render an in-progress chip + start polling /messages/[id]/status
+  // if the user navigates back to a chat whose agent run is still mid-loop
+  // (or whose SSE stream was cut by a tab close while after() kept the
+  // lambda alive). Set to a terminal value at every exit point of
+  // streamChatResponse — see markAssistantStatus().
   const [row] = await db
     .insert(messagesTable)
-    .values({ chatId, role: "assistant", content: "", model })
+    .values({
+      chatId,
+      role: "assistant",
+      content: "",
+      model,
+      status: "processing",
+    })
     .returning({ id: messagesTable.id });
   return row.id;
+}
+
+async function markAssistantStatus(
+  messageId: string,
+  status: "done" | "error" | "cancelled"
+): Promise<void> {
+  await db
+    .update(messagesTable)
+    .set({ status })
+    .where(eq(messagesTable.id, messageId));
 }
 
 export async function generateChatTitle(
