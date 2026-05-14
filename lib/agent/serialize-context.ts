@@ -97,6 +97,16 @@ function defaultUserWorkingHoursForPrompt(tz: string): NormDefault {
 // Format `date` as a full offset-bearing RFC3339 string in `tz`, e.g.
 // "2026-04-20T14:32:00-07:00". Intl handles DST transitions; we never do
 // manual offset math.
+//
+// engineer-59 — seconds are zeroed deliberately for OpenAI prompt
+// caching. The chat orchestrator includes this string inside the
+// per-call system block; caching keys on the literal prefix, so a
+// timestamp that ticks every second invalidates the cache for every
+// back-to-back send. Minute precision is enough for the model's
+// reasoning (no scheduling task cares about second granularity) and
+// gives 60s of cache-stable prefix to amortize across follow-up sends.
+// Audit (2026-05-13) showed chat at 78% cache hit pre-fix; this lifts
+// across-session hits without altering within-loop behavior.
 function formatNowIsoInZone(date: Date, tz: string): string {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: tz,
@@ -105,7 +115,6 @@ function formatNowIsoInZone(date: Date, tz: string): string {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
     hour12: false,
     timeZoneName: "longOffset",
   }).formatToParts(date);
@@ -116,10 +125,9 @@ function formatNowIsoInZone(date: Date, tz: string): string {
   let hour = get("hour");
   if (hour === "24") hour = "00";
   const minute = get("minute");
-  const second = get("second");
   const offsetRaw = get("timeZoneName"); // "GMT-07:00" or "GMT" for UTC
   const offset = offsetRaw && offsetRaw !== "GMT" ? offsetRaw.replace("GMT", "") : "+00:00";
-  return `${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`;
+  return `${year}-${month}-${day}T${hour}:${minute}:00${offset}`;
 }
 
 function formatTzAbbreviation(date: Date, tz: string): string {

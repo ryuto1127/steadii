@@ -132,6 +132,16 @@ export async function* streamChatResponse(
     ? buildClarificationSeedPrompt(clarificationSeed)
     : null;
 
+  // Message order is chosen for OpenAI prompt caching. The literal
+  // prefix is matched for cache hits; once a position differs, the
+  // suffix is uncached. Stable content (MAIN_SYSTEM_PROMPT, then the
+  // user-stable portion of contextPrompt) goes FIRST so the cacheable
+  // prefix is as long as possible. contextPrompt's time-varying line
+  // is at minute precision (see serialize-context.ts formatNowIsoInZone)
+  // so back-to-back sends within 60s share cache. The optional
+  // clarification block is per-conversation; tool defs (passed via the
+  // `tools:` arg below) are also part of the cached prefix.
+  // engineer-59 audit (2026-05-13): chat ran at 78% cache hit pre-fix.
   const conversation: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: MAIN_SYSTEM_PROMPT },
     { role: "system", content: contextPrompt },
