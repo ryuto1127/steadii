@@ -130,8 +130,13 @@ const scenario: EvalScenario = {
         };
       },
     },
-    // (c) MUST convert EACH proposed slot — 2 slots, so ≥2 calls
-    { kind: "tool_called", name: "convert_timezone", minTimes: 2 },
+    // (c) MUST convert EACH proposed slot — 2 slots × 2 endpoints
+    // (start + end) = 4 calls floor per TIMEZONE RULES "for slot
+    // RANGES, convert BOTH endpoints" rule. Pre-2026-05-14 this said
+    // minTimes: 2 (start only); upgraded after Ryuto's dogfood showed
+    // PDT side rendering only the start (`02:00 PDT` instead of
+    // `02:00–02:45 PDT`) — RANGE_END_NOT_CONVERTED failure mode.
+    { kind: "tool_called", name: "convert_timezone", minTimes: 4 },
     // (d) MUST cite the Vancouver night time as the reason for push-back
     {
       kind: "custom",
