@@ -31,6 +31,7 @@ import {
   buildPlaceholderLeakCorrection,
 } from "@/lib/agent/self-critique";
 import { inferSenderTimezone } from "@/lib/agent/email/sender-timezone-heuristic";
+import { inferSenderWorkingHours } from "@/lib/agent/email/sender-norms";
 
 // ---------- Fixture types ----------
 
@@ -83,9 +84,17 @@ export type EvalFixture = {
   entities?: FixtureEntity[];
   // engineer-54 — working/meeting-available window in the user's profile
   // TZ. Mirrors users.preferences.workingHoursLocal. When unset, the
-  // harness emits "USER_WORKING_HOURS: (not set)" so the prompt's
-  // SLOT FEASIBILITY CHECK onboarding-ask branch fires.
+  // harness falls back to the norm default per the user's TZ
+  // (engineer-56 soft-default; the hard-ASK gate was removed).
   workingHoursLocal?: { start: string; end: string } | null;
+  // engineer-56 — empirical window inferred from prior accepted-slot
+  // picks. Overrides the norm default but not an explicit
+  // workingHoursLocal. Optional on fixtures.
+  inferredWorkingHoursLocal?: {
+    start: string;
+    end: string;
+    sampleCount: number;
+  } | null;
 };
 
 // ---------- Scenario + assertion shapes ----------
@@ -209,6 +218,23 @@ const HARNESS_TOOL_DEFS: OpenAITool[] = [
         properties: {
           senderEmail: { type: "string" },
           emailBody: { type: "string" },
+        },
+        required: ["senderEmail"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "infer_sender_norms",
+      description:
+        "Infer the sender's likely working hours from their email domain + optional body language. Returns {start, end, tz, confidence, shouldDisclose, reasoning}. Use when drafting a counter-proposal so your proposed window respects the sender's day, not just the user's. Confidence ≥ 0.7 → use silently; 0.4–0.7 → use AND surface the assumption; < 0.4 → generic fallback, disclose.",
+      parameters: {
+        type: "object",
+        properties: {
+          senderEmail: { type: "string" },
+          body: { type: ["string", "null"] },
         },
         required: ["senderEmail"],
         additionalProperties: false,
@@ -386,6 +412,8 @@ function buildDispatcher(fixture: EvalFixture): DispatchFn {
         return execEmailGetBody(norm, args);
       case "infer_sender_timezone":
         return execInferSenderTimezone(args);
+      case "infer_sender_norms":
+        return execInferSenderNorms(args);
       case "convert_timezone":
         return execConvertTimezone(norm, args);
       case "lookup_entity":
@@ -495,6 +523,20 @@ function execInferSenderTimezone(args: Record<string, unknown>): unknown {
       }).`
     : `Cannot reliably infer the sender's timezone from ${senderEmail}. Ask the user which TZ the email's times are in.`;
   return { ...inf, reasoning };
+}
+
+function execInferSenderNorms(args: Record<string, unknown>): unknown {
+  const senderEmail =
+    typeof args.senderEmail === "string" ? args.senderEmail : "";
+  const body = typeof args.body === "string" && args.body.length > 0 ? args.body : null;
+  const result = inferSenderWorkingHours({ senderEmail, body });
+  const pct = Math.round(result.confidence * 100);
+  const reasoning = `${senderEmail} → ${result.start}–${result.end} ${result.tz} (${pct}% confidence, ${result.source}).`;
+  return {
+    ...result,
+    reasoning,
+    shouldDisclose: result.confidence < 0.7,
+  };
 }
 
 function execConvertTimezone(
@@ -707,6 +749,33 @@ function execSummarizeWeek(norm: NormalizedFixture): unknown {
 // MAIN_SYSTEM_PROMPT — same shape here so prompt caching semantics
 // stay representative.
 
+// engineer-56 — mirror of `lib/agent/email/sender-norms.ts#defaultUserWorkingHours`.
+// Inlined here for the same reason `convertTimezoneInline` is — keeps
+// the harness module free of any `server-only`-tainted imports.
+const HARNESS_EAST_ASIA_TZS = new Set([
+  "Asia/Tokyo",
+  "Asia/Seoul",
+  "Asia/Shanghai",
+  "Asia/Taipei",
+  "Asia/Hong_Kong",
+  "Asia/Singapore",
+]);
+
+function harnessDefaultUserWorkingHours(
+  tz: string
+): { start: string; end: string; source: string } {
+  if (tz.startsWith("America/")) {
+    return { start: "09:00", end: "22:00", source: "norm:north-america" };
+  }
+  if (HARNESS_EAST_ASIA_TZS.has(tz)) {
+    return { start: "08:00", end: "22:00", source: "norm:east-asia" };
+  }
+  if (tz.startsWith("Europe/")) {
+    return { start: "08:00", end: "21:00", source: "norm:europe" };
+  }
+  return { start: "09:00", end: "21:00", source: "norm:other" };
+}
+
 function serializeFixtureContext(fixture: EvalFixture): string {
   const { user, facts } = fixture;
   const lines: string[] = [];
@@ -717,15 +786,23 @@ function serializeFixtureContext(fixture: EvalFixture): string {
   // prod. The fixture always provides a name; the prod path falls back
   // to "(unknown — ask the user…)" when users.name is null.
   lines.push(`USER_NAME: ${user.name}`);
-  // engineer-54 — mirror the prod serialize-context.ts USER_WORKING_HOURS
-  // line so SLOT FEASIBILITY CHECK reads the same hook in eval scenarios.
+  // engineer-54 / 56 — mirror the prod serialize-context.ts
+  // USER_WORKING_HOURS line so SLOT FEASIBILITY CHECK reads the same
+  // hook in eval scenarios. Three-state resolution: explicit / inferred
+  // / norm-default (engineer-56 soft-default).
   if (fixture.workingHoursLocal) {
     lines.push(
       `USER_WORKING_HOURS: ${fixture.workingHoursLocal.start}–${fixture.workingHoursLocal.end} (${user.timezone})`
     );
-  } else {
+  } else if (fixture.inferredWorkingHoursLocal) {
+    const inf = fixture.inferredWorkingHoursLocal;
     lines.push(
-      `USER_WORKING_HOURS: (not set — when drafting acceptance of a proposed meeting slot, ask the user once "what time of day works for you? e.g., 9 AM–10 PM Pacific" before drafting, then save via save_working_hours)`
+      `USER_WORKING_HOURS: ${inf.start}–${inf.end} (${user.timezone}, inferred from ${inf.sampleCount} accepted-slot picks — refine if wrong by volunteering hours; save_working_hours overrides)`
+    );
+  } else {
+    const norm = harnessDefaultUserWorkingHours(user.timezone);
+    lines.push(
+      `USER_WORKING_HOURS: (not set — using norm: ${norm.start}–${norm.end} ${user.timezone}, source: ${norm.source}; surface this assumption once when drafting, save_working_hours if user volunteers actual hours)`
     );
   }
   lines.push(`Name: ${user.name}`);

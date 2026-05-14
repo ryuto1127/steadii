@@ -107,6 +107,14 @@ export const users = pgTable("users", {
       start: string;
       end: string;
     };
+    // engineer-56 — silent learning. Accepted-slot HH:MM samples in the
+    // user's profile TZ. After ≥ 3 samples the agent's SLOT FEASIBILITY
+    // CHECK derives an empirical window [min, max] (with a 30-minute
+    // tolerance buffer) that OVERRIDES the norm default but NOT an
+    // explicit workingHoursLocal. Capped at 20 entries (LIFO) so the
+    // JSONB row stays bounded. See lib/agent/preferences.ts for the
+    // read/write API + computeInferredWindow().
+    acceptedSlotSamplesLocal?: string[];
   }>().default({}),
   timezone: text("timezone"),
   onboardingStep: integer("onboarding_step").notNull().default(0),

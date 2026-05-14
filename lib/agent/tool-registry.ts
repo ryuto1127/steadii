@@ -14,6 +14,7 @@ import { EMAIL_THREAD_TOOLS } from "./tools/email-thread";
 import { summarizeWeekTool } from "./tools/summarize-week";
 import { CONVERT_TIMEZONE_TOOLS } from "./tools/convert-timezone";
 import { INFER_SENDER_TIMEZONE_TOOLS } from "./tools/infer-sender-timezone";
+import { INFER_SENDER_NORMS_TOOLS } from "./tools/infer-sender-norms";
 import { RESOLVE_CLARIFICATION_TOOLS } from "./tools/resolve-clarification";
 import { SAVE_USER_FACT_TOOLS } from "./tools/save-user-fact";
 import { SAVE_WORKING_HOURS_TOOLS } from "./tools/save-working-hours";
@@ -46,6 +47,7 @@ export const ALL_TOOLS: ToolExecutor[] = [
   ...(EMAIL_THREAD_TOOLS as ToolExecutor[]),
   ...(CONVERT_TIMEZONE_TOOLS as ToolExecutor[]),
   ...(INFER_SENDER_TIMEZONE_TOOLS as ToolExecutor[]),
+  ...(INFER_SENDER_NORMS_TOOLS as ToolExecutor[]),
   ...(SAVE_USER_FACT_TOOLS as ToolExecutor[]),
   ...(SAVE_WORKING_HOURS_TOOLS as ToolExecutor[]),
   ...(LOOKUP_ENTITY_TOOLS as ToolExecutor[]),
