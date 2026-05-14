@@ -119,8 +119,16 @@ describe("detectPlaceholderLeak", () => {
       expect(r.matched).toContain("XX月XX日");
     });
 
-    it("does NOT flag valid times like 10:00", () => {
-      const r = detectPlaceholderLeak("10:00–11:00 JST が候補です");
+    it("does NOT flag valid times like 10:00 (with dual-TZ alongside)", () => {
+      // 2026-05-13 engineer-54 — engineer-54 added a JST-without-user-
+      // local-TZ proximity check (WORKING_HOURS_IGNORED detector), so
+      // a slot shown JST-only would legitimately fire that detector.
+      // The original purpose of this case was to verify "10:00 isn't a
+      // placeholder shape" — adding the PT counterpart preserves that
+      // assertion without colliding with the new MUST-rule 7 detector.
+      const r = detectPlaceholderLeak(
+        "10:00–11:00 JST / 18:00–19:00 PT が候補です"
+      );
       expect(r.hasLeak).toBe(false);
     });
   });
@@ -259,6 +267,120 @@ describe("detectPlaceholderLeak", () => {
     });
   });
 
+  // engineer-54 — LATE_NIGHT_SLOT_ACCEPTED_BLINDLY heuristic. Catches
+  // drafts that accept a proposed slot without disclosing the user-
+  // local time. False-positive-tolerant on purpose; the retry pass
+  // gives the agent a clean second swing with SLOT FEASIBILITY CHECK
+  // in scope.
+  describe("slot acceptance missing user-local TZ (LATE_NIGHT_SLOT_ACCEPTED_BLINDLY)", () => {
+    it("flags `ご提示いただいた日程で参加可能です` without user-local TZ", () => {
+      const text =
+        "お世話になっております。\nご提示いただいた日程で参加可能です。\n何卒よろしくお願いいたします。";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+      expect(r.matched).toContain("slot acceptance missing user-local TZ");
+    });
+
+    it("flags `the proposed slot ... works for me` (English)", () => {
+      const text =
+        "Hi Reiwa Travel,\nThanks — the proposed slot at 18:00 works for me.\nBest, Ryuto";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+      expect(r.matched).toContain("slot acceptance missing user-local TZ");
+    });
+
+    it("flags `ご提案いただいた日時で問題ありません`", () => {
+      const text = "ご提案いただいた日時で問題ありません。";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+    });
+
+    it("does NOT flag a polite counter-proposal that explicitly pushes back", () => {
+      // A push-back uses 「難しい」/「対応できかねます」, not 「参加可能」.
+      // The detector should not fire on negation language.
+      const text =
+        "お世話になっております。\nご提案いただいた日程ですが、5/20 18:00 JST はバンクーバー時刻で 02:00 となり、夜間のためご対応が難しいです。代わりに JST の 9:00–14:00 帯であれば調整しやすく、別日程をご提示いただけますと幸いです。";
+      const r = detectPlaceholderLeak(text);
+      // PT is mentioned (バンクーバー時刻), so working-hours detector also OK.
+      expect(r.matched).not.toContain(
+        "slot acceptance missing user-local TZ"
+      );
+    });
+  });
+
+  // engineer-54 — WORKING_HOURS_IGNORED proximity check. JST mentioned
+  // without PT/PDT/PST within 80 chars = MUST-rule 7 violation.
+  describe("JST without user-local TZ nearby (WORKING_HOURS_IGNORED / MUST-rule 7)", () => {
+    it("flags a slot list shown only in JST", () => {
+      const text =
+        "候補1: 5月15日(金) 10:00 JST\n候補2: 5月19日(火) 16:30 JST\n候補3: 5月22日(金) 13:30 JST";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+      expect(r.matched).toContain("JST without user-local TZ nearby");
+    });
+
+    it("does NOT flag a slot list with PT alongside each JST mention", () => {
+      const text = [
+        "候補1: 5月15日(金) 10:00 JST / 5月14日(木) 18:00 PT",
+        "候補2: 5月19日(火) 16:30 JST / 5月19日(火) 00:30 PDT",
+        "候補3: 5月22日(金) 13:30 JST / 5月21日(木) 21:30 PT",
+      ].join("\n");
+      const r = detectPlaceholderLeak(text);
+      expect(r.matched).not.toContain("JST without user-local TZ nearby");
+    });
+
+    it("does NOT flag a single JST + バンクーバー時刻 within window", () => {
+      const text =
+        "5/20 18:00 JST はバンクーバー時刻で 02:00 となり、夜間のためご対応が難しいです。";
+      const r = detectPlaceholderLeak(text);
+      expect(r.matched).not.toContain("JST without user-local TZ nearby");
+    });
+
+    it("flags JST when the PT mention is far away (>80 chars)", () => {
+      // The PT mention is at the end, well outside the 80-char window.
+      const lorem = "x".repeat(200);
+      const text = `5/20 18:00 JST です。${lorem}（参考: PT は -16h）`;
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+      expect(r.matched).toContain("JST without user-local TZ nearby");
+    });
+
+    it("does NOT flag non-JST responses", () => {
+      const text =
+        "Tomorrow you have CS 348 at 10:00 and Office Hours with Prof. Tanaka at 14:00.";
+      const r = detectPlaceholderLeak(text);
+      expect(r.matched).not.toContain("JST without user-local TZ nearby");
+    });
+
+    it("does NOT flag 日本時間 when PT is nearby", () => {
+      // 日本時間 is an alias of JST that should fire the same logic; PT in
+      // the same sentence keeps it clean.
+      const text =
+        "日本時間 5月15日 10:00 / バンクーバー時刻 5月14日 18:00 PT が候補です";
+      const r = detectPlaceholderLeak(text);
+      expect(r.matched).not.toContain("JST without user-local TZ nearby");
+    });
+
+    // 2026-05-13 refinement — the detector now accepts the "analysis in
+    // user-TZ + draft body in sender-TZ" shape. The draft body addressed
+    // to a JST recipient legitimately uses JST-only inside the fence;
+    // the analysis prose above establishes PT context for the user.
+    it("does NOT flag JST in a draft body when PT context was established earlier", () => {
+      const text = [
+        "候補1 は 5月14日(木) 19:30 PDT、候補2 は 5月16日(土) 02:00 PDT です。",
+        "勤務可能時間が 08:00–22:00 なので、候補2 は深夜帯で外れます。",
+        "",
+        "```text",
+        "お世話になっております。",
+        "候補1の2026年5月15日(金) 11:30-12:15 (JST)でお願いいたします。",
+        "畠山 竜都",
+        "```",
+      ].join("\n");
+      const r = detectPlaceholderLeak(text);
+      expect(r.matched).not.toContain("JST without user-local TZ nearby");
+    });
+  });
+
   it("returns multiple matches when multiple leak types present", () => {
     const text = "Dear {name},\nMeeting on XX月XX日.\nLocation: [TBD]";
     const r = detectPlaceholderLeak(text);
@@ -308,5 +430,26 @@ describe("buildPlaceholderLeakCorrection", () => {
     const msg = buildPlaceholderLeakCorrection(["〇〇"]);
     expect(msg).not.toContain("SUBJECT_LINE_FABRICATED_ON_REPLY");
     expect(msg).not.toContain("ACTION_COMMITMENT_VIOLATION");
+    expect(msg).not.toContain("LATE_NIGHT_SLOT_ACCEPTED_BLINDLY");
+    expect(msg).not.toContain("WORKING_HOURS_IGNORED");
+  });
+
+  // engineer-54 — mode-specific corrective notes for push-back failures.
+  it("appends a LATE_NIGHT_SLOT_ACCEPTED_BLINDLY note when the slot-acceptance token matches", () => {
+    const msg = buildPlaceholderLeakCorrection([
+      "slot acceptance missing user-local TZ",
+    ]);
+    expect(msg).toContain("LATE_NIGHT_SLOT_ACCEPTED_BLINDLY");
+    expect(msg).toContain("SLOT FEASIBILITY CHECK");
+    expect(msg).toContain("USER_WORKING_HOURS");
+  });
+
+  it("appends a WORKING_HOURS_IGNORED note when the JST-without-PT token matches", () => {
+    const msg = buildPlaceholderLeakCorrection([
+      "JST without user-local TZ nearby",
+    ]);
+    expect(msg).toContain("WORKING_HOURS_IGNORED");
+    expect(msg).toContain("MUST-rule 7");
+    expect(msg.toLowerCase()).toContain("convert_timezone");
   });
 });
