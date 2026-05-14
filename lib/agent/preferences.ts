@@ -3,6 +3,16 @@ import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import type { ConfirmationMode } from "./confirmation";
+import {
+  computeInferredWindow,
+  MAX_ACCEPTED_SLOT_SAMPLES,
+  type InferredWorkingHoursLocal,
+} from "./empirical-window";
+
+// Re-export for downstream callers that previously imported these from
+// preferences.ts so the move doesn't ripple through every importer.
+export { computeInferredWindow };
+export type { InferredWorkingHoursLocal };
 
 export async function getUserConfirmationMode(userId: string): Promise<ConfirmationMode> {
   const [row] = await db
@@ -162,6 +172,68 @@ export async function getUserWorkingHours(
   if (!wh) return null;
   if (!isValidWorkingHours(wh)) return null;
   return { start: wh.start, end: wh.end };
+}
+
+// engineer-56 — silent learning. Track each accepted slot the user
+// picks (or that the agent emits in a reply draft) as a HH:MM data
+// point in the user's profile TZ. After ≥ 3 samples, the agent's
+// SLOT FEASIBILITY CHECK consumes an empirical window
+// [min(samples), max(samples)] as a refinement over the norm default.
+// Storage shape (in users.preferences JSONB — no schema migration):
+//   acceptedSlotSamplesLocal: ["19:30", "20:00", "21:15", ...]
+// Capped at MAX_ACCEPTED_SLOT_SAMPLES so the JSONB row stays small.
+// The samples are stored as plain HH:MM strings; we don't carry the
+// sender or the date — α scale doesn't need either to compute a window.
+// Math + types live in `./empirical-window.ts` (pure module, no DB).
+
+export async function recordAcceptedSlot(
+  userId: string,
+  hhmmUserLocal: string
+): Promise<void> {
+  if (!HHMM_RE.test(hhmmUserLocal)) {
+    // Silently drop invalid input — Part-4 is best-effort learning, not
+    // a user-facing API. Bad data shouldn't crash the gmail_send path.
+    return;
+  }
+  const [row] = await db
+    .select({ preferences: users.preferences })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const prefs = row?.preferences ?? {};
+  const samples = Array.isArray(prefs.acceptedSlotSamplesLocal)
+    ? prefs.acceptedSlotSamplesLocal.filter(
+        (s): s is string => typeof s === "string" && HHMM_RE.test(s)
+      )
+    : [];
+  samples.push(hhmmUserLocal);
+  // Keep the most recent N — slot preferences drift (graduating to a
+  // job, changing schools). LIFO retention.
+  const trimmed = samples.slice(-MAX_ACCEPTED_SLOT_SAMPLES);
+  const next = {
+    ...prefs,
+    acceptedSlotSamplesLocal: trimmed,
+  };
+  await db
+    .update(users)
+    .set({ preferences: next, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+}
+
+export async function getInferredWorkingHours(
+  userId: string
+): Promise<InferredWorkingHoursLocal | null> {
+  const [row] = await db
+    .select({ preferences: users.preferences })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const samples = Array.isArray(row?.preferences?.acceptedSlotSamplesLocal)
+    ? row.preferences.acceptedSlotSamplesLocal.filter(
+        (s): s is string => typeof s === "string" && HHMM_RE.test(s)
+      )
+    : [];
+  return computeInferredWindow(samples);
 }
 
 export async function setUserWorkingHours(

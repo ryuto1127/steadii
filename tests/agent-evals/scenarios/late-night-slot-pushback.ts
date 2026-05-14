@@ -4,6 +4,16 @@
 // back with a counter-proposal that names the user-local time as the
 // reason and proposes an alternative window in JST.
 //
+// engineer-56 revision — the counter-proposal window must reflect the
+// BIDIRECTIONAL intersection of user-norms AND sender-norms. For this
+// fixture: USER_WORKING_HOURS 08:00–22:00 PT = JST 00:00–15:00 next-day;
+// sender (recruiter@acme-travel.example.co.jp via infer_sender_norms) =
+// 09:00–18:00 JST @ 0.9 confidence. Intersection = JST 09:00–15:00.
+// Pre-engineer-56 a JST 6:00–14:00 proposal would have "passed" because
+// it fit the user side, even though 6 AM JST is pre-business for the
+// sender — that's SENDER_NORMS_IGNORED. The revised assertion enforces
+// that the proposed JST window stays inside 09:00–18:00 JST.
+//
 // Verbatim 2026-05-13 dogfood fixture (アクメトラベル round-2):
 //   5/20 (水) 18:00–18:45 JST  →  5/20 02:00–02:45 PDT (Vancouver night)
 //   5/21 (木) 15:00–15:45 JST  →  5/20 23:00–23:45 PDT (Vancouver night)
@@ -14,6 +24,7 @@
 // Failure modes this scenario gates:
 // - LATE_NIGHT_SLOT_ACCEPTED_BLINDLY (engineer-54) — primary
 // - WORKING_HOURS_IGNORED (engineer-54) — MUST-rule 7 violation
+// - SENDER_NORMS_IGNORED (engineer-56) — counter must respect sender's day
 // - Past-pattern grounding: the chatHistory carries Ryuto's earlier
 //   reply with 3 evening-PT slots so PAST PATTERN GROUNDING can fire.
 
@@ -189,7 +200,36 @@ const scenario: EvalScenario = {
     {
       kind: "response_matches",
       regex:
-        /(難しい|難しく|厳しい|厳しく|外れます|外れる|深夜|夜間|対応できかね|ご対応が|cannot|wouldn'?t work|won'?t work|outside (my )?working hours|不可)/i,
+        /(難しい|難しく|厳しい|厳しく|外れます|外れる|範囲外|範囲を外れ|深夜|夜間|対応時間外|対応できかね|ご対応が|都合がつかない|都合が合わ|cannot|wouldn'?t work|won'?t work|outside (my )?working hours|out of office hours|outside business hours|不可|遅い時間|遅く)/i,
+    },
+    // (g0) engineer-56 — bidirectional consideration. Either calls
+    // `infer_sender_norms` OR demonstrates the sender's hours
+    // explicitly in the response (e.g. "JST 9:00–18:00" anchored to
+    // sender / 業務時間 / working hours). Tool-call preferred but
+    // mini-tier model variance sometimes inlines the prior; either
+    // path satisfies the rule's intent.
+    {
+      kind: "custom",
+      label:
+        "bidirectional consideration: infer_sender_norms called OR sender hours explicitly reasoned",
+      check: (r) => {
+        const calledTool = r.toolCalls.some((c) => c.name === "infer_sender_norms");
+        // Inline reasoning fallback: response mentions a concrete
+        // sender-hours window like "JST 9:00–18:00" / "9 AM – 6 PM
+        // JST" / "9–18 JST" in proximity to a sender-norms framing
+        // word.
+        const t = r.finalText;
+        const senderHourPattern =
+          /(JST.{0,15}(9|09)[:時].{0,15}(18|6 ?PM|6 PM|6PM)|(9|09)[:時]?\d*\s*[-–~〜]\s*(18|6 ?PM)\s*JST|9 ?AM.{0,10}6 ?PM.{0,10}JST|相手の(対応|営業|稼働|業務)時間|sender(?:'s)?\s+(?:working|business|standard)\s+hours|recruiter(?:'s)?\s+(?:working|business|standard)\s+hours)/i;
+        const inlineReasoning = senderHourPattern.test(t);
+        const pass = calledTool || inlineReasoning;
+        return {
+          pass,
+          message: pass
+            ? undefined
+            : "Agent neither called infer_sender_norms NOR surfaced concrete sender-hours reasoning. Bidirectional intersection (COUNTER-PROPOSAL PATTERN rule 3b) requires one or the other.",
+        };
+      },
     },
     // (g) MUST propose an alternative window with CONCRETE HOURS. The
     // handoff spec prefers the window framed in the sender's TZ (JST);
@@ -276,6 +316,82 @@ const scenario: EvalScenario = {
           message: hasRealName
             ? undefined
             : "Draft body emitted but the sign-off did not include the user's real name (田中 / 竜都 / Ryuto).",
+        };
+      },
+    },
+    // (j2) engineer-56 — proposed JST window respects sender norms
+    // (09:00–18:00 Asia/Tokyo). Any JST hour explicitly proposed in
+    // the counter must fall inside [09, 18]. Parsing approach: only
+    // consider HH:MM tokens that are tightly anchored to a JST marker
+    // AND not within the user-side context (バンクーバー時刻 / PT / PDT)
+    // — that way the analysis-section "5/20 02:00–02:45 PT" doesn't
+    // get counted as a JST proposal.
+    {
+      kind: "custom",
+      label:
+        "proposed JST window respects sender norms (no hour < 09:00 or > 18:00 JST)",
+      check: (r) => {
+        const t = r.finalText;
+        const tzRe = /\b(JST|日本時間|Asia\/Tokyo)\b/g;
+        const hits: number[] = [];
+        let m: RegExpExecArray | null;
+        while ((m = tzRe.exec(t)) !== null) {
+          // Tight window — JST proposals are typically written as
+          // "JST 9:00–14:00" or "9:00–14:00 JST" with the HH:MM
+          // directly adjacent to the marker.
+          const winStart = Math.max(0, m.index - 20);
+          const winEnd = Math.min(t.length, m.index + m[0].length + 20);
+          const slice = t.slice(winStart, winEnd);
+          // Skip hours that have a PT / PDT / バンクーバー marker in the
+          // wider 80-char neighborhood — those are user-side mentions,
+          // not JST proposals.
+          const wideStart = Math.max(0, m.index - 80);
+          const wideEnd = Math.min(
+            t.length,
+            m.index + m[0].length + 80
+          );
+          const wideSlice = t.slice(wideStart, wideEnd);
+          if (/\b(P(D|S)?T|バンクーバー時|Pacific)\b/i.test(wideSlice)) {
+            continue;
+          }
+          const hourRe = /\b([01]?\d|2[0-3]):([0-5]\d)\b/g;
+          let hm: RegExpExecArray | null;
+          while ((hm = hourRe.exec(slice)) !== null) {
+            hits.push(Number(hm[1]));
+          }
+        }
+        if (hits.length === 0) return { pass: true };
+        const outOfBand = hits.filter((h) => h < 9 || h > 18);
+        return {
+          pass: outOfBand.length === 0,
+          message:
+            outOfBand.length === 0
+              ? undefined
+              : `Counter-proposal includes JST hour(s) ${outOfBand.join(
+                  ", "
+                )} outside the sender's 09:00–18:00 working window (SENDER_NORMS_IGNORED).`,
+        };
+      },
+    },
+    // (j3) engineer-56 — sender-side reasoning surfaced to the user.
+    // Disclosure proves the agent considered both sides. Accept many
+    // natural phrasings (Japanese 業務時間 / 対応時間 / 営業時間 /
+    // 稼働時間, 向こう側, 相手の…時間, English variants).
+    {
+      kind: "custom",
+      label:
+        "response discloses sender-side reasoning ('the sender's working hours' / '向こう側' / etc.)",
+      check: (r) => {
+        const t = r.finalText;
+        const hits =
+          /(向こう側|相手の(対応|営業|稼働|業務)時間|sender(?:'s)?\s+(?:working|business|standard)\s+hours|sender(?:'s)?\s+side|their\s+(?:working|business|standard)\s+hours|their\s+side|both\s+sides|お互いの.{0,15}(時間|対応|営業|業務)|recipient'?s\s+(?:working|business)\s+hours|recipient'?s\s+side|recruiter(?:'s)?\s+(?:working|business|standard)\s+hours|recruiter(?:'s)?\s+side|相手も.{0,10}(業務|営業|稼働|対応)時間|相手側.{0,20}(時間|業務|営業))/i.test(
+            t
+          );
+        return {
+          pass: hits,
+          message: hits
+            ? undefined
+            : "Response did not disclose sender-side reasoning. COUNTER-PROPOSAL PATTERN rule 3f requires explaining to the user that the proposed window respects BOTH sides (e.g. '相手の業務時間を JST 9:00–18:00 と想定したので…' / 'I assumed the sender's working hours are around 9 AM – 6 PM JST').",
         };
       },
     },

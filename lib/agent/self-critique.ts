@@ -147,7 +147,19 @@ const FORBIDDEN_TOKENS: Array<{ name: string; pattern: RegExp }> = [
 // outside `\w` so we anchor the JA aliases without `\b`. The ASCII
 // alternatives keep `\b` for precise matching.
 const JST_TOKEN_RE = /(\bJST\b|\bAsia\/Tokyo\b|日本時間)/g;
-const USER_LOCAL_TZ_RE = /(\bP(D|S)?T\b|\bAmerica\/Vancouver\b|\bPacific\b|バンクーバー時刻|バンクーバー時間|\bVancouver time\b)/i;
+// User-local TZ markers. Vancouver (the historical α user) is first,
+// then we accept all major IANA-TZ abbreviations and English names
+// because the detector is a "did the agent disclose ANY non-JST anchor
+// for the user" check, not "Vancouver specifically". A response that
+// names CET/CEST for a Berlin user has correctly anchored the user's
+// side, even if the regex was originally built for Vancouver.
+//
+// engineer-56 — extended to cover Europe (CET/CEST/BST), North America
+// non-Vancouver (ET/EDT/EST/CT/CDT/CST/MT/MDT/MST), Oceania (NZST,
+// AEST), and IANA Europe/* names. The detector is intentionally
+// permissive: false negatives (let a real leak slip) are cheaper than
+// false positives (block a correctly-anchored draft on the retry path).
+const USER_LOCAL_TZ_RE = /(\bP(D|S)?T\b|\bE(D|S)?T\b|\bC(D|S)?T\b|\bM(D|S)?T\b|\bA(E|K|D|H)?ST\b|\bCEST?\b|\bBST\b|\bGMT\b|\bNZST\b|\bIST\b|\bAmerica\/[A-Za-z_]+\b|\bEurope\/[A-Za-z_]+\b|\bPacific\b|\bMountain\b|\bEastern\b|\bCentral\b|\bAtlantic\b|バンクーバー時刻|バンクーバー時間|\bVancouver time\b|\bBerlin time\b|\bLondon time\b|\bToronto time\b|\bNew York time\b|\bAuckland time\b)/i;
 const WORKING_HOURS_IGNORED_PROXIMITY = 80;
 
 function detectWorkingHoursIgnored(text: string): boolean {
