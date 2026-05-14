@@ -112,6 +112,13 @@ const scenario: EvalScenario = {
   expect: [
     // Must fetch the body before drafting (engineer-53 rule)
     { kind: "tool_called", name: "email_get_body" },
+    // engineer-62 — structural fix for THREAD_ROLE_CONFUSED. Slot
+    // extraction MUST route through email_get_new_content_only so the
+    // quoted history (round-1 candidates + user's previous reply) is
+    // physically absent at extraction time. This is the wave-completion
+    // gate — without it the cascade can recur even with a correct
+    // post-extraction tool chain.
+    { kind: "tool_called", name: "email_get_new_content_only" },
     // Convert each NEW slot to user-local (2 slots × 2 endpoints = 4 calls)
     { kind: "tool_called", name: "convert_timezone", minTimes: 4 },
     // No placeholder leaks

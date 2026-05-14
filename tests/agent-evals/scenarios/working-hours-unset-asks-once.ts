@@ -92,6 +92,8 @@ const scenario: EvalScenario = {
   expect: [
     // (a) Body fetched
     { kind: "tool_called", name: "email_get_body" },
+    // engineer-62 — slot-extraction surface MUST be the stripped body.
+    { kind: "tool_called", name: "email_get_new_content_only" },
     // (b) Each slot converted (3 slots × 2 endpoints minimum, but the
     // agent may legitimately skip end-conversion for slots it's about
     // to reject; gate on ≥ 3 calls minimum).

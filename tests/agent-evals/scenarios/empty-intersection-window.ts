@@ -73,6 +73,8 @@ const scenario: EvalScenario = {
   expect: [
     // (a) Body fetched
     { kind: "tool_called", name: "email_get_body" },
+    // engineer-62 — slot-extraction surface MUST be the stripped body.
+    { kind: "tool_called", name: "email_get_new_content_only" },
     // (b) Bidirectional consideration. Tool-call preferred but accept
     // inline sender-hours reasoning as a fallback (mini-tier variance).
     {

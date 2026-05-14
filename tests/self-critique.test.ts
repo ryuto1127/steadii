@@ -435,6 +435,143 @@ describe("detectPlaceholderLeak", () => {
     expect(r.matched).toContain("XX月XX日");
     expect(r.matched).toContain("[TBD]/[...]");
   });
+
+  // engineer-62 — cascade-failure detectors. Fire only when the caller
+  // hands the detector tool-call history (and, for the reply-intent
+  // detector, the user message text).
+  describe("slot list without convert_timezone (THREAD_ROLE_CASCADE)", () => {
+    const dualTzSlotList = [
+      "候補1: 5月15日(金) 10:00 JST / 5月14日(木) 18:00 PT",
+      "候補2: 5月19日(火) 16:30 JST / 5月19日(火) 00:30 PDT",
+      "候補3: 5月22日(金) 13:30 JST / 5月21日(木) 21:30 PT",
+    ].join("\n");
+
+    it("flags ≥3 slot lines when convert_timezone was NEVER called", () => {
+      const r = detectPlaceholderLeak(dualTzSlotList, {
+        toolCallHistory: [
+          { toolName: "email_search" },
+          { toolName: "email_get_body" },
+        ],
+      });
+      expect(r.hasLeak).toBe(true);
+      expect(r.matched).toContain("slot list without convert_timezone");
+    });
+
+    it("does NOT flag when convert_timezone WAS called", () => {
+      const r = detectPlaceholderLeak(dualTzSlotList, {
+        toolCallHistory: [
+          { toolName: "email_get_body" },
+          { toolName: "convert_timezone" },
+          { toolName: "convert_timezone" },
+        ],
+      });
+      expect(r.matched).not.toContain("slot list without convert_timezone");
+    });
+
+    it("does NOT flag when no tool-call history is provided", () => {
+      // Detector is a no-op when context is absent — preserves legacy
+      // text-only callers (e.g. older unit tests).
+      const r = detectPlaceholderLeak(dualTzSlotList);
+      expect(r.matched).not.toContain("slot list without convert_timezone");
+    });
+
+    it("does NOT flag a single-time-reference response", () => {
+      // One time mention isn't a slot list — the floor is 3 lines that
+      // each contain a date, a time, AND a TZ marker.
+      const text =
+        "明日 10:00 のミーティングを確認しました。資料は事前に共有します。";
+      const r = detectPlaceholderLeak(text, {
+        toolCallHistory: [{ toolName: "calendar_list_events" }],
+      });
+      expect(r.matched).not.toContain("slot list without convert_timezone");
+    });
+
+    it("does NOT flag a calendar-listing response that lives entirely in user's TZ (no TZ markers per line)", () => {
+      // happy-path-week-summary shape — three calendar events shown in
+      // the user's own TZ, no conversion needed. Pre-2026-05-14 the
+      // detector tripped here because it only checked date+time. Now
+      // requires a TZ marker per slot line.
+      const text = [
+        "今週はこんな感じです。",
+        "",
+        "- 5/13(火) 15:30–16:50: MAT223 Lecture",
+        "- 5/14(水) 10:00–11:00: CSC110 Tutorial",
+        "- 5/15(木) 13:00–14:30: ENG140 Essay Workshop",
+      ].join("\n");
+      const r = detectPlaceholderLeak(text, {
+        toolCallHistory: [{ toolName: "calendar_list_events" }],
+      });
+      expect(r.matched).not.toContain("slot list without convert_timezone");
+    });
+  });
+
+  describe("reply intent without email_get_new_content_only (THREAD_ROLE_CONFUSED risk)", () => {
+    const replyDraft = [
+      "下記の通り、希望日程をお送りします。",
+      "候補1: 5月20日(水) 18:00 JST / 5月20日(水) 02:00 PDT",
+    ].join("\n");
+
+    it("flags reply intent + email_get_body called + email_get_new_content_only NOT called", () => {
+      const r = detectPlaceholderLeak(replyDraft, {
+        toolCallHistory: [
+          { toolName: "email_search" },
+          { toolName: "email_get_body" },
+          { toolName: "convert_timezone" },
+        ],
+        userMessage: "アクメトラベルから返信が来てるから返信したい",
+      });
+      expect(r.hasLeak).toBe(true);
+      expect(r.matched).toContain(
+        "reply intent without email_get_new_content_only"
+      );
+    });
+
+    it("does NOT flag when email_get_new_content_only WAS called", () => {
+      const r = detectPlaceholderLeak(replyDraft, {
+        toolCallHistory: [
+          { toolName: "email_get_body" },
+          { toolName: "email_get_new_content_only" },
+          { toolName: "convert_timezone" },
+        ],
+        userMessage: "アクメトラベルから返信が来てるから返信したい",
+      });
+      expect(r.matched).not.toContain(
+        "reply intent without email_get_new_content_only"
+      );
+    });
+
+    it("does NOT flag when user intent is NOT a reply (e.g. status question)", () => {
+      const r = detectPlaceholderLeak(replyDraft, {
+        toolCallHistory: [{ toolName: "email_get_body" }],
+        userMessage: "あのメールに5/20の時間って書いてあった？",
+      });
+      expect(r.matched).not.toContain(
+        "reply intent without email_get_new_content_only"
+      );
+    });
+
+    it("does NOT flag when response contains no slot dates", () => {
+      const text =
+        "承知しました。ドラフトはまだ作成していません — 候補日程をご教示ください。";
+      const r = detectPlaceholderLeak(text, {
+        toolCallHistory: [{ toolName: "email_get_body" }],
+        userMessage: "アクメトラベルから返信が来てるから返信したい",
+      });
+      expect(r.matched).not.toContain(
+        "reply intent without email_get_new_content_only"
+      );
+    });
+
+    it("fires on English reply triggers too", () => {
+      const r = detectPlaceholderLeak(replyDraft, {
+        toolCallHistory: [{ toolName: "email_get_body" }],
+        userMessage: "Draft a reply to Acme Travel",
+      });
+      expect(r.matched).toContain(
+        "reply intent without email_get_new_content_only"
+      );
+    });
+  });
 });
 
 describe("buildPlaceholderLeakCorrection", () => {
@@ -496,5 +633,24 @@ describe("buildPlaceholderLeakCorrection", () => {
     expect(msg).toContain("WORKING_HOURS_IGNORED");
     expect(msg).toContain("MUST-rule 7");
     expect(msg.toLowerCase()).toContain("convert_timezone");
+  });
+
+  // engineer-62 — cascade-failure corrective notes.
+  it("appends a THREAD_ROLE_CASCADE note when the slot-list-no-convert_timezone token matches", () => {
+    const msg = buildPlaceholderLeakCorrection([
+      "slot list without convert_timezone",
+    ]);
+    expect(msg).toContain("THREAD_ROLE_CASCADE");
+    expect(msg.toLowerCase()).toContain("convert_timezone");
+    expect(msg).toContain("email_get_new_content_only");
+  });
+
+  it("appends a THREAD_ROLE_CONFUSED note when the reply-intent-no-new-content token matches", () => {
+    const msg = buildPlaceholderLeakCorrection([
+      "reply intent without email_get_new_content_only",
+    ]);
+    expect(msg).toContain("THREAD_ROLE_CONFUSED");
+    expect(msg).toContain("email_get_new_content_only");
+    expect(msg).toContain("email_get_body");
   });
 });
