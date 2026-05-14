@@ -4,24 +4,13 @@ import { getTranslations } from "next-intl/server";
 import { SidebarNav } from "./sidebar-nav";
 import { ALL_NAV_ITEM_KEYS } from "./nav-items";
 import { Logo } from "./logo";
+import { SidebarRecentChatRow } from "./sidebar-recent-chat-row";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
 import { chats } from "@/lib/db/schema";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { countPendingDrafts } from "@/lib/agent/email/pending-queries";
-
-function shortTime(d: Date): string {
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const mins = Math.round(diffMs / 60_000);
-  if (mins < 1) return "now";
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  const days = Math.round(hrs / 24);
-  if (days < 7) return `${days}d`;
-  return `${d.getMonth() + 1}/${d.getDate()}`;
-}
+import { shortRelativeTime } from "@/lib/utils/relative-time";
 
 function initials(name: string | null | undefined, email: string | null | undefined): string {
   const source = (name && name.trim()) || (email && email.split("@")[0]) || "";
@@ -94,7 +83,7 @@ export async function Sidebar({
         .from(chats)
         .where(and(eq(chats.userId, user.id), isNull(chats.deletedAt)))
         .orderBy(desc(chats.updatedAt))
-        .limit(3),
+        .limit(5),
       countPendingDrafts(user.id),
     ]);
   }
@@ -164,27 +153,44 @@ export async function Sidebar({
           />
         </div>
 
-        {recent.length > 0 ? (
-          <div className={`mt-5 flex flex-col gap-0.5 ${labelRevealClass}`}>
-            <span className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+        {/*
+          Recent chats — appears below the icon row, above the credits
+          bar. Server-rendered so the list refreshes on every route
+          change (no client-side subscription needed for α). The 5-row
+          limit matches the most-recent set Inbox / agent surfaces use
+          for parity. Empty state replaces the rows when the user has
+          zero chats so the section still announces "we know what this
+          space is for".
+        */}
+        <div className={`mt-5 flex flex-col gap-0.5 ${labelRevealClass}`}>
+          <div className="flex items-center justify-between px-2 pb-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
               {tLayout("recent_chats")}
             </span>
-            {recent.map((c) => (
-              <Link
-                key={c.id}
-                href={`/app/chat/${c.id}`}
-                className="flex h-8 items-center gap-2 rounded-lg px-2 text-[14px] text-[hsl(var(--muted-foreground))] transition-hover hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))]"
-              >
-                <span className="min-w-0 flex-1 truncate">
-                  {c.title ?? tLayout("untitled")}
-                </span>
-                <span className="shrink-0 text-[12px] tabular-nums opacity-60">
-                  {shortTime(c.updatedAt)}
-                </span>
-              </Link>
-            ))}
+            <Link
+              href="/app/chats"
+              className="inline-flex items-center gap-0.5 text-[11px] font-medium text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+              aria-label={tLayout("recent_view_all_aria")}
+            >
+              {tLayout("recent_view_all")}
+              <ChevronRight size={11} strokeWidth={2} aria-hidden />
+            </Link>
           </div>
-        ) : null}
+          {recent.length > 0 ? (
+            recent.map((c) => (
+              <SidebarRecentChatRow
+                key={c.id}
+                id={c.id}
+                title={c.title ?? tLayout("untitled")}
+                timeLabel={shortRelativeTime(c.updatedAt)}
+              />
+            ))
+          ) : (
+            <p className="px-2 pt-0.5 text-[12px] leading-snug text-[hsl(var(--muted-foreground))]">
+              {tLayout("recent_empty")}
+            </p>
+          )}
+        </div>
 
         {/*
           Credits progress bar. Per product decision (2026-04-21): the sidebar

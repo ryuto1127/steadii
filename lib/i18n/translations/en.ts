@@ -482,6 +482,13 @@ type MessagesShape = {
     empty_description: string;
     empty_action: string;
     aria: string;
+    search_placeholder: string;
+    search_aria: string;
+    no_search_results: string;
+    group_today: string;
+    group_yesterday: string;
+    group_week: string;
+    group_earlier: string;
   };
   chat_view: {
     title_placeholder: string;
@@ -627,6 +634,9 @@ type MessagesShape = {
     top_up: string;
     manage: string;
     recent_chats: string;
+    recent_view_all: string;
+    recent_view_all_aria: string;
+    recent_empty: string;
     untitled: string;
     credits_unlimited_short: string;
     credits_remaining: string;
@@ -1616,6 +1626,11 @@ type MessagesShape = {
     cancel: string;
     confirm_delete: string;
   };
+  tool_call_summary: {
+    thinking_prefix: string;
+    retry_count: string;
+    failed_count: string;
+  };
   hero_animation_extra: {
     cmd_k: string;
   };
@@ -2308,6 +2323,13 @@ export const en: MessagesShape = {
     empty_description: "Start a conversation from Home.",
     empty_action: "Start a conversation",
     aria: "Chats",
+    search_placeholder: "Search chats",
+    search_aria: "Search chats by title",
+    no_search_results: "No chats match your search.",
+    group_today: "Today",
+    group_yesterday: "Yesterday",
+    group_week: "This week",
+    group_earlier: "Earlier",
   },
   chat_view: {
     title_placeholder: "Untitled chat",
@@ -2461,6 +2483,9 @@ export const en: MessagesShape = {
     top_up: "Top up",
     manage: "Manage",
     recent_chats: "Recent chats",
+    recent_view_all: "See all",
+    recent_view_all_aria: "See all chats",
+    recent_empty: "No chats yet. Start one from Home.",
     untitled: "Untitled",
     credits_unlimited_short: "∞ credits",
     credits_remaining: "{n} credits left",
@@ -3658,6 +3683,11 @@ export const en: MessagesShape = {
     delete_target_label: "The agent wants to DELETE:",
     cancel: "Cancel",
     confirm_delete: "Confirm deletion",
+  },
+  tool_call_summary: {
+    thinking_prefix: "Steadii's thinking:",
+    retry_count: "{n} retries",
+    failed_count: "{n} failed",
   },
   hero_animation_extra: {
     cmd_k: "⌘K",
