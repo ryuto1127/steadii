@@ -126,21 +126,31 @@ export async function ingestLast24h(
         // hold up the ingest loop. The combined subject + body is the
         // input text; senderEmail is passed as known context so
         // person-kind entities are created with primary_email pre-set.
-        resolveEntitiesInBackground({
-          userId,
-          sourceKind: "inbox_item",
-          sourceId: row.id,
-          contentText: [
-            input.subject ?? "",
-            input.bodySnippet ?? input.snippet ?? "",
-          ]
-            .filter(Boolean)
-            .join("\n\n"),
-          knownContext: {
-            senderEmail: input.fromEmail,
-            sourceHint: "inbound email",
-          },
-        });
+        //
+        // engineer-59 — skip on auto_low. Newsletters / transactional /
+        // no-reply rows are auto-archived (Wave 5) and don't need an
+        // entity-graph entry — the entity extractor is an LLM call
+        // (taskType=tool_call) that earns nothing on noise rows. Audit
+        // 2026-05-13 showed email-pipeline at 89% of 30d spend; this
+        // gating + the embed gate in triage.ts cut the largest UNGATED
+        // path the ingest has.
+        if (result.bucket !== "auto_low") {
+          resolveEntitiesInBackground({
+            userId,
+            sourceKind: "inbox_item",
+            sourceId: row.id,
+            contentText: [
+              input.subject ?? "",
+              input.bodySnippet ?? input.snippet ?? "",
+            ]
+              .filter(Boolean)
+              .join("\n\n"),
+            knownContext: {
+              senderEmail: input.fromEmail,
+              sourceHint: "inbound email",
+            },
+          });
+        }
         // Synchronously run the L2 pipeline for ambiguous (l2_pending) and
         // strict-tier (auto_high / auto_medium) messages. auto_high and
         // auto_medium items skip the risk pass — the L1 rule is strict per

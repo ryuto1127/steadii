@@ -485,8 +485,8 @@ In the QStash console → **Schedules** → **Create**:
 
 | Endpoint | Schedule | Method | Notes |
 |---|---|---|---|
-| `https://mysteadii.com/api/cron/digest` | `0 * * * *` | POST | Hourly. Daily morning digest (7am local). NA timezones are all whole-hour offsets, so hourly is enough; switch to `*/30` only if onboarding India / Newfoundland users. |
-| `https://mysteadii.com/api/cron/weekly-digest` | `0 * * * *` | POST | Hourly. Weekly Sunday retrospective (5pm local Sunday). Same hourly QStash cadence as daily; the Sunday-17:00-local cross + 6-day dedupe is enforced inside `lib/digest/weekly-picker.ts`. Verification span: `cron.weekly-digest.tick`. |
+| `https://mysteadii.com/api/cron/digest` | `0 * * * *` | POST | Hourly. Daily morning digest (7am local). The picker (`lib/digest/picker.ts`) only returns users whose current local hour matches `users.digest_hour_local`; most ticks return 0 users and short-circuit before any LLM/Resend call. Hourly cadence is **required** to cover all IANA timezones — switching to twice-a-day (e.g. `0 7,19 * * *`) would silently drop users in non-UTC offsets. NA + JP α covers 16 distinct UTC offsets between 7am-local-cross slots. engineer-59 audit (2026-05-13) confirmed digest cron contributes 0% of LLM spend — do not retarget this for cost. |
+| `https://mysteadii.com/api/cron/weekly-digest` | `0 * * * *` | POST | Hourly. Weekly Sunday retrospective (5pm local Sunday). Same hourly QStash cadence as daily; the Sunday-17:00-local cross + 6-day dedupe is enforced inside `lib/digest/weekly-picker.ts`. Verification span: `cron.weekly-digest.tick`. Same per-user-local-time semantic as `digest` — keep hourly until the picker is refactored to support multi-TZ batching. |
 | `https://mysteadii.com/api/cron/ingest-sweep` | `*/5 * * * *` | POST | Every 5 minutes. Fans out `ingestLast24h` across all gmail-scoped users, bypassing the page-render auto-ingest 24h cooldown. Without this, new emails only surface when the user manually refreshes Settings. Tightened from `*/15` to `*/5` 2026-05-04 for snappier "secretary" feel — α budget allows it (well within QStash free tier). |
 | `https://mysteadii.com/api/cron/ical-sync` | `0 */6 * * *` | POST | Every 6 hours per Phase 7 W-Integrations Q3. Walks active `ical_subscriptions`, conditional GETs each (If-None-Match: ETag), upserts events into the shared `events` mirror. After 3 consecutive failures the row auto-deactivates so we stop hammering a broken URL. |
 | `https://mysteadii.com/api/cron/pre-brief` | `*/5 * * * *` | POST | Every 5 minutes. Scans events starting in 13-18 min for users with `pre_brief_enabled=true`, generates briefings into `event_pre_briefs`. The look-ahead window offset prevents consecutive ticks from double-briefing; the `(user_id, event_id)` unique index is the safety net. Verification span: `cron.pre_brief.tick`. |
@@ -524,3 +524,31 @@ Body: leave empty. The signing key in headers handles auth.
 `pnpm dev` skips signature verification when both `QSTASH_*` keys are
 empty, so you can `curl -X POST http://localhost:3000/api/cron/digest`
 without QStash. Production has both keys set, so the bypass is closed.
+
+### Cron cost profile (engineer-59 audit, 2026-05-13)
+
+Run `pnpm db:cost-audit` against prod to refresh this picture. The
+last-30d snapshot shows:
+
+- **`email-pipeline`** (`email_classify_deep` / `email_draft` /
+  `email_classify_risk`) — **89% of all token spend.** Driven by
+  `ingest-sweep` pulling new Gmail every 5 minutes and the L2 deep
+  pass running on every high-risk item. Optimizations live in code
+  (Parts 2-3 / 5 of engineer-59), not cadence — `ingest-sweep` cadence
+  controls user-perceived freshness, not cost (the cost is per email,
+  not per tick).
+- **`chat`** (chat orchestrator + tool calls) — **10%.** No cron
+  driver; user-initiated.
+- **`proactive-cron`** (`scanner` daily) — **0.3%.** Negligible.
+- **`digest` / `weekly-digest`** — **0%** of LLM spend. The picker
+  short-circuits when no users are eligible; eligible users send via
+  Resend with no LLM call. Hourly cadence is correct.
+- **`monthly-digest`** — daily at 09:00 UTC, per-user first-Sunday-of-
+  month filter. Synthesizes via LLM but only ~once per user per
+  month; surfaces in `email-pipeline` aggregate but rounds to <1% at
+  scale. Do not move to weekly cadence — semantic is monthly.
+
+**Decision rule for cron cadence at α scale**: drive cadence by
+user-perceived freshness, not cost, because cost is dominated by L2
+deep-pass per email — which is gated at the trigger (engineer-59
+Parts 2-3), not at the cron tick. Revisit when β scale hits ~1k users.

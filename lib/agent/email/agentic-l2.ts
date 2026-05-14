@@ -104,6 +104,106 @@ export async function runAgenticL2(
   );
 }
 
+// engineer-59 — entry gate for agentic L2. Returns false when the
+// tool-using loop earns nothing on this email. The standard one-shot
+// runDeepPass is enough for read-only informational mail (course
+// announcement, system notification, FYI) — agentic L2's value is in
+// scheduling + ambiguity-resolution + multi-turn fact extraction, all
+// of which require a reply-intent signal somewhere in subject/body.
+//
+// Audit (2026-05-13): email_classify_deep is 72.6% of 30d spend. Most
+// high-tier emails are informational, not reply-worthy; gating here
+// drops the agentic call count to the slice that actually benefits.
+//
+// Inputs are cheap to compute — pure string heuristics, no LLM round
+// trip. The user-clarification re-entry path bypasses the gate (we
+// know the user asked us to re-run with their input).
+// Markers chosen for precision over recall — false-positives keep us in
+// agentic L2 (wasted spend); false-negatives downgrade to runDeepPass
+// (cheaper, same notify_only outcome on informational mail). Bare nouns
+// like "schedule" / "meeting" / "calendar" are excluded because
+// announcements use them in non-reply-intent contexts ("schedule
+// change", "meeting recap"). Markers require verb/question patterns.
+const REPLY_INTENT_MARKERS_EN = [
+  // questions — strongest signal
+  "?",
+  // explicit asks
+  "please ",
+  "could you",
+  "would you",
+  "can you",
+  "let me know",
+  "lmk",
+  "your thoughts",
+  "your opinion",
+  "thoughts?",
+  "thoughts on",
+  "what do you think",
+  // scheduling questions / asks
+  "rsvp",
+  "when can",
+  "when are",
+  "when would",
+  "when is",
+  "time works",
+  "good time",
+  "are you free",
+  "are you available",
+  "your availability",
+];
+
+const REPLY_INTENT_MARKERS_JA = [
+  // question marks
+  "？",
+  "?",
+  // explicit asks
+  "お願い",
+  "教えて",
+  "確認",
+  "質問",
+  "ご返信",
+  "ご回答",
+  "お聞き",
+  "伺い",
+  // scheduling — verb/question forms (NOT bare nouns)
+  "都合",
+  "いつ",
+  "面談",
+  "打ち合わせ",
+];
+
+export function shouldRunAgenticL2(args: {
+  subject: string | null;
+  body: string;
+  riskConfidence: number;
+  userClarification?: string | null;
+}): boolean {
+  // Re-entry from a Type E freeText submission always re-runs the
+  // agentic loop. The user explicitly asked us to think again with
+  // their clarification.
+  if (args.userClarification && args.userClarification.trim().length > 0) {
+    return true;
+  }
+  const haystack = `${args.subject ?? ""}\n${args.body.slice(0, 200)}`.toLowerCase();
+  for (const marker of REPLY_INTENT_MARKERS_EN) {
+    if (haystack.includes(marker)) return true;
+  }
+  // JA markers are not all lowercase-safe (kanji are case-stable), but
+  // the EN haystack is already lowercased — search the original body
+  // for JA markers separately.
+  const jaHaystack = `${args.subject ?? ""}\n${args.body.slice(0, 200)}`;
+  for (const marker of REPLY_INTENT_MARKERS_JA) {
+    if (jaHaystack.includes(marker)) return true;
+  }
+  // Low-confidence risk-pass results occasionally bucket informational
+  // mail as high tier. When risk-pass confidence is high AND no reply
+  // marker fired, the standard one-shot deep pass is enough. When risk
+  // confidence is low, fall through to agentic so its tool-using loop
+  // can re-investigate.
+  if (args.riskConfidence < 0.7) return true;
+  return false;
+}
+
 async function runLoop(input: AgenticL2Input): Promise<AgenticL2Result> {
   const model = selectModel("email_classify_deep");
   // engineer-45 — domain heuristic surfaced once at loop entry so the

@@ -98,68 +98,79 @@ export async function applyTriageResult(
     // (~$0.00001 per email at text-embedding-3-small pricing) and it lets
     // future "what did we dismiss?" queries succeed. Failures don't block
     // the ingest — they're logged and retried by the backfill script.
+    //
+    // engineer-59 — skip embed + class-binding on auto_low rows. The
+    // 30d audit (2026-05-13) showed email_embed at 0.1% of spend, but
+    // every auto_low row also incurs a class-binding LLM round-trip
+    // (taskType=tool_call) that lands as noise in the retrieval corpus.
+    // Wave 5 silently auto-archives auto_low items so there's no
+    // user-visible surface that needs class binding anyway. The
+    // embed-backfill script (scripts/embed-backfill.ts) can repopulate
+    // if we ever want noise rows back in the corpus.
     let embedding: number[] | null = null;
-    try {
-      await embedAndStoreInboxItem({
-        userId,
-        inboxItemId: created.id,
-        subject: input.subject,
-        body: input.bodySnippet ?? input.snippet,
-      });
-      // Re-read the embedding row so we can pass it to class-binding
-      // without a fresh API call (the writer above doesn't return the
-      // vector). One-row PK probe; cheap.
-      const [row] = await db
-        .select({ embedding: emailEmbeddings.embedding })
-        .from(emailEmbeddings)
-        .where(eq(emailEmbeddings.inboxItemId, created.id))
-        .limit(1);
-      embedding = row?.embedding ?? null;
-    } catch (err) {
-      Sentry.captureException(err, {
-        tags: { feature: "email_embed", phase: "on_ingest" },
-        user: { id: userId },
-      });
-      await logEmailAudit({
-        userId,
-        action: "email_embed_failed",
-        result: "failure",
-        resourceId: created.id,
-        detail: { message: err instanceof Error ? err.message : String(err) },
-      });
-    }
+    if (result.bucket !== "auto_low") {
+      try {
+        await embedAndStoreInboxItem({
+          userId,
+          inboxItemId: created.id,
+          subject: input.subject,
+          body: input.bodySnippet ?? input.snippet,
+        });
+        // Re-read the embedding row so we can pass it to class-binding
+        // without a fresh API call (the writer above doesn't return the
+        // vector). One-row PK probe; cheap.
+        const [row] = await db
+          .select({ embedding: emailEmbeddings.embedding })
+          .from(emailEmbeddings)
+          .where(eq(emailEmbeddings.inboxItemId, created.id))
+          .limit(1);
+        embedding = row?.embedding ?? null;
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: { feature: "email_embed", phase: "on_ingest" },
+          user: { id: userId },
+        });
+        await logEmailAudit({
+          userId,
+          action: "email_embed_failed",
+          result: "failure",
+          resourceId: created.id,
+          detail: { message: err instanceof Error ? err.message : String(err) },
+        });
+      }
 
-    // Phase 7 W1 — class binding cache. Run once at ingest so the L2
-    // fanout retriever only does an index probe. Fail-soft: on error,
-    // leave the row unbound and the fanout falls back to vector-only.
-    try {
-      const binding = await bindEmailToClass({
-        userId,
-        subject: input.subject,
-        bodySnippet: input.bodySnippet ?? input.snippet,
-        senderEmail: input.fromEmail,
-        senderName: input.fromName,
-        senderRole: result.senderRole as SenderRole | null,
-        queryEmbedding: embedding,
-      });
-      await persistBinding(created.id, binding);
-      await logEmailAudit({
-        userId,
-        action: "email_class_bound",
-        result: "success",
-        resourceId: created.id,
-        detail: {
-          classId: binding.classId,
-          method: binding.method,
-          confidence: binding.confidence,
-          alternates: binding.alternates.length,
-        },
-      });
-    } catch (err) {
-      Sentry.captureException(err, {
-        tags: { feature: "email_class_binding", phase: "on_ingest" },
-        user: { id: userId },
-      });
+      // Phase 7 W1 — class binding cache. Run once at ingest so the L2
+      // fanout retriever only does an index probe. Fail-soft: on error,
+      // leave the row unbound and the fanout falls back to vector-only.
+      try {
+        const binding = await bindEmailToClass({
+          userId,
+          subject: input.subject,
+          bodySnippet: input.bodySnippet ?? input.snippet,
+          senderEmail: input.fromEmail,
+          senderName: input.fromName,
+          senderRole: result.senderRole as SenderRole | null,
+          queryEmbedding: embedding,
+        });
+        await persistBinding(created.id, binding);
+        await logEmailAudit({
+          userId,
+          action: "email_class_bound",
+          result: "success",
+          resourceId: created.id,
+          detail: {
+            classId: binding.classId,
+            method: binding.method,
+            confidence: binding.confidence,
+            alternates: binding.alternates.length,
+          },
+        });
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: { feature: "email_class_binding", phase: "on_ingest" },
+          user: { id: userId },
+        });
+      }
     }
 
     // Wave 5 — silent auto-archive of Tier-1 high-confidence noise.

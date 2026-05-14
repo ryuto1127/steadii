@@ -29,6 +29,7 @@ import {
 } from "./classify-deep";
 import {
   runAgenticL2,
+  shouldRunAgenticL2,
   type AgenticL2Result,
 } from "./agentic-l2";
 import { runDraft, type DraftResult } from "./draft";
@@ -344,10 +345,25 @@ async function runPipeline(
     // runAgenticL2. Both produce the same DeepPassResult contract for
     // the rest of the pipeline; agentic also writes structured-facts +
     // confirmation rows that we persist below.
-    const agenticEnabled =
+    //
+    // engineer-59 — additional entry gate: even when the user has
+    // agentic-L2 opted-in, only run the tool-using loop when the email
+    // carries reply intent (question / scheduling / explicit ask) or
+    // the risk pass is uncertain. Read-only informational mail still
+    // gets the standard runDeepPass, which produces the same
+    // notify_only / archive output at one LLM call instead of 5-10.
+    const agenticOptedIn =
       userRow?.preferences?.agenticL2 === true;
+    const agenticWorthIt =
+      agenticOptedIn &&
+      shouldRunAgenticL2({
+        subject: item.subject,
+        body: bodyForPipeline ?? "",
+        riskConfidence: risk.confidence,
+        userClarification: options.userClarification,
+      });
     let agenticResult: AgenticL2Result | null = null;
-    if (agenticEnabled) {
+    if (agenticWorthIt) {
       try {
         agenticResult = await runAgenticL2({
           userId: item.userId,
