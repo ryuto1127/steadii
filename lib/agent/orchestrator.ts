@@ -72,13 +72,28 @@ export type OrchestratorRequest = {
 // The old cap of 5 cut the loop off mid-comparison and the final text
 // step never ran, so the user saw a sequence of tool checkmarks with
 // no answer (Ryuto dogfood 2026-05-07).
-const MAX_TOOL_ITERATIONS = 10;
+//
+// 2026-05-14 — bumped 10 → 18 after engineer-56 + PR #247 made range
+// slot conversion mandatory (start AND end). A typical 3-slot email-
+// reply now needs lookup_entity + email_search + email_get_body +
+// infer_sender_timezone + infer_sender_norms + convert_timezone × 6
+// (3 slots × 2 endpoints) = 11 tool turns minimum. With the model's
+// tendency to sequence calls one per turn instead of batching, the
+// old cap of 10 was tripping mid-loop and leaving the user staring at
+// 11 checkmarks with no draft. 18 gives headroom for the larger
+// scheduling case (5-6 candidate slots, common in JP recruiter mail)
+// without exploding cost. Verified 2026-05-14 dogfood.
+const MAX_TOOL_ITERATIONS = 18;
 
 // Below this length the cap-exhaustion path runs a forced text-only
 // completion so the user always gets a summary even when the agent
-// blew through its tool budget. 20 chars is roughly "couldn't finish"
-// — anything shorter is treated as "no real response yet."
-const MIN_USEFUL_FINAL_TEXT_LENGTH = 20;
+// blew through its tool budget. 2026-05-14 — bumped 20 → 80 chars
+// after a dogfood case where finalText ended at "本文を確認して、
+// 返信文を整えます。" (a 22-char narration phrase the model emitted
+// between tool calls). 22 > 20 → forced-pass was skipped → user got
+// the narration but no actual draft. 80 is comfortably above any
+// realistic mid-loop narration but below a real draft body (~200+).
+const MIN_USEFUL_FINAL_TEXT_LENGTH = 80;
 
 export async function* streamChatResponse(
   req: OrchestratorRequest
