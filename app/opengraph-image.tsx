@@ -79,6 +79,8 @@ export default async function OpengraphImage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <div
             style={{
+              display: "flex",
+              flexDirection: "column",
               fontSize: 88,
               fontWeight: 700,
               lineHeight: 1.05,
@@ -86,7 +88,8 @@ export default async function OpengraphImage() {
               maxWidth: 960,
             }}
           >
-            AI secretary for your studies.
+            <div>AI secretary</div>
+            <div>for your studies.</div>
           </div>
           <div
             style={{
