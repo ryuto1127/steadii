@@ -4,6 +4,8 @@ import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { auditLog } from "@/lib/db/schema";
 import { getGmailForUser } from "@/lib/integrations/google/gmail";
+import { getUserTimezone, recordAcceptedSlot } from "../preferences";
+import { parseAcceptedSlotFromDraftBody } from "../email/accepted-slot-parser";
 import type { ToolExecutor } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -258,6 +260,25 @@ export const gmailSendTool: ToolExecutor<
         bodyLength: args.body.length,
       },
     });
+
+    // engineer-56 — silent learning. Best-effort: scan the draft body
+    // for a slot anchored in the user's local TZ (MUST-rule 7 dual-TZ
+    // form). When one is found, record it as a sample for empirical
+    // working-window inference. Best-effort + non-blocking; failure
+    // never breaks the gmail_send path.
+    try {
+      const tz = await getUserTimezone(ctx.userId);
+      const slot = parseAcceptedSlotFromDraftBody(args.body, tz);
+      if (slot) {
+        await recordAcceptedSlot(ctx.userId, slot);
+      }
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { feature: "accepted-slot-learning", engineer: "56" },
+        user: { id: ctx.userId },
+      });
+    }
+
     return res;
   },
 };

@@ -26,6 +26,11 @@ import trailingActionNarration from "./trailing-action-narration";
 import lateNightSlotPushback from "./late-night-slot-pushback";
 import feasibleAndInfeasibleMix from "./feasible-and-infeasible-mix";
 import workingHoursUnsetAsksOnce from "./working-hours-unset-asks-once";
+// engineer-56 — bidirectional norms: sender-norms respected even when
+// the user is permissive, + empty-intersection weekend / out-of-hours
+// fallback path.
+import senderNormsRespected from "./sender-norms-respected";
+import emptyIntersectionWindow from "./empty-intersection-window";
 
 export const ALL_SCENARIOS: EvalScenario[] = [
   placeholderLeakEmailReply,
@@ -42,4 +47,6 @@ export const ALL_SCENARIOS: EvalScenario[] = [
   lateNightSlotPushback,
   feasibleAndInfeasibleMix,
   workingHoursUnsetAsksOnce,
+  senderNormsRespected,
+  emptyIntersectionWindow,
 ];

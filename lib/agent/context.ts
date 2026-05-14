@@ -13,6 +13,7 @@ import {
 import { and, count, eq, isNull } from "drizzle-orm";
 import { getCalendarForUser } from "@/lib/integrations/google/calendar";
 import {
+  getInferredWorkingHours,
   getUserLocale,
   getUserTimezone,
   getUserWorkingHours,
@@ -54,6 +55,7 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
     userFactsList,
     userRow,
     workingHours,
+    inferredWorkingHours,
   ] = await Promise.all([
     getUserTimezone(userId),
     getUserLocale(userId),
@@ -76,6 +78,10 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
     // the SLOT FEASIBILITY CHECK prompt section reads this label and
     // either gates the draft on the window or asks the user to set it.
     getUserWorkingHours(userId),
+    // engineer-56 — pull the inferred empirical window so the prompt
+    // can render it as the fallback when no explicit window is set.
+    // Overrides the norm default; underridden by explicit hours.
+    getInferredWorkingHours(userId),
   ]);
 
   return {
@@ -107,6 +113,7 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
     })),
     userName: userRow?.name ?? null,
     workingHoursLocal: workingHours,
+    inferredWorkingHoursLocal: inferredWorkingHours,
   };
 }
 

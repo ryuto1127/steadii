@@ -50,10 +50,49 @@ export type UserContextPayload = {
   // (HH:MM–HH:MM in their profile TZ). Surfaced as a labeled
   // `USER_WORKING_HOURS:` line so the SLOT FEASIBILITY CHECK section of
   // the system prompt has a deterministic place to find it. Null when
-  // the user hasn't set one yet — the prompt's onboarding ask path
-  // fires in that case.
+  // the user hasn't set one yet — the prompt's soft-default norm path
+  // (engineer-56) fires in that case.
   workingHoursLocal?: { start: string; end: string } | null;
+  // engineer-56 — empirical window inferred from the user's accepted
+  // slot picks (≥3 samples). Overrides the norm default but does NOT
+  // override an explicit workingHoursLocal. When null, falls through to
+  // norm default per the user's profile TZ.
+  inferredWorkingHoursLocal?: {
+    start: string;
+    end: string;
+    sampleCount: number;
+  } | null;
 };
+
+// engineer-56 — norm-default lookup mirrored from
+// `lib/agent/email/sender-norms.ts#defaultUserWorkingHours`. Inlined
+// rather than imported because this module is meant to stay free of
+// `server-only` taint (the eval harness pulls the prod context shape
+// through this file). Keep the two in sync; the test suite asserts they
+// agree.
+type NormDefault = { start: string; end: string; source: string };
+
+const EAST_ASIA_TZS_PROMPT = new Set([
+  "Asia/Tokyo",
+  "Asia/Seoul",
+  "Asia/Shanghai",
+  "Asia/Taipei",
+  "Asia/Hong_Kong",
+  "Asia/Singapore",
+]);
+
+function defaultUserWorkingHoursForPrompt(tz: string): NormDefault {
+  if (tz.startsWith("America/")) {
+    return { start: "09:00", end: "22:00", source: "norm:north-america" };
+  }
+  if (EAST_ASIA_TZS_PROMPT.has(tz)) {
+    return { start: "08:00", end: "22:00", source: "norm:east-asia" };
+  }
+  if (tz.startsWith("Europe/")) {
+    return { start: "08:00", end: "21:00", source: "norm:europe" };
+  }
+  return { start: "09:00", end: "21:00", source: "norm:other" };
+}
 
 // Format `date` as a full offset-bearing RFC3339 string in `tz`, e.g.
 // "2026-04-20T14:32:00-07:00". Intl handles DST transitions; we never do
@@ -147,18 +186,29 @@ export function serializeContextForPrompt(ctx: UserContextPayload): string {
       `USER_NAME: (unknown — ask the user for their name before signing a draft on their behalf, never emit 〇〇)`
     );
   }
-  // engineer-54 — surface working hours next to the user's TZ so the
+  // engineer-54 / 56 — surface working hours next to the user's TZ so the
   // SLOT FEASIBILITY CHECK + COUNTER-PROPOSAL PATTERN prompt sections
-  // have the comparison range available without a tool call. When the
-  // user hasn't set one, the "(not set)" sentinel matches the prompt's
-  // onboarding ask trigger.
+  // have the comparison range available without a tool call. Three-state
+  // resolution (engineer-56):
+  //   1. Explicit (workingHoursLocal set)  → use as-is, highest priority
+  //   2. Inferred (≥ 3 accepted-slot samples) → empirical window with
+  //      "(inferred from N picks)" annotation; overrides default norm
+  //   3. Default (norm per profile TZ) → annotated "(not set — using
+  //      norm: …)" so rule 0 of SLOT FEASIBILITY CHECK fires the soft-
+  //      default branch (engineer-56 removed the hard-ASK gate).
   if (ctx.workingHoursLocal) {
     lines.push(
       `USER_WORKING_HOURS: ${ctx.workingHoursLocal.start}–${ctx.workingHoursLocal.end} (${tz})`
     );
-  } else {
+  } else if (ctx.inferredWorkingHoursLocal) {
+    const inf = ctx.inferredWorkingHoursLocal;
     lines.push(
-      `USER_WORKING_HOURS: (not set — when drafting acceptance of a proposed meeting slot, ask the user once "what time of day works for you? e.g., 9 AM–10 PM Pacific" before drafting, then save via save_working_hours)`
+      `USER_WORKING_HOURS: ${inf.start}–${inf.end} (${tz}, inferred from ${inf.sampleCount} accepted-slot picks — refine if wrong by volunteering hours; save_working_hours overrides)`
+    );
+  } else {
+    const norm = defaultUserWorkingHoursForPrompt(tz);
+    lines.push(
+      `USER_WORKING_HOURS: (not set — using norm: ${norm.start}–${norm.end} ${tz}, source: ${norm.source}; surface this assumption once when drafting, save_working_hours if user volunteers actual hours)`
     );
   }
   lines.push(`Timezone: ${tz} (${tzAbbr}, UTC${nowIso.slice(-6)})`);
