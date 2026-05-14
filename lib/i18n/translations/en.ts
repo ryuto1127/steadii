@@ -1560,6 +1560,18 @@ type MessagesShape = {
     page_prev: string;
     page_next: string;
     page_label: string;
+    cost_heading: string;
+    cost_description: string;
+    cost_stat_today: string;
+    cost_stat_week: string;
+    cost_stat_month: string;
+    cost_by_task_heading: string;
+    cost_calls_label: string;
+    cost_top_runs_heading: string;
+    cost_in_label: string;
+    cost_out_label: string;
+    cost_chat_link: string;
+    cost_per_user_heading: string;
   };
   settings_user_facts: {
     settings_back: string;
@@ -3613,6 +3625,19 @@ export const en: MessagesShape = {
     page_prev: "Newer",
     page_next: "Older",
     page_label: "Page {page} of {total}",
+    cost_heading: "Cost & spend",
+    cost_description:
+      "Token spend across every LLM Steadii fired on your behalf. Today / 7-day / 30-day rolling windows. Source: usage_events.",
+    cost_stat_today: "Today",
+    cost_stat_week: "This week",
+    cost_stat_month: "This month",
+    cost_by_task_heading: "By task type (30 days)",
+    cost_calls_label: "{calls} calls",
+    cost_top_runs_heading: "Top {count} most expensive runs (30 days)",
+    cost_in_label: "in",
+    cost_out_label: "out",
+    cost_chat_link: "chat",
+    cost_per_user_heading: "Per-user (admin · 30 days)",
   },
   settings_user_facts: {
     settings_back: "Settings",

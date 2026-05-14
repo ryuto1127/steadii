@@ -67,14 +67,17 @@ vi.mock("@sentry/nextjs", () => ({
 
 // engineer-51 — resolver module pulls in db + entity-graph deps; the
 // ingest path only needs the fire-and-forget no-op behavior here.
+// engineer-59 — track invocations to assert the auto_low gate skips it.
+const resolverMock = vi.fn();
 vi.mock("@/lib/agent/entity-graph/resolver", () => ({
-  resolveEntitiesInBackground: () => {},
+  resolveEntitiesInBackground: (...args: unknown[]) => resolverMock(...args),
 }));
 
 beforeEach(() => {
   processL2Mock.mockClear();
   triageMock.mockReset();
   applyMock.mockReset();
+  resolverMock.mockReset();
 });
 
 async function loadIngest() {
@@ -148,6 +151,33 @@ describe("ingestLast24h → processL2 routing", () => {
     await ingest("user-1");
 
     expect(processL2Mock).not.toHaveBeenCalled();
+  });
+
+  // engineer-59 — UNGATED_AGENT_WORK fix. resolveEntitiesInBackground
+  // runs an LLM extractor (taskType=tool_call) per inbox row; on
+  // auto_low (newsletters / transactional / no-reply) it earns nothing.
+  it("auto_low bucket skips resolveEntitiesInBackground", async () => {
+    triageMock.mockResolvedValueOnce(triageFor("auto_low"));
+    applyMock.mockResolvedValueOnce({ id: "inbox-low" });
+    triageMock.mockResolvedValueOnce(triageFor("ignore"));
+    applyMock.mockResolvedValueOnce(null);
+
+    const ingest = await loadIngest();
+    await ingest("user-1");
+
+    expect(resolverMock).not.toHaveBeenCalled();
+  });
+
+  it("auto_high bucket still runs resolveEntitiesInBackground", async () => {
+    triageMock.mockResolvedValueOnce(triageFor("auto_high"));
+    applyMock.mockResolvedValueOnce({ id: "inbox-high" });
+    triageMock.mockResolvedValueOnce(triageFor("ignore"));
+    applyMock.mockResolvedValueOnce(null);
+
+    const ingest = await loadIngest();
+    await ingest("user-1");
+
+    expect(resolverMock).toHaveBeenCalledTimes(1);
   });
 
   it("processL2 failure on one item does not poison the ingest", async () => {
