@@ -178,13 +178,20 @@ function buildChipLabel({
   isStreaming: boolean;
   locale: ToolLabelLocale;
 }): string {
-  const thinking = t("thinking_prefix");
+  // 2026-05-14 — dropped the "Steadii の思考:" / "Steadii's thinking:"
+  // prefix per Ryuto. The chip's visual treatment (muted color, small
+  // type, expand-chevron icon, sub-indented detail rows on expand)
+  // already signals "this is the agent's reasoning trace" — the prose
+  // prefix was redundant and ate the horizontal budget the sequence
+  // arrow chain actually needs. `thinking_prefix` translation key is
+  // intentionally left in place (en.ts / ja.ts) in case we want to
+  // bring it back behind a setting.
   const toLabel = (tool: string) => toolLabelDone(tool, locale);
   const sequence = renderSequenceLabel(summary.sequence, toLabel) ?? "";
   const annotations: string[] = [];
 
   if (summary.inFlightTool && isStreaming) {
-    return `${thinking} ${sequence}…`;
+    return `${sequence}…`;
   }
 
   if (summary.failedCount > 0) {
@@ -199,7 +206,7 @@ function buildChipLabel({
   }
 
   if (annotations.length > 0) {
-    return `${thinking} ${sequence} (${annotations.join(", ")})`;
+    return `${sequence} (${annotations.join(", ")})`;
   }
-  return `${thinking} ${sequence}`;
+  return sequence;
 }
