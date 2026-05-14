@@ -3,13 +3,15 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
 import { chats } from "@/lib/db/schema";
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { DenseList } from "@/components/ui/dense-list";
-import { ChatHistoryRow } from "@/components/chat/chat-history-row";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MessagesSquare, Plus } from "lucide-react";
 import Link from "next/link";
 import { ContextualSuggestion } from "@/components/suggestions/contextual-suggestion";
 import { getLocale, getTranslations } from "next-intl/server";
+import {
+  ChatsHistoryList,
+  type ChatsHistoryRow,
+} from "@/components/chat/chats-history-list";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,13 @@ export default async function ChatsListPage() {
   const dateLocale = locale === "ja" ? "ja-JP" : "en-US";
   const t = await getTranslations("chats_list");
   const tChat = await getTranslations("chat_view");
+
+  const presentationRows: ChatsHistoryRow[] = rows.map((chat) => ({
+    id: chat.id,
+    title: chat.title ?? tChat("title_placeholder"),
+    updatedAtIso: chat.updatedAt.toISOString(),
+    updatedAtLabel: chat.updatedAt.toLocaleDateString(dateLocale),
+  }));
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -49,7 +58,7 @@ export default async function ChatsListPage() {
         revalidatePath="/app/chats"
       />
 
-      {rows.length === 0 ? (
+      {presentationRows.length === 0 ? (
         <EmptyState
           icon={<MessagesSquare size={18} strokeWidth={1.5} />}
           title={t("empty_title")}
@@ -57,16 +66,7 @@ export default async function ChatsListPage() {
           actions={[{ label: t("empty_action"), href: "/app" }]}
         />
       ) : (
-        <DenseList ariaLabel={t("aria")}>
-          {rows.map((chat) => (
-            <ChatHistoryRow
-              key={chat.id}
-              id={chat.id}
-              title={chat.title ?? tChat("title_placeholder")}
-              updatedAt={chat.updatedAt.toLocaleDateString(dateLocale)}
-            />
-          ))}
-        </DenseList>
+        <ChatsHistoryList rows={presentationRows} />
       )}
     </div>
   );
