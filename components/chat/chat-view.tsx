@@ -17,7 +17,8 @@ import { toast } from "sonner";
 // at /app/settings/facts + the save_user_fact chat tool, not in chat UI.
 // Handwritten-OCR + class-detail mistake_notes paths remain.
 import { MarkdownMessage } from "./markdown-message";
-import { ToolCallCard, type ToolCallStatus } from "./tool-call-card";
+import { type ToolCallStatus } from "./tool-call-card";
+import { ToolCallSummary } from "./tool-call-summary";
 import { parseProposedActions } from "./proposed-actions";
 import { ActionPill } from "@/components/ui/action-pill";
 import { cn } from "@/lib/utils/cn";
@@ -599,30 +600,12 @@ export function ChatView({
                     </div>
                   )}
                   {m.role === "assistant" && m.items && m.items.length > 0 && (
-                    <div className="mb-2 space-y-1">
-                      {m.items.map((it, i) =>
-                        it.kind === "narration" ? (
-                          <p
-                            key={`n-${i}`}
-                            className="whitespace-pre-wrap text-small italic text-[hsl(var(--muted-foreground))]"
-                          >
-                            {it.text}
-                          </p>
-                        ) : (
-                          <ToolCallCard
-                            key={`t-${it.event.id}`}
-                            toolName={it.event.toolName}
-                            status={it.event.status}
-                            args={it.event.args}
-                            result={it.event.result}
-                            pendingId={it.event.pendingId}
-                            onConfirm={(d) =>
-                              it.event.pendingId &&
-                              confirmPending(it.event.pendingId, d)
-                            }
-                          />
-                        )
-                      )}
+                    <div className="mb-2">
+                      <ToolCallSummary
+                        items={m.items}
+                        isStreaming={streaming && isLastAssistant}
+                        onConfirmPending={confirmPending}
+                      />
                     </div>
                   )}
                   {renderBody ? (
