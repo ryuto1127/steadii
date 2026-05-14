@@ -100,6 +100,10 @@ export default async function SingleChatPage({
         id: m.id,
         role: m.role,
         content: m.content,
+        // engineer-58 — pass the row's status through so ChatView can
+        // detect an in-flight agent run on mount / tab-refocus and start
+        // polling /api/chat/messages/[id]/status instead of giving up.
+        status: m.status,
         items,
         attachments: (byMessage.get(m.id) ?? []).map((a) => ({
           id: a.id,

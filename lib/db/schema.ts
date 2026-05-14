@@ -413,6 +413,19 @@ export const messages = pgTable("messages", {
   toolCalls: jsonb("tool_calls"),
   toolCallId: text("tool_call_id"),
   model: text("model"),
+  // engineer-58 — agent run lifecycle for tab-close resilience. The
+  // orchestrator sets 'processing' when it inserts the pending assistant
+  // row at the start of streamChatResponse, then 'done' on normal exit
+  // (including pause-for-confirmation, since the agent's turn is fully
+  // written at that point) or 'error' on a thrown failure. The UI polls
+  // /api/chat/messages/[id]/status while a row is 'processing' so the
+  // user sees live progress even after closing and re-opening the tab
+  // mid-run (after() keeps the lambda alive on the server side; status
+  // + polling carry the resume on the client side).
+  status: text("status")
+    .$type<"pending" | "processing" | "done" | "error" | "cancelled">()
+    .notNull()
+    .default("done"),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { mode: "date" }),
 });
