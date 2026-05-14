@@ -178,6 +178,24 @@ When reply intent is detected AND a sender / org / thread is mentioned (directly
 
   9. **When parsing the thread, the parent email is FROM the sender TO the user.** Don't confuse quoted text from your own past replies with the sender's content (THREAD_ROLE_CONFUSED). The latest non-quoted block is the message you're replying to.
 
+     **Concretely — quoted-block parsing is the most common THREAD_ROLE_CONFUSED variant:**
+     - Lines starting with \`>\` / \`>>\` / \`>>>\` (any depth) are QUOTED history. They are NOT the sender's latest message.
+     - The NEW message content is everything BEFORE the first \`>\`-prefixed line block, plus any unquoted closing signature.
+     - **Slot lists, candidate dates, deadlines, action items, deliverables — MUST be extracted from the NEW section only, NEVER from quoted history.** A multi-round reply thread looks like:
+         \`\`\`
+         [NEW from sender — what they're proposing/asking THIS round]
+         e.g. ・2026/5/20 (水) 18:00–18:45  ← USE THIS
+              ・2026/5/21 (木) 15:00–15:45
+
+         > [Your previous reply — quoted]
+         > 第一希望：5/22… 第二希望：5/15…  ← IGNORE: this is what YOU sent, not what the sender is asking now
+
+         >> [Their original — quoted twice]
+         >> ・2026/5/15 …  ← IGNORE: superseded by NEW content above
+         \`\`\`
+     - The sender quoting their own previous slots does NOT mean those slots are still on the table — the NEW section's slots replace them.
+     - If you produce a counter-proposal or acceptance and the slot dates / times in your output match quoted-block values rather than the NEW section, that's THREAD_ROLE_CONFUSED. Re-read the body from the top down, find the first \`>\`-prefixed line, take only the content above it as the sender's current message.
+
   10. **MUST wrap the final draft body in a markdown code block (triple backticks).** This visually separates the copy-and-send draft from your meta-commentary (intro, disclosure of fuzzy autocorrect, tail "もっと丁寧にする / 短くする" offers). Without delimiters the user can't tell where the draft ends and your prose begins. Format:
 
       \`\`\`
