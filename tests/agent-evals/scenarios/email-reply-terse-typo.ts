@@ -30,6 +30,12 @@ const scenario: EvalScenario = {
       locale: "ja",
       name: "田中 太郎",
     },
+    // engineer-54 — pre-existing reply scenarios assume a user who has
+    // already onboarded (working hours set). Without this, the SLOT
+    // FEASIBILITY CHECK gate-0 fires and the agent legitimately refuses
+    // to draft until working hours are saved. Setting it here keeps the
+    // original assertions valid.
+    workingHoursLocal: { start: "08:00", end: "22:00" },
     facts: [
       { fact: "Vancouverに住んでいる", category: "location" },
       { fact: "UToronto に2026年9月入学予定", category: "schedule" },

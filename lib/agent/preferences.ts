@@ -119,3 +119,78 @@ export function isValidIanaTimezone(tz: string): boolean {
     return false;
   }
 }
+
+// engineer-54 — working hours window in user's profile TZ. Used by the
+// agent SLOT FEASIBILITY CHECK to decide whether a proposed meeting slot
+// is acceptable. Stored as HH:MM 24h strings; the actual TZ is derived
+// from users.timezone (single source of truth, auto-follows on travel).
+//
+// α scope: only non-overnight windows (start < end). The save tool
+// rejects overnight ranges so the prompt-side comparison stays a simple
+// "is HH:MM in [start, end]" check; overnight support is post-α.
+
+export type WorkingHoursLocal = {
+  start: string;
+  end: string;
+};
+
+const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+export function isValidWorkingHours(value: unknown): value is WorkingHoursLocal {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  if (typeof v.start !== "string" || typeof v.end !== "string") return false;
+  if (!HHMM_RE.test(v.start) || !HHMM_RE.test(v.end)) return false;
+  return hhmmToMinutes(v.start) < hhmmToMinutes(v.end);
+}
+
+export function hhmmToMinutes(hhmm: string): number {
+  const m = HHMM_RE.exec(hhmm);
+  if (!m) return Number.NaN;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+export async function getUserWorkingHours(
+  userId: string
+): Promise<WorkingHoursLocal | null> {
+  const [row] = await db
+    .select({ preferences: users.preferences })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const wh = row?.preferences?.workingHoursLocal;
+  if (!wh) return null;
+  if (!isValidWorkingHours(wh)) return null;
+  return { start: wh.start, end: wh.end };
+}
+
+export async function setUserWorkingHours(
+  userId: string,
+  hours: WorkingHoursLocal
+): Promise<void> {
+  // Belt-and-suspenders at the API boundary — runtime validation in
+  // case a caller passes raw / untyped data. The type guard narrows
+  // `hours` to `never` in the failure branch (since the input type is
+  // already WorkingHoursLocal), so we capture the bad values before
+  // the throw rather than referencing them through the narrowed type.
+  const badStart = hours.start;
+  const badEnd = hours.end;
+  if (!isValidWorkingHours(hours)) {
+    throw new Error(
+      `Invalid working hours: start=${badStart} end=${badEnd} — both must be HH:MM 24h and start < end (overnight ranges deferred post-α).`
+    );
+  }
+  const [row] = await db
+    .select({ preferences: users.preferences })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const next = {
+    ...(row?.preferences ?? {}),
+    workingHoursLocal: { start: hours.start, end: hours.end },
+  };
+  await db
+    .update(users)
+    .set({ preferences: next, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+}

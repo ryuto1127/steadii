@@ -96,6 +96,17 @@ export const users = pgTable("users", {
     // ISO timestamp; null/missing = never fired (rule eligible on next
     // scan after the user has any sender_confidence rows).
     lastMonthlyReviewAt?: string;
+    // engineer-54 — secretary push-back. Working/meeting-available
+    // window in the user's profile TZ (no `tz` field — derived from
+    // `users.timezone`, single source of truth; if the user travels and
+    // their timezone changes the window auto-follows). Stored as
+    // HH:MM 24h strings. SLOT FEASIBILITY CHECK + COUNTER-PROPOSAL
+    // PATTERN in lib/agent/prompts/main.ts gate slot acceptance on
+    // this window. α scope: simple non-overnight (start < end).
+    workingHoursLocal?: {
+      start: string;
+      end: string;
+    };
   }>().default({}),
   timezone: text("timezone"),
   onboardingStep: integer("onboarding_step").notNull().default(0),

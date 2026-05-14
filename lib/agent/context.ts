@@ -12,7 +12,11 @@ import {
 } from "@/lib/db/schema";
 import { and, count, eq, isNull } from "drizzle-orm";
 import { getCalendarForUser } from "@/lib/integrations/google/calendar";
-import { getUserLocale, getUserTimezone } from "./preferences";
+import {
+  getUserLocale,
+  getUserTimezone,
+  getUserWorkingHours,
+} from "./preferences";
 import { loadTopUserFacts } from "./user-facts";
 export {
   serializeContextForPrompt,
@@ -49,6 +53,7 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
     syllabusCount,
     userFactsList,
     userRow,
+    workingHours,
   ] = await Promise.all([
     getUserTimezone(userId),
     getUserLocale(userId),
@@ -66,6 +71,11 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
       .where(eq(users.id, userId))
       .limit(1)
       .then((rows) => rows[0] ?? null),
+    // engineer-54 — pull working hours to surface as USER_WORKING_HOURS
+    // in the serialized prompt. Mirrors the USER_NAME injection pattern;
+    // the SLOT FEASIBILITY CHECK prompt section reads this label and
+    // either gates the draft on the window or asks the user to set it.
+    getUserWorkingHours(userId),
   ]);
 
   return {
@@ -96,6 +106,7 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
       category: f.category,
     })),
     userName: userRow?.name ?? null,
+    workingHoursLocal: workingHours,
   };
 }
 

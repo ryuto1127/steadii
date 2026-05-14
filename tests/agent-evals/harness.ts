@@ -81,6 +81,11 @@ export type EvalFixture = {
   calendarEvents?: FixtureEvent[];
   assignments?: FixtureAssignment[];
   entities?: FixtureEntity[];
+  // engineer-54 — working/meeting-available window in the user's profile
+  // TZ. Mirrors users.preferences.workingHoursLocal. When unset, the
+  // harness emits "USER_WORKING_HOURS: (not set)" so the prompt's
+  // SLOT FEASIBILITY CHECK onboarding-ask branch fires.
+  workingHoursLocal?: { start: string; end: string } | null;
 };
 
 // ---------- Scenario + assertion shapes ----------
@@ -307,6 +312,23 @@ const HARNESS_TOOL_DEFS: OpenAITool[] = [
   {
     type: "function",
     function: {
+      name: "save_working_hours",
+      description:
+        "Save the user's working/meeting-available window. Call when the user states their availability (e.g. '9 AM to 10 PM Pacific') or answers the SLOT FEASIBILITY CHECK onboarding ask. Auto-saves; HH:MM 24h in the user's profile TZ. α scope non-overnight only (start < end).",
+      parameters: {
+        type: "object",
+        properties: {
+          start: { type: "string", description: "Start HH:MM 24h." },
+          end: { type: "string", description: "End HH:MM 24h." },
+        },
+        required: ["start", "end"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "summarize_week",
       description:
         "Summarize the user's past 7 days of academic activity — chat count, mistake-note count, syllabus count, top classes, observation.",
@@ -374,6 +396,8 @@ function buildDispatcher(fixture: EvalFixture): DispatchFn {
         return execAssignmentsCreate(args);
       case "save_user_fact":
         return execSaveUserFact(args);
+      case "save_working_hours":
+        return execSaveWorkingHours(args);
       case "summarize_week":
         return execSummarizeWeek(norm);
       default:
@@ -640,6 +664,22 @@ function execSaveUserFact(args: Record<string, unknown>): unknown {
   };
 }
 
+function execSaveWorkingHours(args: Record<string, unknown>): unknown {
+  // engineer-54 — fixture-only; no DB. The eval cares that the tool was
+  // CALLED with sane args, not that it persisted. The scenarios for the
+  // unset path assert on `tool_called: save_working_hours`.
+  const start = typeof args.start === "string" ? args.start : "";
+  const end = typeof args.end === "string" ? args.end : "";
+  const hhmm = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  if (!hhmm.test(start) || !hhmm.test(end)) {
+    return {
+      error: "invalid_format",
+      message: "start and end must be HH:MM 24h.",
+    };
+  }
+  return { ok: true, start, end };
+}
+
 function execSummarizeWeek(norm: NormalizedFixture): unknown {
   const titles = norm.events.slice(0, 8).map((e) => e.title);
   const assignmentTitles = norm.assignments.slice(0, 8).map((a) => a.title);
@@ -677,6 +717,17 @@ function serializeFixtureContext(fixture: EvalFixture): string {
   // prod. The fixture always provides a name; the prod path falls back
   // to "(unknown — ask the user…)" when users.name is null.
   lines.push(`USER_NAME: ${user.name}`);
+  // engineer-54 — mirror the prod serialize-context.ts USER_WORKING_HOURS
+  // line so SLOT FEASIBILITY CHECK reads the same hook in eval scenarios.
+  if (fixture.workingHoursLocal) {
+    lines.push(
+      `USER_WORKING_HOURS: ${fixture.workingHoursLocal.start}–${fixture.workingHoursLocal.end} (${user.timezone})`
+    );
+  } else {
+    lines.push(
+      `USER_WORKING_HOURS: (not set — when drafting acceptance of a proposed meeting slot, ask the user once "what time of day works for you? e.g., 9 AM–10 PM Pacific" before drafting, then save via save_working_hours)`
+    );
+  }
   lines.push(`Name: ${user.name}`);
   lines.push(`Timezone: ${user.timezone}`);
   lines.push(`Locale: ${user.locale}`);
@@ -826,6 +877,13 @@ export async function runScenario(
   // We run the retry and report the BEST output, but the
   // `response_no_placeholder_leak` assertion checks the BEST output —
   // so a regression that's robust enough to leak twice still fails.
+  //
+  // engineer-54 — retry now drives a small tool loop. Without this the
+  // retry pass became a punt: the model would emit `候補を直して再度返信文
+  // を作り直します` (acknowledge without doing) and that text replaced
+  // finalText, breaking the downstream scenario assertions. Mirrors the
+  // orchestrator.ts retry-with-tools pattern (PR #235): one round of
+  // tool calls allowed, then one final text-only pass.
   if (finalText.trim().length >= 20) {
     let retries = 0;
     while (retries < HARNESS_MAX_RETRY_AFTER_LEAK) {
@@ -842,11 +900,81 @@ export async function runScenario(
           model,
           messages: conversation,
           tools: HARNESS_TOOL_DEFS,
+          tool_choice: "auto",
         });
-        const retryText = retry.choices[0]?.message?.content ?? "";
-        if (retryText.length > 0) {
+        const retryMsg = retry.choices[0]?.message;
+        const retryText = retryMsg?.content ?? "";
+        const retryToolCalls = (retryMsg?.tool_calls ?? []).filter(
+          isFunctionToolCall
+        );
+
+        if (retryToolCalls.length > 0) {
+          // Execute the retry's tool calls and make one more text-only
+          // pass so the model can compose a grounded response from the
+          // fetched values. Matches the orchestrator's pattern.
+          conversation.push({
+            role: "assistant",
+            content: retryText || null,
+            tool_calls: retryToolCalls.map((c) => ({
+              id: c.id,
+              type: "function" as const,
+              function: {
+                name: c.function.name,
+                arguments: c.function.arguments,
+              },
+            })),
+          });
+          for (const call of retryToolCalls) {
+            let parsedArgs: unknown;
+            try {
+              parsedArgs = JSON.parse(call.function.arguments || "{}");
+            } catch {
+              parsedArgs = {};
+            }
+            let result: unknown;
+            try {
+              result = await dispatcher(call.function.name, parsedArgs);
+            } catch (err) {
+              result = {
+                error: "tool_failed",
+                message:
+                  err instanceof Error ? err.message : String(err),
+              };
+            }
+            const serialized = JSON.stringify(result);
+            toolCalls.push({
+              name: call.function.name,
+              args: parsedArgs,
+              resultPreview: serialized.slice(0, 300),
+            });
+            conversation.push({
+              role: "tool",
+              tool_call_id: call.id,
+              content: serialized,
+            });
+          }
+          // Final text-only pass.
+          const finalPass = await client.chat.completions.create({
+            model,
+            messages: conversation,
+          });
+          const finalPassText =
+            finalPass.choices[0]?.message?.content ?? "";
+          if (finalPassText.length > 0) {
+            const finalLeak = detectPlaceholderLeak(finalPassText);
+            if (!finalLeak.hasLeak) {
+              finalText = finalPassText;
+            }
+          }
+        } else if (retryText.length > 0) {
+          // No tool calls — accept the retry text only if it's longer
+          // than the original (heuristic guard against punt-style
+          // "I'll redo this" replies that strip substantive content).
           const retryLeak = detectPlaceholderLeak(retryText);
-          if (!retryLeak.hasLeak) {
+          if (
+            !retryLeak.hasLeak &&
+            retryText.length >= finalText.length * 0.6
+          ) {
             finalText = retryText;
           }
         }
