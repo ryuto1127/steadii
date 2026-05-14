@@ -30,6 +30,10 @@ const JA_LABELS: LocaleMap = {
   // Email
   email_search: { running: "メールを探しています", done: "メールを探す" },
   email_get_body: { running: "本文を確認しています", done: "本文を確認" },
+  email_get_new_content_only: {
+    running: "新規本文を取得しています",
+    done: "新規本文を取得",
+  },
   email_thread_summarize: {
     running: "スレッドを要約しています",
     done: "スレッドを要約",
@@ -176,6 +180,10 @@ const EN_LABELS: LocaleMap = {
   // Email
   email_search: { running: "Searching emails", done: "Searched emails" },
   email_get_body: { running: "Reading email body", done: "Read email body" },
+  email_get_new_content_only: {
+    running: "Reading new content only",
+    done: "Read new content only",
+  },
   email_thread_summarize: {
     running: "Summarizing thread",
     done: "Summarized thread",

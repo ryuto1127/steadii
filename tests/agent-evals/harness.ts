@@ -32,6 +32,7 @@ import {
 } from "@/lib/agent/self-critique";
 import { inferSenderTimezone } from "@/lib/agent/email/sender-timezone-heuristic";
 import { inferSenderWorkingHours } from "@/lib/agent/email/sender-norms";
+import { stripQuotedHistory } from "@/lib/agent/email/quoted-block-stripper";
 
 // ---------- Fixture types ----------
 
@@ -142,6 +143,12 @@ export type EvalRunResult = {
   toolCalls: EvalToolCallRecord[];
   iterations: number;
   durationMs: number;
+  // engineer-62 — carry the user message so the
+  // `response_no_placeholder_leak` assertion can apply the cascade-
+  // failure detectors (which need both tool-call history and reply-
+  // intent context). Without this the assertion sees a narrower view
+  // than the retry pass.
+  userMessage?: string;
 };
 
 export type EvalAssertionResult = {
@@ -198,7 +205,21 @@ const HARNESS_TOOL_DEFS: OpenAITool[] = [
     function: {
       name: "email_get_body",
       description:
-        "Fetch the full body text of an email by inboxItemId. Use after email_search when the snippet doesn't carry enough detail (URLs, slot lists, structured content).",
+        "Fetch the full body text of an email by inboxItemId — INCLUDING quoted reply history (`>` lines, 'On … wrote:' attributions, '-----Original Message-----' dividers, Outlook header blocks). Use for thread context; do NOT extract slot dates / deadlines / action items from this — that's the email_get_new_content_only surface (MUST-rule 2).",
+      parameters: {
+        type: "object",
+        properties: { inboxItemId: { type: "string" } },
+        required: ["inboxItemId"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "email_get_new_content_only",
+      description:
+        "Get the sender's NEW message body with quoted history stripped — lines starting with `>` (any depth), 'On … wrote:' attributions, '-----Original Message-----' dividers, Outlook 差出人/From header blocks are all removed. Returns only what the sender wrote THIS round. **MUST use this for slot / candidate-date / deadline / action-item extraction on reply intents** — quoted-block slots are physically absent from the result, so the agent literally cannot pull a previous-round slot. Returns { newContentBody, stripperFlagged, ... }; when stripperFlagged is true, fall back to email_get_body and disclose to the user.",
       parameters: {
         type: "object",
         properties: { inboxItemId: { type: "string" } },
@@ -410,6 +431,8 @@ function buildDispatcher(fixture: EvalFixture): DispatchFn {
         return execEmailSearch(norm, args);
       case "email_get_body":
         return execEmailGetBody(norm, args);
+      case "email_get_new_content_only":
+        return execEmailGetNewContentOnly(norm, args);
       case "infer_sender_timezone":
         return execInferSenderTimezone(args);
       case "infer_sender_norms":
@@ -503,6 +526,40 @@ function execEmailGetBody(
     truncated: false,
     format: it.body ? "text/plain" : "empty",
   };
+}
+
+function execEmailGetNewContentOnly(
+  norm: NormalizedFixture,
+  args: Record<string, unknown>
+): unknown {
+  const id = typeof args.inboxItemId === "string" ? args.inboxItemId : "";
+  const it = norm.inboxItems.find((x) => x.id === id);
+  if (!it) {
+    return {
+      error: "not_found",
+      message: `No inbox item with id ${id} in fixture.`,
+    };
+  }
+  const fullBody = it.body ?? it.snippet ?? "";
+  const strip = stripQuotedHistory(fullBody);
+  const base: Record<string, unknown> = {
+    inboxItemId: it.id,
+    externalId: it.id,
+    senderEmail: it.senderEmail,
+    subject: it.subject ?? null,
+    receivedAt: it.receivedAt ?? new Date().toISOString(),
+    newContentBody: strip.newContentBody,
+    newContentBodyLength: strip.newContentBodyLength,
+    originalBodyLength: strip.originalBodyLength,
+    truncated: false,
+    stripperFlagged: strip.stripperFlagged,
+  };
+  if (strip.stripperFlagged) {
+    base.originalBody = fullBody;
+    base.stripperReason =
+      "stripped >95% — possible structure unrecognized; consider email_get_body as a fallback";
+  }
+  return base;
 }
 
 function execInferSenderTimezone(args: Record<string, unknown>): unknown {
@@ -961,10 +1018,22 @@ export async function runScenario(
   // finalText, breaking the downstream scenario assertions. Mirrors the
   // orchestrator.ts retry-with-tools pattern (PR #235): one round of
   // tool calls allowed, then one final text-only pass.
+  //
+  // engineer-62 — the detector now consumes tool-call history + user
+  // message so the cascade-failure shapes (slot list without
+  // convert_timezone, reply intent without email_get_new_content_only)
+  // surface here too. Mirrors the orchestrator's wiring.
+  const critiqueContext = {
+    toolCallHistory: toolCalls.map((c) => ({
+      toolName: c.name,
+      status: "ok" as const,
+    })),
+    userMessage: scenario.input.userMessage,
+  };
   if (finalText.trim().length >= 20) {
     let retries = 0;
     while (retries < HARNESS_MAX_RETRY_AFTER_LEAK) {
-      const leak = detectPlaceholderLeak(finalText);
+      const leak = detectPlaceholderLeak(finalText, critiqueContext);
       if (!leak.hasLeak) break;
       retries += 1;
       conversation.push({ role: "assistant", content: finalText });
@@ -1024,6 +1093,10 @@ export async function runScenario(
               args: parsedArgs,
               resultPreview: serialized.slice(0, 300),
             });
+            critiqueContext.toolCallHistory.push({
+              toolName: call.function.name,
+              status: "ok",
+            });
             conversation.push({
               role: "tool",
               tool_call_id: call.id,
@@ -1038,7 +1111,10 @@ export async function runScenario(
           const finalPassText =
             finalPass.choices[0]?.message?.content ?? "";
           if (finalPassText.length > 0) {
-            const finalLeak = detectPlaceholderLeak(finalPassText);
+            const finalLeak = detectPlaceholderLeak(
+              finalPassText,
+              critiqueContext
+            );
             if (!finalLeak.hasLeak) {
               finalText = finalPassText;
             }
@@ -1047,7 +1123,7 @@ export async function runScenario(
           // No tool calls — accept the retry text only if it's longer
           // than the original (heuristic guard against punt-style
           // "I'll redo this" replies that strip substantive content).
-          const retryLeak = detectPlaceholderLeak(retryText);
+          const retryLeak = detectPlaceholderLeak(retryText, critiqueContext);
           if (
             !retryLeak.hasLeak &&
             retryText.length >= finalText.length * 0.6
@@ -1067,6 +1143,7 @@ export async function runScenario(
     toolCalls,
     iterations,
     durationMs: Date.now() - start,
+    userMessage: scenario.input.userMessage,
   };
 }
 
@@ -1176,7 +1253,13 @@ function evaluateOne(
       };
     }
     case "response_no_placeholder_leak": {
-      const leak = detectPlaceholderLeak(result.finalText);
+      const leak = detectPlaceholderLeak(result.finalText, {
+        toolCallHistory: result.toolCalls.map((c) => ({
+          toolName: c.name,
+          status: "ok",
+        })),
+        userMessage: result.userMessage,
+      });
       const pass = !leak.hasLeak;
       return {
         label: "response_no_placeholder_leak",

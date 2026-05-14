@@ -156,6 +156,12 @@ export async function* streamChatResponse(
 
   let iterations = 0;
   let finalText = "";
+  // engineer-62 — tool-call history accumulator. Drives the cascade-
+  // failure detectors in self-critique.ts: "slot list without
+  // convert_timezone" and "reply intent without
+  // email_get_new_content_only". Tracks every name+ok across the
+  // whole assistant turn, including retry-path executions below.
+  const toolCallHistory: Array<{ toolName: string; status: string }> = [];
 
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations += 1;
@@ -368,6 +374,10 @@ export async function* streamChatResponse(
         ok = false;
         resultPayload = toolErrorPayload(err);
       }
+      toolCallHistory.push({
+        toolName: call.name,
+        status: ok ? "ok" : "error",
+      });
       const serialized = JSON.stringify(resultPayload);
       conversation.push({
         role: "tool",
@@ -492,11 +502,25 @@ export async function* streamChatResponse(
   // No retry when finalText is empty (different failure path —
   // handled by the forced-final-pass above) or when iterations are
   // already exhausted (model can't call more tools anyway).
+  // engineer-62 — pull the most recent user-turn text so the cascade-
+  // failure detectors can compare reply intent against tool calls.
+  // `history` was loaded at the top of streamChatResponse; the last
+  // entry with role==="user" is the message that triggered this run.
+  const lastUserMessage = (() => {
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === "user") return history[i].content;
+    }
+    return "";
+  })();
+
   if (
     finalText.trim().length >= MIN_USEFUL_FINAL_TEXT_LENGTH &&
     iterations < MAX_TOOL_ITERATIONS - 1
   ) {
-    const leak = detectPlaceholderLeak(finalText);
+    const leak = detectPlaceholderLeak(finalText, {
+      toolCallHistory,
+      userMessage: lastUserMessage,
+    });
     if (leak.hasLeak) {
       // Push the failed response + corrective system message onto the
       // conversation so the agent has full context for the retry.
@@ -615,6 +639,10 @@ export async function* streamChatResponse(
               ok = false;
               resultPayload = toolErrorPayload(err);
             }
+            toolCallHistory.push({
+              toolName: call.name,
+              status: ok ? "ok" : "error",
+            });
             const serialized = JSON.stringify(resultPayload);
             conversation.push({
               role: "tool",
@@ -662,7 +690,10 @@ export async function* streamChatResponse(
           // Only commit the retry if the leak is gone — otherwise the
           // model failed twice and we ship the original (the corrective
           // re-emit wasn't successful so don't double-down).
-          const retryLeak = detectPlaceholderLeak(retryText);
+          const retryLeak = detectPlaceholderLeak(retryText, {
+            toolCallHistory,
+            userMessage: lastUserMessage,
+          });
           if (!retryLeak.hasLeak) {
             finalText = retryText;
             await db

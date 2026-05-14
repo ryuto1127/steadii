@@ -56,6 +56,11 @@ const scenario: EvalScenario = {
   },
   expect: [
     { kind: "tool_called", name: "email_get_body" },
+    // engineer-62 — reply-intent EMAIL REPLY WORKFLOW MUST-rule 2 binds
+    // for ALL reply drafts (slot or no slot). Slot-extraction surface
+    // is the stripped body, and habit-forming on this tool prevents
+    // THREAD_ROLE_CONFUSED from appearing on multi-round threads later.
+    { kind: "tool_called", name: "email_get_new_content_only" },
     // The draft must contain a name or salutation — meaning the agent
     // followed through on the action it committed to.
     {

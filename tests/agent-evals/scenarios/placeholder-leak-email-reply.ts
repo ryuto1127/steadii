@@ -75,6 +75,11 @@ const scenario: EvalScenario = {
   },
   expect: [
     { kind: "tool_called", name: "email_get_body" },
+    // engineer-62 — structural fix for THREAD_ROLE_CONFUSED. Even
+    // single-round reply scenarios MUST route slot extraction through
+    // email_get_new_content_only so the agent has the same habit when
+    // the thread DOES contain quoted history later.
+    { kind: "tool_called", name: "email_get_new_content_only" },
     // The agent may infer the sender TZ via the dedicated tool OR
     // directly via convert_timezone with fromTz=Asia/Tokyo. Either path
     // counts — what matters is that the TZ ANCHOR is correct (it's the
