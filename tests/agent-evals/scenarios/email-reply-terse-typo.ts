@@ -88,6 +88,11 @@ const scenario: EvalScenario = {
   expect: [
     // (a) MUST chain — body fetch is non-negotiable
     { kind: "tool_called", name: "email_get_body" },
+    // engineer-62 — slot-extraction surface MUST be the stripped body.
+    // Even on single-round threads with no quoted history, the agent
+    // should habit-form on this tool so multi-round threads (where
+    // THREAD_ROLE_CONFUSED actually fires) get correct handling too.
+    { kind: "tool_called", name: "email_get_new_content_only" },
     // (b) MUST resolve sender TZ before citing slot times
     {
       kind: "custom",

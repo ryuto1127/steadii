@@ -119,6 +119,8 @@ const scenario: EvalScenario = {
   expect: [
     // (a) MUST chain — body fetch is non-negotiable
     { kind: "tool_called", name: "email_get_body" },
+    // engineer-62 — slot-extraction surface MUST be the stripped body.
+    { kind: "tool_called", name: "email_get_new_content_only" },
     // (b) MUST resolve sender TZ + convert each proposed slot
     {
       kind: "custom",

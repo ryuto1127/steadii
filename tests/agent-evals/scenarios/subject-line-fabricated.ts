@@ -58,6 +58,10 @@ const scenario: EvalScenario = {
   },
   expect: [
     { kind: "tool_called", name: "email_get_body" },
+    // engineer-62 — reply-intent slot-extraction surface MUST be the
+    // stripped body, even when there are no slot conflicts in this
+    // particular fixture.
+    { kind: "tool_called", name: "email_get_new_content_only" },
     // The core assertion: the draft body MUST NOT begin with a `件名:` /
     // `Subject:` line followed by `Re:`. This is the named failure mode.
     {
