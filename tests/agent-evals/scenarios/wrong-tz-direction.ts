@@ -24,6 +24,9 @@ const scenario: EvalScenario = {
       locale: "ja",
       name: "Ryuto",
     },
+    // engineer-54 — pre-set so the SLOT FEASIBILITY CHECK gate doesn't
+    // block older reply scenarios. Already-onboarded user state.
+    workingHoursLocal: { start: "08:00", end: "22:00" },
     inboxItems: [
       {
         id: "email-jp-body",

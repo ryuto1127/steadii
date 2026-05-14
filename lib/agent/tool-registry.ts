@@ -16,6 +16,7 @@ import { CONVERT_TIMEZONE_TOOLS } from "./tools/convert-timezone";
 import { INFER_SENDER_TIMEZONE_TOOLS } from "./tools/infer-sender-timezone";
 import { RESOLVE_CLARIFICATION_TOOLS } from "./tools/resolve-clarification";
 import { SAVE_USER_FACT_TOOLS } from "./tools/save-user-fact";
+import { SAVE_WORKING_HOURS_TOOLS } from "./tools/save-working-hours";
 import { LOOKUP_ENTITY_TOOLS } from "./tools/lookup-entity";
 import { toOpenAIToolDefinition, type ToolExecutor } from "./tools/types";
 
@@ -46,6 +47,7 @@ export const ALL_TOOLS: ToolExecutor[] = [
   ...(CONVERT_TIMEZONE_TOOLS as ToolExecutor[]),
   ...(INFER_SENDER_TIMEZONE_TOOLS as ToolExecutor[]),
   ...(SAVE_USER_FACT_TOOLS as ToolExecutor[]),
+  ...(SAVE_WORKING_HOURS_TOOLS as ToolExecutor[]),
   ...(LOOKUP_ENTITY_TOOLS as ToolExecutor[]),
   summarizeWeekTool as ToolExecutor,
   ...SESSION_SCOPED_TOOLS,

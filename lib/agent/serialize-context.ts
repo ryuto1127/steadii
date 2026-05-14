@@ -46,6 +46,13 @@ export type UserContextPayload = {
   // the user's real name instead of defaulting to a 〇〇 placeholder.
   // Null when the user signed up via a flow that didn't capture a name.
   userName?: string | null;
+  // engineer-54 — the user's stored working/meeting-available window
+  // (HH:MM–HH:MM in their profile TZ). Surfaced as a labeled
+  // `USER_WORKING_HOURS:` line so the SLOT FEASIBILITY CHECK section of
+  // the system prompt has a deterministic place to find it. Null when
+  // the user hasn't set one yet — the prompt's onboarding ask path
+  // fires in that case.
+  workingHoursLocal?: { start: string; end: string } | null;
 };
 
 // Format `date` as a full offset-bearing RFC3339 string in `tz`, e.g.
@@ -138,6 +145,20 @@ export function serializeContextForPrompt(ctx: UserContextPayload): string {
   } else {
     lines.push(
       `USER_NAME: (unknown — ask the user for their name before signing a draft on their behalf, never emit 〇〇)`
+    );
+  }
+  // engineer-54 — surface working hours next to the user's TZ so the
+  // SLOT FEASIBILITY CHECK + COUNTER-PROPOSAL PATTERN prompt sections
+  // have the comparison range available without a tool call. When the
+  // user hasn't set one, the "(not set)" sentinel matches the prompt's
+  // onboarding ask trigger.
+  if (ctx.workingHoursLocal) {
+    lines.push(
+      `USER_WORKING_HOURS: ${ctx.workingHoursLocal.start}–${ctx.workingHoursLocal.end} (${tz})`
+    );
+  } else {
+    lines.push(
+      `USER_WORKING_HOURS: (not set — when drafting acceptance of a proposed meeting slot, ask the user once "what time of day works for you? e.g., 9 AM–10 PM Pacific" before drafting, then save via save_working_hours)`
     );
   }
   lines.push(`Timezone: ${tz} (${tzAbbr}, UTC${nowIso.slice(-6)})`);
