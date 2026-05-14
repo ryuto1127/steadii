@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -50,10 +50,22 @@ type TurnItem =
   | { kind: "narration"; text: string }
   | { kind: "tool"; event: ToolEvent };
 
+// engineer-58 — mirrors messages.status. Only assistant rows ever reach a
+// non-'done' value in practice; user / tool rows are written once and stay
+// 'done'. Optional in the type because legacy callers / partial updates
+// don't always carry it.
+type MessageStatus =
+  | "pending"
+  | "processing"
+  | "done"
+  | "error"
+  | "cancelled";
+
 type Message = {
   id: string;
   role: "user" | "assistant" | "system" | "tool";
   content: string;
+  status?: MessageStatus;
   items?: TurnItem[];
   attachments: Attachment[];
 };
@@ -176,6 +188,91 @@ export function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStream]);
 
+  // engineer-58 — tab-close resilience. If any assistant row is still
+  // status='processing' on mount (or after a SSE network failure mid-
+  // stream), drive its completion by polling /api/chat/messages/[id]/status
+  // every 2s. The orchestrator keeps running on the server via after() +
+  // maxDuration=300; this loop is the client-side resume.
+  const inFlightAssistantId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "assistant" && m.status === "processing") return m.id;
+    }
+    return null;
+  }, [messages]);
+
+  useEffect(() => {
+    if (!inFlightAssistantId) return;
+
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    // Flip the streaming flag so the textarea stays disabled and the
+    // in-progress cursor renders while we resume.
+    setStreaming(true);
+
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetch(
+          `/api/chat/messages/${inFlightAssistantId}/status`,
+          { cache: "no-store" }
+        );
+        if (!res.ok) {
+          // 404 (row deleted) or 401 — give up on this run.
+          setStreaming(false);
+          return;
+        }
+        const data = (await res.json()) as PollStatusResponse;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === data.id ? rehydrateFromPoll(m, data) : m))
+        );
+        if (data.status === "processing") {
+          timeoutId = setTimeout(tick, 2000);
+        } else {
+          // Terminal status reached. Drop streaming, then refresh the
+          // page server-side so any tool messages / titles that landed
+          // between polls propagate into the rest of the UI (sidebar,
+          // chats list, etc.).
+          setStreaming(false);
+          startTransition(() => router.refresh());
+        }
+      } catch {
+        // Transient network error — back off and try again. Don't drop
+        // the streaming flag; the run may still be in progress server-
+        // side and we'll catch up on the next tick.
+        if (!cancelled) timeoutId = setTimeout(tick, 4000);
+      }
+    };
+
+    void tick();
+
+    // Tab-focus return: when the user comes back to the tab, poll
+    // immediately instead of waiting up to 2s for the next scheduled
+    // tick. This is the moment they're most likely to be watching the
+    // UI for progress.
+    const onVisibility = () => {
+      if (cancelled) return;
+      if (document.visibilityState !== "visible") return;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      void tick();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+    // Re-runs when the in-flight target changes. Intentionally omit
+    // `streaming` and `router` — the closure reads what it needs at
+    // setup time and we don't want toggle-on-streaming to abort the
+    // polling we just started.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inFlightAssistantId]);
+
   async function runStream() {
     setStreamError(null);
     setStreaming(true);
@@ -233,7 +330,9 @@ export function ChatView({
                   return m.filter((x) => x.id !== assistantTempId);
                 }
                 return m.map((x) =>
-                  x.id === assistantTempId ? { ...x, id: currentAssistantId } : x
+                  x.id === assistantTempId
+                    ? { ...x, id: currentAssistantId, status: "processing" }
+                    : x
                 );
               });
             } else if (payload.type === "text_delta") {
@@ -293,6 +392,7 @@ export function ChatView({
                     ? {
                         ...x,
                         role: "assistant",
+                        status: "error" as const,
                         content:
                           x.content ||
                           `⚠ ${payload.message ?? "Something went wrong."}`,
@@ -302,6 +402,22 @@ export function ChatView({
               );
               setStreamError(
                 payload.message ?? `Stream failed (${payload.code ?? "UNKNOWN"})`
+              );
+            } else if (
+              payload.type === "message_end" ||
+              payload.type === "done"
+            ) {
+              // engineer-58 — flip local status to 'done' so the resume-
+              // poll effect doesn't pick this row up after the stream
+              // finishes naturally. Orchestrator already wrote 'done' to
+              // the DB at this point (or 'error' if OPENAI_FAILED — that
+              // path emits the error event above which overrides this).
+              setMessages((m) =>
+                m.map((x) =>
+                  x.id === currentAssistantId && x.status !== "error"
+                    ? { ...x, status: "done" as const }
+                    : x
+                )
               );
             }
           } catch {
@@ -836,6 +952,93 @@ function updateToolStatus(
         ? { ...it, event: { ...it.event, ...patch } }
         : it
     ),
+  };
+}
+
+// engineer-58 — shape of /api/chat/messages/[id]/status response. Keep in
+// sync with app/api/chat/messages/[id]/status/route.ts.
+type PollStatusResponse = {
+  id: string;
+  chatId: string;
+  status: MessageStatus;
+  content: string;
+  toolCalls: unknown;
+  toolResults: Array<{ toolCallId: string; content: string }>;
+  updatedAt: string;
+};
+
+type StoredToolCall = {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+};
+
+function safeJsonParse(s: string | null | undefined): unknown {
+  if (s == null || s === "") return undefined;
+  try {
+    return JSON.parse(s);
+  } catch {
+    return s;
+  }
+}
+
+// engineer-58 — apply a /status poll snapshot onto the local message. The
+// /status endpoint returns the assistant row's current content + toolCalls
+// + the tool-response rows for those calls; rebuild `items` from those so
+// the chip states match what the live stream would have produced.
+function rehydrateFromPoll(msg: Message, data: PollStatusResponse): Message {
+  const storedCalls = Array.isArray(data.toolCalls)
+    ? (data.toolCalls as StoredToolCall[])
+    : [];
+  const resultByCallId = new Map<string, string>();
+  for (const r of data.toolResults) resultByCallId.set(r.toolCallId, r.content);
+
+  // Preserve any pendingId we already had locally — the /status endpoint
+  // doesn't know about pendingToolCalls.id (that's a separate table), and
+  // losing it would break the confirm-pending button after a resume.
+  const existingPendingByCallId = new Map<string, string>();
+  if (msg.items) {
+    for (const it of msg.items) {
+      if (
+        it.kind === "tool" &&
+        it.event.status === "pending" &&
+        it.event.pendingId
+      ) {
+        existingPendingByCallId.set(it.event.id, it.event.pendingId);
+      }
+    }
+  }
+
+  const items: TurnItem[] =
+    storedCalls.length > 0
+      ? storedCalls.map((c) => {
+          const rawResult = resultByCallId.get(c.id);
+          const pendingId = existingPendingByCallId.get(c.id);
+          const status: ToolCallStatus =
+            rawResult !== undefined
+              ? "done"
+              : pendingId
+                ? "pending"
+                : "running";
+          return {
+            kind: "tool" as const,
+            event: {
+              id: c.id,
+              toolName: c.function.name,
+              status,
+              args: safeJsonParse(c.function.arguments),
+              result: rawResult !== undefined ? safeJsonParse(rawResult) : undefined,
+              pendingId,
+            },
+          };
+        })
+      : (msg.items ?? []);
+
+  return {
+    ...msg,
+    content: data.content,
+    status: data.status,
+    items: items.length > 0 ? items : msg.items,
   };
 }
 
