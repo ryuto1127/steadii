@@ -180,7 +180,69 @@ function detectWorkingHoursIgnored(text: string): boolean {
   return true;
 }
 
-export function detectPlaceholderLeak(text: string): PlaceholderLeakDetection {
+// engineer-62 — context the orchestrator (and the harness) hands the
+// detector so the cascade-failure checks can inspect what was CALLED,
+// not just what was SAID. `toolCallHistory` is the in-order list of
+// tool calls that ran during this assistant turn. `userMessage` is the
+// raw text of the user's most recent turn — used by the reply-intent
+// heuristic.
+//
+// Both fields are optional. When omitted, the detectors that rely on
+// them are no-ops, so existing callers keep working without changes.
+export type SelfCritiqueContext = {
+  toolCallHistory?: ReadonlyArray<{ toolName: string; status?: string }>;
+  userMessage?: string;
+};
+
+// Reply-intent triggers (EMAIL REPLY WORKFLOW prompt). Used by the
+// `reply intent without email_get_new_content_only` detector.
+const REPLY_INTENT_RE =
+  /(返したい|返信したい|返事|返信ドラフト|下書き|送りたい|返信して|返信した方|返信お願い|\breply\b|\brespond\b|draft a reply|write back|get back to)/i;
+
+// Slot tokens — used by `slot list without convert_timezone` AND by
+// `reply intent without email_get_new_content_only` (we only flag the
+// reply-intent case when the response actually contains slot dates,
+// since not every reply needs convert_timezone).
+//
+// A "slot line" is a line that contains a DATE token AND a TIME token.
+// `countTzSlotLines` further requires a TZ marker on the line — that's
+// the canonical shape of a dual-TZ slot list (`5月15日 10:00 JST / …`)
+// and the cascade-failure signal. A line listing the user's own
+// calendar events in their own TZ (e.g. "5/13 15:30 MAT223 Lecture")
+// is NOT a slot list and must not trip the convert_timezone gate.
+const SLOT_DATE_TOKEN_RE = /(\d{1,2}[\/\-月]\d{1,2}|候補\s*\d|第[一二三四五]希望|May\s*\d{1,2}|Jun\s*\d{1,2})/;
+const SLOT_TIME_TOKEN_RE = /\d{1,2}[:：]\d{2}/;
+const SLOT_TZ_TOKEN_RE =
+  /(\bJST\b|\bAsia\/Tokyo\b|日本時間|\bP(D|S)?T\b|\bE(D|S)?T\b|\bC(D|S)?T\b|\bM(D|S)?T\b|\bCEST?\b|\bBST\b|\bGMT\b|\bNZST\b|バンクーバー時刻|バンクーバー時間|Pacific|Eastern|Central|Mountain|Atlantic)/i;
+
+function countSlotLines(text: string): number {
+  let count = 0;
+  for (const line of text.split("\n")) {
+    if (SLOT_DATE_TOKEN_RE.test(line) && SLOT_TIME_TOKEN_RE.test(line)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function countTzSlotLines(text: string): number {
+  let count = 0;
+  for (const line of text.split("\n")) {
+    if (
+      SLOT_DATE_TOKEN_RE.test(line) &&
+      SLOT_TIME_TOKEN_RE.test(line) &&
+      SLOT_TZ_TOKEN_RE.test(line)
+    ) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+export function detectPlaceholderLeak(
+  text: string,
+  context?: SelfCritiqueContext
+): PlaceholderLeakDetection {
   const matched: string[] = [];
   for (const tok of FORBIDDEN_TOKENS) {
     if (tok.pattern.test(text)) {
@@ -190,6 +252,60 @@ export function detectPlaceholderLeak(text: string): PlaceholderLeakDetection {
   if (detectWorkingHoursIgnored(text)) {
     matched.push("JST without user-local TZ nearby");
   }
+
+  // engineer-62 — cascade-failure detectors. Fire only when the
+  // orchestrator (or the harness) handed us tool-call history. Text-
+  // only callers (e.g. legacy tests, downstream tooling) keep working
+  // exactly as before.
+  if (context?.toolCallHistory) {
+    const history = context.toolCallHistory;
+    const tzSlotLineCount = countTzSlotLines(text);
+    const userMessage = context.userMessage ?? "";
+
+    // (1) slot list without convert_timezone — the agent emitted a
+    // multi-slot dual-TZ-shaped response but never called
+    // convert_timezone. The canonical cascade signal: agent displayed
+    // dual-TZ slots without using the tool that produces them, so the
+    // conversions are either hallucinated or copy-pasted from somewhere
+    // they shouldn't be (quoted-block round-1 candidates).
+    //
+    // Requiring a TZ marker per slot line is what separates this from a
+    // legit "here are your calendar events today" listing (which lives
+    // entirely in the user's TZ and needs no conversion).
+    if (tzSlotLineCount >= 3) {
+      const hasConvertTimezone = history.some(
+        (h) => h.toolName === "convert_timezone"
+      );
+      if (!hasConvertTimezone) {
+        matched.push("slot list without convert_timezone");
+      }
+    }
+
+    // (2) reply intent + slot dates + email_get_body called +
+    // email_get_new_content_only NOT called → THREAD_ROLE_CONFUSED-class
+    // risk. The agent went through the metadata-then-body path but
+    // skipped the structural slot-extraction surface — exactly the
+    // cascade shape from the 2026-05-14 dogfood.
+    //
+    // For reply-intent, ANY slot line (date + time, with or without TZ
+    // marker) counts — a draft that simply echoes the sender's slots is
+    // still pulling them from somewhere, and if email_get_new_content_only
+    // wasn't called the source might be quoted history.
+    const replyIntent =
+      userMessage.length > 0 && REPLY_INTENT_RE.test(userMessage);
+    if (replyIntent && countSlotLines(text) >= 1) {
+      const calledGetBody = history.some(
+        (h) => h.toolName === "email_get_body"
+      );
+      const calledGetNewContent = history.some(
+        (h) => h.toolName === "email_get_new_content_only"
+      );
+      if (calledGetBody && !calledGetNewContent) {
+        matched.push("reply intent without email_get_new_content_only");
+      }
+    }
+  }
+
   return { hasLeak: matched.length > 0, matched };
 }
 
@@ -223,6 +339,16 @@ export function buildPlaceholderLeakCorrection(
   if (matched.includes("JST without user-local TZ nearby")) {
     extras.push(
       "- WORKING_HOURS_IGNORED / MUST-rule 7 violation: your response cited a JST time without the user-local TZ counterpart within ~80 chars. EVERY slot you display MUST be in dual-TZ form on its first mention — sender-side AND user-side, side-by-side (see TIMEZONE RULES). Re-emit with each slot in the shape `5月15日(金) 10:00 JST / 5月14日(木) 18:00 PT`. The conversion goes through convert_timezone; do not math TZ offsets in your head."
+    );
+  }
+  if (matched.includes("slot list without convert_timezone")) {
+    extras.push(
+      "- THREAD_ROLE_CASCADE / TIMEZONE RULES violation: your response shows ≥3 slot lines but you did NOT call `convert_timezone` this turn. Either the conversions you displayed are hallucinated, or you copy-pasted slots from somewhere instead of computing them. Re-run the EMAIL REPLY WORKFLOW from the top: `email_get_body` → `email_get_new_content_only` → `infer_sender_timezone` → `infer_sender_norms` → `convert_timezone` for EACH slot (start AND end endpoints), then re-emit the draft with the tool results inlined. Do NOT math TZ offsets in your head; do NOT skip the tool call because you 'already know' the answer."
+    );
+  }
+  if (matched.includes("reply intent without email_get_new_content_only")) {
+    extras.push(
+      "- THREAD_ROLE_CONFUSED risk: you drafted a slot-list reply, and you called `email_get_body`, but you did NOT call `email_get_new_content_only` — the structural slot-extraction surface (MUST-rule 2). Extracting slots from `email_get_body`'s output means you may have pulled them from quoted history (previous-round candidates), which is the THREAD_ROLE_CONFUSED failure shape from the 2026-05-14 dogfood. Call `email_get_new_content_only` for the same inboxItemId, re-extract slots from its `newContentBody` ONLY, then re-emit the draft. If `stripperFlagged: true` comes back, fall back to `email_get_body` AND disclose to the user."
     );
   }
   return [

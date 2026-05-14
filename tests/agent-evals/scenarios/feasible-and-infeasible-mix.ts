@@ -70,6 +70,8 @@ const scenario: EvalScenario = {
   expect: [
     // (a) Body fetched
     { kind: "tool_called", name: "email_get_body" },
+    // engineer-62 — slot-extraction surface MUST be the stripped body.
+    { kind: "tool_called", name: "email_get_new_content_only" },
     // (b) Both slots converted
     { kind: "tool_called", name: "convert_timezone", minTimes: 2 },
     // (c) The feasible slot MUST be referenced in the response. The

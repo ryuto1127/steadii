@@ -10,6 +10,7 @@ import { ASSIGNMENTS_TOOLS } from "./tools/assignments";
 import { ICAL_TOOLS } from "./tools/ical";
 import { OFFICE_HOURS_TOOLS } from "./tools/office-hours";
 import { EMAIL_TOOLS } from "./tools/email";
+import { EMAIL_GET_NEW_CONTENT_ONLY_TOOLS } from "./tools/email-get-new-content-only";
 import { EMAIL_THREAD_TOOLS } from "./tools/email-thread";
 import { summarizeWeekTool } from "./tools/summarize-week";
 import { CONVERT_TIMEZONE_TOOLS } from "./tools/convert-timezone";
@@ -44,6 +45,7 @@ export const ALL_TOOLS: ToolExecutor[] = [
   ...(ICAL_TOOLS as ToolExecutor[]),
   ...(OFFICE_HOURS_TOOLS as ToolExecutor[]),
   ...(EMAIL_TOOLS as ToolExecutor[]),
+  ...(EMAIL_GET_NEW_CONTENT_ONLY_TOOLS as ToolExecutor[]),
   ...(EMAIL_THREAD_TOOLS as ToolExecutor[]),
   ...(CONVERT_TIMEZONE_TOOLS as ToolExecutor[]),
   ...(INFER_SENDER_TIMEZONE_TOOLS as ToolExecutor[]),
