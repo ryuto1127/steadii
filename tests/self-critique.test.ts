@@ -267,6 +267,51 @@ describe("detectPlaceholderLeak", () => {
     });
   });
 
+  // 2026-05-14 — CONTEXT_LABEL_LEAK detector. The user-context block
+  // uses ALL_CAPS_WITH_UNDERSCORES labels (USER_WORKING_HOURS, USER_NAME,
+  // USER_FACTS, USER_TIMEZONE) as reasoning scaffolding. Quoting them
+  // verbatim in user-facing prose reveals internals — caught the first
+  // time post-engineer-54 when the agent literally said
+  // `USER_WORKING_HOURS が未設定なので…` to Ryuto.
+  describe("context label leak (CONTEXT_LABEL_LEAK)", () => {
+    it("flags USER_WORKING_HOURS in JA prose", () => {
+      const text =
+        "USER_WORKING_HOURS が未設定なので、まず対応しやすい時間帯を1回だけ教えてください。";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+      expect(r.matched).toContain("context label leak");
+    });
+
+    it("flags USER_NAME in EN prose", () => {
+      const text = "Hi USER_NAME, hope your week is going well.";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+    });
+
+    it("flags USER_FACTS reference", () => {
+      const text = "I'll save this to USER_FACTS for next time.";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+    });
+
+    it("flags USER_TIMEZONE reference", () => {
+      const text =
+        "ご提案の時刻は USER_TIMEZONE では夜遅くにあたります。";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(true);
+    });
+
+    it("does NOT flag natural-language phrasing of the same concept", () => {
+      // The fix tells the agent to translate USER_WORKING_HOURS to
+      // 「対応可能時間帯」 / "meeting hours". This text uses both
+      // natural forms and must NOT trip.
+      const text =
+        "対応可能時間帯がまだ分からないので、教えていただけると助かります。Your meeting hours aren't set yet.";
+      const r = detectPlaceholderLeak(text);
+      expect(r.hasLeak).toBe(false);
+    });
+  });
+
   // engineer-54 — LATE_NIGHT_SLOT_ACCEPTED_BLINDLY heuristic. Catches
   // drafts that accept a proposed slot without disclosing the user-
   // local time. False-positive-tolerant on purpose; the retry pass

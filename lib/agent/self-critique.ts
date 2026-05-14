@@ -101,6 +101,20 @@ const FORBIDDEN_TOKENS: Array<{ name: string; pattern: RegExp }> = [
       /(ご提示いただいた[日時候]|ご提案いただいた[日時候]|the proposed (slot|time|date)|that proposed (slot|time|date)).{0,200}(参加可能|可能です|問題ありません|問題なく|works for me|sounds good|that works|that'll work|that would work)/i,
   },
 
+  // 2026-05-14 — CONTEXT_LABEL_LEAK. The user-context block uses
+  // ALL_CAPS_WITH_UNDERSCORES labels (USER_WORKING_HOURS, USER_NAME,
+  // USER_FACTS, USER_TIMEZONE) for the agent's reasoning surface only.
+  // Surfacing them verbatim in user-facing prose ("USER_WORKING_HOURS
+  // が未設定なので…") reveals scaffolding and reads as a bug. Pattern
+  // matches the exact label tokens we currently inject; if a new
+  // context label gets added in lib/agent/serialize-context.ts, extend
+  // this list at the same time.
+  {
+    name: "context label leak",
+    pattern:
+      /\b(USER_WORKING_HOURS|USER_NAME|USER_FACTS|USER_TIMEZONE)\b/,
+  },
+
   // Numeric placeholders like 00:00 in templates (loose — single 00:00
   // could be a real midnight slot, but in concert with other context...
   // — skip for now, too noisy).
