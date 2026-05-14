@@ -21,6 +21,11 @@ import happyPathAbsenceMail from "./happy-path-absence-mail";
 import emailReplyTerseTypo from "./email-reply-terse-typo";
 import subjectLineFabricated from "./subject-line-fabricated";
 import trailingActionNarration from "./trailing-action-narration";
+// engineer-54 — secretary push-back: SLOT FEASIBILITY CHECK +
+// COUNTER-PROPOSAL PATTERN + working-hours onboarding ask.
+import lateNightSlotPushback from "./late-night-slot-pushback";
+import feasibleAndInfeasibleMix from "./feasible-and-infeasible-mix";
+import workingHoursUnsetAsksOnce from "./working-hours-unset-asks-once";
 
 export const ALL_SCENARIOS: EvalScenario[] = [
   placeholderLeakEmailReply,
@@ -34,4 +39,7 @@ export const ALL_SCENARIOS: EvalScenario[] = [
   emailReplyTerseTypo,
   subjectLineFabricated,
   trailingActionNarration,
+  lateNightSlotPushback,
+  feasibleAndInfeasibleMix,
+  workingHoursUnsetAsksOnce,
 ];

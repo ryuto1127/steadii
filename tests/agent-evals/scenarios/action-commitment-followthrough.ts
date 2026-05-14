@@ -23,6 +23,11 @@ const scenario: EvalScenario = {
       locale: "ja",
       name: "Ryuto",
     },
+    // engineer-54 — pre-set so the SLOT FEASIBILITY CHECK gate doesn't
+    // block this older reply scenario. Represents an already-onboarded
+    // user; the engineer-54 onboarding-ask flow has its own dedicated
+    // scenario (`working-hours-unset-asks-once`).
+    workingHoursLocal: { start: "08:00", end: "22:00" },
     inboxItems: [
       {
         id: "email-prof",

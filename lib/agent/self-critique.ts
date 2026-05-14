@@ -82,10 +82,77 @@ const FORBIDDEN_TOKENS: Array<{ name: string; pattern: RegExp }> = [
       /(メール本文を確認します|メール本文を確認して|本文を確認します|本文を確認して|確認して報告します|チェックして送ります|reviewing the email|let me check the body|let me read the body|i'll check the email body)/i,
   },
 
+  // engineer-54 — LATE_NIGHT_SLOT_ACCEPTED_BLINDLY heuristic. Fires when
+  // the response narrates acceptance of a proposed time slot using the
+  // common acceptance shape ("ご提示いただいた日程… で参加可能です" /
+  // "the proposed slot … works for me") without disclosing the user-
+  // local time. The regex is loose by design (false-positive tolerant):
+  // a clean draft that DID surface dual-TZ slots can still trigger this
+  // if the acceptance prose is phrased generically, but the retry pass
+  // re-fetches and re-emits with the SLOT FEASIBILITY CHECK section in
+  // play, so the false-positive cost is one extra LLM iteration. The
+  // false-negative cost — shipping a 2 AM acceptance to the user — is
+  // far worse. The detector pairs with WORKING_HOURS_IGNORED below for
+  // the case where slot times ARE shown but no user-TZ counterpart
+  // anchors them.
+  {
+    name: "slot acceptance missing user-local TZ",
+    pattern:
+      /(ご提示いただいた[日時候]|ご提案いただいた[日時候]|the proposed (slot|time|date)|that proposed (slot|time|date)).{0,200}(参加可能|可能です|問題ありません|問題なく|works for me|sounds good|that works|that'll work|that would work)/i,
+  },
+
   // Numeric placeholders like 00:00 in templates (loose — single 00:00
   // could be a real midnight slot, but in concert with other context...
   // — skip for now, too noisy).
 ];
+
+// engineer-54 — WORKING_HOURS_IGNORED proximity check. Can't be a single
+// regex because the rule is "JST time appears AND no user-local TZ
+// marker (PT/PDT/PST/user TZ) within 80 chars" — proximity needs
+// programmatic logic. Catches the most-violated MUST-rule 7 shape
+// (dual-TZ on first mention) that no other detector covers, AND the
+// WORKING_HOURS_IGNORED failure mode (draft shows JST slots in spite of
+// the user's working hours being known and incompatible with that JST
+// time-of-day).
+//
+// Verified against engineer-53's detector set: no existing dual-TZ
+// check, so this doesn't double-count. The LATE_NIGHT detector above
+// covers the "acceptance prose, no slot times shown" branch; this one
+// covers the "slot times shown JST-only, no user-TZ anchor" branch.
+//
+// 2026-05-13 refinement: when the response has ESTABLISHED PT context
+// elsewhere (e.g. analysis section above the draft uses PT; draft body
+// uses JST for the recipient's benefit), proximity check still works
+// but failing it would punish a correct shape (analysis-in-user-TZ +
+// body-in-sender-TZ). The detector now treats the FIRST JST mention as
+// authoritative: if PT is within proximity of the FIRST JST mention OR
+// appears anywhere before it, dual-TZ context is established and
+// subsequent JST-only mentions inside the draft are fine.
+//
+// `\b` only binds to ASCII word boundaries; Japanese characters fall
+// outside `\w` so we anchor the JA aliases without `\b`. The ASCII
+// alternatives keep `\b` for precise matching.
+const JST_TOKEN_RE = /(\bJST\b|\bAsia\/Tokyo\b|日本時間)/g;
+const USER_LOCAL_TZ_RE = /(\bP(D|S)?T\b|\bAmerica\/Vancouver\b|\bPacific\b|バンクーバー時刻|バンクーバー時間|\bVancouver time\b)/i;
+const WORKING_HOURS_IGNORED_PROXIMITY = 80;
+
+function detectWorkingHoursIgnored(text: string): boolean {
+  JST_TOKEN_RE.lastIndex = 0;
+  const firstJst = JST_TOKEN_RE.exec(text);
+  if (!firstJst) return false;
+  const idx = firstJst.index;
+  const winStart = Math.max(0, idx - WORKING_HOURS_IGNORED_PROXIMITY);
+  const winEnd = Math.min(
+    text.length,
+    idx + firstJst[0].length + WORKING_HOURS_IGNORED_PROXIMITY
+  );
+  // Dual-TZ context established at first JST mention → OK.
+  if (USER_LOCAL_TZ_RE.test(text.slice(winStart, winEnd))) return false;
+  // PT mentioned ANYWHERE earlier in the response → analysis-section
+  // pattern, also OK.
+  if (USER_LOCAL_TZ_RE.test(text.slice(0, idx))) return false;
+  return true;
+}
 
 export function detectPlaceholderLeak(text: string): PlaceholderLeakDetection {
   const matched: string[] = [];
@@ -93,6 +160,9 @@ export function detectPlaceholderLeak(text: string): PlaceholderLeakDetection {
     if (tok.pattern.test(text)) {
       matched.push(tok.name);
     }
+  }
+  if (detectWorkingHoursIgnored(text)) {
+    matched.push("JST without user-local TZ nearby");
   }
   return { hasLeak: matched.length > 0, matched };
 }
@@ -117,6 +187,16 @@ export function buildPlaceholderLeakCorrection(
   if (matched.includes("trailing future action")) {
     extras.push(
       "- ACTION_COMMITMENT_VIOLATION (trailing): you trailed a phrase like `メール本文を確認します` AFTER your draft was already emitted. That sequence ships ungrounded output AND admits on-the-record that you should have fetched. The fix is to actually fetch (email_get_body, etc.) BEFORE re-emitting the draft — never as a postscript. Drop the trailing 'will check' phrase from the rewrite."
+    );
+  }
+  if (matched.includes("slot acceptance missing user-local TZ")) {
+    extras.push(
+      "- LATE_NIGHT_SLOT_ACCEPTED_BLINDLY: your draft accepted a proposed slot without comparing it to the user's working hours (USER_WORKING_HOURS in your context). Re-run the SLOT FEASIBILITY CHECK: convert each proposed slot to the user's local TZ via convert_timezone, then compare the user-local HH:MM to USER_WORKING_HOURS. If the slot is outside that window, switch to a COUNTER-PROPOSAL draft (push back politely, name the user-local time as the reason, propose an alternative window in the sender's TZ). Do not ship a 2 AM acceptance."
+    );
+  }
+  if (matched.includes("JST without user-local TZ nearby")) {
+    extras.push(
+      "- WORKING_HOURS_IGNORED / MUST-rule 7 violation: your response cited a JST time without the user-local TZ counterpart within ~80 chars. EVERY slot you display MUST be in dual-TZ form on its first mention — sender-side AND user-side, side-by-side (see TIMEZONE RULES). Re-emit with each slot in the shape `5月15日(金) 10:00 JST / 5月14日(木) 18:00 PT`. The conversion goes through convert_timezone; do not math TZ offsets in your head."
     );
   }
   return [
