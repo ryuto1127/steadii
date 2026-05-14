@@ -1,9 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { ChevronRight, Check, X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import {
+  toolLabel,
+  type ToolLabelLocale,
+} from "@/lib/utils/tool-friendly-labels";
 
 export type ToolCallStatus = "running" | "done" | "failed" | "pending" | "denied";
 
@@ -16,42 +20,18 @@ type Props = {
   onConfirm?: (decision: "approve" | "deny") => void;
 };
 
-// Each tool gets a present-progressive label (running) and a past-tense
-// label (done) so the chat row reads like a sentence: "Deleting calendar
-// event" while the request is in flight, then "Deleted calendar event"
-// once it lands. The bug 2026-04-30 ("delete results render as a black
-// box") was the absence of a done-state label — the running label hung
-// around even after the tool finished.
-type ToolLabels = { running: string; done: string };
-
-const FRIENDLY_NAMES: Record<string, ToolLabels> = {
-  calendar_create_event: { running: "Creating calendar event", done: "Calendar event created" },
-  calendar_update_event: { running: "Updating calendar event", done: "Calendar event updated" },
-  calendar_delete_event: { running: "Deleting calendar event", done: "Calendar event deleted" },
-  calendar_list_events: { running: "Reading calendar", done: "Read calendar" },
-  notion_search_pages: { running: "Searching Notion", done: "Searched Notion" },
-  notion_get_page: { running: "Reading Notion page", done: "Read Notion page" },
-  notion_create_page: { running: "Creating Notion page", done: "Notion page created" },
-  notion_update_page: { running: "Updating Notion page", done: "Notion page updated" },
-  notion_delete_page: { running: "Deleting Notion page", done: "Notion page deleted" },
-  notion_query_database: { running: "Querying Notion database", done: "Queried Notion database" },
-  notion_create_row: { running: "Adding Notion row", done: "Notion row added" },
-  notion_update_row: { running: "Updating Notion row", done: "Notion row updated" },
-  syllabus_save: { running: "Saving syllabus", done: "Syllabus saved" },
-  syllabus_extract: { running: "Extracting syllabus", done: "Syllabus extracted" },
-  read_syllabus_full_text: { running: "Reading syllabus source", done: "Read syllabus source" },
-  summarize_week: { running: "Summarizing past week", done: "Summarized past week" },
-};
-
-function friendlyName(tool: string, status: ToolCallStatus): string {
-  const labels = FRIENDLY_NAMES[tool];
-  if (labels) {
-    return status === "done" ? labels.done : labels.running;
-  }
-  // Fallback for tools we haven't mapped: replace underscores so
-  // `tasks_complete` reads as "tasks complete" rather than the raw
-  // identifier. Not great, but the registry covers the common cases.
-  return tool.replaceAll("_", " ");
+// 2026-05-14 — friendly-label mapping moved to lib/utils/tool-
+// friendly-labels.ts so the card AND the collapsed chip share the same
+// JA/EN labels. Before this, the chip showed raw tool IDs (`save_
+// working_hours`) to JA users while the card was English-only — both
+// broken in different ways.
+function friendlyName(
+  tool: string,
+  status: ToolCallStatus,
+  locale: ToolLabelLocale
+): string {
+  const labels = toolLabel(tool, locale);
+  return status === "done" ? labels.done : labels.running;
 }
 
 export function ToolCallCard({
@@ -63,6 +43,7 @@ export function ToolCallCard({
   onConfirm,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const locale = (useLocale() === "ja" ? "ja" : "en") as ToolLabelLocale;
 
   const isDestructivePending = status === "pending" && toolName.includes("delete");
 
@@ -130,7 +111,7 @@ export function ToolCallCard({
             status === "failed" && "text-[hsl(var(--destructive))]"
           )}
         >
-          {friendlyName(toolName, status)}
+          {friendlyName(toolName, status, locale)}
           {status === "failed" ? " — failed" : null}
         </span>
         {hasDetail ? (

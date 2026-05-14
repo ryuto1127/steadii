@@ -1,13 +1,18 @@
 "use client";
 
 import { useId, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AlertTriangle, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import {
+  renderSequenceLabel,
   summarizeToolCalls,
   type ToolSummaryEvent,
 } from "@/lib/utils/tool-call-summary";
+import {
+  toolLabelDone,
+  type ToolLabelLocale,
+} from "@/lib/utils/tool-friendly-labels";
 import { ToolCallCard, type ToolCallStatus } from "./tool-call-card";
 
 export type ToolCallSummaryEvent = ToolSummaryEvent & {
@@ -39,6 +44,7 @@ export function ToolCallSummary({
   ) => void;
 }) {
   const t = useTranslations("tool_call_summary");
+  const locale = (useLocale() === "ja" ? "ja" : "en") as ToolLabelLocale;
   const [expanded, setExpanded] = useState(false);
   const detailsId = useId();
 
@@ -76,6 +82,7 @@ export function ToolCallSummary({
     t,
     summary,
     isStreaming,
+    locale,
   });
 
   return (
@@ -164,13 +171,16 @@ function buildChipLabel({
   t,
   summary,
   isStreaming,
+  locale,
 }: {
   t: ReturnType<typeof useTranslations>;
   summary: ReturnType<typeof summarizeToolCalls>;
   isStreaming: boolean;
+  locale: ToolLabelLocale;
 }): string {
   const thinking = t("thinking_prefix");
-  const sequence = summary.sequenceLabel ?? "";
+  const toLabel = (tool: string) => toolLabelDone(tool, locale);
+  const sequence = renderSequenceLabel(summary.sequence, toLabel) ?? "";
   const annotations: string[] = [];
 
   if (summary.inFlightTool && isStreaming) {
