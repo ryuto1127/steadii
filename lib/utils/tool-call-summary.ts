@@ -20,10 +20,17 @@ export type ToolSummaryEvent = {
   status: ToolSummaryStatus;
 };
 
+export type ToolSummarySegment = {
+  tool: string;
+  count: number;
+};
+
 export type ToolCallSummary = {
-  // Compact left-to-right sequence label, e.g. "email_search →
-  // email_get_body × 2". `null` when the input is empty.
-  sequenceLabel: string | null;
+  // Collapsed sequence of consecutive same-tool runs. Empty array when
+  // the input is empty. Callers render this via `renderSequenceLabel`
+  // with a locale-aware label resolver — the util stays presentation-
+  // free so JA and EN surfaces don't have to duplicate aggregation.
+  sequence: ToolSummarySegment[];
   // Aggregate counts the chip surfaces as small annotations after
   // the sequence.
   totalCount: number;
@@ -42,7 +49,7 @@ export function summarizeToolCalls(
 ): ToolCallSummary {
   if (events.length === 0) {
     return {
-      sequenceLabel: null,
+      sequence: [],
       totalCount: 0,
       failedCount: 0,
       retryCount: 0,
@@ -89,12 +96,8 @@ export function summarizeToolCalls(
     }
   }
 
-  const sequenceLabel = segments
-    .map((s) => (s.count > 1 ? `${friendly(s.tool)} × ${s.count}` : friendly(s.tool)))
-    .join(" → ");
-
   return {
-    sequenceLabel,
+    sequence: segments.map((s) => ({ tool: s.tool, count: s.count })),
     totalCount: events.length,
     failedCount: failed,
     retryCount: retries,
@@ -103,11 +106,19 @@ export function summarizeToolCalls(
   };
 }
 
-// `email_get_body` is more legible than the raw identifier, but we
-// strip the trailing common suffixes ("_event", "_message") so the
-// chip stays narrow. The chat already renders the full friendly name
-// in the expanded view via ToolCallCard's FRIENDLY_NAMES — the chip
-// is intentionally terser.
-function friendly(tool: string): string {
-  return tool;
+// Render the sequence with locale-aware labels. Kept out of
+// `summarizeToolCalls` so the pure util stays presentation-free and
+// callers can swap label maps (chat chip uses tool-friendly-labels;
+// future surfaces — voice transcript, activity log — can pick their
+// own). 2026-05-14 — added after Ryuto's dogfood revealed raw tool IDs
+// in the chip ("save_working_hours → convert_timezone × 2") were
+// unintelligible.
+export function renderSequenceLabel(
+  segments: ReadonlyArray<{ tool: string; count: number }>,
+  toLabel: (tool: string) => string
+): string | null {
+  if (segments.length === 0) return null;
+  return segments
+    .map((s) => (s.count > 1 ? `${toLabel(s.tool)} × ${s.count}` : toLabel(s.tool)))
+    .join(" → ");
 }
