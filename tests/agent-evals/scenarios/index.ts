@@ -31,6 +31,10 @@ import workingHoursUnsetAsksOnce from "./working-hours-unset-asks-once";
 // fallback path.
 import senderNormsRespected from "./sender-norms-respected";
 import emptyIntersectionWindow from "./empty-intersection-window";
+// 2026-05-14 sparring inline — THREAD_ROLE_CONFUSED quoted-block
+// variant. Verbatim reproduction of the round-2 reply dogfood where
+// agent extracted slots from quoted history instead of NEW content.
+import quotedBlockExtraction from "./quoted-block-extraction";
 
 export const ALL_SCENARIOS: EvalScenario[] = [
   placeholderLeakEmailReply,
@@ -49,4 +53,5 @@ export const ALL_SCENARIOS: EvalScenario[] = [
   workingHoursUnsetAsksOnce,
   senderNormsRespected,
   emptyIntersectionWindow,
+  quotedBlockExtraction,
 ];
