@@ -163,6 +163,21 @@ export async function* streamChatResponse(
   // whole assistant turn, including retry-path executions below.
   const toolCallHistory: Array<{ toolName: string; status: string }> = [];
 
+  // 2026-05-15 sparring inline — accumulator for the persisted
+  // `messages.tool_calls` field. Pre-fix the orchestrator overwrote
+  // this field with EACH iteration's batch, so the UI rehydrate
+  // (page.tsx initial render + chat-view's rehydrateFromPoll) only
+  // ever saw the LAST iteration's tools — Ryuto's dogfood showed
+  // `convert_timezone × 4` while DB tool_result rows confirmed 8+
+  // distinct calls happened. Accumulating here keeps the full
+  // assistant-turn history queryable from `messages.tool_calls`.
+  type PersistedToolCall = {
+    id: string;
+    type: "function";
+    function: { name: string; arguments: string };
+  };
+  const persistedToolCalls: PersistedToolCall[] = [];
+
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations += 1;
 
@@ -259,16 +274,22 @@ export async function* streamChatResponse(
     }
 
     // Persist the tool-call envelope on the assistant row so a resumed
-    // stream can rebuild the OpenAI conversation exactly.
+    // stream can rebuild the OpenAI conversation exactly. 2026-05-15
+    // — accumulate across iterations instead of overwriting, so the UI
+    // rehydrate sees the FULL assistant-turn tool history (not just
+    // the last iteration's batch).
+    persistedToolCalls.push(
+      ...toolCalls.map((c) => ({
+        id: c.id,
+        type: "function" as const,
+        function: { name: c.name, arguments: c.args },
+      }))
+    );
     await db
       .update(messagesTable)
       .set({
         content: text,
-        toolCalls: toolCalls.map((c) => ({
-          id: c.id,
-          type: "function",
-          function: { name: c.name, arguments: c.args },
-        })),
+        toolCalls: persistedToolCalls,
       })
       .where(eq(messagesTable.id, assistantId));
 
@@ -591,6 +612,20 @@ export async function* streamChatResponse(
         // grounded response from the fetched values. Capped at one
         // round to avoid runaway cost.
         if (retryToolCalls.length > 0) {
+          // 2026-05-15 — accumulate retry-path tools into the
+          // persisted history so the UI rehydrate sees them alongside
+          // the main-loop tools (Bug A fix).
+          persistedToolCalls.push(
+            ...retryToolCalls.map((c) => ({
+              id: c.id,
+              type: "function" as const,
+              function: { name: c.name, arguments: c.args },
+            }))
+          );
+          await db
+            .update(messagesTable)
+            .set({ toolCalls: persistedToolCalls })
+            .where(eq(messagesTable.id, assistantId));
           conversation.push({
             role: "assistant",
             content: retryText || null,
