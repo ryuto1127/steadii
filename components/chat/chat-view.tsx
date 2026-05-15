@@ -17,6 +17,7 @@ import { toast } from "sonner";
 // at /app/settings/facts + the save_user_fact chat tool, not in chat UI.
 // Handwritten-OCR + class-detail mistake_notes paths remain.
 import { MarkdownMessage } from "./markdown-message";
+import { type DraftReplyTarget } from "./draft-action-bar";
 import { type ToolCallStatus } from "./tool-call-card";
 import { ToolCallSummary } from "./tool-call-summary";
 import { parseProposedActions } from "./proposed-actions";
@@ -74,6 +75,7 @@ export function ChatView({
   chatId,
   initialTitle,
   initialMessages,
+  initialReplyTargets = {},
   blobConfigured = true,
   autoStream = false,
   voiceTriggerKey = "caps_lock",
@@ -82,6 +84,9 @@ export function ChatView({
   chatId: string;
   initialTitle: string | null;
   initialMessages: Message[];
+  // engineer-63 — server-resolved reply target per assistant message id.
+  // Drives the Send button's destination + the confirm modal's preview.
+  initialReplyTargets?: Record<string, DraftReplyTarget>;
   blobConfigured?: boolean;
   autoStream?: boolean;
   voiceTriggerKey?: VoiceTriggerKey;
@@ -727,7 +732,23 @@ export function ChatView({
                   {renderBody ? (
                     m.role === "assistant" ? (
                       <div className={cn(showCursor && "streaming-cursor")}>
-                        <MarkdownMessage content={renderBody} />
+                        <MarkdownMessage
+                          content={renderBody}
+                          draftContext={
+                            // Only render Send/Edit on persisted assistant
+                            // rows — temp streaming ids ("assistant-…")
+                            // change on message_start, and the reply target
+                            // is keyed by the persisted id.
+                            !m.id.startsWith("assistant-") &&
+                            initialReplyTargets[m.id]
+                              ? {
+                                  chatId,
+                                  messageId: m.id,
+                                  replyTarget: initialReplyTargets[m.id],
+                                }
+                              : undefined
+                          }
+                        />
                       </div>
                     ) : (
                       <span className="whitespace-pre-wrap">{renderBody}</span>
