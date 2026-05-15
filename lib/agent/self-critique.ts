@@ -115,6 +115,17 @@ const FORBIDDEN_TOKENS: Array<{ name: string; pattern: RegExp }> = [
       /\b(USER_WORKING_HOURS|USER_NAME|USER_FACTS|USER_TIMEZONE)\b/,
   },
 
+  // 2026-05-15 sparring — response opens with a conjunction (ただ /
+  // でも / それで / However / But / And so) without an establishing
+  // sentence first. Violates EMAIL REPLY WORKFLOW MUST-rule 11. User
+  // reads fresh and needs context before reasoning. Pattern matches
+  // the FIRST line of the response (after optional whitespace).
+  {
+    name: "response opens with conjunction",
+    pattern:
+      /^\s*(ただ|でも|それで|しかし|However|But|And so)[、,\s]/,
+  },
+
   // Numeric placeholders like 00:00 in templates (loose — single 00:00
   // could be a real midnight slot, but in concert with other context...
   // — skip for now, too noisy).
@@ -161,6 +172,52 @@ const JST_TOKEN_RE = /(\bJST\b|\bAsia\/Tokyo\b|日本時間)/g;
 // false positives (block a correctly-anchored draft on the retry path).
 const USER_LOCAL_TZ_RE = /(\bP(D|S)?T\b|\bE(D|S)?T\b|\bC(D|S)?T\b|\bM(D|S)?T\b|\bA(E|K|D|H)?ST\b|\bCEST?\b|\bBST\b|\bGMT\b|\bNZST\b|\bIST\b|\bAmerica\/[A-Za-z_]+\b|\bEurope\/[A-Za-z_]+\b|\bPacific\b|\bMountain\b|\bEastern\b|\bCentral\b|\bAtlantic\b|バンクーバー時刻|バンクーバー時間|\bVancouver time\b|\bBerlin time\b|\bLondon time\b|\bToronto time\b|\bNew York time\b|\bAuckland time\b)/i;
 const WORKING_HOURS_IGNORED_PROXIMITY = 80;
+
+// 2026-05-15 sparring — LOCATION_NOT_DISCLOSED_TO_SENDER detector.
+// When the agent emits a draft (inside ```...```) that references
+// user-local TZ tokens (PT / PDT / こちらの時間 / 現地時間) WITHOUT a
+// location disclosure (海外 / 北米 / Pacific / Vancouver / 在住 /
+// currently based in / based out of), the recipient can't frame the
+// times — "こちら" is ambiguous, PDT unexplained. MUST-rule 12.
+//
+// Implementation: extract fenced code-block bodies; for each, check
+// for user-TZ tokens vs location-disclosure tokens. Flag if mismatch.
+const USER_TZ_IN_DRAFT_RE =
+  /(\bP(D|S)?T\b|\bE(D|S)?T\b|\bC(D|S)?T\b|\bM(D|S)?T\b|\bCEST?\b|\bBST\b|\bNZST\b|Pacific Time|Eastern Time|Central Time|Mountain Time|こちらの時間|現地時間|私の時間)/i;
+const LOCATION_DISCLOSURE_RE =
+  /(海外|北米|アメリカ|カナダ|Pacific\s+(?:Time|Standard|Daylight)|Mountain\s+(?:Time|Standard|Daylight)|Eastern\s+(?:Time|Standard|Daylight)|Central\s+(?:Time|Standard|Daylight)|Vancouver|Toronto|Berlin|London|New York|Auckland|在住|住んで|currently based|based in|based out of|住んでおり|海外におり)/i;
+
+function extractCodeBlocks(text: string): string[] {
+  const blocks: string[] = [];
+  const re = /```[ \t]*\n([\s\S]*?)\n[ \t]*```/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    blocks.push(m[1]);
+  }
+  return blocks;
+}
+
+function detectLocationNotDisclosed(text: string): boolean {
+  const blocks = extractCodeBlocks(text);
+  for (const block of blocks) {
+    // Skip blocks that don't look like an email body — heuristic: must
+    // have a greeting marker AND a closing marker (same shape as
+    // draft-detect.ts confidence check). Avoids false-positives on
+    // code snippets / config blocks that happen to mention PDT.
+    const hasGreeting =
+      /(お世話になっております|お疲れ様|Dear\s|Hi\s|Hello\s)/.test(block);
+    const hasClosing =
+      /(よろしくお願いいたします|Best regards|Best,|Sincerely|Regards,)/.test(
+        block
+      );
+    if (!hasGreeting || !hasClosing) continue;
+    if (!USER_TZ_IN_DRAFT_RE.test(block)) continue;
+    if (LOCATION_DISCLOSURE_RE.test(block)) continue;
+    // Draft references user-TZ but lacks a location disclosure → flag.
+    return true;
+  }
+  return false;
+}
 
 function detectWorkingHoursIgnored(text: string): boolean {
   JST_TOKEN_RE.lastIndex = 0;
@@ -251,6 +308,9 @@ export function detectPlaceholderLeak(
   }
   if (detectWorkingHoursIgnored(text)) {
     matched.push("JST without user-local TZ nearby");
+  }
+  if (detectLocationNotDisclosed(text)) {
+    matched.push("draft references user-TZ without location disclosure");
   }
 
   // engineer-62 — cascade-failure detectors. Fire only when the
