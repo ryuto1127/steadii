@@ -422,6 +422,66 @@ const scenario: EvalScenario = {
         };
       },
     },
+    // 2026-05-15 sparring — MUST-rule 11: response opens with an
+    // establishing sentence, not a conjunction. The 2026-05-15 dogfood
+    // had the agent start with 「ただ、あなたの対応可能時間は…」 — reverse-
+    // direction conjunction without prior context.
+    {
+      kind: "custom",
+      label: "response does not open with a conjunction",
+      check: (r) => {
+        const t = r.finalText.trimStart();
+        const opensWithConjunction =
+          /^(ただ|でも|それで|しかし|However|But|And so)[、,\s]/.test(t);
+        return {
+          pass: !opensWithConjunction,
+          message: opensWithConjunction
+            ? "Response opens with a conjunction (ただ / でも / However / etc.) — user has no prior context to anchor against. Establish what the email is + what's being asked in the first sentence."
+            : undefined,
+        };
+      },
+    },
+    // 2026-05-15 sparring — MUST-rule 12: when the draft body references
+    // user-local TZ, it must include a location disclosure so the
+    // recipient can frame the times. Recruiter doesn't know the user is
+    // in Vancouver; "こちらの時間で 02:00 PDT" is ambiguous.
+    {
+      kind: "custom",
+      label:
+        "draft body discloses user's location when referencing user-local TZ",
+      check: (r) => {
+        const t = r.finalText;
+        // Extract code blocks
+        const blocks: string[] = [];
+        const re = /```[ \t]*\n([\s\S]*?)\n[ \t]*```/g;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(t)) !== null) blocks.push(m[1]);
+        const draftBlocks = blocks.filter(
+          (b) =>
+            /(お世話になっております|お疲れ様|Dear\s|Hi\s)/.test(b) &&
+            /(よろしくお願いいたします|Best,|Sincerely|Regards)/.test(b)
+        );
+        if (draftBlocks.length === 0) return { pass: true };
+        for (const block of draftBlocks) {
+          const refsUserTz =
+            /(\bP(D|S)?T\b|Pacific Time|こちらの時間|現地時間|私の時間)/i.test(
+              block
+            );
+          if (!refsUserTz) continue;
+          const hasDisclosure =
+            /(海外|北米|アメリカ|カナダ|Pacific\s+(?:Time|Standard|Daylight)|Vancouver|Toronto|Berlin|London|New York|在住|住んで|currently based|based in|based out of|海外におり)/i.test(
+              block
+            );
+          if (!hasDisclosure) {
+            return {
+              pass: false,
+              message: `Draft body references user-local TZ (PT/PDT/こちらの時間/etc.) but lacks a location disclosure (海外 / 北米 / Pacific / Vancouver / 在住 / based in). Recipient cannot frame the times — "こちら" is ambiguous. Add a one-sentence disclosure right after お世話になっております.`,
+            };
+          }
+        }
+        return { pass: true };
+      },
+    },
   ],
 };
 
