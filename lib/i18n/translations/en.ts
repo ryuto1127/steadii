@@ -1000,6 +1000,24 @@ type MessagesShape = {
       title_resolved: string;
       back: string;
     };
+    draft_actions: {
+      send: string;
+      edit: string;
+      save: string;
+      cancel: string;
+      confirm_title: string;
+      confirm_to: string;
+      confirm_subject: string;
+      confirm_body: string;
+      confirm_send_button: string;
+      sent_success: string;
+      sent_error: string;
+      send_aria: string;
+      edit_aria: string;
+      edit_textarea_label: string;
+      looks_like_draft_tooltip: string;
+      missing_reply_target: string;
+    };
   };
   voice: {
     hint_caps: string;
@@ -2920,6 +2938,25 @@ export const en: MessagesShape = {
       title: "Resolving clarification:",
       title_resolved: "Clarification resolved:",
       back: "↩ Back to queue",
+    },
+    draft_actions: {
+      send: "Send",
+      edit: "Edit",
+      save: "Save",
+      cancel: "Cancel",
+      confirm_title: "Confirm send",
+      confirm_to: "To",
+      confirm_subject: "Subject",
+      confirm_body: "Body",
+      confirm_send_button: "Send for real",
+      sent_success: "✓ Sent at {time}",
+      sent_error: "Send failed — please try again",
+      send_aria: "Send draft to {recipient}",
+      edit_aria: "Edit draft body",
+      edit_textarea_label: "Draft body",
+      looks_like_draft_tooltip: "Looks like a draft? Send or edit.",
+      missing_reply_target:
+        "Can't find the original email to reply to. Reopen this from the inbox item to enable Send.",
     },
   },
   voice: {
