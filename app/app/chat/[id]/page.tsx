@@ -11,6 +11,8 @@ import {
 import { and, asc, eq } from "drizzle-orm";
 import { ChatView } from "@/components/chat/chat-view";
 import { getUserVoiceTriggerKey } from "@/lib/agent/preferences";
+import { resolveReplyTargetsForMessages } from "@/lib/chat/draft-reply-target";
+import type { DraftReplyTarget } from "@/components/chat/draft-action-bar";
 
 export default async function SingleChatPage({
   params,
@@ -116,6 +118,24 @@ export default async function SingleChatPage({
 
   const voiceTriggerKey = await getUserVoiceTriggerKey(userId);
 
+  // engineer-63 — for each assistant message, walk its accumulated
+  // tool_calls (sparring PR #260) for the most recent email_get_body /
+  // email_get_new_content_only call and resolve the cited inbox_item to a
+  // reply target (to / subject / thread). Chat-view passes these per-
+  // message so the DraftActionBar's Send button knows where to send.
+  const assistantRows = msgs
+    .filter((m) => m.role === "assistant" && !m.deletedAt)
+    .map((m) => ({ id: m.id, toolCalls: m.toolCalls }));
+  const targets = await resolveReplyTargetsForMessages(userId, assistantRows);
+  const initialReplyTargets: Record<string, DraftReplyTarget> = {};
+  for (const [id, t] of targets) {
+    initialReplyTargets[id] = {
+      inboxItemId: t.inboxItemId,
+      to: t.to,
+      subject: t.subject,
+    };
+  }
+
   // engineer-46 — when the chat was opened from a Type E clarifying
   // queue card, render a banner at the top of the chat so the student
   // remembers which card they're resolving and has a one-click route
@@ -155,6 +175,7 @@ export default async function SingleChatPage({
         chatId={chat.id}
         initialTitle={chat.title}
         initialMessages={visible}
+        initialReplyTargets={initialReplyTargets}
         blobConfigured={!!process.env.BLOB_READ_WRITE_TOKEN}
         autoStream={stream === "1"}
         voiceTriggerKey={voiceTriggerKey}
