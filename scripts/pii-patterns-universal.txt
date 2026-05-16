@@ -3,8 +3,8 @@
 # Rule: every line here must describe a SHAPE, not an identity. A pattern is
 # OK to commit if seeing it tells the reader nothing specific about any real
 # person, company, or piece of correspondence. "@gmail.com address that
-# isn't in the allowlist" is a SHAPE. "畠山" is an identity — those go in
-# `pii-patterns.local.txt` (gitignored) instead.
+# isn't in the allowlist" is a SHAPE. A literal personal name is an
+# IDENTITY — those go in `pii-patterns.local.txt` (gitignored) instead.
 #
 # Format: one ERE-flavor regex per line. `#` starts a comment. Blank lines
 # OK. Patterns are joined with `|` and matched case-insensitive in
