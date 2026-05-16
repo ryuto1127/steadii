@@ -4,7 +4,7 @@
 -- Sibling to agent_contact_personas.structured_facts (per-contact typed
 -- facts shipped by engineer-41). user_facts holds per-user free-form
 -- sentences the chat agent picked up via the save_user_fact tool — e.g.
--- "I'm in Vancouver", "Don't notify me at night", "Grade 12, UToronto CS
+-- "I'm in Vancouver", "Don't notify me at night", "high-school student → CS program
 -- in September".
 --
 -- The chat orchestrator splices the top-12 facts back into the system

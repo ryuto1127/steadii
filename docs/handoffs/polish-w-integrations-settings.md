@@ -75,7 +75,7 @@ Copy: simple, neutral. "Paste a calendar feed URL (.ics) — Steadii will read e
 ### Verify
 
 - Settings → Connections shows iCal section with input form
-- Paste a real iCal URL (UToronto Acorn export, or any public test feed) → row appears in list, sync runs, events appear in `/app/calendar`
+- Paste a real iCal URL (a university's calendar export, or any public test feed) → row appears in list, sync runs, events appear in `/app/calendar`
 - Paste invalid URL → friendly error, no row inserted
 - Paste `webcal://...` → normalized to https before storing
 - Reactivate button on a deactivated row resets failureCount, triggers sync

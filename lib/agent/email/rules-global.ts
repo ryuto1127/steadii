@@ -296,7 +296,7 @@ export const GITHUB_HIGH_SIGNALS: RegExp[] = [
 // module to recognize a course identifier in the email subject. Operator-
 // curated; grow over time per false-negative rescue rate. The plain Latin-
 // script pattern (\b[A-Z]{2,4}-\d{2,4}\b) is hard-coded into class-binding
-// itself since it covers EN-cycle universities (UTORONTO CSC108 etc.).
+// itself since it covers EN-cycle universities (SAMPLEUNI CSC108 etc.).
 //
 // Each regex is matched case-insensitively against the email subject. A
 // hit is then cross-referenced against the user's classes.code values to

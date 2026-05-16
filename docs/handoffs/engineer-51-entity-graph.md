@@ -58,7 +58,7 @@ export type EntityKind =
   | "person"          // a specific human (professor, classmate, recruiter, etc.)
   | "project"         // a body of work (group project, interview process, club initiative)
   | "course"          // a school class — usually 1:1 with the existing `classes` table; entity layer for queries
-  | "org"             // a company, school, club (アクメトラベル, UToronto, etc.)
+  | "org"             // a company, school, club (アクメトラベル, SampleUni, etc.)
   | "event_series";   // recurring event (weekly TA hours, study group)
 
 export const entities = pgTable(

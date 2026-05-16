@@ -3506,7 +3506,7 @@ export const en: MessagesShape = {
     url_label: "URL",
     url_placeholder: "https://… or webcal://…",
     label_optional_label: "Label (optional)",
-    label_placeholder: "e.g. UToronto",
+    label_placeholder: "e.g. SampleUni",
     add_button: "Add",
     add_button_pending: "Adding…",
     paused_prefix: "Paused —",
