@@ -187,7 +187,7 @@ Authoritative numbers live in `project_decisions.md`. This section covers only i
 - `scripts/pii-patterns-universal.txt` — **committed, public.** SHAPE-based patterns only: real-personal-email regex (any `@gmail.com` / `@outlook.com` / etc. not in allowlist), API key shapes, JWT shapes, private key headers, DSN credentials. Seeing this file tells the reader nothing about any specific real person — only what KINDS of leaks the scanner catches.
 - `scripts/pii-patterns.local.txt` — **gitignored, LOCAL ONLY.** Maintainer-specific literal identities (real names, real emails, the recruiting case, third parties from PR notifications, identifying profile combos). Mirror this file's contents into the github repo secret `PII_PATTERNS_LOCAL` (Settings → Secrets and variables → Actions) so CI has parity with the local hook.
 
-Why split: committing `'田中'` as a literal pattern in a public script IS itself a leak — the scanner becomes the leak vector. Splitting keeps the scanner's logic + universal patterns public (so the workflow is reviewable + portable) while the identity-specific patterns stay private.
+Why split: committing a literal personal identity as a pattern in a public script IS itself a leak — the scanner becomes the leak vector. Splitting keeps the scanner's logic + universal patterns public (so the workflow is reviewable + portable) while the identity-specific patterns stay private.
 
 ### 7b. Pre-merge review — MANDATORY on every PR
 
