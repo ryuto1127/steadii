@@ -15,7 +15,7 @@ Reference shipped patterns:
 
 ## Strategic context
 
-Ryuto report 2026-05-06: a recruiting interview email (令和トラベル / 明日のグループディスカッション選考のご案内) surfaced `syllabus-1 64%` in the draft details panel. The email has nothing to do with any class — but the syllabus chunk passed the existing 0.55 similarity threshold.
+Ryuto report 2026-05-06: a recruiting interview email (アクメトラベル / 明日のグループディスカッション選考のご案内) surfaced `syllabus-1 64%` in the draft details panel. The email has nothing to do with any class — but the syllabus chunk passed the existing 0.55 similarity threshold.
 
 This is a **retrieval quality bug**: the fanout's vector search returns chunks above threshold even when the email has no class binding. For non-academic emails (recruiting, billing, OTPs, vendor support), syllabus retrieval is irrelevant and clutters reasoning.
 

@@ -21,7 +21,7 @@ Reference shipped patterns:
 
 ## Strategic context
 
-The biggest gap from the 2026-05-12 agent-quality research: Steadii's data sources operate as silos. Email knows senderEmail. Assignment knows classId. Event knows Google-calendar-id. Chat session knows userId. Without cross-linking, the agent can't reason "this email about 令和トラベル interview is about the same project as last week's calendar block + the Notion doc + the chat from 5 days ago." Human EAs do this naturally — "connecting the dots" is THE defining EA skill per the research literature.
+The biggest gap from the 2026-05-12 agent-quality research: Steadii's data sources operate as silos. Email knows senderEmail. Assignment knows classId. Event knows Google-calendar-id. Chat session knows userId. Without cross-linking, the agent can't reason "this email about アクメトラベル interview is about the same project as last week's calendar block + the Notion doc + the chat from 5 days ago." Human EAs do this naturally — "connecting the dots" is THE defining EA skill per the research literature.
 
 Engineer-51 builds the entity layer that bridges sources:
 
@@ -31,7 +31,7 @@ Engineer-51 builds the entity layer that bridges sources:
 
 Once landed:
 - Agentic L2 can call `lookup_entity` to pull all context about a project/person before drafting
-- Chat agent can answer "what's the latest on the 令和トラベル thing?" without the user re-stating context
+- Chat agent can answer "what's the latest on the アクメトラベル thing?" without the user re-stating context
 - CoS digest (engineer-50) gains entity-grouped synthesis (instead of "47 emails", "8 emails about project A, 12 about project B")
 - Proactive scanner gains rules like "you've been quiet on project X for 12 days" or "project Y has 3 deadlines clustered next week"
 
@@ -58,7 +58,7 @@ export type EntityKind =
   | "person"          // a specific human (professor, classmate, recruiter, etc.)
   | "project"         // a body of work (group project, interview process, club initiative)
   | "course"          // a school class — usually 1:1 with the existing `classes` table; entity layer for queries
-  | "org"             // a company, school, club (令和トラベル, UToronto, etc.)
+  | "org"             // a company, school, club (アクメトラベル, UToronto, etc.)
   | "event_series";   // recurring event (weekly TA hours, study group)
 
 export const entities = pgTable(
@@ -205,7 +205,7 @@ Available always (no session-type gating).
 
 ### Wire into agentic L2 tools (engineer-41 + engineer-45 pattern)
 
-Add `lookup_entity` to the agentic L2 tool list so the draft pipeline can pull cross-source context BEFORE generating a reply — e.g., a recruiter email arrives, agent calls `lookup_entity("令和トラベル")` and finds 4 prior emails + 1 calendar event + 1 chat session, drafts a reply that respects all that history.
+Add `lookup_entity` to the agentic L2 tool list so the draft pipeline can pull cross-source context BEFORE generating a reply — e.g., a recruiter email arrives, agent calls `lookup_entity("アクメトラベル")` and finds 4 prior emails + 1 calendar event + 1 chat session, drafts a reply that respects all that history.
 
 ### System prompt extension
 
@@ -267,10 +267,10 @@ Add to `AgentProposalIssueType` enum.
 3. **Migration 0042** applied via `pnpm tsx scripts/migrate-prod.ts`
 4. **QStash schedule** for `/api/cron/entity-backfill` daily at 03:00 UTC
 5. **Live dogfood**:
-   - Manually trigger resolver on Ryuto's 令和トラベル email thread → verify entity "令和トラベル" (kind=org) + person entity for the recruiter get created + linked
+   - Manually trigger resolver on Ryuto's アクメトラベル email thread → verify entity "アクメトラベル" (kind=org) + person entity for the recruiter get created + linked
    - Open `/app/entities` → see them listed
-   - Click 令和トラベル entity → detail page shows all linked emails / assignments / calendar events in unified timeline
-   - Open a new chat, say "令和トラベルの状況どう？" → agent calls lookup_entity, returns cohesive answer without re-asking context
+   - Click アクメトラベル entity → detail page shows all linked emails / assignments / calendar events in unified timeline
+   - Open a new chat, say "アクメトラベルの状況どう？" → agent calls lookup_entity, returns cohesive answer without re-asking context
    - Backdated test: clear `lastTouched` on a person entity → fading-entity rule fires Type C card
 
 ---

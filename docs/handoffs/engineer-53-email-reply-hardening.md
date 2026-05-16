@@ -4,7 +4,7 @@
 
 - `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/MEMORY.md`
 - `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/feedback_agent_failure_modes.md` — taxonomy of named modes; you'll add one new entry
-- `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/user_ryuto.md` — canonical fixture user (畠山 竜都 / Ryuto)
+- `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/user_ryuto.md` — canonical fixture user (田中 太郎 / Ryuto)
 - `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/feedback_prompts_in_english.md` — internal docs and prompt sections stay in English; user-facing messages keep their bilingual treatment
 - `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/feedback_typecheck_before_push.md` — typecheck before every push, including `tests/agent-evals/*` and `scripts/*`
 
@@ -23,9 +23,9 @@ Reference shipped patterns:
 
 Ryuto opened a chat and typed (verbatim):
 
-> 令和とレベルとの次の面接日程へのメールを返したいです
+> アクメとラベルとの次の面接日程へのメールを返したいです
 
-The actual inbound email was a structured 令和トラベル recruiter message with 3 candidate interview slots:
+The actual inbound email was a structured アクメトラベル recruiter message with 3 candidate interview slots:
 - 2026/5/15 (金) 10:00–11:00 + 11:30–13:00
 - 2026/5/19 (火) 16:30–18:00
 - 2026/5/22 (金) 13:30–14:00
@@ -33,12 +33,12 @@ The actual inbound email was a structured 令和トラベル recruiter message w
 …and an explicit response template asking for first/second/third choice with the user's name in the salutation.
 
 **What the agent did**:
-1. Called `lookup_entity` → resolved "令和トラベル" (transparent autocorrect worked — PR #227)
+1. Called `lookup_entity` → resolved "アクメトラベル" (transparent autocorrect worked — PR #227)
 2. Stopped. Did NOT call `email_get_body`, `infer_sender_timezone`, or `convert_timezone`.
 3. Drafted from imagination:
    ```
    件名: Re: 次回面接日程のご連絡
-   令和トラベル
+   アクメトラベル
    〇〇様
    お世話になっております。〇〇です。
    ご連絡ありがとうございます。
@@ -131,18 +131,18 @@ Update `buildPlaceholderLeakCorrection` to mention these new modes explicitly. A
 
 The existing `tests/agent-evals/scenarios/placeholder-leak-email-reply.ts` includes the user message:
 
-> 令和トラベルとの面接日程に返信したい。候補3つそれぞれを JST と PT 両方で見せて。
+> アクメトラベルとの面接日程に返信したい。候補3つそれぞれを JST と PT 両方で見せて。
 
 This is biased toward passing — "候補3つ" and "JST と PT 両方で見せて" are hints the real user would never type. Add a new scenario that mirrors actual dogfood phrasing:
 
 **`tests/agent-evals/scenarios/email-reply-terse-typo.ts`**:
 ```typescript
 input: {
-  userMessage: "令和とレベルとの次の面接日程へのメールを返したいです",
+  userMessage: "アクメとラベルとの次の面接日程へのメールを返したいです",
 },
 // Assertions: same as placeholder-leak-email-reply but using a typo'd
-// entity name (令和とレベル) and no instructional hints. The agent
-// must (a) fuzzy-match to 令和トラベル AND disclose the correction,
+// entity name (アクメとラベル) and no instructional hints. The agent
+// must (a) fuzzy-match to アクメトラベル AND disclose the correction,
 // (b) call email_get_body, (c) call infer_sender_timezone, (d)
 // call convert_timezone for each slot, (e) emit no 〇〇, no 件名 line,
 // and at least 3 concrete date/time tokens, (f) use the user's actual
@@ -165,7 +165,7 @@ For (1): add a MUST rule in EMAIL REPLY WORKFLOW (Part 1, rule 5). Already cover
 
 For (2): build an automatic injection. The user's `name` field on the `users` table is already populated at signup. Either:
 - (a) Inject it as a synthetic `USER_FACTS` row at orchestrator entry time
-- (b) Add `name` to the system prompt context directly (`USER_NAME: 畠山 竜都`)
+- (b) Add `name` to the system prompt context directly (`USER_NAME: 田中 太郎`)
 
 Lean: **(b)**. Simpler, doesn't pollute the user-facts table with auto-generated entries. Add to the system prompt assembly path. Test that `〇〇です` no longer appears in the eval scenario sign-offs.
 
@@ -195,7 +195,7 @@ git checkout -b engineer-53
 - `pnpm typecheck` clean
 - `pnpm test` — full suite green, +12–18 new tests (self-critique detector cases + sign-off grounding + harness self-tests)
 - `pnpm eval:agent` — 8 → 11 scenarios pass live. Cost: ~\$0.015/run
-- Manual: re-run the 令和トラベル dogfood scenario in the production preview; agent should call `email_get_body` + `infer_sender_timezone` + `convert_timezone` and emit a grounded draft with no `〇〇`, no `件名:` line, real sign-off, all 3 slots cited with JST + PT dual display.
+- Manual: re-run the アクメトラベル dogfood scenario in the production preview; agent should call `email_get_body` + `infer_sender_timezone` + `convert_timezone` and emit a grounded draft with no `〇〇`, no `件名:` line, real sign-off, all 3 slots cited with JST + PT dual display.
 
 ## Out of scope
 

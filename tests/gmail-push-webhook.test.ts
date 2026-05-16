@@ -28,7 +28,7 @@ import { decodePubSubPayload } from "@/app/api/webhooks/gmail-push/route";
 
 describe("decodePubSubPayload", () => {
   it("decodes a well-formed Pub/Sub envelope", () => {
-    const inner = { emailAddress: "ryuto@school.edu", historyId: "12345" };
+    const inner = { emailAddress: "alex@school.edu", historyId: "12345" };
     const envelope = {
       message: {
         data: Buffer.from(JSON.stringify(inner)).toString("base64"),
@@ -41,7 +41,7 @@ describe("decodePubSubPayload", () => {
   });
 
   it("accepts numeric historyId", () => {
-    const inner = { emailAddress: "ryuto@school.edu", historyId: 9999 };
+    const inner = { emailAddress: "alex@school.edu", historyId: 9999 };
     const envelope = {
       message: { data: Buffer.from(JSON.stringify(inner)).toString("base64") },
     };

@@ -10,7 +10,7 @@
 
 The repo has no dev-only login route. Engineer authenticated against the local dev server by minting an Auth.js v5 session JWT via a temporary helper using the project's `AUTH_SECRET` from `.env.local`, then setting the cookie via `preview_eval`. Helper deleted at end of branch.
 
-Verified user: `ryuto.2007.11.27@gmail.com` (id `0fcb5f44-3940-4eb8-9d2c-2113859111c1`, `is_admin=true`, plan=free).
+Verified user: `admin@example.com` (id `0fcb5f44-3940-4eb8-9d2c-2113859111c1`, `is_admin=true`, plan=free).
 
 ## Per-section results
 

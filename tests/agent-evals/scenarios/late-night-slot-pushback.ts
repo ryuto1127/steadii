@@ -7,14 +7,14 @@
 // engineer-56 revision — the counter-proposal window must reflect the
 // BIDIRECTIONAL intersection of user-norms AND sender-norms. For this
 // fixture: USER_WORKING_HOURS 08:00–22:00 PT = JST 00:00–15:00 next-day;
-// sender (recruiter@reiwa-travel.co.jp via infer_sender_norms) =
+// sender (recruiter@acme-travel.example.co.jp via infer_sender_norms) =
 // 09:00–18:00 JST @ 0.9 confidence. Intersection = JST 09:00–15:00.
 // Pre-engineer-56 a JST 6:00–14:00 proposal would have "passed" because
 // it fit the user side, even though 6 AM JST is pre-business for the
 // sender — that's SENDER_NORMS_IGNORED. The revised assertion enforces
 // that the proposed JST window stays inside 09:00–18:00 JST.
 //
-// Verbatim 2026-05-13 dogfood fixture (令和トラベル round-2):
+// Verbatim 2026-05-13 dogfood fixture (アクメトラベル round-2):
 //   5/20 (水) 18:00–18:45 JST  →  5/20 02:00–02:45 PDT (Vancouver night)
 //   5/21 (木) 15:00–15:45 JST  →  5/20 23:00–23:45 PDT (Vancouver night)
 //
@@ -38,7 +38,7 @@ const scenario: EvalScenario = {
       id: "user-ryuto",
       timezone: "America/Vancouver",
       locale: "ja",
-      name: "畠山 竜都",
+      name: "田中 太郎",
     },
     workingHoursLocal: { start: "08:00", end: "22:00" },
     facts: [
@@ -50,16 +50,16 @@ const scenario: EvalScenario = {
     ],
     inboxItems: [
       {
-        id: "email-reiwa-round1-from-user",
-        senderEmail: "ryuto.2007.11.27@gmail.com",
-        senderName: "畠山 竜都",
+        id: "email-acme-round1-from-user",
+        senderEmail: "admin@example.com",
+        senderName: "田中 太郎",
         subject: "Re: 次回面接のご連絡",
         snippet:
           "下記の通り、希望日程をお送りいたします。第一希望：5月15日(金) 11:30〜12:00 JST...",
         body: [
-          "令和トラベル 採用担当者様",
+          "アクメトラベル 採用担当者様",
           "",
-          "お世話になっております。畠山 竜都です。",
+          "お世話になっております。田中 太郎です。",
           "ご連絡ありがとうございます。",
           "",
           "下記の通り、希望日程をお送りいたします。",
@@ -68,21 +68,21 @@ const scenario: EvalScenario = {
           "第三希望：5月22日(金) 13:30〜14:00 JST (バンクーバー: 5月21日(木) 21:30〜22:00 PT)",
           "",
           "何卒よろしくお願いいたします。",
-          "畠山 竜都",
+          "田中 太郎",
         ].join("\n"),
         receivedAt: "2026-05-10T18:00:00Z",
       },
       {
-        id: "email-reiwa-round2",
-        senderEmail: "recruiter@reiwa-travel.co.jp",
-        senderName: "令和トラベル採用担当",
+        id: "email-acme-round2",
+        senderEmail: "recruiter@acme-travel.example.co.jp",
+        senderName: "アクメトラベル採用担当",
         subject: "Re: Re: 次回面接のご連絡",
         snippet:
           "ご返信ありがとうございます。誠に恐れ入りますが、ご提示いただいた日程ではいずれも調整が難しく、下記2候補をご検討いただけますでしょうか。",
         body: [
-          "畠山様",
+          "田中様",
           "",
-          "お世話になっております。令和トラベルの採用担当でございます。",
+          "お世話になっております。アクメトラベルの採用担当でございます。",
           "ご返信誠にありがとうございます。",
           "誠に恐れ入りますが、ご提示いただいた3日程ではいずれも調整が難しく、",
           "下記2候補をご検討いただけますでしょうか。",
@@ -93,28 +93,28 @@ const scenario: EvalScenario = {
           "ご都合の良い方をお選びいただければ幸いです。",
           "ご検討のほど、何卒よろしくお願い申し上げます。",
           "",
-          "令和トラベル 採用担当",
+          "アクメトラベル 採用担当",
         ].join("\n"),
         receivedAt: "2026-05-13T01:30:00Z",
       },
     ],
     entities: [
       {
-        id: "ent-reiwa-pushback",
+        id: "ent-acme-pushback",
         kind: "org",
-        displayName: "令和トラベル",
-        aliases: ["Reiwa Travel"],
+        displayName: "アクメトラベル",
+        aliases: ["Acme Travel"],
         description: "新卒採用面接プロセス中の旅行会社（round 2)",
-        primaryEmail: "recruiter@reiwa-travel.co.jp",
+        primaryEmail: "recruiter@acme-travel.example.co.jp",
         linkedInboxItemIds: [
-          "email-reiwa-round1-from-user",
-          "email-reiwa-round2",
+          "email-acme-round1-from-user",
+          "email-acme-round2",
         ],
       },
     ],
   },
   input: {
-    userMessage: "令和トラベル の二回目のメールに返信したい",
+    userMessage: "アクメトラベル の二回目のメールに返信したい",
   },
   expect: [
     // (a) MUST chain — body fetch is non-negotiable
@@ -286,7 +286,7 @@ const scenario: EvalScenario = {
     // (h) No placeholder leaks (SUBJECT_LINE / 〇〇 / trailing-action)
     { kind: "response_no_placeholder_leak" },
     // (i) Canonical entity name appears
-    { kind: "response_contains", text: "令和トラベル" },
+    { kind: "response_contains", text: "アクメトラベル" },
     // (j) Sign-off uses real name when a draft body is emitted
     {
       kind: "custom",
@@ -312,12 +312,12 @@ const scenario: EvalScenario = {
             t.includes("Regards"));
         if (!hasDraftBody) return { pass: true };
         const hasRealName =
-          t.includes("畠山") || t.includes("竜都") || t.includes("Ryuto");
+          t.includes("田中") || t.includes("竜都") || t.includes("Ryuto");
         return {
           pass: hasRealName,
           message: hasRealName
             ? undefined
-            : "Draft body emitted but the sign-off did not include the user's real name (畠山 / 竜都 / Ryuto).",
+            : "Draft body emitted but the sign-off did not include the user's real name (田中 / 竜都 / Ryuto).",
         };
       },
     },

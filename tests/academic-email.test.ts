@@ -24,7 +24,7 @@ describe("isAcademicEmail", () => {
   });
 
   it("rejects non-academic domains", () => {
-    expect(isAcademicEmail("ryuto@gmail.com")).toBe(false);
+    expect(isAcademicEmail("alex@example.com")).toBe(false);
     expect(isAcademicEmail("me@outlook.com")).toBe(false);
     expect(isAcademicEmail("random@business.ca")).toBe(false);
     expect(isAcademicEmail("bogus@edu.fake")).toBe(false);

@@ -38,7 +38,7 @@ export async function createWaitlistPromotionCode(args: {
   // manually, hits the same slug a couple times). After numeric suffixes
   // saturate, fall back to a random 4-char base36 suffix (~36^4 = 1.6M
   // values) so dev-test churn that fills the human-readable namespace
-  // doesn't leak as a Sentry error. 2026-04-30 incident: ryuty1127@…
+  // doesn't leak as a Sentry error. 2026-04-30 incident: admin-alt@…
   // hit STEADII-RYUTO-1..50 all colliding from repeated dogfood runs.
   for (let attempt = 0; attempt < 50; attempt++) {
     let code: string;

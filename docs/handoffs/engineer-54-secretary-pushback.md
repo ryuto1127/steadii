@@ -25,7 +25,7 @@ Reference shipped patterns:
 
 ## Strategic context — what this wave delivers
 
-Steadii's core differentiation versus ChatGPT and other AI assistants is **proactive secretarial reasoning**, not just text generation. The 2026-05-13 dogfood made this explicit. Ryuto manually replied to a 令和トラベル interview-slot email. The recruiter wrote back with two alternative slots — both in JST:
+Steadii's core differentiation versus ChatGPT and other AI assistants is **proactive secretarial reasoning**, not just text generation. The 2026-05-13 dogfood made this explicit. Ryuto manually replied to a アクメトラベル interview-slot email. The recruiter wrote back with two alternative slots — both in JST:
 
 - 2026/5/20 (水) 18:00–18:45 JST → **PDT 02:00–02:45 (Tue 2 AM Vancouver)**
 - 2026/5/21 (木) 15:00–15:45 JST → **PDT 23:00–23:45 (Tue 11 PM Vancouver)**
@@ -182,10 +182,10 @@ Add corresponding unit tests in `tests/self-critique.test.ts`.
 Three new files in `tests/agent-evals/scenarios/`:
 
 **`late-night-slot-pushback.ts`** — exact fixture from Ryuto's 2026-05-13 dogfood:
-- Email body: 令和トラベル round 2 (the alternative slots 5/20 18:00 JST + 5/21 15:00 JST)
+- Email body: アクメトラベル round 2 (the alternative slots 5/20 18:00 JST + 5/21 15:00 JST)
 - Prior thread state: Ryuto's first reply (with his 3 chosen slots, all PT 20:00–22:00 range)
 - `users.preferences.workingHoursLocal = { start: "08:00", end: "22:00" }` (Vancouver TZ)
-- User message: "令和トラベル の二回目のメールに返信したい"
+- User message: "アクメトラベル の二回目のメールに返信したい"
 - Assertions:
   - `tool_called: convert_timezone` (≥2 times — one for each proposed slot)
   - `response_contains: "2 AM"` OR `"2:00"` (the converted Vancouver time — user-local cited)
@@ -273,7 +273,7 @@ git checkout -b engineer-54
 - `pnpm typecheck` clean
 - `pnpm test` — full suite green, ~+18 new unit tests (preference schema, save_working_hours, self-critique detectors)
 - `pnpm eval:agent` — all scenarios pass live, including the 3 new ones. Cost ~\$0.02/run.
-- Manual: re-run the 令和トラベル round-2 dogfood scenario; expected: agent calls `convert_timezone` on both slots, recognizes both are night Pacific, drafts a counter-proposal with concrete alternative window in JST, references the prior-pattern if visible.
+- Manual: re-run the アクメトラベル round-2 dogfood scenario; expected: agent calls `convert_timezone` on both slots, recognizes both are night Pacific, drafts a counter-proposal with concrete alternative window in JST, references the prior-pattern if visible.
 
 ## Out of scope
 

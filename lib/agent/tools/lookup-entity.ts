@@ -70,7 +70,7 @@ export const lookupEntity: ToolExecutor<
         query: {
           type: "string",
           description:
-            "Fuzzy name or alias to look up. E.g. '令和トラベル', 'Prof. Tanaka', 'MAT223', 'TA hours'.",
+            "Fuzzy name or alias to look up. E.g. 'アクメトラベル', 'Prof. Tanaka', 'MAT223', 'TA hours'.",
         },
         kind: {
           type: "string",

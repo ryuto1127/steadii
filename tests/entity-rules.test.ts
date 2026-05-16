@@ -134,7 +134,7 @@ describe("entity_deadline_cluster rule", () => {
       {
         entityId: "p1",
         kind: "project",
-        displayName: "令和トラベル",
+        displayName: "アクメトラベル",
         daysSinceLastLink: 1,
         meanGapDays: 1,
         stddevGapDays: 0.5,

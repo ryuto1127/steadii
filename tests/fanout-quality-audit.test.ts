@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Engineer-35 — fanout retrieval-quality regression suite.
 //
 // Background: Ryuto received a recruiting email
-//   subject: "※要返信※【令和トラベル】明日のグループディスカッション選考のご案内"
-//   sender:  notifications@reiwatravel.n-ats.hrmos.co
+//   subject: "※要返信※【アクメトラベル】明日のグループディスカッション選考のご案内"
+//   sender:  notifications@example-ats.example.com
 // and the draft details panel surfaced "syllabus-1 64%" — the unbound
 // vector search caught a topical-overlap chunk for an email that has
 // nothing to do with any class.
@@ -191,12 +191,12 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("isEmailLikelyAcademic", () => {
-  it("rejects the canonical recruiting regression case (Reiwa Travel)", async () => {
+  it("rejects the canonical recruiting regression case (Acme Travel)", async () => {
     const { isEmailLikelyAcademic } = await import("@/lib/agent/email/fanout");
     expect(
       isEmailLikelyAcademic(
-        "※要返信※【令和トラベル】明日のグループディスカッション選考のご案内",
-        "令和トラベル株式会社の選考にご応募いただきありがとうございます。明日のグループディスカッションのご案内をお送りします。"
+        "※要返信※【アクメトラベル】明日のグループディスカッション選考のご案内",
+        "アクメトラベル株式会社の選考にご応募いただきありがとうございます。明日のグループディスカッションのご案内をお送りします。"
       )
     ).toBe(false);
   });
@@ -336,9 +336,9 @@ describe("fanoutForInbox — non-academic gate", () => {
       inboxItemId: "ix-recruiting",
       phase: "deep",
       subject:
-        "※要返信※【令和トラベル】明日のグループディスカッション選考のご案内",
+        "※要返信※【アクメトラベル】明日のグループディスカッション選考のご案内",
       snippet:
-        "令和トラベル株式会社の選考にご応募いただきありがとうございます。",
+        "アクメトラベル株式会社の選考にご応募いただきありがとうございます。",
       senderEmail: null,
     });
 

@@ -58,7 +58,7 @@ Branch: `engineer-42-type-f-cards`. Don't push without Ryuto's explicit authoriz
 export type QueueCardF = {
   id: string;                          // `confirmation:<uuid>`
   archetype: "F";
-  title: string;                       // LLM-generated, e.g. "令和トラベルの本社は JST ですよね?"
+  title: string;                       // LLM-generated, e.g. "アクメトラベルの本社は JST ですよね?"
   body: string;                        // context: where the inference came from
   confidence: QueueConfidence;         // map from inferred value confidence
   createdAt: string;

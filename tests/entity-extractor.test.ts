@@ -97,14 +97,14 @@ describe("parseExtractorOutput", () => {
       entities: [
         {
           kind: "org",
-          displayName: "  令和トラベル  ",
+          displayName: "  アクメトラベル  ",
           aliases: ["  Reiwa  Travel  ", "RT"],
         },
       ],
     });
     const out = parseExtractorOutput(raw);
     expect(out).toHaveLength(1);
-    expect(out[0].displayName).toBe("令和トラベル");
+    expect(out[0].displayName).toBe("アクメトラベル");
     expect(out[0].aliases).toEqual(["Reiwa  Travel", "RT"]);
   });
 

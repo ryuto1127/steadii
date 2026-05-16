@@ -6,8 +6,8 @@ A small but high-leverage system-prompt fix. Steadii's chat agent currently spli
 
 User asks Steadii to merge two duplicate calendar events. Steadii lists them:
 
-- 令和トラベル — 2026-05-07 20:00–21:00 (no Meet link, generic name)
-- 令和とレベルのインターンシップ グループディスカッション — 2026-05-07 20:00–21:00, Meet: https://meet.google.com/oyu-zduv-mdg
+- アクメトラベル — 2026-05-07 20:00–21:00 (no Meet link, generic name)
+- アクメとラベルのインターンシップ グループディスカッション — 2026-05-07 20:00–21:00, Meet: https://meet.google.com/oyu-zduv-mdg
 
 Then asks: "どちらを残しますか? 「1つ目を消して」「2つ目を消して」のように指定してください。"
 
@@ -58,8 +58,8 @@ The framing changes from "you decide" to "I'd do X — that OK?"
 
 Examples of clearly-stronger options:
 - Two duplicate calendar events, one has a Meet link and a specific
-  name ("令和とレベルのインターンシップ グループディスカッション"),
-  the other is generic ("令和トラベル") → recommend keeping the
+  name ("アクメとラベルのインターンシップ グループディスカッション"),
+  the other is generic ("アクメトラベル") → recommend keeping the
   one with the Meet link.
 - Two syllabus PDFs uploaded, one is dated this semester and the
   other is from a previous year → recommend the current one.

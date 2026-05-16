@@ -2853,7 +2853,7 @@ export type NewSenderConfidenceRow = typeof senderConfidence.$inferInsert;
 // org / event_series. Each entity links back to source rows
 // (inbox_items, agent_drafts, events, assignments, chat_messages,
 // agent_contact_personas) via `entity_links`. The graph bridges silos so
-// the agent can answer "what's the latest on the 令和トラベル thing?" by
+// the agent can answer "what's the latest on the アクメトラベル thing?" by
 // pulling the email thread + calendar slot + chat history + assignment
 // under one lookup.
 //

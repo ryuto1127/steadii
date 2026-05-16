@@ -32,16 +32,16 @@ const scenario: EvalScenario = {
     workingHoursLocal: { start: "17:00", end: "22:00" },
     inboxItems: [
       {
-        id: "email-reiwa-empty",
-        senderEmail: "recruiter@reiwa-travel.co.jp",
-        senderName: "Reiwa Travel Recruiting",
+        id: "email-acme-empty",
+        senderEmail: "recruiter@acme-travel.example.co.jp",
+        senderName: "Acme Travel Recruiting",
         subject: "Interview slot proposal",
         snippet:
           "Could we schedule the interview for 2026-05-15 10:00–11:00 JST? We're typically available 9 AM – 6 PM JST on weekdays.",
         body: [
           "Hi Lena,",
           "",
-          "Thank you for your interest in joining Reiwa Travel.",
+          "Thank you for your interest in joining Acme Travel.",
           "We'd like to schedule a 60-minute interview at the following time:",
           "",
           "Slot: 2026-05-15 (Fri) 10:00–11:00 JST",
@@ -50,25 +50,25 @@ const scenario: EvalScenario = {
           "Please let us know if this works, or suggest an alternative.",
           "",
           "Best regards,",
-          "Reiwa Travel Recruiting",
+          "Acme Travel Recruiting",
         ].join("\n"),
         receivedAt: "2026-05-13T01:30:00Z",
       },
     ],
     entities: [
       {
-        id: "ent-reiwa-empty",
+        id: "ent-acme-empty",
         kind: "org",
-        displayName: "Reiwa Travel",
-        aliases: ["令和トラベル"],
+        displayName: "Acme Travel",
+        aliases: ["アクメトラベル"],
         description: "Travel company, interviewing candidate Lena Müller",
-        primaryEmail: "recruiter@reiwa-travel.co.jp",
-        linkedInboxItemIds: ["email-reiwa-empty"],
+        primaryEmail: "recruiter@acme-travel.example.co.jp",
+        linkedInboxItemIds: ["email-acme-empty"],
       },
     ],
   },
   input: {
-    userMessage: "Please draft a reply to the Reiwa Travel recruiter.",
+    userMessage: "Please draft a reply to the Acme Travel recruiter.",
   },
   expect: [
     // (a) Body fetched
@@ -158,7 +158,7 @@ const scenario: EvalScenario = {
       },
     },
     // (g) Canonical entity name
-    { kind: "response_contains", text: "Reiwa Travel" },
+    { kind: "response_contains", text: "Acme Travel" },
   ],
 };
 

@@ -54,7 +54,7 @@ Add an expandable section to the sidebar below the existing icon row. Layout:
 
 ──────────  (subtle divider)
 Recent chats        すべて →   (link to /app/chats)
-  令和トラベル面接日程返信文…  (3h ago)
+  アクメトラベル面接日程返信文…  (3h ago)
   カレンダーの整理について…  (1d ago)
   CSC108 課題の概要…  (3d ago)
   …  (up to 5 entries total)

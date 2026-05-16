@@ -165,8 +165,8 @@ function freshJoined(
     },
     inbox: {
       id: "33333333-3333-3333-3333-333333333333",
-      senderName: "Reiwa Travel Recruiting",
-      senderEmail: "recruiter@reiwa-travel.co.jp",
+      senderName: "Acme Travel Recruiting",
+      senderEmail: "recruiter@acme-travel.example.co.jp",
       subject: "Interview scheduling — 2 candidate days",
       ...overrides.inbox,
     },
