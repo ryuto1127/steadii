@@ -1,0 +1,49 @@
+# Universal PII / leak shape patterns. PUBLIC — committed to repo.
+#
+# Rule: every line here must describe a SHAPE, not an identity. A pattern is
+# OK to commit if seeing it tells the reader nothing specific about any real
+# person, company, or piece of correspondence. "@gmail.com address that
+# isn't in the allowlist" is a SHAPE. "畠山" is an identity — those go in
+# `pii-patterns.local.txt` (gitignored) instead.
+#
+# Format: one ERE-flavor regex per line. `#` starts a comment. Blank lines
+# OK. Patterns are joined with `|` and matched case-insensitive in
+# `scripts/check-no-pii.sh`.
+
+# ---- Personal email addresses on real mailbox providers ----
+# Catches `someone@gmail.com` / `someone@outlook.com` etc. — any mailbox
+# that isn't in our example/test allowlist. Triggers on ANY real-personal-
+# email leak without naming a specific human.
+[a-zA-Z0-9._%+-]+@(gmail|googlemail|hotmail|outlook|live|msn|icloud|me|mac|yahoo|ymail|aol|protonmail|proton|tutanota|fastmail|posteo|zoho|gmx|t-online|laposte|orange|wanadoo|free|sfr|libero|seznam|mail\.ru|yandex|inbox|ya)\.(com|net|jp|co\.jp|fr|de|it|ru|nl|pl|ca|us|uk|com\.br|com\.au|co\.uk|io|me|cz|fi|se|no|dk|ch|at|be|es|pt|hu|gr|tr|kr|tw|hk|sg|in)
+
+# ---- API keys / cloud credentials ----
+# OpenAI keys come in `sk-XXX` and `sk-proj-XXX` shapes; both may contain
+# hyphens + underscores in the payload, so allow those in the body.
+sk-[a-zA-Z0-9_-]{20,}
+sk_(test|live)_[a-zA-Z0-9]{20,}
+rk_(test|live)_[a-zA-Z0-9]{20,}
+pk_(test|live)_[a-zA-Z0-9]{20,}
+whsec_[a-zA-Z0-9]{20,}
+xoxb-[0-9]+-[0-9]+-[a-zA-Z0-9]+
+xoxp-[0-9]+-[0-9]+-[a-zA-Z0-9]+
+ghp_[a-zA-Z0-9]{36}
+gho_[a-zA-Z0-9]{36}
+ghs_[a-zA-Z0-9]{36}
+ghu_[a-zA-Z0-9]{36}
+github_pat_[a-zA-Z0-9_]{60,}
+AIza[a-zA-Z0-9_-]{30,}
+AKIA[A-Z0-9]{16}
+
+# ---- Private key headers ----
+-----BEGIN (RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY
+-----BEGIN PGP PRIVATE KEY
+-----BEGIN CERTIFICATE-----
+
+# ---- Connection strings with embedded credentials ----
+postgres(ql)?://[^:/@ ]+:[^@/ ]+@
+mongodb(\+srv)?://[^:/@ ]+:[^@/ ]+@
+mysql://[^:/@ ]+:[^@/ ]+@
+redis://[^:/@ ]+:[^@/ ]+@
+
+# ---- JWT-shaped tokens (3 base64 segments separated by dots) ----
+eyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}

@@ -182,6 +182,13 @@ Authoritative numbers live in `project_decisions.md`. This section covers only i
 
 **Pre-commit check**: before any `git add` of a content-bearing file, scan the diff for the patterns above. If a leak is suspected, scrub at the source, do NOT rely on a later cleanup pass.
 
+**Pattern storage — split by sensitivity** (the scanner itself must not be the leak):
+
+- `scripts/pii-patterns-universal.txt` — **committed, public.** SHAPE-based patterns only: real-personal-email regex (any `@gmail.com` / `@outlook.com` / etc. not in allowlist), API key shapes, JWT shapes, private key headers, DSN credentials. Seeing this file tells the reader nothing about any specific real person — only what KINDS of leaks the scanner catches.
+- `scripts/pii-patterns.local.txt` — **gitignored, LOCAL ONLY.** Maintainer-specific literal identities (real names, real emails, the recruiting case, third parties from PR notifications, identifying profile combos). Mirror this file's contents into the github repo secret `PII_PATTERNS_LOCAL` (Settings → Secrets and variables → Actions) so CI has parity with the local hook.
+
+Why split: committing `'畠山'` as a literal pattern in a public script IS itself a leak — the scanner becomes the leak vector. Splitting keeps the scanner's logic + universal patterns public (so the workflow is reviewable + portable) while the identity-specific patterns stay private.
+
 ### 7b. Pre-merge review — MANDATORY on every PR
 
 Before any squash-merge to `main`, the assistant (or whoever is shipping) MUST do a two-layer review of the PR's diff vs `main`:
