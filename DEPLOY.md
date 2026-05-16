@@ -417,8 +417,8 @@ Skip this whole block if `AUTH_MS_ID` is not set in env.
 ### 10.1 Pre-invite final checks
 
 - [ ] All sections 1-9 + 11 above ticked through
-- [ ] Ryuto's admin flag confirmed on production DB
-      (`SELECT is_admin FROM users WHERE email = '<ryuto>'` returns true)
+- [ ] Admin flag confirmed on production DB
+      (`SELECT is_admin FROM users WHERE email = '<admin-email>'` returns true)
 - [ ] Test-mode banner verified in production: subscription flows
       complete but no real Stripe charges post
 - [ ] Sentry shows zero unresolved errors from the full §8 smoke test pass
