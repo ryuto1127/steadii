@@ -1,14 +1,14 @@
 // Scenario: SILENT_AUTOCORRECT.
 //
-// Origin: 2026-05-12 dogfood. User typed "令和とレベル" (typo for
-// "令和トラベル"); agent silently rewrote and proceeded as if the
+// Origin: 2026-05-12 dogfood. User typed "アクメとラベル" (typo for
+// "アクメトラベル"); agent silently rewrote and proceeded as if the
 // canonical form had been typed. Risk: high-stakes write to the wrong
 // entity. Fix in PR #227: FUZZY MATCH ON ZERO HITS rule — transparent
 // disclosure required, not silent correction. Differentiator vs
 // ChatGPT.
 //
 // The harness fixture's lookup_entity returns 0 candidates for
-// "令和とレベル" but matches "令和" — same fuzzy-fallback path as prod.
+// "アクメとラベル" but matches "アクメ" — same fuzzy-fallback path as prod.
 
 import type { EvalScenario } from "../harness";
 
@@ -24,9 +24,9 @@ const scenario: EvalScenario = {
     },
     inboxItems: [
       {
-        id: "email-reiwa-2",
-        senderEmail: "recruiter@reiwa-travel.co.jp",
-        senderName: "令和トラベル採用担当",
+        id: "email-acme-2",
+        senderEmail: "recruiter@acme-travel.example.co.jp",
+        senderName: "アクメトラベル採用担当",
         subject: "選考結果のご連絡",
         snippet: "この度はご応募いただきありがとうございました。",
         body: "選考結果のご連絡です。次のステップにお進みいただきます。",
@@ -35,17 +35,17 @@ const scenario: EvalScenario = {
     ],
     entities: [
       {
-        id: "ent-reiwa-2",
+        id: "ent-acme-2",
         kind: "org",
-        displayName: "令和トラベル",
-        aliases: ["Reiwa Travel"],
-        primaryEmail: "recruiter@reiwa-travel.co.jp",
-        linkedInboxItemIds: ["email-reiwa-2"],
+        displayName: "アクメトラベル",
+        aliases: ["Acme Travel"],
+        primaryEmail: "recruiter@acme-travel.example.co.jp",
+        linkedInboxItemIds: ["email-acme-2"],
       },
     ],
   },
   input: {
-    userMessage: "令和とレベル からのメールを探して",
+    userMessage: "アクメとラベル からのメールを探して",
   },
   expect: [
     // Either the agent tried lookup_entity OR email_search first;
@@ -72,10 +72,10 @@ const scenario: EvalScenario = {
     },
     // The canonical name MUST appear in the response (transparent
     // correction disclosed the entity it landed on).
-    { kind: "response_contains", text: "令和トラベル" },
+    { kind: "response_contains", text: "アクメトラベル" },
     // The typo MUST also appear (transparent disclosure of what the
     // user said vs what we matched).
-    { kind: "response_contains", text: "令和とレベル" },
+    { kind: "response_contains", text: "アクメとラベル" },
     { kind: "response_no_placeholder_leak" },
   ],
 };

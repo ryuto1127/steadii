@@ -48,7 +48,7 @@ describe("isBotSender", () => {
     expect(
       isBotSender({
         fromEmail: "notifications@github.com",
-        fromName: "Takumi Shiraishi",
+        fromName: "Sample Sender",
       })
     ).toBe(true);
     expect(

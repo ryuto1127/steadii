@@ -18,7 +18,7 @@ const args = z.object({
     .min(3)
     .max(254)
     .describe(
-      "The sender's email address (e.g. 'recruiter@reiwa-travel.co.jp'). Used for TLD-based norm inference + sender TZ resolution."
+      "The sender's email address (e.g. 'recruiter@acme-travel.example.co.jp'). Used for TLD-based norm inference + sender TZ resolution."
     ),
   body: z
     .string()

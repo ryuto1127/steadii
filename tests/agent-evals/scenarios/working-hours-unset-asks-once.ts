@@ -42,7 +42,7 @@ const scenario: EvalScenario = {
       id: "user-ryuto-new",
       timezone: "America/Vancouver",
       locale: "ja",
-      name: "畠山 竜都",
+      name: "田中 太郎",
     },
     // Explicitly null — the harness emits "(not set — using norm: …)"
     // so the engineer-56 soft-default branch fires.
@@ -50,15 +50,15 @@ const scenario: EvalScenario = {
     inboxItems: [
       {
         id: "email-first-slots",
-        senderEmail: "recruiter@reiwa-travel.co.jp",
-        senderName: "令和トラベル採用担当",
+        senderEmail: "recruiter@acme-travel.example.co.jp",
+        senderName: "アクメトラベル採用担当",
         subject: "次回面接のご連絡",
         snippet:
           "下記3候補からご都合の良い時間帯をお選びください。各60分程度を想定しております。",
         body: [
-          "畠山様",
+          "田中様",
           "",
-          "お世話になっております。令和トラベルの採用担当でございます。",
+          "お世話になっております。アクメトラベルの採用担当でございます。",
           "次回面接の候補として下記3つの日程をご提案いたします。",
           "各60分程度を想定しております。",
           "",
@@ -69,25 +69,25 @@ const scenario: EvalScenario = {
           "ご返信いただけますと幸いです。",
           "何卒よろしくお願い申し上げます。",
           "",
-          "令和トラベル 採用担当",
+          "アクメトラベル 採用担当",
         ].join("\n"),
         receivedAt: "2026-05-13T05:00:00Z",
       },
     ],
     entities: [
       {
-        id: "ent-reiwa-first",
+        id: "ent-acme-first",
         kind: "org",
-        displayName: "令和トラベル",
-        aliases: ["Reiwa Travel"],
+        displayName: "アクメトラベル",
+        aliases: ["Acme Travel"],
         description: "新卒採用面接プロセス中の旅行会社",
-        primaryEmail: "recruiter@reiwa-travel.co.jp",
+        primaryEmail: "recruiter@acme-travel.example.co.jp",
         linkedInboxItemIds: ["email-first-slots"],
       },
     ],
   },
   input: {
-    userMessage: "令和トラベル の面接日程のメールに返信したい",
+    userMessage: "アクメトラベル の面接日程のメールに返信したい",
   },
   expect: [
     // (a) Body fetched
@@ -131,7 +131,7 @@ const scenario: EvalScenario = {
       },
     },
     // (d) Canonical entity name appears
-    { kind: "response_contains", text: "令和トラベル" },
+    { kind: "response_contains", text: "アクメトラベル" },
     // (e) No placeholder leaks
     { kind: "response_no_placeholder_leak" },
     // (f) Did NOT revert to the pre-engineer-56 hard-ASK behavior of

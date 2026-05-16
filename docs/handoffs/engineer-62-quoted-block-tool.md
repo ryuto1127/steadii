@@ -22,7 +22,7 @@ Reference shipped patterns:
 
 ## Strategic context — why prompt-only failed
 
-The 2026-05-14 dogfood on the 令和トラベル round-2 reply produced this draft despite engineer-53's MUST-rule 9 + the sparring inline strengthening (PR #257):
+The 2026-05-14 dogfood on the アクメトラベル round-2 reply produced this draft despite engineer-53's MUST-rule 9 + the sparring inline strengthening (PR #257):
 
 ```
 第一希望：5月15日（金）10:00〜11:00
@@ -188,7 +188,7 @@ IMPORTANT before checkout: `git status`. See `feedback_sparring_engineer_branch_
 - `pnpm typecheck` clean
 - `pnpm test` full suite green, +~10 new unit tests (stripper edge cases + cascade detector cases)
 - `pnpm eval:agent` — every scenario passes; specifically `quoted-block-extraction` (currently failing) MUST go green. Cost ~\$0.02/run.
-- Manual dogfood: re-trigger the 令和トラベル round-2 reply scenario. Expected: draft cites 5/20 + 5/21 NEW slots (NOT 5/15/5/19/5/22 quoted ones); convert_timezone called ≥4 times (2 slots × 2 endpoints); infer_sender_norms called once; SLOT FEASIBILITY CHECK / SENDER NORMS reasoning surfaced in the meta-prose; counter-proposal generated because the JST 5/20 18:00 / 5/21 15:00 are Vancouver night.
+- Manual dogfood: re-trigger the アクメトラベル round-2 reply scenario. Expected: draft cites 5/20 + 5/21 NEW slots (NOT 5/15/5/19/5/22 quoted ones); convert_timezone called ≥4 times (2 slots × 2 endpoints); infer_sender_norms called once; SLOT FEASIBILITY CHECK / SENDER NORMS reasoning surfaced in the meta-prose; counter-proposal generated because the JST 5/20 18:00 / 5/21 15:00 are Vancouver night.
 
 ## Out of scope
 

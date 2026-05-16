@@ -1,4 +1,4 @@
-// Scenario: PLACEHOLDER_LEAK on the 令和トラベル email-reply flow.
+// Scenario: PLACEHOLDER_LEAK on the アクメトラベル email-reply flow.
 //
 // Origin: 2026-05-12 dogfood. Agent emitted a template containing
 // 〇〇 / "ご提示いただいた日程で参加可能です" / undated slots and shipped
@@ -32,16 +32,16 @@ const scenario: EvalScenario = {
     ],
     inboxItems: [
       {
-        id: "email-reiwa",
-        senderEmail: "recruiter@reiwa-travel.co.jp",
-        senderName: "令和トラベル採用担当",
+        id: "email-acme",
+        senderEmail: "recruiter@acme-travel.example.co.jp",
+        senderName: "アクメトラベル採用担当",
         subject: "次回面接のご連絡",
         snippet:
           "下記3候補からご都合の良い時間帯をお選びください。各60分程度を想定しております。",
         body: [
           "Ryuto様",
           "",
-          "お世話になっております。令和トラベルの採用担当でございます。",
+          "お世話になっております。アクメトラベルの採用担当でございます。",
           "次回面接の候補として下記3つの日程をご提案いたします。",
           "各60分程度を想定しております。",
           "",
@@ -52,26 +52,26 @@ const scenario: EvalScenario = {
           "上記からご都合の良い時間帯をお選びいただき、ご返信いただけますと幸いです。",
           "",
           "何卒よろしくお願い申し上げます。",
-          "令和トラベル 採用担当",
+          "アクメトラベル 採用担当",
         ].join("\n"),
         receivedAt: "2026-05-12T01:30:00Z",
       },
     ],
     entities: [
       {
-        id: "ent-reiwa",
+        id: "ent-acme",
         kind: "org",
-        displayName: "令和トラベル",
-        aliases: ["Reiwa Travel"],
+        displayName: "アクメトラベル",
+        aliases: ["Acme Travel"],
         description: "新卒採用面接プロセス中の旅行会社",
-        primaryEmail: "recruiter@reiwa-travel.co.jp",
-        linkedInboxItemIds: ["email-reiwa"],
+        primaryEmail: "recruiter@acme-travel.example.co.jp",
+        linkedInboxItemIds: ["email-acme"],
       },
     ],
   },
   input: {
     userMessage:
-      "令和トラベルとの面接日程に返信したい。候補3つそれぞれを JST と PT 両方で見せて。",
+      "アクメトラベルとの面接日程に返信したい。候補3つそれぞれを JST と PT 両方で見せて。",
   },
   expect: [
     { kind: "tool_called", name: "email_get_body" },

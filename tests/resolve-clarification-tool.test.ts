@@ -133,7 +133,7 @@ function happyPathArgs() {
     newAction: "draft_reply" as const,
     draftBody: "Hi — Tuesday 10:00 PT works for me. Looking forward to it.",
     draftSubject: "Re: Interview slots",
-    draftTo: ["recruiter@reiwa-travel.co.jp"],
+    draftTo: ["recruiter@acme-travel.example.co.jp"],
     draftCc: [],
     reasoning:
       "Confirmed with the student via chat that they prefer the Tuesday slot in PT. Drafted a reply locking that in.",
@@ -166,7 +166,7 @@ describe("resolveClarification.execute", () => {
       action: "draft_reply",
       status: "pending",
       draftSubject: "Re: Interview slots",
-      draftTo: ["recruiter@reiwa-travel.co.jp"],
+      draftTo: ["recruiter@acme-travel.example.co.jp"],
       riskTier: "medium",
     });
     // Exactly one status-flip update inside the transaction.

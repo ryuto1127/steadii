@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
 
   // engineer-51 — entity resolution on the user message. The user's
   // wording is often the canonical surface for an entity reference
-  // (e.g. "what's the latest on 令和トラベル"). Fire-and-forget so the
+  // (e.g. "what's the latest on アクメトラベル"). Fire-and-forget so the
   // chat reply doesn't wait on the resolver.
   if (trimmed.length > 0) {
     resolveEntitiesInBackground({

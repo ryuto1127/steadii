@@ -10,7 +10,7 @@
 // permissive, bidirectional intersection means the JST proposal stays
 // inside 09:00–18:00 JST.
 //
-// Fixture: same 令和トラベル round-2 shape as late-night-slot-pushback,
+// Fixture: same アクメトラベル round-2 shape as late-night-slot-pushback,
 // but workingHoursLocal explicitly widened to 06:00–23:00 PT. Round 1
 // slot 5/22 13:30 JST = 5/21 21:30 PT — INSIDE the wide window, so the
 // agent could accept it. But it's the round-2 push-back we test: both
@@ -31,7 +31,7 @@ const scenario: EvalScenario = {
       id: "user-ryuto-flex",
       timezone: "America/Vancouver",
       locale: "ja",
-      name: "畠山 竜都",
+      name: "田中 太郎",
     },
     // Permissive — user explicitly told the agent they're free from
     // 06:00 to 23:00 PT. The agent could "fit the user" at JST
@@ -40,16 +40,16 @@ const scenario: EvalScenario = {
     workingHoursLocal: { start: "06:00", end: "23:00" },
     inboxItems: [
       {
-        id: "email-reiwa-round2-flexuser",
-        senderEmail: "recruiter@reiwa-travel.co.jp",
-        senderName: "令和トラベル採用担当",
+        id: "email-acme-round2-flexuser",
+        senderEmail: "recruiter@acme-travel.example.co.jp",
+        senderName: "アクメトラベル採用担当",
         subject: "Re: Re: 次回面接のご連絡",
         snippet:
           "ご返信ありがとうございます。誠に恐れ入りますが、ご提示いただいた日程ではいずれも調整が難しく、下記2候補をご検討いただけますでしょうか。",
         body: [
-          "畠山様",
+          "田中様",
           "",
-          "お世話になっております。令和トラベルの採用担当でございます。",
+          "お世話になっております。アクメトラベルの採用担当でございます。",
           "ご返信誠にありがとうございます。",
           "誠に恐れ入りますが、ご提示いただいた3日程ではいずれも調整が難しく、",
           "下記2候補をご検討いただけますでしょうか。",
@@ -60,25 +60,25 @@ const scenario: EvalScenario = {
           "ご都合の良い方をお選びいただければ幸いです。",
           "ご検討のほど、何卒よろしくお願い申し上げます。",
           "",
-          "令和トラベル 採用担当",
+          "アクメトラベル 採用担当",
         ].join("\n"),
         receivedAt: "2026-05-13T01:30:00Z",
       },
     ],
     entities: [
       {
-        id: "ent-reiwa-flex",
+        id: "ent-acme-flex",
         kind: "org",
-        displayName: "令和トラベル",
-        aliases: ["Reiwa Travel"],
+        displayName: "アクメトラベル",
+        aliases: ["Acme Travel"],
         description: "新卒採用面接プロセス中の旅行会社（round 2)",
-        primaryEmail: "recruiter@reiwa-travel.co.jp",
-        linkedInboxItemIds: ["email-reiwa-round2-flexuser"],
+        primaryEmail: "recruiter@acme-travel.example.co.jp",
+        linkedInboxItemIds: ["email-acme-round2-flexuser"],
       },
     ],
   },
   input: {
-    userMessage: "令和トラベル の二回目のメールに返信したい",
+    userMessage: "アクメトラベル の二回目のメールに返信したい",
   },
   expect: [
     // (a) Body fetched
@@ -110,7 +110,7 @@ const scenario: EvalScenario = {
     // (c) Each slot converted (start + end = 4 calls floor)
     { kind: "tool_called", name: "convert_timezone", minTimes: 4 },
     // (d) Canonical entity name appears
-    { kind: "response_contains", text: "令和トラベル" },
+    { kind: "response_contains", text: "アクメトラベル" },
     // (e) PRIMARY assertion — every JST hour proposed in the counter
     // lies inside 09:00–18:00 Asia/Tokyo. SENDER_NORMS_IGNORED gate.
     // Parsing: tight HH:MM proximity (20 chars) + skip if a PT marker
@@ -189,7 +189,7 @@ const scenario: EvalScenario = {
             t.includes("Regards"));
         if (!hasDraftBody) return { pass: true };
         const hasRealName =
-          t.includes("畠山") || t.includes("竜都") || t.includes("Ryuto");
+          t.includes("田中") || t.includes("竜都") || t.includes("Ryuto");
         return {
           pass: hasRealName,
           message: hasRealName

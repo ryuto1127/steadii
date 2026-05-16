@@ -135,7 +135,7 @@ describe("detectPlaceholderLeak", () => {
 
   describe("clean output (no leaks)", () => {
     it("does not flag a fully-grounded JA email reply", () => {
-      const text = `お世話になっております。畠山 竜都です。
+      const text = `お世話になっております。田中 太郎です。
 ご連絡ありがとうございます。
 
 下記の通り、希望日程をお送りいたします。
@@ -165,8 +165,8 @@ describe("detectPlaceholderLeak", () => {
     it("flags `件名: Re: ...` at the top of a draft body", () => {
       const text = [
         "件名: Re: 次回面接日程のご連絡",
-        "令和トラベル",
-        "畠山 竜都です。",
+        "アクメトラベル",
+        "田中 太郎です。",
       ].join("\n");
       const r = detectPlaceholderLeak(text);
       expect(r.hasLeak).toBe(true);
@@ -177,7 +177,7 @@ describe("detectPlaceholderLeak", () => {
       const text = [
         "Subject: Re: Interview slots",
         "",
-        "Hi Reiwa Travel,",
+        "Hi Acme Travel,",
         "Thanks for the slots.",
       ].join("\n");
       const r = detectPlaceholderLeak(text);
@@ -328,7 +328,7 @@ describe("detectPlaceholderLeak", () => {
 
     it("flags `the proposed slot ... works for me` (English)", () => {
       const text =
-        "Hi Reiwa Travel,\nThanks — the proposed slot at 18:00 works for me.\nBest, Ryuto";
+        "Hi Acme Travel,\nThanks — the proposed slot at 18:00 works for me.\nBest, Alex";
       const r = detectPlaceholderLeak(text);
       expect(r.hasLeak).toBe(true);
       expect(r.matched).toContain("slot acceptance missing user-local TZ");
@@ -418,7 +418,7 @@ describe("detectPlaceholderLeak", () => {
         "```text",
         "お世話になっております。",
         "候補1の2026年5月15日(金) 11:30-12:15 (JST)でお願いいたします。",
-        "畠山 竜都",
+        "田中 太郎",
         "```",
       ].join("\n");
       const r = detectPlaceholderLeak(text);
@@ -518,7 +518,7 @@ describe("detectPlaceholderLeak", () => {
           { toolName: "email_get_body" },
           { toolName: "convert_timezone" },
         ],
-        userMessage: "令和トラベルから返信が来てるから返信したい",
+        userMessage: "アクメトラベルから返信が来てるから返信したい",
       });
       expect(r.hasLeak).toBe(true);
       expect(r.matched).toContain(
@@ -533,7 +533,7 @@ describe("detectPlaceholderLeak", () => {
           { toolName: "email_get_new_content_only" },
           { toolName: "convert_timezone" },
         ],
-        userMessage: "令和トラベルから返信が来てるから返信したい",
+        userMessage: "アクメトラベルから返信が来てるから返信したい",
       });
       expect(r.matched).not.toContain(
         "reply intent without email_get_new_content_only"
@@ -555,7 +555,7 @@ describe("detectPlaceholderLeak", () => {
         "承知しました。ドラフトはまだ作成していません — 候補日程をご教示ください。";
       const r = detectPlaceholderLeak(text, {
         toolCallHistory: [{ toolName: "email_get_body" }],
-        userMessage: "令和トラベルから返信が来てるから返信したい",
+        userMessage: "アクメトラベルから返信が来てるから返信したい",
       });
       expect(r.matched).not.toContain(
         "reply intent without email_get_new_content_only"
@@ -565,7 +565,7 @@ describe("detectPlaceholderLeak", () => {
     it("fires on English reply triggers too", () => {
       const r = detectPlaceholderLeak(replyDraft, {
         toolCallHistory: [{ toolName: "email_get_body" }],
-        userMessage: "Draft a reply to Reiwa Travel",
+        userMessage: "Draft a reply to Acme Travel",
       });
       expect(r.matched).toContain(
         "reply intent without email_get_new_content_only"

@@ -2,13 +2,13 @@
 // + write intent. Mirrors the 2026-05-13 dogfood failure that triggered
 // engineer-53.
 //
-// Verbatim user message: 「令和とレベルとの次の面接日程へのメールを返したいです」
+// Verbatim user message: 「アクメとラベルとの次の面接日程へのメールを返したいです」
 //
 // Differences vs placeholder-leak-email-reply.ts:
 // - User message has NO instructional hints (no "候補3つ", no "JST と PT
 //   両方で見せて") — those biased the older scenario toward passing
 //   because the model could just follow the recipe in the prompt.
-// - Entity name is typo'd ("令和とレベル" vs "令和トラベル"), so the agent
+// - Entity name is typo'd ("アクメとラベル" vs "アクメトラベル"), so the agent
 //   must fuzzy-match AND disclose the correction (SILENT_AUTOCORRECT
 //   coverage piggy-backed on top of the reply flow).
 // - Reply intent + write context — the EMAIL REPLY WORKFLOW MUST-rules
@@ -28,7 +28,7 @@ const scenario: EvalScenario = {
       id: "user-ryuto",
       timezone: "America/Vancouver",
       locale: "ja",
-      name: "畠山 竜都",
+      name: "田中 太郎",
     },
     // engineer-54 — pre-existing reply scenarios assume a user who has
     // already onboarded (working hours set). Without this, the SLOT
@@ -42,16 +42,16 @@ const scenario: EvalScenario = {
     ],
     inboxItems: [
       {
-        id: "email-reiwa-typo",
-        senderEmail: "recruiter@reiwa-travel.co.jp",
-        senderName: "令和トラベル採用担当",
+        id: "email-acme-typo",
+        senderEmail: "recruiter@acme-travel.example.co.jp",
+        senderName: "アクメトラベル採用担当",
         subject: "次回面接のご連絡",
         snippet:
           "下記3候補からご都合の良い時間帯をお選びください。各60分程度を想定しております。",
         body: [
-          "畠山様",
+          "田中様",
           "",
-          "お世話になっております。令和トラベルの採用担当でございます。",
+          "お世話になっております。アクメトラベルの採用担当でございます。",
           "次回面接の候補として下記3つの日程をご提案いたします。",
           "各60分程度を想定しております。",
           "",
@@ -62,20 +62,20 @@ const scenario: EvalScenario = {
           "上記からご都合の良い時間帯をお選びいただき、ご返信いただけますと幸いです。",
           "",
           "何卒よろしくお願い申し上げます。",
-          "令和トラベル 採用担当",
+          "アクメトラベル 採用担当",
         ].join("\n"),
         receivedAt: "2026-05-13T01:30:00Z",
       },
     ],
     entities: [
       {
-        id: "ent-reiwa-typo",
+        id: "ent-acme-typo",
         kind: "org",
-        displayName: "令和トラベル",
-        aliases: ["Reiwa Travel"],
+        displayName: "アクメトラベル",
+        aliases: ["Acme Travel"],
         description: "新卒採用面接プロセス中の旅行会社",
-        primaryEmail: "recruiter@reiwa-travel.co.jp",
-        linkedInboxItemIds: ["email-reiwa-typo"],
+        primaryEmail: "recruiter@acme-travel.example.co.jp",
+        linkedInboxItemIds: ["email-acme-typo"],
       },
     ],
   },
@@ -83,7 +83,7 @@ const scenario: EvalScenario = {
     // Verbatim from the 2026-05-13 dogfood transcript. Do NOT edit
     // this string — it's the exact phrasing that surfaced the failure.
     userMessage:
-      "令和とレベルとの次の面接日程へのメールを返したいです",
+      "アクメとラベルとの次の面接日程へのメールを返したいです",
   },
   expect: [
     // (a) MUST chain — body fetch is non-negotiable
@@ -162,13 +162,13 @@ const scenario: EvalScenario = {
     // (h) SILENT_AUTOCORRECT mitigation. The canonical entity name
     // MUST appear in the response (so the user sees which company /
     // person Steadii is acting on). Explicit typo-disclosure
-    // ("令和とレベル」だと該当なし、『令和トラベル』のことですね") is
+    // ("アクメとラベル」だと該当なし、『アクメトラベル』のことですね") is
     // ideal but mini-model variance makes a strict assertion flaky on
     // this WRITE-intent scenario — the sibling READ-intent scenario
     // `silent-autocorrect-disclosure.ts` keeps the strict version, so
     // the SILENT_AUTOCORRECT regression remains gated. Here we only
     // require the canonical name to appear.
-    { kind: "response_contains", text: "令和トラベル" },
+    { kind: "response_contains", text: "アクメトラベル" },
     // (i) Sign-off / placeholder gating. The fixture has a typo so the
     // FUZZY MATCH ON ZERO HITS rule says "ASK before acting" on WRITE
     // intent — meaning the model may legitimately respond with the
@@ -196,7 +196,7 @@ const scenario: EvalScenario = {
           };
         }
         // Heuristic for "draft was emitted": the body contains both a
-        // greeting (お世話になっております / 畠山様 / Hi 〜) AND a
+        // greeting (お世話になっております / 田中様 / Hi 〜) AND a
         // closing (よろしくお願い / Best / Sincerely). When neither
         // marker is present we assume the model chose the clarification
         // branch — that's correct WRITE-intent behavior on a typo'd
@@ -211,12 +211,12 @@ const scenario: EvalScenario = {
             t.includes("Regards"));
         if (!hasDraftBody) return { pass: true };
         const hasRealName =
-          t.includes("畠山") || t.includes("竜都") || t.includes("Ryuto");
+          t.includes("田中") || t.includes("竜都") || t.includes("Ryuto");
         return {
           pass: hasRealName,
           message: hasRealName
             ? undefined
-            : "A draft body was emitted but the sign-off did not include the user's real name (畠山 / 竜都 / Ryuto).",
+            : "A draft body was emitted but the sign-off did not include the user's real name (田中 / 竜都 / Ryuto).",
         };
       },
     },

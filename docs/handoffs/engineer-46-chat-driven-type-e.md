@@ -23,7 +23,7 @@ Reference shipped patterns:
 
 ## Strategic context
 
-Ryuto's 2026-05-12 transcript: when Steadii needs clarification on an inbox email, the current Type E card forces a single-shot text input. For nuanced cases (the 令和トラベル interview thread had 12+ turns of TZ disambiguation, slot selection, AM/PM, etc.), one input field is not enough. The user wants to **chat with Steadii to determine the email content collaboratively**, not stuff everything into a single textarea.
+Ryuto's 2026-05-12 transcript: when Steadii needs clarification on an inbox email, the current Type E card forces a single-shot text input. For nuanced cases (the アクメトラベル interview thread had 12+ turns of TZ disambiguation, slot selection, AM/PM, etc.), one input field is not enough. The user wants to **chat with Steadii to determine the email content collaboratively**, not stuff everything into a single textarea.
 
 Engineer-45 (PR #212) shipped the foundation: agent now has `convert_timezone` tool + system prompt with user TZ + scheduling-domain rules + immediate L2 re-run on the existing single-shot submit path. Engineer-46 layers the **multi-turn chat path** on top — same agent, same tool kit, new entry point + a tool to finalize the conversation back into the queue.
 

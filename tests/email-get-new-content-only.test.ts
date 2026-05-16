@@ -84,13 +84,13 @@ describe("stripQuotedHistory", () => {
 
   it("strips Outlook-style JA header cluster (差出人 / 送信日時 / 件名)", () => {
     const body = [
-      "畠山さま",
+      "田中さま",
       "",
       "新しい候補は 2026/05/25 14:00 です。",
       "",
       "差出人: prof@uni.example",
       "送信日時: 2026年5月11日 月曜日 1:05",
-      "宛先: ryuto@example.com",
+      "宛先: alex@example.com",
       "件名: 面接の件",
       "",
       "過去のメール本文 — 2026/05/15 10:00 を提案。",
@@ -110,7 +110,7 @@ describe("stripQuotedHistory", () => {
       "",
       "From: prof@uni.edu",
       "Sent: Mon, May 11, 2026",
-      "To: ryuto@example.com",
+      "To: alex@example.com",
       "Subject: Interview",
       "",
       "Old content — Slot 2026-05-15 10:00.",
@@ -121,12 +121,12 @@ describe("stripQuotedHistory", () => {
     expect(r.newContentBody).not.toContain("2026-05-15");
   });
 
-  it("verbatim reproduces the 2026-05-14 round-2 dogfood fixture (令和トラベル)", () => {
+  it("verbatim reproduces the 2026-05-14 round-2 dogfood fixture (アクメトラベル)", () => {
     // Same body as tests/agent-evals/scenarios/quoted-block-extraction.ts
     const body = [
-      "畠山 竜都　さま",
+      "田中 太郎　さま",
       "",
-      "お世話になっております。令和トラベル採用担当でございます。",
+      "お世話になっております。アクメトラベル採用担当でございます。",
       "ご面接日程のご希望をご回答いただきましてありがとうございます。",
       "",
       "誠に申し訳ございませんが、いただいた日程につきまして、面接官の調整が難しくなってしまい、以下のいずれかでのご参加は可能でしょうか。",
@@ -152,15 +152,15 @@ describe("stripQuotedHistory", () => {
       "> 第二希望：5月15日（金） 12：30〜13：00",
       "> 第三希望：5月15日（金） 12：00〜12：30",
       ">",
-      "> On Mon, May 11, 2026 at 1:05 AM 株式会社令和トラベル 採用担当 <",
-      "> 2239928341129601024.candidate@reiwatravel.n-ats.hrmos.co> wrote:",
+      "> On Mon, May 11, 2026 at 1:05 AM 株式会社アクメトラベル 採用担当 <",
+      "> candidate-001@example-ats.example.com> wrote:",
       ">",
-      "> > 畠山 竜都 さま",
+      "> > 田中 太郎 さま",
       "> >",
-      "> > お世話になっております。令和トラベル採用担当でございます。",
+      "> > お世話になっております。アクメトラベル採用担当でございます。",
       "> > この度は、グループディスカッション選考にご参加いただきまして、ありがとうございました。",
       "> >",
-      "> > 慎重な選考の結果、畠山さまにはぜひ次回ステップにお進みいただきたく思っております。",
+      "> > 慎重な選考の結果、田中さまにはぜひ次回ステップにお進みいただきたく思っております。",
       "> >",
       "> > ＜候補日程＞",
       "> > ・2026/5/15 (金) 10:00 〜 11:00の間、11:30 〜 13:00の間",
@@ -177,7 +177,7 @@ describe("stripQuotedHistory", () => {
     expect(r.newContentBody).toContain("18:00");
     expect(r.newContentBody).toContain("2026/5/21");
     expect(r.newContentBody).toContain("15:00");
-    expect(r.newContentBody).toContain("令和トラベル採用担当");
+    expect(r.newContentBody).toContain("アクメトラベル採用担当");
 
     // QUOTED — round-1 / user's previous reply slots MUST be absent
     expect(r.newContentBody).not.toContain("第一希望");

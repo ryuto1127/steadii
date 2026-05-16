@@ -22,7 +22,7 @@ Reference shipped patterns:
 
 ## Strategic context
 
-In Ryuto's 2026-05-12 chat transcript with the 令和トラベル interview thread, he had to clarify the same context multiple times:
+In Ryuto's 2026-05-12 chat transcript with the アクメトラベル interview thread, he had to clarify the same context multiple times:
 
 - "私がいるところはバンクーバーなのですが、時差的にはどうですか？" (I'm in Vancouver — what about the TZ?)
 - "私目線で話していました" (I was speaking from my POV)

@@ -256,7 +256,7 @@ Aim: 1101 → ~1130+. `pnpm test` + `pnpm tsc --noEmit` clean.
 Per AGENTS.md §13 — `preview_screenshot @ 1440×900` EN+JA. Required:
 
 - Settings → Beta features section showing the agentic-L2 toggle (EN + JA)
-- After flipping the toggle for a test scenario: an interview-scheduling email (令和トラベル type) produces a draft that includes specific time choices grounded in the user's actual calendar availability — capture the DraftDetailsPanel + reasoning text
+- After flipping the toggle for a test scenario: an interview-scheduling email (アクメトラベル type) produces a draft that includes specific time choices grounded in the user's actual calendar availability — capture the DraftDetailsPanel + reasoning text
 - A confirmation question appears in a new queue surface (Type F preview — final UI lands in engineer-42; for now even a Sentry log entry showing `queue_user_confirmation` was called counts as verify)
 
 ---

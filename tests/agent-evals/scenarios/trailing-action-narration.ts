@@ -22,7 +22,7 @@ const scenario: EvalScenario = {
       id: "user-ryuto",
       timezone: "America/Vancouver",
       locale: "ja",
-      name: "畠山 竜都",
+      name: "田中 太郎",
     },
     // engineer-54 — pre-set so the SLOT FEASIBILITY CHECK gate doesn't
     // block older reply scenarios. Already-onboarded user state.

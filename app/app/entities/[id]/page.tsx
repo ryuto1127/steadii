@@ -49,7 +49,7 @@ export default async function EntityDetailPage({
   const unlinkAriaLabel = t("detail_unlink_aria");
 
   // Merge candidates — other live entities of the same kind, so the
-  // user can collapse "令和トラベル" + "Reiwa Travel" into one.
+  // user can collapse "アクメトラベル" + "Acme Travel" into one.
   const sameKind = await listEntitiesForUser({
     userId,
     kind: entity.kind,

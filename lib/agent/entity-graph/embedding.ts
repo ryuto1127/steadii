@@ -6,7 +6,7 @@ import { recordUsage } from "@/lib/agent/usage";
 
 // engineer-51 — entity-side embedding helper. Same text-embedding-3-small
 // model as the email side so the vectors live in a shared semantic space
-// (an email "令和トラベル" and an entity "令和トラベル" land near each
+// (an email "アクメトラベル" and an entity "アクメトラベル" land near each
 // other). Distinct from lib/agent/email/embeddings.ts because the input
 // shape is different — entities embed display_name + aliases +
 // description, not subject + body.

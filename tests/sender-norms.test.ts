@@ -45,9 +45,9 @@ describe("inferSenderWorkingHours — domain hits", () => {
 
   it("body-language JP from generic .com → 09:00–18:00 Asia/Tokyo @ 0.8", () => {
     const body =
-      "お世話になっております。令和トラベル採用担当の山田です。次回の面接日程につきまして、以下の候補をご提案させていただきます。ご都合の良い日時をお知らせください。";
+      "お世話になっております。アクメトラベル採用担当の山田です。次回の面接日程につきまして、以下の候補をご提案させていただきます。ご都合の良い日時をお知らせください。";
     const r = inferSenderWorkingHours({
-      senderEmail: "recruiter@reiwatravel.com",
+      senderEmail: "recruiter@acme.com",
       body,
     });
     expect(r.tz).toBe("Asia/Tokyo");
@@ -72,7 +72,7 @@ describe("inferSenderWorkingHours — domain hits", () => {
 
   it("accepts senderEmail with full @ prefix", () => {
     const r = inferSenderWorkingHours({
-      senderEmail: "recruiter@reiwa-travel.co.jp",
+      senderEmail: "recruiter@acme-travel.example.co.jp",
     });
     expect(r.tz).toBe("Asia/Tokyo");
     expect(r.confidence).toBe(0.9);

@@ -44,10 +44,10 @@ describe("createWaitlistPromotionCode — code shape", () => {
   it("emits STEADII-{SLUG} with no Greek alpha", async () => {
     hoist.state.queue.push({ kind: "ok", id: "promo_1" });
     const result = await createWaitlistPromotionCode({
-      email: "ryuty1127@gmail.com",
+      email: "sample@example.com",
       name: null,
     });
-    expect(result.code).toBe("STEADII-RYUTY1127");
+    expect(result.code).toBe("STEADII-SAMPLE");
     expect(result.code).not.toMatch(/α/);
     expect(result.promotionCodeId).toBe("promo_1");
   });

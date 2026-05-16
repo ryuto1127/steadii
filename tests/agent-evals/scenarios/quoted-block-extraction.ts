@@ -29,7 +29,7 @@ const scenario: EvalScenario = {
       id: "user-ryuto",
       timezone: "America/Vancouver",
       locale: "ja",
-      name: "畠山 竜都",
+      name: "田中 太郎",
     },
     workingHoursLocal: { start: "08:00", end: "22:00" },
     facts: [
@@ -37,16 +37,16 @@ const scenario: EvalScenario = {
     ],
     inboxItems: [
       {
-        id: "email-reiwa-round2",
-        senderEmail: "2239928341129601024.candidate@reiwatravel.n-ats.hrmos.co",
-        senderName: "株式会社令和トラベル 採用担当",
-        subject: "Re: Re: 【令和トラベル】選考結果のご連絡",
+        id: "email-acme-round2",
+        senderEmail: "candidate-001@example-ats.example.com",
+        senderName: "株式会社アクメトラベル 採用担当",
+        subject: "Re: Re: 【アクメトラベル】選考結果のご連絡",
         snippet:
           "ご面接日程のご希望をご回答いただきましてありがとうございます。誠に申し訳ございませんが、いただいた日程につきまして、面接官の調整が難しくなってしまい、以下のいずれかでのご参加は可能でしょうか。",
         body: [
-          "畠山 竜都　さま",
+          "田中 太郎　さま",
           "",
-          "お世話になっております。令和トラベル採用担当でございます。",
+          "お世話になっております。アクメトラベル採用担当でございます。",
           "ご面接日程のご希望をご回答いただきましてありがとうございます。",
           "",
           "誠に申し訳ございませんが、いただいた日程につきまして、面接官の調整が難しくなってしまい、以下のいずれかでのご参加は可能でしょうか。",
@@ -72,15 +72,15 @@ const scenario: EvalScenario = {
           "> 第二希望：5月15日（金） 12：30〜13：00",
           "> 第三希望：5月15日（金） 12：00〜12：30",
           ">",
-          "> On Mon, May 11, 2026 at 1:05 AM 株式会社令和トラベル 採用担当 <",
-          "> 2239928341129601024.candidate@reiwatravel.n-ats.hrmos.co> wrote:",
+          "> On Mon, May 11, 2026 at 1:05 AM 株式会社アクメトラベル 採用担当 <",
+          "> candidate-001@example-ats.example.com> wrote:",
           ">",
-          "> > 畠山 竜都 さま",
+          "> > 田中 太郎 さま",
           "> >",
-          "> > お世話になっております。令和トラベル採用担当でございます。",
+          "> > お世話になっております。アクメトラベル採用担当でございます。",
           "> > この度は、グループディスカッション選考にご参加いただきまして、ありがとうございました。",
           "> >",
-          "> > 慎重な選考の結果、畠山さまにはぜひ次回ステップにお進みいただきたく思っております。",
+          "> > 慎重な選考の結果、田中さまにはぜひ次回ステップにお進みいただきたく思っております。",
           "> >",
           "> > ＜候補日程＞",
           "> > ・2026/5/15 (金) 10:00 〜 11:00の間、11:30 〜 13:00の間",
@@ -94,20 +94,20 @@ const scenario: EvalScenario = {
     ],
     entities: [
       {
-        id: "ent-reiwa",
+        id: "ent-acme",
         kind: "org",
-        displayName: "令和トラベル",
-        aliases: ["Reiwa Travel"],
+        displayName: "アクメトラベル",
+        aliases: ["Acme Travel"],
         description: "新卒採用面接プロセス中の旅行会社",
         primaryEmail:
-          "2239928341129601024.candidate@reiwatravel.n-ats.hrmos.co",
-        linkedInboxItemIds: ["email-reiwa-round2"],
+          "candidate-001@example-ats.example.com",
+        linkedInboxItemIds: ["email-acme-round2"],
       },
     ],
   },
   input: {
     userMessage:
-      "令和トラベルから返信が来てるから返信したい",
+      "アクメトラベルから返信が来てるから返信したい",
   },
   expect: [
     // Must fetch the body before drafting (engineer-53 rule)

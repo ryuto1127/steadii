@@ -27,9 +27,9 @@ const scenario: EvalScenario = {
     workingHoursLocal: { start: "08:00", end: "22:00" },
     inboxItems: [
       {
-        id: "email-reiwa-detail",
-        senderEmail: "recruiter@reiwa-travel.co.jp",
-        senderName: "令和トラベル採用担当",
+        id: "email-acme-detail",
+        senderEmail: "recruiter@acme-travel.example.co.jp",
+        senderName: "アクメトラベル採用担当",
         subject: "次回面接の詳細について",
         snippet: "詳細は本文をご確認ください。",
         body: [
@@ -37,7 +37,7 @@ const scenario: EvalScenario = {
           "",
           "次回面接の詳細をお送りいたします。",
           "",
-          "・会場: 東京都港区 令和トラベル本社 8階",
+          "・会場: 東京都港区 アクメトラベル本社 8階",
           "・面接官: 田中部長、佐藤マネージャー",
           "・所要時間: 60分",
           "・持参物: 履歴書、ポートフォリオ",
@@ -49,17 +49,17 @@ const scenario: EvalScenario = {
     ],
     entities: [
       {
-        id: "ent-reiwa-d",
+        id: "ent-acme-d",
         kind: "org",
-        displayName: "令和トラベル",
-        aliases: ["Reiwa Travel"],
-        primaryEmail: "recruiter@reiwa-travel.co.jp",
-        linkedInboxItemIds: ["email-reiwa-detail"],
+        displayName: "アクメトラベル",
+        aliases: ["Acme Travel"],
+        primaryEmail: "recruiter@acme-travel.example.co.jp",
+        linkedInboxItemIds: ["email-acme-detail"],
       },
     ],
   },
   input: {
-    userMessage: "令和トラベルからの最新メールの本文を教えて",
+    userMessage: "アクメトラベルからの最新メールの本文を教えて",
   },
   expect: [
     // Body content must be fetched. The agent may go via lookup_entity

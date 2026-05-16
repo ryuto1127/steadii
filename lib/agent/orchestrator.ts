@@ -513,7 +513,7 @@ export async function* streamChatResponse(
   // any tool_calls in the response, leaving the model unable to
   // actually fetch the missing data the corrective message asked for —
   // it could only re-write the leaky template into a different leaky
-  // template. The 令和トラベル dogfood failure (2026-05-13) proved this
+  // template. The アクメトラベル dogfood failure (2026-05-13) proved this
   // doesn't self-heal. Now: if the retry response contains tool_calls,
   // execute the read-only ones and make one more text-only pass so the
   // model can inline the fetched values. Write/destructive tools are

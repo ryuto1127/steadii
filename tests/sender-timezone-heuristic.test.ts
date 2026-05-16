@@ -99,7 +99,7 @@ describe("inferSenderTzFromDomain", () => {
 describe("inferSenderTzFromBody", () => {
   it("returns Asia/Tokyo when body is heavily Japanese", () => {
     const body =
-      "お世話になっております。令和トラベル採用担当の山田です。次回の面接日程につきまして、以下の候補をご提案させていただきます。ご都合の良い日時をお知らせください。";
+      "お世話になっております。アクメトラベル採用担当の山田です。次回の面接日程につきまして、以下の候補をご提案させていただきます。ご都合の良い日時をお知らせください。";
     const r = inferSenderTzFromBody(body);
     expect(r.tz).toBe("Asia/Tokyo");
     expect(r.confidence).toBeGreaterThanOrEqual(0.7);
@@ -144,10 +144,10 @@ describe("inferSenderTimezone (combined)", () => {
     expect(r.source).toMatch(/\+/);
   });
 
-  it("body wins when domain is generic .com but body is heavily Japanese (令和トラベル case)", () => {
+  it("body wins when domain is generic .com but body is heavily Japanese (アクメトラベル case)", () => {
     const r = inferSenderTimezone({
-      domain: "reiwatravel.com",
-      body: "お世話になっております。令和トラベル採用担当の山田です。次回の面接日程につきまして、以下の候補をご提案させていただきます。",
+      domain: "acme.com",
+      body: "お世話になっております。アクメトラベル採用担当の山田です。次回の面接日程につきまして、以下の候補をご提案させていただきます。",
     });
     expect(r.tz).toBe("Asia/Tokyo");
     expect(r.confidence).toBeGreaterThanOrEqual(0.7);

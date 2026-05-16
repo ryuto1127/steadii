@@ -14,7 +14,7 @@ const baseInput: ClassifyInput = {
   externalId: "msg-gh",
   threadExternalId: "thr-gh",
   fromEmail: "notifications@github.com",
-  fromName: "Takumi Shiraishi",
+  fromName: "Sample Sender",
   fromDomain: "github.com",
   toEmails: ["student@example.com"],
   ccEmails: [],
@@ -47,8 +47,8 @@ describe("classifyEmail — GitHub notifications", () => {
   it("default routes a PR-comment notification to auto_low @ 0.95", () => {
     const input: ClassifyInput = {
       ...baseInput,
-      subject: "Re: [WhiteStoneTak/Sonae] feat(data): citizens.json (PR #42)",
-      snippet: "@WhiteStoneTak commented on this pull request.",
+      subject: "Re: [acme/sample] feat(data): citizens.json (PR #42)",
+      snippet: "@sample-user commented on this pull request.",
       bodySnippet: "Looks good — ready when you are.",
     };
     const res = classifyEmail(input, makeCtx());

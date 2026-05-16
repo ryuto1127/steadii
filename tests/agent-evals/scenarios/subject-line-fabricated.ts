@@ -22,7 +22,7 @@ const scenario: EvalScenario = {
       id: "user-ryuto",
       timezone: "America/Vancouver",
       locale: "ja",
-      name: "畠山 竜都",
+      name: "田中 太郎",
     },
     // engineer-54 — pre-set so the SLOT FEASIBILITY CHECK gate doesn't
     // block older reply scenarios. Already-onboarded user state.
@@ -36,7 +36,7 @@ const scenario: EvalScenario = {
         snippet:
           "面談の日程をご相談させてください。下記候補からご都合の良い時間帯をお選びください。",
         body: [
-          "畠山様",
+          "田中様",
           "",
           "お世話になっております。サンプル株式会社の採用担当でございます。",
           "下記の通り面談の候補日程をご提案いたします。",

@@ -74,8 +74,8 @@ describe("harness — dispatcher", () => {
     inboxItems: [
       {
         id: "email-1",
-        senderEmail: "recruiter@reiwa-travel.co.jp",
-        senderName: "令和トラベル採用担当",
+        senderEmail: "recruiter@acme-travel.example.co.jp",
+        senderName: "アクメトラベル採用担当",
         subject: "次回面接のご連絡",
         snippet: "下記3候補からご都合の良い時間帯をお選びください",
         body: "5/15(木) 10:00-11:00\n5/15(木) 14:00-15:00\n5/16(金) 10:00-11:00",
@@ -84,11 +84,11 @@ describe("harness — dispatcher", () => {
     ],
     entities: [
       {
-        id: "ent-reiwa",
+        id: "ent-acme",
         kind: "org" as const,
-        displayName: "令和トラベル",
-        aliases: ["Reiwa Travel"],
-        primaryEmail: "recruiter@reiwa-travel.co.jp",
+        displayName: "アクメトラベル",
+        aliases: ["Acme Travel"],
+        primaryEmail: "recruiter@acme-travel.example.co.jp",
         linkedInboxItemIds: ["email-1"],
       },
     ],
@@ -104,7 +104,7 @@ describe("harness — dispatcher", () => {
 
   it("email_search matches senderName token", async () => {
     const d = buildDispatcher(fixture);
-    const out = (await d("email_search", { query: "令和トラベル採用担当" })) as {
+    const out = (await d("email_search", { query: "アクメトラベル採用担当" })) as {
       hits: Array<{ inboxItemId: string }>;
     };
     expect(out.hits.length).toBe(1);
@@ -131,7 +131,7 @@ describe("harness — dispatcher", () => {
   it("infer_sender_timezone returns Asia/Tokyo for .co.jp", async () => {
     const d = buildDispatcher(fixture);
     const out = (await d("infer_sender_timezone", {
-      senderEmail: "recruiter@reiwa-travel.co.jp",
+      senderEmail: "recruiter@acme-travel.example.co.jp",
     })) as { tz: string | null; confidence: number };
     expect(out.tz).toBe("Asia/Tokyo");
     expect(out.confidence).toBeGreaterThan(0.9);
@@ -139,17 +139,17 @@ describe("harness — dispatcher", () => {
 
   it("lookup_entity returns canonical match for the canonical name", async () => {
     const d = buildDispatcher(fixture);
-    const out = (await d("lookup_entity", { query: "令和トラベル" })) as {
+    const out = (await d("lookup_entity", { query: "アクメトラベル" })) as {
       candidates: Array<{ displayName: string; recentLinks: unknown[] }>;
     };
     expect(out.candidates.length).toBeGreaterThan(0);
-    expect(out.candidates[0].displayName).toBe("令和トラベル");
+    expect(out.candidates[0].displayName).toBe("アクメトラベル");
     expect(out.candidates[0].recentLinks.length).toBeGreaterThan(0);
   });
 
   it("lookup_entity returns empty for a typo (mirrors prod zero-hit behavior)", async () => {
     const d = buildDispatcher(fixture);
-    const out = (await d("lookup_entity", { query: "令和とレベル" })) as {
+    const out = (await d("lookup_entity", { query: "アクメとラベル" })) as {
       candidates: unknown[];
       noMatchHint: string | null;
     };
@@ -187,11 +187,11 @@ describe("harness — dispatcher", () => {
 describe("harness — assertion evaluation", () => {
   const baseResult: EvalRunResult = {
     finalText:
-      "5/15 10:00 JST → 5/14 18:00 PT — 令和トラベル の面接候補1です。",
+      "5/15 10:00 JST → 5/14 18:00 PT — アクメトラベル の面接候補1です。",
     toolCalls: [
       {
         name: "email_search",
-        args: { query: "令和トラベル" },
+        args: { query: "アクメトラベル" },
         resultPreview: '{"hits":[{"inboxItemId":"email-1"}]}',
       },
       {
@@ -201,7 +201,7 @@ describe("harness — assertion evaluation", () => {
       },
       {
         name: "infer_sender_timezone",
-        args: { senderEmail: "recruiter@reiwa-travel.co.jp" },
+        args: { senderEmail: "recruiter@acme-travel.example.co.jp" },
         resultPreview: '{"tz":"Asia/Tokyo"}',
       },
       {
@@ -251,7 +251,7 @@ describe("harness — assertion evaluation", () => {
 
   it("response_contains is case-insensitive by default", () => {
     const [a] = evaluateAssertions(baseResult, [
-      { kind: "response_contains", text: "令和トラベル" },
+      { kind: "response_contains", text: "アクメトラベル" },
     ]);
     expect(a.pass).toBe(true);
   });

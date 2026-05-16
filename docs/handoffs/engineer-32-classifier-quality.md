@@ -22,7 +22,7 @@ This PR is **L1-only** — no L2 prompt changes, no migrations.
 Ryuto's inbox at the time of dispatch shows 156 pending items where most are bot-relayed notifications mis-classified as 高/重要. Investigation identified two root causes:
 
 1. **Bot detection is too narrow.** `isNoreplySender` only matches local-parts starting with `noreply` / `no-reply` / `donotreply`. It misses `*[bot]@` (vercel[bot], dependabot[bot], github-actions[bot]), `*-bot@`, known SaaS bot hostnames (`notifications.github.com`, `notifications.slack.com`, `noreply.discord.com`, etc.), and the `Auto-Submitted: auto-generated` RFC 3834 header.
-2. **GitHub PR notifications get the human-display-name boost.** A PR-comment email arrives with `From: "Takumi Shiraishi <notifications@github.com>"` — the L1 sees a human-looking display name and a subject like `Re: [WhiteStoneTak/Sonae] feat(data): citizens.json …` and over-weights it as work-y. The actual sender is a bot relay.
+2. **GitHub PR notifications get the human-display-name boost.** A PR-comment email arrives with `From: "Sample Sender <notifications@github.com>"` — the L1 sees a human-looking display name and a subject like `Re: [acme/sample] feat(data): citizens.json …` and over-weights it as work-y. The actual sender is a bot relay.
 
 This PR adds:
 - A broader `isBotSender(input)` predicate that also reads display-name + headers
@@ -161,7 +161,7 @@ Inserted **after** the bot-sender ignore check and **before** the AUTO_HIGH sect
 ```ts
 if (isGithubNotificationDomain(input.fromDomain)) {
   // Default for GitHub notifications: auto_low. The display name
-  // ("Takumi Shiraishi" etc.) shadows the actual sender, so role-based
+  // ("Sample Sender" etc.) shadows the actual sender, so role-based
   // escalation must not apply. The first-time-domain heuristic is also
   // disabled here because every PR comment is from a "first-time"
   // collaborator pseudonym.

@@ -16,7 +16,7 @@ import type { ToolExecutor } from "./types";
 // quoted-block slots are physically invisible at extraction time.
 //
 // Prompt-only enforcement of MUST-rule 9 was proven insufficient by
-// the 2026-05-14 round-2 dogfood (令和トラベル) — agent extracted
+// the 2026-05-14 round-2 dogfood (アクメトラベル) — agent extracted
 // round-1 slots from the `>>` block and skipped every downstream
 // gating rule (convert_timezone, infer_sender_norms, SLOT FEASIBILITY
 // CHECK) because it had internally classified the misread slots as

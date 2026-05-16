@@ -10,8 +10,8 @@ Companion to the Section A-N handbook. Open this in a tab while running dogfood;
 |---|---|---|
 | Test syllabus PDF | `/tmp/MAT223_TestSyllabus_Spring2026.pdf` | Synthetic but realistic. Contains MAT 223 — Linear Algebra I, 7 schedule rows with ISO dates (2026-01-13 → 2026-04-14). Use for Section C.3-5. |
 | Test iCal feed URL | `https://www.officeholidays.com/ics-clean/japan` | JP holidays. Use for Section G. |
-| Admin Google account | `ryuto.2007.11.27@gmail.com` | Already signed in (admin flag set in DB). |
-| Test waitlist account | Any other Google account (e.g. `ryuty1127@gmail.com` from earlier dogfood) | Use for Section J — submit waitlist request from incognito. |
+| Admin Google account | `admin@example.com` | Already signed in (admin flag set in DB). |
+| Test waitlist account | Any other Google account (e.g. `sample@example.com` from earlier dogfood) | Use for Section J — submit waitlist request from incognito. |
 | Reduced Motion toggle | macOS System Settings → Accessibility → Display → "Reduce motion" | Section H — toggle ON to verify static fallbacks. |
 
 ---
@@ -261,7 +261,7 @@ Engineer runs `lighthouse` against `/` and `/app` (when feasible against dev). R
 
 ```sql
 -- Get user id
-SELECT id FROM users WHERE email = 'ryuto.2007.11.27@gmail.com';
+SELECT id FROM users WHERE email = 'admin@example.com';
 -- → use as <USER_ID> below
 
 BEGIN;
@@ -290,10 +290,10 @@ WHERE user_id = '<USER_ID>'
 -- UPDATE inbox_items SET sender_role = NULL WHERE user_id = '<USER_ID>' AND sender_role IS NOT NULL;
 
 -- 6. Remove test waitlist request from J (if it was a one-off test)
-DELETE FROM waitlist_requests WHERE email = 'ryuty1127@gmail.com';
+DELETE FROM waitlist_requests WHERE email = 'sample@example.com';
 
 -- 7. Remove the auto-generated Stripe Promotion Code (manual via Stripe Dashboard:
---    Coupons → STEADII_FRIEND_3MO → Promotion Codes → archive STEADII-RYUTY1127)
+--    Coupons → STEADII_FRIEND_3MO → Promotion Codes → archive STEADII-SAMPLE)
 
 COMMIT;
 ```

@@ -123,7 +123,7 @@ The inference is intentionally simple — no clustering, no time-of-week segment
 
 ### Part 5 — Sender business-hours research (DEFERRED — engineer-57)
 
-Ryuto's stretch case: "令和トラベルの電話対応時刻や、一日のスケジュールのサンプルなどを調べて、その会社は何時から働き始めることが多いのかを調べます".
+Ryuto's stretch case: "アクメトラベルの電話対応時刻や、一日のスケジュールのサンプルなどを調べて、その会社は何時から働き始めることが多いのかを調べます".
 
 This requires web search / scraping of the sender's contact page. Out of scope for engineer-56 because:
 - Heuristic in Part 2 covers 80%+ of cases at α
@@ -135,11 +135,11 @@ Mention the future tool in the new failure-mode entry so the taxonomy points at 
 ### Part 6 — Eval scenario revisions + new scenarios
 
 Update `tests/agent-evals/scenarios/late-night-slot-pushback.ts`:
-- The expected counter-proposal window must INTERSECT user norms AND `infer_sender_norms` output for `recruiter@reiwa-travel.co.jp` (= JST 09:00–18:00). User-side norm for America/Vancouver = 09:00–22:00 PT = JST 02:00–15:00 next-day. Intersection = JST 09:00–15:00. Add a custom assertion: response's proposed JST window does NOT include any hour < 09:00 OR > 18:00 JST.
+- The expected counter-proposal window must INTERSECT user norms AND `infer_sender_norms` output for `recruiter@acme-travel.example.co.jp` (= JST 09:00–18:00). User-side norm for America/Vancouver = 09:00–22:00 PT = JST 02:00–15:00 next-day. Intersection = JST 09:00–15:00. Add a custom assertion: response's proposed JST window does NOT include any hour < 09:00 OR > 18:00 JST.
 - New assertion: response mentions sender-side reasoning ("向こう側" / "the sender's side" / "their working hours") at least once.
 
 New scenario `tests/agent-evals/scenarios/sender-norms-respected.ts`:
-- Fixture: same 令和トラベル round-2 setup, but workingHoursLocal explicitly set to 06:00–23:00 PT (so user CAN take a 6 AM PT meeting). The agent's counter-proposal MUST STILL respect sender norms — i.e. not propose JST 23:00 or 02:00 even though the user is technically available then.
+- Fixture: same アクメトラベル round-2 setup, but workingHoursLocal explicitly set to 06:00–23:00 PT (so user CAN take a 6 AM PT meeting). The agent's counter-proposal MUST STILL respect sender norms — i.e. not propose JST 23:00 or 02:00 even though the user is technically available then.
 - Failure mode covered: `SENDER_NORMS_IGNORED`.
 
 New scenario `tests/agent-evals/scenarios/empty-intersection-window.ts`:
@@ -181,7 +181,7 @@ IMPORTANT before checkout: `git status`. See `feedback_sparring_engineer_branch_
 - `pnpm typecheck` clean
 - `pnpm test` full suite green, +~15 new tests (sender-norms heuristic, preference schema extension for `inferredWorkingHoursLocal`, intersection math)
 - `pnpm eval:agent` — every scenario passes; cost ~$0.025/run
-- Manual: re-run the 令和トラベル round-2 dogfood without setting working hours first. Expected: agent uses 09:00–22:00 PT norm silently, proposes JST 9:00–15:00 (NOT 6:00–14:00), explicitly explains it considered the sender's likely 9–18 JST window.
+- Manual: re-run the アクメトラベル round-2 dogfood without setting working hours first. Expected: agent uses 09:00–22:00 PT norm silently, proposes JST 9:00–15:00 (NOT 6:00–14:00), explicitly explains it considered the sender's likely 9–18 JST window.
 
 ## Out of scope
 

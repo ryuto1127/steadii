@@ -95,7 +95,7 @@ The scoping doc surfaced six Open Questions. Sparring side resolved them as foll
 
 **Additional locked decisions (from memory, restated for hand-off clarity):**
 
-- **Environment: TEST MODE.** Google Cloud Console stays in "Testing" app-verification state for W1 + all α. Add Ryuto's own account (`ryuto.2007.11.27@gmail.com`) to the test-user list before running `ingestLast24h` end-to-end. **Do not flip to "In production" or file for verification during W1** — that is a CASA Tier 2 task post-W4.
+- **Environment: TEST MODE.** Google Cloud Console stays in "Testing" app-verification state for W1 + all α. Add Ryuto's own account (`admin@example.com`) to the test-user list before running `ingestLast24h` end-to-end. **Do not flip to "In production" or file for verification during W1** — that is a CASA Tier 2 task post-W4.
 - **Currency / pricing: N/A to W1.** No billing code changes.
 - **Dogfood user: Ryuto is `is_admin=true`.** Admin users see the Inbox item like everyone else; admin bypass (unlimited credits) is a W2 concern, not a W1 concern.
 - **Encryption: inherited.** `scope` is a plain-text column on `accounts`; tokens are already encrypted by `EncryptedDrizzleAdapter`. Do not invent a second encryption layer for Gmail.

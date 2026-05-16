@@ -34,13 +34,13 @@ The Greek lowercase `α` (U+03B1) is not in Stripe's allowed character set for P
 
 `isPromotionCodeCollision` at `lib/waitlist/promotion-code.ts:75-86` matches ANY `StripeInvalidRequestError` with `param: "code"` as a collision and continues the retry loop. The character-validation error is indistinguishable from a real "already exists" collision, so we burn through all 50 attempts and throw the catch-all.
 
-Sentry trace from prod: `Error: Could not create a unique Stripe Promotion Code for ryuty1127@gmail.com after 50 attempts.`
+Sentry trace from prod: `Error: Could not create a unique Stripe Promotion Code for sample@example.com after 50 attempts.`
 
 ### Fix — two layers
 
 **Layer 1 (the actual bug): replace `α` with ASCII.** Pick the cleanest substitute:
 
-- Option A — drop entirely: `STEADII-{SLUG}` (e.g. `STEADII-RYUTY1127`)
+- Option A — drop entirely: `STEADII-{SLUG}` (e.g. `STEADII-SAMPLE`)
 - Option B — `STEADII-A-{SLUG}` (visual mnemonic for "alpha")
 - Option C — `STEADII-ALPHA-{SLUG}` (verbose but explicit)
 
@@ -83,8 +83,8 @@ Verify Stripe's exact "already exists" message string before locking in the rege
 
 ### Verify
 
-- Approve the existing pending `ryuty1127@gmail.com` row → Stripe Promotion Code created (visible in Stripe dashboard → Coupons → STEADII_FRIEND_3MO → Promotion codes), Resend email fires, `/invite/STEADII-RYUTY1127` resolves.
-- Try approving twice (refresh, click again on already-approved row) → second call hits the real collision path, increments to `STEADII-RYUTY1127-2`, succeeds.
+- Approve the existing pending `sample@example.com` row → Stripe Promotion Code created (visible in Stripe dashboard → Coupons → STEADII_FRIEND_3MO → Promotion codes), Resend email fires, `/invite/STEADII-SAMPLE` resolves.
+- Try approving twice (refresh, click again on already-approved row) → second call hits the real collision path, increments to `STEADII-SAMPLE-2`, succeeds.
 - Try approving an email with non-ASCII chars like `田中@example.com` → slug normalization strips them, code lands as `STEADII-EXAMPLE` or `STEADII-FRIEND` (fallback), no character-rejection error.
 
 ### Memory update needed
@@ -129,7 +129,7 @@ If the existing schema doesn't easily support multi-target records, the simplest
 "Needs review"
   ⚠ Draft pending: re: midterm extension (3h ago)
   ⚠ Draft pending: lab make-up (5h ago)
-  📋 Waitlist request from ryuto.test@gmail.com (2m ago)    ← new
+  📋 Waitlist request from tester@example.com (2m ago)    ← new
   📋 Waitlist request from another@example.com (1h ago)    ← new
 ```
 

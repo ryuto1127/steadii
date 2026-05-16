@@ -160,9 +160,9 @@ describe("serializeContextForPrompt", () => {
           syllabiDbId: null,
         },
         registeredResources: [],
-        userName: "畠山 竜都",
+        userName: "田中 太郎",
       });
-      expect(out).toMatch(/USER_NAME: 畠山 竜都/);
+      expect(out).toMatch(/USER_NAME: 田中 太郎/);
     });
 
     it("emits a USER_NAME line with the unknown-fallback when null", () => {
@@ -213,7 +213,7 @@ describe("serializeContextForPrompt", () => {
           syllabiDbId: null,
         },
         registeredResources: [],
-        userName: "Ryuto",
+        userName: "Alex",
       });
       const userIdx = out.indexOf("USER_NAME:");
       const tzIdx = out.indexOf("Timezone:");

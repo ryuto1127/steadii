@@ -24,7 +24,7 @@ Reference shipped patterns:
 
 ## Strategic context
 
-Ryuto shipped a chat transcript on 2026-05-12 with the 令和トラベル interview email. The chat agent failed in 8 distinct ways across one conversation:
+Ryuto shipped a chat transcript on 2026-05-12 with the アクメトラベル interview email. The chat agent failed in 8 distinct ways across one conversation:
 
 1. First TZ question → agent said "no TZ difference issue" (the email is from a .jp recruiter, slots are JST)
 2. "バンクーバーで表示して" → agent showed the same JST values as if they were PT (no conversion)
@@ -199,7 +199,7 @@ Audit `lib/agent/email/draft.ts` and its prompt. Confirm that when:
 
 …the body renders each slot in **both** timezones. If today's prompt doesn't enforce this, add the same `DRAFT BODY TZ DISPLAY` rule as Part 3 — but in the draft prompt, not the agentic L2 prompt (so non-agentic users also benefit).
 
-Test fixture: a 令和トラベル-style email at risk_tier=high with student in America/Vancouver. The generated draft body must include both JST and PT for each slot it proposes.
+Test fixture: a アクメトラベル-style email at risk_tier=high with student in America/Vancouver. The generated draft body must include both JST and PT for each slot it proposes.
 
 ---
 
@@ -218,11 +218,11 @@ Test fixture: a 令和トラベル-style email at risk_tier=high with student in
 1. `pnpm typecheck` clean
 2. `pnpm vitest run` — all existing tests pass + new unit tests for each part
 3. **Live dogfood**: log in as Ryuto. Open a new chat. Reproduce a fragment of the 2026-05-12 transcript:
-   - Send "令和トラベルの面接の時刻を確認して"
+   - Send "アクメトラベルの面接の時刻を確認して"
    - Verify agent immediately surfaces both JST and PT for each candidate slot, with conversion-tool-backed values (not LLM math)
    - Send "8:30 PM PT で良いですか？候補内ですか？" — verify agent calls convert_timezone, gets 12:30 JST, matches against the range 11:30-13:00 JST, says "candidate 2 の範囲内です"
 4. **Immediate re-draft test**: find a Type E (ask_clarifying) card in the queue, type a clarification, click "Steadii に送る". Verify a NEW draft appears in the queue within a few seconds (not after waiting for the next email).
-5. Screenshot: dual-TZ slots in a generated draft body for the 令和トラベル workflow.
+5. Screenshot: dual-TZ slots in a generated draft body for the アクメトラベル workflow.
 
 ---
 

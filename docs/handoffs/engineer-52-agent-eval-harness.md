@@ -118,15 +118,15 @@ New directory: `tests/agent-evals/scenarios/`. One file per failure mode + a few
 
 Scenarios to ship in engineer-52 (one file per mode):
 
-1. **`placeholder-leak-email-reply.ts`** — the 令和トラベル case from 2026-05-12.
+1. **`placeholder-leak-email-reply.ts`** — the アクメトラベル case from 2026-05-12.
    - Fixture: 1 inbox_item from a .jp recruiter (or .com with JP body) with 3 candidate slots, user in PT
-   - Input: 「令和とレベルとの面接日程に返信したい」
+   - Input: 「アクメとラベルとの面接日程に返信したい」
    - Assertions:
      - `tool_called: email_get_body` (mandatory)
      - `tool_called: infer_sender_timezone` (mandatory)
      - `tool_called: convert_timezone` at least 3x (each slot)
      - `response_no_placeholder_leak`
-     - `response_contains: "令和トラベル"` (transparent correction)
+     - `response_contains: "アクメトラベル"` (transparent correction)
      - `response_contains: "JST"` + `response_contains: "PT"` (dual-TZ)
      - `response_does_not_contain: "〇〇"`
      - `response_does_not_contain: "ご提示いただいた日程"`
@@ -141,17 +141,17 @@ Scenarios to ship in engineer-52 (one file per mode):
      - `response_does_not_contain: "PDT → JST"` (the wrong-direction signature)
 
 3. **`silent-autocorrect-disclosure.ts`** — typo gets transparently fixed
-   - Fixture: 1 entity named 令和トラベル
-   - Input: 「令和とレベル からのメールを探して」
+   - Fixture: 1 entity named アクメトラベル
+   - Input: 「アクメとラベル からのメールを探して」
    - Assertions:
      - tool_called: lookup_entity (first try with typo) → 0
-     - tool_called: lookup_entity (retry with 令和 or similar shorter) OR email_search with shorter substring
-     - `response_contains: "令和トラベル"` AND `response_contains: "令和とレベル"` (discloses the correction)
+     - tool_called: lookup_entity (retry with アクメ or similar shorter) OR email_search with shorter substring
+     - `response_contains: "アクメトラベル"` AND `response_contains: "アクメとラベル"` (discloses the correction)
      - `response_contains: "のことですね"` OR similar disclosure pattern
 
 4. **`metadata-confused-for-content.ts`** — agent doesn't stop at lookup_entity summary
-   - Fixture: entity 令和トラベル with 1 linked email
-   - Input: 「令和トラベルからの最新メールの本文教えて」
+   - Fixture: entity アクメトラベル with 1 linked email
+   - Input: 「アクメトラベルからの最新メールの本文教えて」
    - Assertions:
      - `tool_call_order: ["lookup_entity", "email_get_body"]`
      - Response contains specific body content (e.g. a slot or a sentence from the body), not just subject
@@ -203,7 +203,7 @@ Scenario: placeholder-leak-email-reply (PLACEHOLDER_LEAK)
   ✅ tool_called: infer_sender_timezone (1x)
   ✅ tool_called: convert_timezone (3x)
   ✅ response_no_placeholder_leak
-  ❌ response_contains: "令和トラベル"
+  ❌ response_contains: "アクメトラベル"
      Final text was: "Subject: Re: 次回面接のご連絡 ..."
      The transparent-correction disclosure didn't fire.
   Duration: 4.2s, 5 tool calls

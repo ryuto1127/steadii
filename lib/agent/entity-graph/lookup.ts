@@ -121,8 +121,8 @@ async function runLookup(
     });
   }
 
-  // Phase 2: substring ILIKE — picks up "令和" when the canonical is
-  // "令和トラベル". Cheaper than embedding for short queries.
+  // Phase 2: substring ILIKE — picks up "アクメ" when the canonical is
+  // "アクメトラベル". Cheaper than embedding for short queries.
   if (collected.size < topK) {
     const substringRows = await db
       .select({
