@@ -182,7 +182,28 @@ Authoritative numbers live in `project_decisions.md`. This section covers only i
 
 **Pre-commit check**: before any `git add` of a content-bearing file, scan the diff for the patterns above. If a leak is suspected, scrub at the source, do NOT rely on a later cleanup pass.
 
-### 7b. App security
+### 7b. Pre-merge review — MANDATORY on every PR
+
+Before any squash-merge to `main`, the assistant (or whoever is shipping) MUST do a two-layer review of the PR's diff vs `main`:
+
+**Layer 1 — Mechanical (CI-enforced).** `.github/workflows/pii-check.yml` runs `scripts/check-no-pii.sh --range main..HEAD` automatically. Catches known-leak patterns (see §7a). PR cannot merge if this fails.
+
+**Layer 2 — Semantic (human / Claude judgment).** The mechanical script only catches shapes it already knows about. Before clicking merge, scan the diff yourself for shapes the script wouldn't catch:
+
+- **Real-looking content even if not in the pattern list.** A new sender name, a new third party, a new course code, a new specific date — anything that "feels like real data". If unsure, treat as real and scrub.
+- **Production endpoints / hostnames / internal URLs** beyond the public app URLs (`mysteadii.com`, `*.vercel.app` deploys, etc.). Internal service URLs, admin dashboard URLs, prod DB names.
+- **Confidential business / strategy content** that shouldn't be public: unannounced pricing, internal cost figures, partner contract details, future-feature plans the maintainer wants kept private until launch.
+- **Credentials / tokens / secrets** of any kind — even truncated samples. `.env.example` is fine (keys without values); never commit actual values.
+- **Real customer / user data** from production: UUIDs, customer IDs, real Stripe IDs, real account email addresses. Test fixtures must use placeholders.
+- **Third-party content** that the maintainer encountered via dogfood but doesn't own — emails from real senders, screenshots of real conversations, real GitHub repo names from PR notification emails. **Highest-severity class** — the person never consented to being on this repo.
+- **Identifying combos** for the maintainer (city + grade + school + program, or specific job + employer + location).
+- **Real dates that mark specific real events** (birthdays, exam dates, real meeting dates that aren't generic test fixtures).
+
+If any of the above shows up, **stop the merge**, scrub at the source (file + commit message + PR title/body), force-push the branch if already pushed, then re-trigger the merge.
+
+**Process**: when running through a PR merge chain, the assistant should explicitly state "PII review: pass" or "PII review: hit on <X>, scrubbing first" before invoking `gh pr merge`. Silent merges without this gate are an §7a violation.
+
+### 7c. App security
 
 - Secrets in Vercel env only. `.env.example` has keys, never values.
 - OAuth tokens: AES-256-GCM at the application layer (`ENCRYPTION_KEY`).
