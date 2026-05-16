@@ -213,7 +213,7 @@ describe("serializeContextForPrompt", () => {
           syllabiDbId: null,
         },
         registeredResources: [],
-        userName: "Ryuto",
+        userName: "Alex",
       });
       const userIdx = out.indexOf("USER_NAME:");
       const tzIdx = out.indexOf("Timezone:");

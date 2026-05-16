@@ -36,7 +36,7 @@ const fixture = {
     body: string;
     internalDate: string | null;
   }>,
-  ownEmail: "ryuto@example.com",
+  ownEmail: "alex@example.com",
   llmResponse: {
     overview: "default overview",
     keyPoints: ["k1", "k2"],
@@ -127,7 +127,7 @@ vi.mock("@/lib/integrations/openai/client", () => ({
 beforeEach(() => {
   fixture.inboxRow = null;
   fixture.threadMessages = [];
-  fixture.ownEmail = "ryuto@example.com";
+  fixture.ownEmail = "alex@example.com";
   fixture.llmResponse = { overview: "default overview", keyPoints: ["k1", "k2"] };
   fixture.llmThrows = false;
 });
@@ -149,7 +149,7 @@ describe("emailThreadSummarize", () => {
       {
         id: "m2",
         headers: {
-          From: "<ryuto@example.com>",
+          From: "<alex@example.com>",
           Subject: "Re: Midterm prep",
         },
         body: "Thanks — I'll review chapter 7.",
@@ -191,7 +191,7 @@ describe("emailThreadSummarize", () => {
     expect(result.participants).toEqual(
       expect.arrayContaining([
         expect.stringContaining("prof@uni.edu"),
-        expect.stringContaining("ryuto@example.com"),
+        expect.stringContaining("alex@example.com"),
       ])
     );
     expect(result.firstSentAt).toBe("2026-04-20T08:00:00.000Z");

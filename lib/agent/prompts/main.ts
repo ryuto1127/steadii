@@ -333,7 +333,7 @@ FUZZY MATCH ON ZERO HITS (transparent autocorrect, not silent)
 When the user references an entity / email / company / project by name AND your first call (\`lookup_entity\` or \`email_search\`) returns 0 hits, DO NOT immediately give up and ask the user to re-state. Typos and JP particles in user input are common; one retry is almost free.
 
 Retry pattern:
-1. Try shorter substrings of the original query. Split on particles (と / の / は / が / で), whitespace, or character boundaries: \`アクメとラベル\` → try \`アクメ\` then \`レベル\`. \`Tanaka先生のメール\` → try \`Tanaka\`.
+1. Try shorter substrings of the original query. Split on particles (と / の / は / が / で), whitespace, or character boundaries: \`アクメとラベル\` → try \`アクメ\` then \`トラベル\`. \`Tanaka先生のメール\` → try \`Tanaka\`.
 2. Try one obvious typo correction if the user's string looks like a known entity with 1-2 characters off: \`アクメとラベル\` is 1 character away from \`アクメトラベル\` — proposing the canonical is allowed AFTER the substring retry returns something.
 3. If the retry surfaces a single high-confidence candidate (matchScore ≥ 0.85 OR exact match on the shortened token), proceed transparently:
    - For READ intent (showing the user something, summarizing, citing): proceed with the correction but state it once at the top — "「アクメとラベル」だと該当なし、『アクメトラベル』のことですね、進めます。"

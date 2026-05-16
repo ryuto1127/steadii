@@ -44,7 +44,7 @@ describe("createWaitlistPromotionCode — code shape", () => {
   it("emits STEADII-{SLUG} with no Greek alpha", async () => {
     hoist.state.queue.push({ kind: "ok", id: "promo_1" });
     const result = await createWaitlistPromotionCode({
-      email: "admin-alt@example.com",
+      email: "sample@example.com",
       name: null,
     });
     expect(result.code).toBe("STEADII-SAMPLE");

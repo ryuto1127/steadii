@@ -195,7 +195,7 @@ export default async function QueuePreview({
     <div className="mx-auto w-full max-w-4xl px-10 py-8">
       <header className="mb-6 flex flex-col gap-1.5">
         <h1 className="font-display text-[28px] font-semibold leading-[1.1] tracking-[-0.02em] text-[hsl(var(--foreground))]">
-          おはようございます、Ryuto。
+          おはようございます、Alex さん。
         </h1>
         <p className="text-[15px] text-[hsl(var(--muted-foreground))]">
           Here&apos;s where you are this week.
