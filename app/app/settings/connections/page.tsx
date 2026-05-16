@@ -415,7 +415,7 @@ export default async function ConnectionsPage({
               defaultValue={existingGithubUsername}
               pattern="[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}"
               maxLength={39}
-              placeholder="ryuto1127"
+              placeholder="octocat"
               autoComplete="off"
               spellCheck={false}
               className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
