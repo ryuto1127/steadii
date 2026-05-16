@@ -33,7 +33,7 @@ Engineer-45 fixed the structural TZ math + system prompt injection of `users.pre
 - "私の時刻指定は基本的にバンクーバー時間で話してます" (I generally speak in PT)
 - "営業日 13:00-18:00 PT で動いてます" (I'm reachable 13:00-18:00 PT on weekdays)
 - "ビジネスメールは丁寧体、友達には砕けて返信する" (Formal tone for business, casual for friends)
-- "高校 12 年生で、UToronto CS 進学予定" (Grade 12, going to UToronto CS in September)
+- "高校 3 年生で、CS 系大学へ進学予定" (high-school student going to a CS program)
 - "深夜は通知しないで" (Don't notify me at night)
 
 Steadii currently has no place for these. `users.preferences` is the structured-prefs slot but it's flat-typed (timezone, locale, agenticL2 flag, voiceProfile string, etc.) — adding free-form remembered facts there bloats the column. A dedicated `user_facts` table is cleaner.
@@ -109,7 +109,7 @@ export type UserFactCategory =
   | "schedule"            // "I work 9-5 PT weekdays"
   | "communication_style" // "formal with business, casual with friends"
   | "location_timezone"   // "I'm in Vancouver"
-  | "academic"            // "Grade 12, UToronto CS in Sept"
+  | "academic"            // "high-school student → CS program in Sept"
   | "personal_pref"       // "don't notify me at night"
   | "other";
 
@@ -165,7 +165,7 @@ USER FACTS (things Steadii has learned about you across past sessions):
 - [schedule] I work 9-5 PT weekdays
 - [location_timezone] I'm in Vancouver
 - [communication_style] Formal with business, casual with friends
-- [academic] Grade 12, UToronto CS in September
+- [academic] high-school student → CS program in September
 ...
 
 Use these as ambient context. Don't re-ask things already covered. If a fact looks stale or wrong, call save_user_fact with the corrected version (the soft-unique index upserts cleanly).

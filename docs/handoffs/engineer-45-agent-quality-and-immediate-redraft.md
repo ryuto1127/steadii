@@ -5,7 +5,7 @@
 - `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/MEMORY.md`
 - `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/feedback_ms_education_admin_consent.md` — why Teams API is dead-piled
 - `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/project_agent_model.md` — risk-tiered confirmation model
-- `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/user_ryuto.md` — Ryuto's location (Vancouver, PDT/PST) — drives the test case below
+- `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/user_ryuto.md` — the user's location (a Pacific-TZ city) — drives the test case below
 - `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/project_wave_2_home_design.md` — Type E card surface; relevant for Part 5
 
 Reference shipped patterns:

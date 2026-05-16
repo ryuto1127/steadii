@@ -1738,7 +1738,7 @@ export const ja: Messages = {
     url_label: "URL",
     url_placeholder: "https://… または webcal://…",
     label_optional_label: "ラベル（任意）",
-    label_placeholder: "例：UToronto",
+    label_placeholder: "例：SampleUni",
     add_button: "追加",
     add_button_pending: "追加中…",
     paused_prefix: "一時停止中 —",

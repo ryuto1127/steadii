@@ -11,3 +11,5 @@ claude-*.log
 .handoffs/
 .vercel
 tests/agent-evals/last-run.json
+.git.bak.*/
+.git.bak.*

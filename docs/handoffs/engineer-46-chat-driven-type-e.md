@@ -5,7 +5,7 @@
 - `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/MEMORY.md`
 - `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/project_wave_2_home_design.md` — Type E card lives here
 - `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/project_agent_model.md` — risk-tiered model
-- `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/user_ryuto.md` — Ryuto's location (Vancouver, PDT/PST)
+- `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/user_ryuto.md` — the user's location (a Pacific-TZ city)
 
 Reference shipped patterns:
 
