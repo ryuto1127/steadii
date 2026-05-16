@@ -186,10 +186,25 @@ export function ChatView({
   // from the Home input and was routed here with a fresh user message that
   // already exists in the DB).
   useEffect(() => {
-    if (autoStream && !didAutoStream.current) {
-      didAutoStream.current = true;
-      void runStream();
-    }
+    if (!autoStream || didAutoStream.current) return;
+    didAutoStream.current = true;
+
+    // Strip ?stream=1 from the URL the moment we consume it. The ref guard
+    // above only protects against double-fires within a single React tree;
+    // it does NOT survive Cmd+R, because a fresh page load gets a fresh
+    // ref. Without this scrub, every reload would replay runStream() and
+    // stack a duplicate assistant response in the DB (and burn an /api/chat
+    // call). Use history.replaceState rather than router.replace so we
+    // don't trigger a server-component re-fetch of the whole chat.
+    window.history.replaceState(null, "", `/app/chat/${chatId}`);
+
+    // If the chat already has a processing assistant message (e.g. landed
+    // from inbox ?stream=1 on an in-flight email reply), skip the new run
+    // and let the resume-poll effect drive the existing one to completion.
+    // Otherwise we'd stack two concurrent generations on the same chat.
+    if (inFlightAssistantId) return;
+
+    void runStream();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStream]);
 
