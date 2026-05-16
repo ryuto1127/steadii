@@ -129,7 +129,7 @@ const scenario: EvalScenario = {
       check: (r) => {
         const t = r.finalText;
         const hits =
-          /(sender(?:'s)?\s+(?:working|business|standard)\s+hours|their\s+(?:working|business|standard)\s+hours|sender(?:'s)?\s+side|their\s+side|both\s+sides|the\s+recruiter(?:'s)?\s+(?:working|business|standard)\s+hours|reiwa.{0,40}(?:hours|working|business|9|6 PM|18:00|9 AM)|\bJST\b.{0,40}(?:9|6 PM|18:00|18:00 JST|9 AM)|9 AM.{0,40}6 PM.{0,10}JST)/i.test(
+          /(sender(?:'s)?\s+(?:working|business|standard)\s+hours|their\s+(?:working|business|standard)\s+hours|sender(?:'s)?\s+side|their\s+side|both\s+sides|the\s+recruiter(?:'s)?\s+(?:working|business|standard)\s+hours|acme.{0,40}(?:hours|working|business|9|6 PM|18:00|9 AM)|\bJST\b.{0,40}(?:9|6 PM|18:00|18:00 JST|9 AM)|9 AM.{0,40}6 PM.{0,10}JST)/i.test(
             t
           );
         return {

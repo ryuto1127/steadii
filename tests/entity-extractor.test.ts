@@ -98,14 +98,14 @@ describe("parseExtractorOutput", () => {
         {
           kind: "org",
           displayName: "  アクメトラベル  ",
-          aliases: ["  Reiwa  Travel  ", "RT"],
+          aliases: ["  Acme  Travel  ", "RT"],
         },
       ],
     });
     const out = parseExtractorOutput(raw);
     expect(out).toHaveLength(1);
     expect(out[0].displayName).toBe("アクメトラベル");
-    expect(out[0].aliases).toEqual(["Reiwa  Travel", "RT"]);
+    expect(out[0].aliases).toEqual(["Acme  Travel", "RT"]);
   });
 
   it("normalizes missing aliases to []", () => {

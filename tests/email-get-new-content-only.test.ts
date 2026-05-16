@@ -52,7 +52,7 @@ describe("stripQuotedHistory", () => {
       "",
       "Re-confirming the meeting for next Tuesday.",
       "",
-      "On Mon, May 11, 2026 at 1:05 AM Reiwa <recruit@reiwa.example> wrote:",
+      "On Mon, May 11, 2026 at 1:05 AM Acme <recruiterer@acme.example> wrote:",
       "",
       "Please pick a slot from below.",
       "Slot: 2026/05/15 10:00",

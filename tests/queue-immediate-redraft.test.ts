@@ -19,8 +19,8 @@ import { buildAgenticL2UserMessage } from "@/lib/agent/email/agentic-l2-prompt";
 describe("buildAgenticL2UserMessage with userClarification", () => {
   const baseArgs = {
     locale: "ja" as const,
-    senderEmail: "recruiter@reiwa.co.jp",
-    senderDomain: "reiwa.co.jp",
+    senderEmail: "recruiter@acme.example.co.jp",
+    senderDomain: "acme.example.co.jp",
     senderRole: null,
     subject: "面接日程の調整",
     body: "5/15 と 5/19 でご都合のよい日をご教示ください。",

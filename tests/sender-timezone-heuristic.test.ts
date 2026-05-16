@@ -72,7 +72,7 @@ describe("inferSenderTzFromDomain", () => {
   });
 
   it("handles full email addresses by stripping the local-part", () => {
-    const r = inferSenderTzFromDomain("recruiter@reiwa.co.jp");
+    const r = inferSenderTzFromDomain("recruiter@acme.example.co.jp");
     expect(r.tz).toBe("Asia/Tokyo");
   });
 
