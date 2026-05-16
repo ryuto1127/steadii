@@ -28,7 +28,7 @@ const scenario: EvalScenario = {
     workingHoursLocal: { start: "08:00", end: "22:00" },
     facts: [
       { fact: "Vancouverに住んでいる", category: "location" },
-      { fact: "UToronto に2026年9月入学予定", category: "schedule" },
+      { fact: "Sample 大学に2026年9月入学予定", category: "schedule" },
     ],
     inboxItems: [
       {

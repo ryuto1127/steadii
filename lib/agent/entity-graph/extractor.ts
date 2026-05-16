@@ -34,7 +34,7 @@ Entity kinds:
 - person: a specific human (professor, classmate, recruiter, club friend, family). Use the actual name, not the role.
 - project: a body of work spanning multiple touchpoints (interview process, group project, club initiative, research collaboration). Don't include one-off tasks.
 - course: a university class. Use the course name OR code (e.g. "MAT223", "Introduction to Linear Algebra").
-- org: a company, university, club, lab, association (e.g. "アクメトラベル", "UToronto", "Anthropic", "Robotics Club").
+- org: a company, university, club, lab, association (e.g. "アクメトラベル", "SampleUni", "Anthropic", "Robotics Club").
 - event_series: a recurring event (e.g. "Tuesday TA hours", "weekly study group"). NOT one-off events.
 
 Rules:

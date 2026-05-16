@@ -100,7 +100,7 @@ describe("serializeContextForPrompt — user_facts injection", () => {
       userFacts: [
         { fact: "I'm in Vancouver", category: "location_timezone" },
         { fact: "Don't notify me at night", category: "personal_pref" },
-        { fact: "Grade 12, UToronto CS in September", category: "academic" },
+        { fact: "high-school student going to a CS program", category: "academic" },
       ],
     });
     expect(prompt).toContain("# USER CONTEXT (always honor)");
@@ -110,7 +110,7 @@ describe("serializeContextForPrompt — user_facts injection", () => {
     expect(prompt).toContain("- [location_timezone] I'm in Vancouver");
     expect(prompt).toContain("- [personal_pref] Don't notify me at night");
     expect(prompt).toContain(
-      "- [academic] Grade 12, UToronto CS in September"
+      "- [academic] high-school student going to a CS program"
     );
     // Sits inside USER CONTEXT — should appear before the # Time header.
     const ctxIdx = prompt.indexOf("# USER CONTEXT (always honor)");
