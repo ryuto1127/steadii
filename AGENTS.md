@@ -155,6 +155,35 @@ Authoritative numbers live in `project_decisions.md`. This section covers only i
 
 ## 7. Security
 
+### 7a. HARD RULE — no PII / third-party content in committed artifacts
+
+**Highest-priority engineering rule on this repo.** Real personal content from the maintainer's inbox / calendar / contacts (or from anyone the maintainer corresponds with) must NEVER reach `git add` / `git commit` / `gh pr create` / `gh pr edit` / any public surface.
+
+**Prohibited in committed files** (code, tests, fixtures, prompts, scenarios, docs, handoffs, PR titles, PR bodies, commit messages):
+
+- Real human names — the maintainer's own (Japanese / katakana / romaji variants) AND any third party they correspond with (friends, classmates, professors, recruiters, family).
+- Real email addresses of any human — including the maintainer's personal Gmail. Use `@example.com` / `@example.co.jp` / `@*.test`.
+- Real domain names of senders / schools / companies — use `acme-travel.example.co.jp`, `sample-univ.example.edu`, etc.
+- Real subject lines, body text, or specific dates from actual messages — describe the bug pattern, never quote the email.
+- Real GitHub usernames or repo names from third parties (e.g. quoting `<user>/<repo>` from a real PR-notification email).
+- Identifying profile combos for the maintainer (e.g. city + grade + school + program; the combination uniquely identifies even without the name).
+- Real UUIDs / customer IDs / candidate IDs from production data.
+- Phone numbers, postal addresses, student IDs, DOB-shaped patterns.
+
+**Allowed**:
+
+- **Working-tree code** during local debugging — the rule fires at `git add` time, not before. You can paste a real email into a `.scratch.ts` you don't commit.
+- **Conversational diagnosis with the maintainer** via Claude Code chat — that channel is private.
+- **App-critical real strings** that the production code MUST match: e.g. `utoronto.ca` in the `lib/billing/academic-email.ts` student-tier TLD allowlist, `notifications@github.com` in bot-relay routing, `noreply@anthropic.com` in `Co-Authored-By:` trailers. These are public-by-design app config, not personal correspondence.
+
+**Test fixtures and prompt examples must be generic from creation**: `Tanaka Taro`, `Acme Travel`, `alex@example.com`, `prof@u.sample-univ.example.edu`, `<ADMIN_USER_ID>`. Preserve structural semantics — if a test asserts `.co.jp` TLD-based JP timezone inference, the generic must end in `.co.jp` (use `.example.co.jp`).
+
+**Why**: a leak to a public-repo artifact is permanent and indexable. The dogfood sample is INPUT for a generalized fix, not the spec. Third-party leaks (people who never consented to appearing on this repo) are the highest-severity kind. See `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/feedback_no_user_case_leak.md` for the full rule + verified incidents (2026-05-15 — PR #265 / #266 / #267 + full git-history rewrite + author-identity scrub).
+
+**Pre-commit check**: before any `git add` of a content-bearing file, scan the diff for the patterns above. If a leak is suspected, scrub at the source, do NOT rely on a later cleanup pass.
+
+### 7b. App security
+
 - Secrets in Vercel env only. `.env.example` has keys, never values.
 - OAuth tokens: AES-256-GCM at the application layer (`ENCRYPTION_KEY`).
 - Rate limits: chat burst (per-minute) + per-plan chat hourly/daily + endpoint-specific (syllabus extract, redeem removed). In-memory token bucket; move to Upstash when multi-region drift matters.
