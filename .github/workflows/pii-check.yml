@@ -1,0 +1,57 @@
+# Mechanical PII / leak guard on every PR.
+#
+# Runs `scripts/check-no-pii.sh` against the PR's diff vs base branch.
+# If a known-leak pattern is detected, the check fails and the PR cannot
+# merge until the leak is scrubbed.
+#
+# This is the "known-shape catcher". Pair it with a manual review pass
+# (see AGENTS.md §7c) that looks for NEW leak shapes the script doesn't
+# yet know about.
+#
+# To make this check REQUIRED for merge, configure branch protection
+# on the GitHub repo settings page:
+#   Settings → Branches → main → Require status checks to pass before merging
+#   → add "pii-check / scan" to the required-checks list.
+
+name: pii-check
+
+on:
+  pull_request:
+    branches: [main]
+  # Also run on direct pushes to main as a fallback (force-pushes etc.).
+  push:
+    branches: [main]
+
+jobs:
+  scan:
+    name: scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR head with full history
+        uses: actions/checkout@v4
+        with:
+          # Need history so we can diff against the base branch.
+          fetch-depth: 0
+
+      - name: Compute scan range
+        id: range
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+            echo "range=${BASE}..${HEAD}" >> "$GITHUB_OUTPUT"
+            echo "mode=--range" >> "$GITHUB_OUTPUT"
+          else
+            # Push-to-main fallback — scan the whole tree.
+            echo "mode=--all" >> "$GITHUB_OUTPUT"
+            echo "range=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run PII / leak scan
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.range.outputs.mode }}" = "--range" ]; then
+            bash scripts/check-no-pii.sh --range "${{ steps.range.outputs.range }}"
+          else
+            bash scripts/check-no-pii.sh --all
+          fi
