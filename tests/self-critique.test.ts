@@ -328,7 +328,7 @@ describe("detectPlaceholderLeak", () => {
 
     it("flags `the proposed slot ... works for me` (English)", () => {
       const text =
-        "Hi Acme Travel,\nThanks — the proposed slot at 18:00 works for me.\nBest, Ryuto";
+        "Hi Acme Travel,\nThanks — the proposed slot at 18:00 works for me.\nBest, Alex";
       const r = detectPlaceholderLeak(text);
       expect(r.hasLeak).toBe(true);
       expect(r.matched).toContain("slot acceptance missing user-local TZ");
