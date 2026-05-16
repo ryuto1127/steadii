@@ -1,9 +1,26 @@
 #!/usr/bin/env bash
 # Pre-commit / pre-push PII guard.
 #
-# Scans the diff (staged by default) for personal-content patterns that should
-# never reach git per AGENTS.md §7a. Exits non-zero with a clear message on
-# first hit so the leak is caught before it enters history.
+# Scans the diff (staged by default) for leak shapes that should never reach
+# git per AGENTS.md §7a. Exits non-zero with a clear message on first hit so
+# the leak is caught before it enters history.
+#
+# Patterns are loaded from two sibling files:
+#   scripts/pii-patterns-universal.txt  ← COMMITTED, PUBLIC. Shape-based
+#                                         patterns only (no real identities).
+#                                         Catches e.g. any `@gmail.com`
+#                                         address, API key shapes, JWT
+#                                         tokens, private key headers,
+#                                         connection strings with credentials.
+#   scripts/pii-patterns.local.txt      ← GITIGNORED, LOCAL ONLY. The
+#                                         maintainer's specific real names /
+#                                         emails / companies. Mirror into
+#                                         github secret `PII_PATTERNS_LOCAL`
+#                                         for CI parity.
+#
+# The split exists because committing literal identities to the public-
+# repo's pattern list would itself leak those identities — the scanner
+# would become the leak.
 #
 # Usage:
 #   bash scripts/check-no-pii.sh                # scans staged diff (pre-commit)
@@ -13,26 +30,54 @@
 # Wire it into your local pre-commit hook (one-time setup):
 #   ln -sf ../../scripts/check-no-pii.sh .git/hooks/pre-commit
 #   chmod +x .git/hooks/pre-commit
-#
-# Patterns are explicitly known-leak; extend when a new leak shape is
-# identified. This is a deterrent, not a guarantee — judgment still required.
 
 set -euo pipefail
 
 MODE="${1:-staged}"
 
-# Build the scan target into a tempfile.
-TMP="$(mktemp -t pii-scan-XXXXXX)"
-trap 'rm -f "$TMP"' EXIT
+# Resolve pattern files via git repo root — works whether the script is
+# invoked directly, via the .git/hooks/pre-commit symlink, or from CI.
+# Plain `dirname "$0"` returns the symlink's dir (`.git/hooks/`) when
+# called via the hook, which is the wrong location for the pattern files.
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -z "$REPO_ROOT" ]; then
+  # Not inside a git repo; fall back to script's resolved physical dir.
+  REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fi
+UNIVERSAL_FILE="$REPO_ROOT/scripts/pii-patterns-universal.txt"
+LOCAL_FILE="$REPO_ROOT/scripts/pii-patterns.local.txt"
 
-# Exclude this script + AGENTS.md from scanning — they intentionally
-# CONTAIN the patterns (as the rule's pattern list / NG examples), so a
-# naive scan would flag them every commit. The whitelist is narrow: only
-# files where the pattern presence is by-design and reviewed.
+if [ ! -f "$UNIVERSAL_FILE" ]; then
+  echo "ERROR: universal patterns file missing: $UNIVERSAL_FILE" >&2
+  exit 2
+fi
+
+# Load patterns: universal (always) + local (if present)
+load_patterns() {
+  local file="$1"
+  # Strip comments + blank lines
+  grep -v '^\s*#' "$file" 2>/dev/null | grep -v '^\s*$' || true
+}
+
+PATTERNS_FILE="$(mktemp -t pii-patterns-XXXXXX)"
+trap 'rm -f "$PATTERNS_FILE" "$TMP" 2>/dev/null' EXIT
+
+load_patterns "$UNIVERSAL_FILE" > "$PATTERNS_FILE"
+if [ -f "$LOCAL_FILE" ]; then
+  load_patterns "$LOCAL_FILE" >> "$PATTERNS_FILE"
+fi
+
+# Self-exclusion: this script + AGENTS.md + the pattern files themselves
+# legitimately contain example pattern text (as rule docs / regex source).
+# Don't flag them.
 WHITELIST=(
   ':!scripts/check-no-pii.sh'
+  ':!scripts/pii-patterns-universal.txt'
+  ':!scripts/pii-patterns.local.txt'
   ':!AGENTS.md'
 )
+
+TMP="$(mktemp -t pii-scan-XXXXXX)"
 
 case "$MODE" in
   staged)
@@ -48,52 +93,30 @@ case "$MODE" in
     ;;
   *)
     echo "Unknown mode: $MODE" >&2
+    echo "Usage: $0 [staged | --all | --range A..B]" >&2
     exit 2
     ;;
 esac
 
-# Known-leak patterns — extend as new shapes surface.
-# Anchored as case-insensitive substrings; one hit is enough to block.
-PATTERNS=(
-  # Maintainer's own identity that must never land in git
-  '田中'
-  'Tanaka'
-  'admin\.2007'
-  'admin-alt'
-  # Recruiting case (アクメトラベル) — historical leak vector
-  'アクメトラベル'
-  'アクメとラベル'
-  'acme'
-  'acme-travel'
-  'Acme Travel'
-  'acme\.co\.jp'
-  'acme\.example'
-  'example\.com'
-  'example-ats'
-  'candidate-001'
-  # Third-party leak (PR-notification quoted in docs)
-  'Sample Sender'
-  'sample-user'
-  # Identifying profile combos for the maintainer
-  'Vancouver Grade-12'
-  'Grade 12, UToronto'
-  'Grade 12, going to UToronto'
-  'UToronto CS in September'
-)
+# Allowlist: shapes that LOOK like leaks but are app-critical / by-design.
+# These are subtracted from hits.
+ALLOWLIST_REGEX='noreply@|no-reply@|notifications@|@example\.|@test\.|@your-domain\.example|@u-tokyo\.ac\.jp|@u\.sample-univ\.example\.edu|@uni\.edu|@school\.edu|@somecorp\.com|@stripe\.com|recruiter@acme|\b(me|you|user|users|friend|friends|foo|bar|baz|abc|xyz|someone|anyone|test|tester|hello|admin|sample|alex|tanaka|stu|prof|recruiter|stripe|noreply|no-reply|notifications)@|user:pass@|username:password@|user:password@|\$\{[^}]+\}:\$\{[^}]+\}@'
 
 hits=0
-for pat in "${PATTERNS[@]}"; do
-  if grep -niE "$pat" "$TMP" > /dev/null 2>&1; then
+while IFS= read -r pat; do
+  [ -z "$pat" ] && continue
+  matched=$(grep -niE --color=never "$pat" "$TMP" 2>/dev/null | grep -viE "$ALLOWLIST_REGEX" || true)
+  if [ -n "$matched" ]; then
     if [ "$hits" -eq 0 ]; then
       echo "BLOCKED — PII / leak patterns detected in this diff:" >&2
       echo "" >&2
     fi
     echo "  pattern: $pat" >&2
-    grep -niE --color=never "$pat" "$TMP" | head -3 | sed 's/^/    /' >&2
+    echo "$matched" | head -3 | sed 's/^/    /' >&2
     echo "" >&2
     hits=$((hits + 1))
   fi
-done
+done < "$PATTERNS_FILE"
 
 if [ "$hits" -gt 0 ]; then
   cat >&2 <<'EOF'
@@ -101,8 +124,8 @@ See AGENTS.md §7a — no PII or third-party content in committed artifacts.
 Replace with a generic placeholder (Tanaka Taro / Acme Travel /
 alex@example.com / etc.) at the source, then re-stage. If a pattern is
 flagged but you believe it's app-critical (e.g. utoronto.ca in the academic-
-email allowlist), either rephrase to avoid the trigger or update this script
-to whitelist that specific usage.
+email allowlist), either rephrase to avoid the trigger or extend the
+ALLOWLIST_REGEX in this script to whitelist that specific usage.
 EOF
   exit 1
 fi

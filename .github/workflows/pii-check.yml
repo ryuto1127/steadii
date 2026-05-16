@@ -4,21 +4,22 @@
 # If a known-leak pattern is detected, the check fails and the PR cannot
 # merge until the leak is scrubbed.
 #
-# This is the "known-shape catcher". Pair it with a manual review pass
-# (see AGENTS.md §7c) that looks for NEW leak shapes the script doesn't
-# yet know about.
+# Pattern sources:
+#   scripts/pii-patterns-universal.txt  ← always loaded (committed, public)
+#   scripts/pii-patterns.local.txt      ← materialized at runtime from the
+#                                         `PII_PATTERNS_LOCAL` repo secret
+#                                         (Settings → Secrets and variables
+#                                         → Actions). If the secret is unset,
+#                                         only universal patterns run.
 #
-# To make this check REQUIRED for merge, configure branch protection
-# on the GitHub repo settings page:
-#   Settings → Branches → main → Require status checks to pass before merging
-#   → add "pii-check / scan" to the required-checks list.
+# To make this check REQUIRED for merge, branch protection on `main` already
+# has `scan` selected under "Require status checks to pass before merging".
 
 name: pii-check
 
 on:
   pull_request:
     branches: [main]
-  # Also run on direct pushes to main as a fallback (force-pushes etc.).
   push:
     branches: [main]
 
@@ -30,8 +31,22 @@ jobs:
       - name: Check out PR head with full history
         uses: actions/checkout@v4
         with:
-          # Need history so we can diff against the base branch.
           fetch-depth: 0
+
+      - name: Materialize local patterns from secret
+        env:
+          LOCAL_PATTERNS: ${{ secrets.PII_PATTERNS_LOCAL }}
+        run: |
+          if [ -n "${LOCAL_PATTERNS:-}" ]; then
+            printf '%s\n' "$LOCAL_PATTERNS" > scripts/pii-patterns.local.txt
+            echo "Loaded $(grep -cv '^\s*\(#\|$\)' scripts/pii-patterns.local.txt) local patterns from secret."
+          else
+            echo "PII_PATTERNS_LOCAL secret not set — running with universal patterns only."
+            echo "To enable maintainer-specific pattern matching in CI, set the secret at:"
+            echo "  Settings → Secrets and variables → Actions → New repository secret"
+            echo "  Name: PII_PATTERNS_LOCAL"
+            echo "  Value: contents of scripts/pii-patterns.local.txt"
+          fi
 
       - name: Compute scan range
         id: range
@@ -42,7 +57,6 @@ jobs:
             echo "range=${BASE}..${HEAD}" >> "$GITHUB_OUTPUT"
             echo "mode=--range" >> "$GITHUB_OUTPUT"
           else
-            # Push-to-main fallback — scan the whole tree.
             echo "mode=--all" >> "$GITHUB_OUTPUT"
             echo "range=" >> "$GITHUB_OUTPUT"
           fi
