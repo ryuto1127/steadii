@@ -13,3 +13,5 @@ claude-*.log
 tests/agent-evals/last-run.json
 .git.bak.*/
 .git.bak.*
+scripts/pii-patterns.local.txt
+
