@@ -536,6 +536,11 @@ export function buildPlaceholderLeakCorrection(
       "- WORKING_HOURS_IGNORED / MUST-rule 7 violation: your response cited a JST time without the user-local TZ counterpart within ~80 chars. EVERY slot you display MUST be in dual-TZ form on its first mention — sender-side AND user-side, side-by-side (see TIMEZONE RULES). Re-emit with each slot in the shape `5月15日(金) 10:00 JST / 5月14日(木) 18:00 PT`. The conversion goes through convert_timezone; do not math TZ offsets in your head."
     );
   }
+  if (matched.includes("draft references user-TZ without location disclosure")) {
+    extras.push(
+      "- LOCATION_NOT_DISCLOSED_TO_SENDER / MUST-rule 12 violation: your draft body (inside the fenced code block) references a user-local TZ — a TZ abbreviation (PT / PDT / EST / etc.) OR a phrase like こちらの時間 / 現地時間 / 私の時間 — WITHOUT a location anchor naming your region. The recipient does not know where you are based; without a city/region they can't frame the times. Add a one-sentence disclosure right after お世話になっております (or the EN equivalent greeting) — shape (JA): 「現在 <region> 在住のため、…」or 「海外在住のため、…」。Shape (EN): 'I'm currently based in <region>, …'. Pull <region> from USER CONTEXT (USER_TIMEZONE) — never hard-code. The disclosure is a SEND-side concern only (inside the code block); meta-prose ABOVE the code block can keep using こちら freely."
+    );
+  }
   if (matched.includes("slot list without convert_timezone")) {
     extras.push(
       "- THREAD_ROLE_CASCADE / TIMEZONE RULES violation: your response shows ≥3 slot lines but you did NOT call `convert_timezone` this turn. Either the conversions you displayed are hallucinated, or you copy-pasted slots from somewhere instead of computing them. Re-run the EMAIL REPLY WORKFLOW from the top: `email_get_body` → `email_get_new_content_only` → `infer_sender_timezone` → `infer_sender_norms` → `convert_timezone` for EACH slot (start AND end endpoints), then re-emit the draft with the tool results inlined. Do NOT math TZ offsets in your head; do NOT skip the tool call because you 'already know' the answer."
