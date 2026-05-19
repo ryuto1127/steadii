@@ -291,6 +291,42 @@ function detectDraftOutsideCodeBlock(text: string): boolean {
 const COUNTER_PUSH_RE =
   /(再度ご調整|再度ご提案|別途ご調整|別の時間|別の日程|別途ご提案|もう少し早い時間|もう少し遅い時間|もう少し早めの時間|もう少し遅めの時間|earlier (slot|time|window|hours)|different (slot|time|window)|alternative (slot|time|window|times)|propose .{0,15}different)/i;
 
+// 2026-05-19 — COUNTER_WINDOW_VAGUE: counter-push language fires but the
+// proposed window has NO concrete HH:MM (or fewer than 2 distinct HH:MM
+// tokens). Catches the post-#282 production dogfood shape: agent wrote
+// "平日の日中〜夕方で再度ご調整いただけますと幸いです" — push-back but no
+// actionable range. The recipient has no anchor to choose from, and the
+// thread gets stuck in another round of vague back-and-forth.
+//
+// Scoped to the 300-char window FOLLOWING the counter-push token so an
+// HH:MM range elsewhere in the response (e.g., the intro citing the
+// original sender's slots in dual-TZ form) doesn't accidentally satisfy
+// the check. Distinct from `detectCounterWindowNotDualTZ` which fires
+// when a CONCRETE range is present in only one TZ — this detector fires
+// when there's no concrete range at all.
+function detectCounterWindowVague(text: string): boolean {
+  COUNTER_PUSH_RE.lastIndex = 0;
+  const m = COUNTER_PUSH_RE.exec(text);
+  if (!m) return false;
+  // Scope: line containing the counter-push (backward to last \n)
+  // + 100 chars forward. The intro typically cites the sender's
+  // original slots in dual-TZ form on earlier lines; line-bounding
+  // keeps those slots out of scope. A concrete counter window will
+  // sit on the same line as (or right next to) the push verb.
+  const beforeBreak = text.lastIndexOf("\n", m.index);
+  const scopeStart = beforeBreak === -1 ? 0 : beforeBreak + 1;
+  const scopeEnd = Math.min(text.length, m.index + 100);
+  const scope = text.slice(scopeStart, scopeEnd);
+  const rangeRe = /\d{1,2}:\d{2}\s*[-–~〜]\s*\d{1,2}:\d{2}/;
+  if (rangeRe.test(scope)) return false;
+  // Allow multi-slot proposals (≥2 distinct HH:MM tokens in scope).
+  const timeRe = /\b\d{1,2}:\d{2}\b/g;
+  const matches = scope.match(timeRe) ?? [];
+  const unique = new Set(matches);
+  if (unique.size >= 2) return false;
+  return true;
+}
+
 function detectCounterWindowNotDualTZ(text: string): boolean {
   if (!COUNTER_PUSH_RE.test(text)) return false;
 
@@ -432,6 +468,9 @@ export function detectPlaceholderLeak(
   if (detectCounterWindowNotDualTZ(text)) {
     matched.push("counter window not dual-TZ");
   }
+  if (detectCounterWindowVague(text)) {
+    matched.push("counter window vague");
+  }
 
   // engineer-62 — cascade-failure detectors. Fire only when the
   // orchestrator (or the harness) handed us tool-call history. Text-
@@ -568,7 +607,12 @@ export function buildPlaceholderLeakCorrection(
   }
   if (matched.includes("counter window not dual-TZ")) {
     extras.push(
-      "- COUNTER_WINDOW_NOT_DUAL_TZ / COUNTER-PROPOSAL PATTERN rule 3 violation: you proposed a counter window with HH:MM–HH:MM in only ONE timezone (sender-TZ OR user-TZ, not both). The recipient is in their own TZ and shouldn't have to math the offset — that's exactly the burden Steadii is supposed to remove. Re-emit the counter window with BOTH ranges side-by-side: `<HH:MM–HH:MM <sender-TZ>> (<HH:MM–HH:MM <user-TZ>>)`. The conversion goes through convert_timezone — do not math TZ offsets in your head, and do not propose a window without first checking the bidirectional intersection of user-hours and sender-hours."
+      "- COUNTER_WINDOW_NOT_DUAL_TZ / COUNTER-PROPOSAL PATTERN rule 3 violation: you proposed a counter window with HH:MM–HH:MM in only ONE timezone (sender-TZ OR user-TZ, not both). The recipient is in their own TZ and shouldn't have to math the offset — that's exactly the burden Steadii is supposed to remove. Re-emit the counter window with BOTH ranges side-by-side, **sender-TZ FIRST**: `<HH:MM–HH:MM <sender-TZ>> (<HH:MM–HH:MM <user-TZ>>)`. Example: 「JST 9:00–13:00 (バンクーバー時間 17:00–21:00) であれば調整しやすく…」. The conversion goes through convert_timezone — do not math TZ offsets in your head, and do not propose a window without first checking the bidirectional intersection of user-hours and sender-hours."
+    );
+  }
+  if (matched.includes("counter window vague")) {
+    extras.push(
+      "- COUNTER_WINDOW_VAGUE / COUNTER-PROPOSAL PATTERN rule 3 violation: you used counter / push-back language (再度ご調整 / もう少し早い時間 / earlier / different / etc.) but proposed NO concrete HH:MM window. Phrases like 「平日の日中〜夕方」 / 「ご都合の良い時間で」 / 「なるべく早めで」 / \"any weekday afternoon\" / \"sometime next week\" are unactionable — the recipient has no anchor to choose from, and the thread gets stuck in another vague round. Re-emit with a concrete HH:MM–HH:MM range in BOTH TZs (sender-TZ first): 「JST 9:00–13:00 (バンクーバー時間 17:00–21:00) であれば調整しやすく…」. If you genuinely don't have enough information to propose a concrete range, call `infer_sender_norms` first OR fall back to the empty-intersection branch (rule 3e: 「お互いの対応時間が重ならないようで、土日や時間外のご対応もご相談できますでしょうか。」). Never ship a vague counter."
     );
   }
   return [
