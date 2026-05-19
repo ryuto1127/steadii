@@ -35,6 +35,10 @@ import emptyIntersectionWindow from "./empty-intersection-window";
 // failure shape where the agent extracted slots from quoted history
 // instead of the sender's NEW content.
 import quotedBlockExtraction from "./quoted-block-extraction";
+// EDGE-FEASIBLE slot — proposed time is inside user hours but within
+// 60min of either boundary; senior-secretary B+C behavior (counter
+// draft + user-choice prose) replaces silent acceptance.
+import edgeFeasibleSlotPushback from "./edge-feasible-slot-pushback";
 
 export const ALL_SCENARIOS: EvalScenario[] = [
   placeholderLeakEmailReply,
@@ -54,4 +58,5 @@ export const ALL_SCENARIOS: EvalScenario[] = [
   senderNormsRespected,
   emptyIntersectionWindow,
   quotedBlockExtraction,
+  edgeFeasibleSlotPushback,
 ];
