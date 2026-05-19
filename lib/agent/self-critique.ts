@@ -187,11 +187,16 @@ const WORKING_HOURS_IGNORED_PROXIMITY = 80;
 const USER_TZ_IN_DRAFT_RE =
   /(\bP(D|S)?T\b|\bE(D|S)?T\b|\bC(D|S)?T\b|\bM(D|S)?T\b|\bCEST?\b|\bBST\b|\bNZST\b|Pacific Time|Eastern Time|Central Time|Mountain Time|こちらの時間|現地時間|私の時間)/i;
 const LOCATION_DISCLOSURE_RE =
-  /(海外|北米|アメリカ|カナダ|Pacific\s+(?:Time|Standard|Daylight)|Mountain\s+(?:Time|Standard|Daylight)|Eastern\s+(?:Time|Standard|Daylight)|Central\s+(?:Time|Standard|Daylight)|Vancouver|Toronto|Berlin|London|New York|Auckland|在住|住んで|currently based|based in|based out of|住んでおり|海外におり)/i;
+  /(海外|北米|アメリカ|カナダ|Pacific\s+(?:Time|Standard|Daylight)|Mountain\s+(?:Time|Standard|Daylight)|Eastern\s+(?:Time|Standard|Daylight)|Central\s+(?:Time|Standard|Daylight)|Vancouver|Toronto|Berlin|London|New York|Auckland|バンクーバー|トロント|ベルリン|ロンドン|ニューヨーク|オークランド|シドニー|在住|住んで|currently based|based in|based out of|住んでおり|海外におり)/i;
 
 function extractCodeBlocks(text: string): string[] {
   const blocks: string[] = [];
-  const re = /```[ \t]*\n([\s\S]*?)\n[ \t]*```/g;
+  // 2026-05-19 — accept optional language tag after the opening ```
+  // (e.g. ```text, ```yaml). The production agent emits ```text for
+  // email drafts; the prior regex required ``` followed by only
+  // whitespace before the newline, which missed every draft with a
+  // language tag.
+  const re = /```[a-zA-Z]*[ \t]*\n([\s\S]*?)\n[ \t]*```/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     blocks.push(m[1]);
@@ -219,6 +224,110 @@ function detectLocationNotDisclosed(text: string): boolean {
     return true;
   }
   return false;
+}
+
+// 2026-05-19 — three structural violations seen in the post-#281
+// production dogfood:
+//
+// (1) MISSING_INTRO_BEFORE_DRAFT (MUST-rule 11): tool trace finishes,
+//     response jumps directly into mid-draft content with no
+//     establishing intro for the user.
+// (2) DRAFT_OUTSIDE_CODE_BLOCK (MUST-rule 10): the email-draft prose
+//     (greeting + closing) is emitted as plain text, not wrapped in a
+//     fenced code block — the UI can't attach Send/Edit affordances.
+// (3) COUNTER_WINDOW_NOT_DUAL_TZ (COUNTER-PROPOSAL PATTERN rule 3):
+//     agent proposes a counter window in only ONE TZ (user-TZ only OR
+//     sender-TZ only), so the recipient has to math the offset.
+//
+// All three are mini-tier variance shapes — the prompt has explicit
+// MUSTs for each, but the model drops them under load. Post-hoc
+// detectors mirror the placeholder-leak pattern: detect → push a
+// corrective system message → one retry iteration.
+
+const DRAFT_GREETING_RE =
+  /(お世話になっております|お疲れ様|Dear\s\S|Hi\s\S|Hello\s\S)/;
+const DRAFT_CLOSING_RE =
+  /(よろしくお願いいたします|よろしくお願いします|Best regards|Best,|Sincerely|Regards,)/;
+
+function detectMissingIntroBeforeDraft(text: string): boolean {
+  // Only fires when the response contains a draft-shaped code block —
+  // a "no draft" turn (clarification-only, summary, etc.) has no
+  // MUST-rule 11 obligation.
+  const blocks = extractCodeBlocks(text);
+  const hasDraftBlock = blocks.some(
+    (b) => DRAFT_GREETING_RE.test(b) && DRAFT_CLOSING_RE.test(b),
+  );
+  if (!hasDraftBlock) return false;
+
+  // Intro = text BEFORE the first fence opener. Strip whitespace.
+  const fenceIdx = text.indexOf("```");
+  if (fenceIdx === -1) return false;
+  const intro = text.slice(0, fenceIdx).trim();
+
+  // Heuristics for "this is a real intro":
+  //   - At least 40 chars of prose (a substantive sentence)
+  //   - Contains a sentence-ending punctuation (。 / ! / ?)
+  // Failing either = MUST-rule 11 violation.
+  if (intro.length < 40) return true;
+  if (!/[。!?]/.test(intro)) return true;
+  return false;
+}
+
+function detectDraftOutsideCodeBlock(text: string): boolean {
+  // Strip out all fenced code-block contents — what's left is
+  // "outside-block prose". If that prose contains BOTH a greeting AND
+  // a closing marker, the agent emitted a draft body inline. MUST-
+  // rule 10 requires the draft body to be inside a fence so the UI's
+  // Send/Edit affordances can attach.
+  const stripped = text.replace(/```[\s\S]*?```/g, "");
+  const hasGreeting = DRAFT_GREETING_RE.test(stripped);
+  const hasClosing = DRAFT_CLOSING_RE.test(stripped);
+  return hasGreeting && hasClosing;
+}
+
+// Counter-push language signals the agent is proposing an alternative
+// window to the sender (not accepting the original slots). Used to
+// gate detector (3) so non-counter replies don't trip it.
+const COUNTER_PUSH_RE =
+  /(再度ご調整|再度ご提案|別途ご調整|別の時間|別の日程|別途ご提案|もう少し早い時間|もう少し遅い時間|もう少し早めの時間|もう少し遅めの時間|earlier (slot|time|window|hours)|different (slot|time|window)|alternative (slot|time|window|times)|propose .{0,15}different)/i;
+
+function detectCounterWindowNotDualTZ(text: string): boolean {
+  if (!COUNTER_PUSH_RE.test(text)) return false;
+
+  // Find each HH:MM–HH:MM range in the response. For each, check if
+  // a JST marker AND a user-TZ marker appear within 50 chars on either
+  // side. The counter window is "dual-TZ" when at least one range has
+  // BOTH markers nearby OR the response has two adjacent ranges each
+  // labelled with a different TZ.
+  //
+  // Pragmatic check: count ranges that are TZ-anchored. If counter
+  // language is present AND at least one range exists AND no range
+  // has BOTH TZs in its neighbourhood AND no pair of ranges covers
+  // both TZs → flag.
+  const rangeRe = /\d{1,2}:\d{2}\s*[-–~〜]\s*\d{1,2}:\d{2}/g;
+  let m: RegExpExecArray | null;
+  let hasJstRange = false;
+  let hasUserRange = false;
+  while ((m = rangeRe.exec(text)) !== null) {
+    const idx = m.index;
+    const winStart = Math.max(0, idx - 60);
+    const winEnd = Math.min(text.length, idx + m[0].length + 60);
+    const win = text.slice(winStart, winEnd);
+    if (/(\bJST\b|日本時間|Asia\/Tokyo)/i.test(win)) hasJstRange = true;
+    if (
+      /(\bP(D|S)?T\b|バンクーバー時|Pacific|Vancouver|\bE(D|S)?T\b|\bC(D|S)?T\b|\bM(D|S)?T\b|\bCEST?\b|\bBST\b|\bNZST\b)/i.test(
+        win,
+      )
+    )
+      hasUserRange = true;
+  }
+  // No ranges found at all → can't say (might be a "different day"
+  // counter without HH:MM). Don't flag.
+  if (!hasJstRange && !hasUserRange) return false;
+  // Both sides present → dual-TZ. OK.
+  if (hasJstRange && hasUserRange) return false;
+  // Only one side present → violation.
+  return true;
 }
 
 function detectWorkingHoursIgnored(text: string): boolean {
@@ -313,6 +422,15 @@ export function detectPlaceholderLeak(
   }
   if (detectLocationNotDisclosed(text)) {
     matched.push("draft references user-TZ without location disclosure");
+  }
+  if (detectMissingIntroBeforeDraft(text)) {
+    matched.push("missing intro before draft");
+  }
+  if (detectDraftOutsideCodeBlock(text)) {
+    matched.push("draft body outside code block");
+  }
+  if (detectCounterWindowNotDualTZ(text)) {
+    matched.push("counter window not dual-TZ");
   }
 
   // engineer-62 — cascade-failure detectors. Fire only when the
@@ -431,6 +549,21 @@ export function buildPlaceholderLeakCorrection(
   if (matched.includes("multiple drafts in one turn")) {
     extras.push(
       "- SILENT_DOUBLE_DRAFT / MUST-rule 13 violation: your response contains TWO email-draft fenced code blocks. The UI renders one Send/Edit affordance per block, so the user now sees two ambiguous primaries with no clear which-to-act-on. Re-emit ONE complete draft inside a single code block. If you wanted to offer a variant, append a single-line prose offer OUTSIDE the block (e.g. `より短くしたい場合はおっしゃってください` / `Want a more formal tone?`) — the user will request the alternative explicitly. Never ship two drafts in one reply-intent turn."
+    );
+  }
+  if (matched.includes("missing intro before draft")) {
+    extras.push(
+      "- MISSING_INTRO_BEFORE_DRAFT / MUST-rule 11 violation: your response jumped straight into the draft code block without an establishing intro for the user. The user reads fresh and has no anchor — they need to know WHO the email is from + WHAT it's about + WHICH ROUND + the SPECIFIC VALUES in dual-TZ form + YOUR DECISION before they see the draft. Re-emit with a 1–2 sentence intro above the code block per MUST-rule 11's 5-element shape (sender + topic + round + values + decision). Never start the response with just the draft body."
+    );
+  }
+  if (matched.includes("draft body outside code block")) {
+    extras.push(
+      "- DRAFT_OUTSIDE_CODE_BLOCK / MUST-rule 10 violation: your response emitted email-draft prose (greeting + closing markers) as PLAIN TEXT, not wrapped in a fenced ``` code block. The UI attaches Send / Edit / Confirm affordances to the contents of a fenced block — when the draft is inline prose, the user has no copy-and-send target. Re-emit with the entire reply body inside a single ```text ... ``` fence. Meta-commentary (intro, sender-side reasoning disclosure, trailing offer) stays OUTSIDE the fence; only the literal send-as-is reply prose goes INSIDE."
+    );
+  }
+  if (matched.includes("counter window not dual-TZ")) {
+    extras.push(
+      "- COUNTER_WINDOW_NOT_DUAL_TZ / COUNTER-PROPOSAL PATTERN rule 3 violation: you proposed a counter window with HH:MM–HH:MM in only ONE timezone (sender-TZ OR user-TZ, not both). The recipient is in their own TZ and shouldn't have to math the offset — that's exactly the burden Steadii is supposed to remove. Re-emit the counter window with BOTH ranges side-by-side: `<HH:MM–HH:MM <sender-TZ>> (<HH:MM–HH:MM <user-TZ>>)`. The conversion goes through convert_timezone — do not math TZ offsets in your head, and do not propose a window without first checking the bidirectional intersection of user-hours and sender-hours."
     );
   }
   return [
