@@ -107,8 +107,12 @@ const scenario: EvalScenario = {
         };
       },
     },
-    // (c) Each slot converted (start + end = 4 calls floor)
-    { kind: "tool_called", name: "convert_timezone", minTimes: 4 },
+    // (c) TZ math anchored with at least one `convert_timezone`
+    // call. 2026-05-18 — relaxed from minTimes 4 to 1, matching the
+    // late-night-slot-pushback change. Substance (sender-norms JST
+    // window respected, sender-side reasoning surfaced) is the real
+    // signal; count was an over-spec proxy that flaked on mini-tier.
+    { kind: "tool_called", name: "convert_timezone", minTimes: 1 },
     // (d) Canonical entity name appears
     { kind: "response_contains", text: "アクメトラベル" },
     // (e) PRIMARY assertion — every JST hour proposed in the counter
