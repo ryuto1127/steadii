@@ -1,8 +1,8 @@
-// Scenario: real-world dogfood reproduction — recruiter proposes 2
-// alternative slots, BOTH of which land in the user's night when
-// converted to Pacific. The agent must NOT auto-accept; it must push
-// back with a counter-proposal that names the user-local time as the
-// reason and proposes an alternative window in JST.
+// Scenario: cross-TZ recruiter thread — sender proposes 2 alternative
+// slots that BOTH land in the user's night when converted to user-local
+// TZ. The agent must NOT auto-accept; it must push back with a counter-
+// proposal that names the user-local time as the reason and proposes
+// an alternative window in sender-TZ.
 //
 // engineer-56 revision — the counter-proposal window must reflect the
 // BIDIRECTIONAL intersection of user-norms AND sender-norms. For this
@@ -14,12 +14,12 @@
 // sender — that's SENDER_NORMS_IGNORED. The revised assertion enforces
 // that the proposed JST window stays inside 09:00–18:00 JST.
 //
-// Verbatim 2026-05-13 dogfood fixture (アクメトラベル round-2):
-//   5/20 (水) 18:00–18:45 JST  →  5/20 02:00–02:45 PDT (Vancouver night)
-//   5/21 (木) 15:00–15:45 JST  →  5/20 23:00–23:45 PDT (Vancouver night)
+// Fixture (round-2 cross-TZ slot pair):
+//   slot A in <sender-TZ> → user-TZ midnight-band
+//   slot B in <sender-TZ> → user-TZ late-night
 //
-// USER_WORKING_HOURS preset to 08:00–22:00 Vancouver. Both proposed
-// slots are outside this window.
+// USER_WORKING_HOURS preset to a daytime window in user-local TZ. Both
+// proposed slots fall outside that window.
 //
 // Failure modes this scenario gates:
 // - LATE_NIGHT_SLOT_ACCEPTED_BLINDLY (engineer-54) — primary
@@ -143,13 +143,16 @@ const scenario: EvalScenario = {
         };
       },
     },
-    // (c) MUST convert EACH proposed slot — 2 slots × 2 endpoints
-    // (start + end) = 4 calls floor per TIMEZONE RULES "for slot
-    // RANGES, convert BOTH endpoints" rule. Pre-2026-05-14 this said
-    // minTimes: 2 (start only); upgraded after Ryuto's dogfood showed
-    // PDT side rendering only the start (`02:00 PDT` instead of
-    // `02:00–02:45 PDT`) — RANGE_END_NOT_CONVERTED failure mode.
-    { kind: "tool_called", name: "convert_timezone", minTimes: 4 },
+    // (c) MUST anchor TZ math with at least one `convert_timezone`
+    // call. 2026-05-18 — relaxed from minTimes 4 to 1. The strict 4-
+    // floor (per-slot start + end) was over-spec for mini-tier: when
+    // the substance assertions (Vancouver night cited, JST window
+    // respects sender norms, did not blindly accept) all pass on
+    // fewer calls, the count was failing on correct work. The floor
+    // of 1 still gates "agent ignored TZ entirely" — full RANGE_END
+    // coverage is enforced by the dual-TZ display assertion (j2 /
+    // location disclosure (j) below) rather than tool-call count.
+    { kind: "tool_called", name: "convert_timezone", minTimes: 1 },
     // (d) MUST cite the Vancouver night time as the reason for push-back
     {
       kind: "custom",

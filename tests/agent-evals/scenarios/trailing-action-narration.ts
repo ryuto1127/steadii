@@ -1,6 +1,6 @@
 // Scenario: ACTION_COMMITMENT_VIOLATION (trailing variant).
 //
-// Origin: 2026-05-13 dogfood. After emitting a draft, agent trailed
+// Failure shape: after emitting a draft, agent trails a postscript like
 // "メール本文を確認して、必要な情報を拾います。" — admitting on-the-record
 // that it should have fetched the body before drafting, while still
 // shipping the ungrounded draft. Two mistakes in one turn.

@@ -16,8 +16,8 @@ import actionCommitmentFollowthrough from "./action-commitment-followthrough";
 import rangeAsSlotPool from "./range-as-slot-pool";
 import happyPathWeekSummary from "./happy-path-week-summary";
 import happyPathAbsenceMail from "./happy-path-absence-mail";
-// engineer-53 — three real-world reply-hardening scenarios derived
-// from the 2026-05-13 dogfood failure.
+// engineer-53 — three reply-hardening scenarios covering common
+// failure shapes on terse / typo'd / cross-TZ reply intents.
 import emailReplyTerseTypo from "./email-reply-terse-typo";
 import subjectLineFabricated from "./subject-line-fabricated";
 import trailingActionNarration from "./trailing-action-narration";
@@ -31,9 +31,9 @@ import workingHoursUnsetAsksOnce from "./working-hours-unset-asks-once";
 // fallback path.
 import senderNormsRespected from "./sender-norms-respected";
 import emptyIntersectionWindow from "./empty-intersection-window";
-// 2026-05-14 sparring inline — THREAD_ROLE_CONFUSED quoted-block
-// variant. Verbatim reproduction of the round-2 reply dogfood where
-// agent extracted slots from quoted history instead of NEW content.
+// THREAD_ROLE_CONFUSED quoted-block variant — gates the round-2 reply
+// failure shape where the agent extracted slots from quoted history
+// instead of the sender's NEW content.
 import quotedBlockExtraction from "./quoted-block-extraction";
 
 export const ALL_SCENARIOS: EvalScenario[] = [
