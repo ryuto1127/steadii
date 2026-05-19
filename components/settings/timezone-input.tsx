@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-const COMMON_ZONES = [
+const COMMON_ZONES: readonly string[] = [
   "America/Vancouver",
   "America/Los_Angeles",
   "America/Denver",
@@ -38,10 +38,15 @@ const COMMON_ZONES = [
 export function TimezoneInput({
   initial,
   labels,
+  friendlyLabels,
 }: {
   initial: string | null;
   labels: { placeholder: string; save: string; detected: string; saved: string; invalid: string };
+  // Optional IANA → friendly display string map. When omitted, raw IANA names render.
+  // Source: lib/timezone-labels.ts, scoped to the active locale by the parent.
+  friendlyLabels?: Record<string, string>;
 }) {
+  const displayLabel = (iana: string): string => friendlyLabels?.[iana] ?? iana;
   const [value, setValue] = useState(initial ?? "");
   const [detected, setDetected] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "saved" | "invalid">("idle");
@@ -107,7 +112,7 @@ export function TimezoneInput({
         />
         <datalist id="steadii-tz-options">
           {options.map((z) => (
-            <option key={z} value={z} />
+            <option key={z} value={z} label={displayLabel(z)} />
           ))}
         </datalist>
         <button
@@ -126,10 +131,10 @@ export function TimezoneInput({
               onClick={useDetected}
               className="font-mono underline-offset-2 hover:underline"
             >
-              {labels.detected}: {detected}
+              {labels.detected}: {displayLabel(detected)}
             </button>
           ) : detected ? (
-            <span className="font-mono">{labels.detected}: {detected}</span>
+            <span className="font-mono">{labels.detected}: {displayLabel(detected)}</span>
           ) : null}
         </span>
         <span

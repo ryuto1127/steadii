@@ -1141,7 +1141,7 @@ export const ja: Messages = {
     language_option_ja: "日本語",
     timezone_description:
       "「明日」などの相対的な日付をこのタイムゾーンで解釈します。初回はブラウザから自動検出されます。",
-    timezone_placeholder: "例: Asia/Tokyo",
+    timezone_placeholder: "例: 東京、バンクーバー、ロンドン",
     timezone_save: "保存",
     timezone_detected: "検出",
     timezone_saved: "保存しました",
