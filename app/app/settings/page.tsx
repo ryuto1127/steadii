@@ -32,6 +32,7 @@ import { priceLabelsFor } from "@/lib/billing/format-price";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { LanguageToggle } from "@/components/settings/language-toggle";
 import { TimezoneInput } from "@/components/settings/timezone-input";
+import { FRIENDLY_TZ_LABELS } from "@/lib/timezone-labels";
 import { VoiceSettings } from "@/components/settings/voice-settings";
 import { WipeDataSection } from "@/components/settings/wipe-data-section";
 import { getUserThemePreference } from "@/lib/theme/get-preference";
@@ -621,6 +622,7 @@ export default async function SettingsPage() {
             saved: t("timezone_saved"),
             invalid: t("timezone_invalid"),
           }}
+          friendlyLabels={FRIENDLY_TZ_LABELS[currentLocale]}
         />
       </Section>
 

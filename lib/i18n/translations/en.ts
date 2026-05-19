@@ -3153,7 +3153,7 @@ export const en: MessagesShape = {
     language_option_ja: "日本語",
     timezone_description:
       "The agent uses this to resolve relative dates like “tomorrow.” Defaults to your browser's zone on first use.",
-    timezone_placeholder: "e.g. America/Vancouver",
+    timezone_placeholder: "e.g. Vancouver, Tokyo, London",
     timezone_save: "Save",
     timezone_detected: "Detected",
     timezone_saved: "Saved.",
