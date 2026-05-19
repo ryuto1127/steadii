@@ -1,6 +1,5 @@
-// Scenario: real-world dogfood reproduction — terse user message + typo
-// + write intent. Mirrors the 2026-05-13 dogfood failure that triggered
-// engineer-53.
+// Scenario: terse user message + typo + write intent. Mirrors the
+// failure shape that triggered engineer-53.
 //
 // Verbatim user message: 「アクメとラベルとの次の面接日程へのメールを返したいです」
 //
@@ -80,8 +79,9 @@ const scenario: EvalScenario = {
     ],
   },
   input: {
-    // Verbatim from the 2026-05-13 dogfood transcript. Do NOT edit
-    // this string — it's the exact phrasing that surfaced the failure.
+    // Pinned: do NOT edit this string — it's the exact phrasing
+    // (typo + particle) that surfaces the failure shape this test
+    // gates. Wording variation reduces or eliminates the failure.
     userMessage:
       "アクメとラベルとの次の面接日程へのメールを返したいです",
   },

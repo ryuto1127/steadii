@@ -4,12 +4,12 @@
 // recruiter's original first round. The agent must extract slots from
 // the NEW section ONLY, not from quoted history.
 //
-// 2026-05-14 verbatim dogfood reproduction:
-//   - Recruiter NEW content proposes: 5/20 18:00–18:45 JST + 5/21 15:00–15:45 JST
-//   - Quoted reply (Ryuto's previous): 5/22 13:30, 5/15 12:30, 5/15 12:00
-//   - Quoted original (round 1 from recruiter): 5/15 10-11/11:30-13:00, 5/19 16:30-18:00, 5/22 13:30-14:00
+// Concrete shape (cross-TZ recruiter thread, round 2):
+//   - Sender NEW content proposes 2 new slots in <sender-TZ>
+//   - Quoted user reply just above carries the user's earlier 3 slots
+//   - Quoted original from sender (round 1) carries the original 3 slots
 //
-// Agent in the actual dogfood produced a draft that listed the ROUND-1
+// Agent on this failure shape produced a draft that listed the ROUND-1
 // candidates (5/15/5/19/5/22) as if they were still on the table —
 // extracting from the deepest `>>` quoted block instead of the NEW
 // top-of-body content. This is exactly the failure mode engineer-53's

@@ -1,8 +1,8 @@
-// Scenario: real-world dogfood reproduction — recruiter proposes 2
-// alternative slots, BOTH of which land in the user's night when
-// converted to Pacific. The agent must NOT auto-accept; it must push
-// back with a counter-proposal that names the user-local time as the
-// reason and proposes an alternative window in JST.
+// Scenario: cross-TZ recruiter thread — sender proposes 2 alternative
+// slots that BOTH land in the user's night when converted to user-local
+// TZ. The agent must NOT auto-accept; it must push back with a counter-
+// proposal that names the user-local time as the reason and proposes
+// an alternative window in sender-TZ.
 //
 // engineer-56 revision — the counter-proposal window must reflect the
 // BIDIRECTIONAL intersection of user-norms AND sender-norms. For this
@@ -14,12 +14,12 @@
 // sender — that's SENDER_NORMS_IGNORED. The revised assertion enforces
 // that the proposed JST window stays inside 09:00–18:00 JST.
 //
-// Verbatim 2026-05-13 dogfood fixture (アクメトラベル round-2):
-//   5/20 (水) 18:00–18:45 JST  →  5/20 02:00–02:45 PDT (Vancouver night)
-//   5/21 (木) 15:00–15:45 JST  →  5/20 23:00–23:45 PDT (Vancouver night)
+// Fixture (round-2 cross-TZ slot pair):
+//   slot A in <sender-TZ> → user-TZ midnight-band
+//   slot B in <sender-TZ> → user-TZ late-night
 //
-// USER_WORKING_HOURS preset to 08:00–22:00 Vancouver. Both proposed
-// slots are outside this window.
+// USER_WORKING_HOURS preset to a daytime window in user-local TZ. Both
+// proposed slots fall outside that window.
 //
 // Failure modes this scenario gates:
 // - LATE_NIGHT_SLOT_ACCEPTED_BLINDLY (engineer-54) — primary

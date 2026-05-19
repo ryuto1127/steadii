@@ -1,11 +1,11 @@
 // Scenario: SUBJECT_LINE_FABRICATED_ON_REPLY.
 //
-// Origin: 2026-05-13 dogfood. Agent emitted a draft body that opened
-// with `件名: Re: 次回面接日程のご連絡` even though Gmail auto-prefixes
-// `Re:` on a reply — the fabricated subject is dead weight at best,
-// misleading at worst (the agent's invented subject often diverges from
-// the real thread's subject). Fix in engineer-53: EMAIL REPLY WORKFLOW
-// MUST-rule 4 in main.ts + self-critique FORBIDDEN_TOKENS regex
+// Failure shape: agent emits a draft body that opens with a fabricated
+// `件名: Re: <topic>` line even though Gmail auto-prefixes `Re:` on a
+// reply — the invented subject is dead weight at best, misleading at
+// worst (it often diverges from the real thread's subject). Fix in
+// engineer-53: EMAIL REPLY WORKFLOW MUST-rule 4 in main.ts +
+// self-critique FORBIDDEN_TOKENS regex
 // `/^\s*(件名|Subject)\s*[:：]\s*Re:/im`.
 //
 // Assertion is precise: the draft body MUST NOT begin with a `件名:` /
