@@ -135,7 +135,14 @@ describe("detectPlaceholderLeak", () => {
 
   describe("clean output (no leaks)", () => {
     it("does not flag a fully-grounded JA email reply", () => {
-      const text = `お世話になっております。田中 太郎です。
+      // 2026-05-19 — wrapped the draft body in a fenced code block per
+      // MUST-rule 10 (the post-#281 DRAFT_OUTSIDE_CODE_BLOCK detector
+      // correctly flags raw inline draft prose, which is exactly the
+      // production failure shape we now gate against).
+      const text = `サンプル株式会社からの面接日程について、第一〜第三希望を整理して返信案を作りました。
+
+\`\`\`text
+お世話になっております。田中 太郎です。
 ご連絡ありがとうございます。
 
 下記の通り、希望日程をお送りいたします。
@@ -143,7 +150,8 @@ describe("detectPlaceholderLeak", () => {
 第二希望：5月19日(火) 16:30〜17:00 JST (バンクーバー: 5月19日(火) 00:30〜01:00 PT)
 第三希望：5月22日(金) 13:30〜14:00 JST (バンクーバー: 5月21日(木) 21:30〜22:00 PT)
 
-何卒よろしくお願いいたします。`;
+何卒よろしくお願いいたします。
+\`\`\``;
       const r = detectPlaceholderLeak(text);
       expect(r.hasLeak).toBe(false);
       expect(r.matched).toHaveLength(0);
@@ -574,6 +582,120 @@ describe("detectPlaceholderLeak", () => {
   });
 });
 
+// 2026-05-19 — three structural-violation detectors mirroring the
+// production dogfood failure shape: missing intro, draft outside code
+// block, counter window with only one TZ.
+
+describe("detectMissingIntroBeforeDraft", () => {
+  const draftBlock =
+    "```text\nお世話になっております。\nご連絡ありがとうございます。\nよろしくお願いいたします。\n田中 太郎\n```";
+
+  it("does NOT flag a response with a substantive intro before the draft", () => {
+    const text =
+      `サンプルコンサルからの面接日程返信案です。候補は 5/22 13:30 JST / 5/21 21:30 PDT で、対応時間ぎりぎりなのでもう少し早い時間でお願いする内容にしました。\n\n${draftBlock}`;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("missing intro before draft");
+  });
+
+  it("flags a response that opens directly with the code block (no intro)", () => {
+    const text = `${draftBlock}\n\nもっと短くしますか?`;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).toContain("missing intro before draft");
+  });
+
+  it("flags an intro shorter than 40 chars", () => {
+    const text = `返信案です。\n\n${draftBlock}`;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).toContain("missing intro before draft");
+  });
+
+  it("flags an intro with no sentence-ending punctuation", () => {
+    const text =
+      "返信案を作成中、もう少しお待ちください、こちらで進めます、ありがとうございます\n\n" +
+      draftBlock;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).toContain("missing intro before draft");
+  });
+
+  it("does NOT flag a response with no draft code block (no MUST-rule 11 obligation)", () => {
+    const text = "今週は授業が3つ、課題が2つあります。";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("missing intro before draft");
+  });
+
+  it("does NOT flag a code block that isn't a draft (no greeting+closing)", () => {
+    const text = "config snippet:\n```yaml\nport: 3000\n```";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("missing intro before draft");
+  });
+});
+
+describe("detectDraftOutsideCodeBlock", () => {
+  it("flags a draft body emitted as plain text (no fence)", () => {
+    const text =
+      "サンプルコンサルへの返信案を作りました。\n\nお世話になっております。\nご連絡ありがとうございます。\n5/22 13:30 でご調整いただけますと幸いです。\nよろしくお願いいたします。\n田中 太郎";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).toContain("draft body outside code block");
+  });
+
+  it("does NOT flag a draft properly wrapped in a fenced code block", () => {
+    const text =
+      "サンプルコンサルへの返信案を作りました。\n\n```text\nお世話になっております。\nご連絡ありがとうございます。\nよろしくお願いいたします。\n田中 太郎\n```\n\nもっと短くしますか?";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("draft body outside code block");
+  });
+
+  it("does NOT flag a response with neither greeting nor closing", () => {
+    const text = "今週の予定はカレンダーで確認できます。";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("draft body outside code block");
+  });
+
+  it("does NOT flag a response with greeting but no closing", () => {
+    const text =
+      "お世話になっております、確認しました。詳細はこちらです。";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("draft body outside code block");
+  });
+});
+
+describe("detectCounterWindowNotDualTZ", () => {
+  it("flags counter language with HH:MM range in user-TZ only", () => {
+    const text =
+      "ご提案いただいた候補は対応時間外のため、もう少し早い時間でお願いできますでしょうか。平日であれば、13:00〜21:00（バンクーバー時間）で調整可能です。";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).toContain("counter window not dual-TZ");
+  });
+
+  it("flags counter language with HH:MM range in sender-TZ (JST) only", () => {
+    const text =
+      "ご提示いただいた候補は対応が難しく、別の時間でご調整いただけますでしょうか。9:00〜15:00 JST 帯ですと調整しやすいです。";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).toContain("counter window not dual-TZ");
+  });
+
+  it("does NOT flag a counter window with both TZ ranges side-by-side", () => {
+    const text =
+      "別の時間でご調整いただけますでしょうか。9:00〜15:00 JST (バンクーバー時間で 17:00〜23:00 PDT) であれば調整しやすいです。";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("counter window not dual-TZ");
+  });
+
+  it("does NOT flag a response with no counter-push language (even if single-TZ ranges appear)", () => {
+    const text =
+      "今週の予定は 13:00〜14:00 です。MAT223 の講義があります。";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("counter window not dual-TZ");
+  });
+
+  it("does NOT flag counter language without any HH:MM range (different failure path)", () => {
+    const text =
+      "ご提示いただいた候補は対応が難しく、もう少し早い時間でご調整いただけますでしょうか。";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("counter window not dual-TZ");
+  });
+});
+
 describe("buildPlaceholderLeakCorrection", () => {
   it("includes the matched token names", () => {
     const msg = buildPlaceholderLeakCorrection(["〇〇", "{placeholder}"]);
@@ -652,5 +774,27 @@ describe("buildPlaceholderLeakCorrection", () => {
     expect(msg).toContain("THREAD_ROLE_CONFUSED");
     expect(msg).toContain("email_get_new_content_only");
     expect(msg).toContain("email_get_body");
+  });
+
+  // 2026-05-19 — corrective notes for the structural-violation detectors.
+  it("appends a MISSING_INTRO_BEFORE_DRAFT note when the missing-intro token matches", () => {
+    const msg = buildPlaceholderLeakCorrection(["missing intro before draft"]);
+    expect(msg).toContain("MISSING_INTRO_BEFORE_DRAFT");
+    expect(msg).toContain("MUST-rule 11");
+    expect(msg.toLowerCase()).toContain("intro");
+  });
+
+  it("appends a DRAFT_OUTSIDE_CODE_BLOCK note when the outside-fence token matches", () => {
+    const msg = buildPlaceholderLeakCorrection(["draft body outside code block"]);
+    expect(msg).toContain("DRAFT_OUTSIDE_CODE_BLOCK");
+    expect(msg).toContain("MUST-rule 10");
+    expect(msg.toLowerCase()).toContain("fenced");
+  });
+
+  it("appends a COUNTER_WINDOW_NOT_DUAL_TZ note when the counter-single-TZ token matches", () => {
+    const msg = buildPlaceholderLeakCorrection(["counter window not dual-TZ"]);
+    expect(msg).toContain("COUNTER_WINDOW_NOT_DUAL_TZ");
+    expect(msg).toContain("COUNTER-PROPOSAL PATTERN");
+    expect(msg.toLowerCase()).toContain("convert_timezone");
   });
 });
