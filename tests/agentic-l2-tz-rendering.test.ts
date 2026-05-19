@@ -25,9 +25,15 @@ describe("AGENTIC_L2_SYSTEM_PROMPT — timezone + scheduling rules", () => {
 
   it("requires dual-TZ rendering in the draft body when sender TZ differs", () => {
     expect(AGENTIC_L2_SYSTEM_PROMPT).toMatch(/DRAFT BODY TZ DISPLAY/);
-    // The exemplar phrase (JST + PT) must be present so the model sees
-    // the format it should match.
-    expect(AGENTIC_L2_SYSTEM_PROMPT).toMatch(/JST.*PT/);
+    // 2026-05-18 — was /JST.*PT/. The prompt was rewritten to use
+    // abstract <sender-TZ> / <user-TZ> placeholders so the example
+    // doesn't bake the maintainer's actual case (JP↔Pacific) into
+    // the agent's reasoning prior. The behavioral rule (sender-side
+    // first, user-side second, separated by " / ") is still asserted —
+    // just via the placeholder shape rather than literal abbreviations.
+    expect(AGENTIC_L2_SYSTEM_PROMPT).toMatch(
+      /<sender-TZ>.*<user-TZ>|sender-TZ.*\/ .*user-TZ/
+    );
   });
 
   it("encodes the slot-pool rule (range + duration = pick within)", () => {
