@@ -18,6 +18,12 @@ type Props = {
   result?: unknown;
   pendingId?: string;
   onConfirm?: (decision: "approve" | "deny") => void;
+  // 2026-05-18 — when consecutive calls of the same tool are collapsed
+  // upstream (e.g. 2 slots × 2 endpoints = 4× convert_timezone), pass
+  // the run-length here so the card surfaces "× N" next to the name.
+  // Default 1 = no badge. Args / result reflect the LAST call in the
+  // run; deeper per-call breakdown can be added later if needed.
+  count?: number;
 };
 
 // 2026-05-14 — friendly-label mapping moved to lib/utils/tool-
@@ -41,6 +47,7 @@ export function ToolCallCard({
   result,
   pendingId,
   onConfirm,
+  count = 1,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const locale = (useLocale() === "ja" ? "ja" : "en") as ToolLabelLocale;
@@ -112,6 +119,11 @@ export function ToolCallCard({
           )}
         >
           {friendlyName(toolName, status, locale)}
+          {count > 1 ? (
+            <span className="ml-1 text-[hsl(var(--muted-foreground))]">
+              {" "}× {count}
+            </span>
+          ) : null}
           {status === "failed" ? " — failed" : null}
         </span>
         {hasDetail ? (

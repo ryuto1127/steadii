@@ -67,6 +67,10 @@ const JA_LABELS: LocaleMap = {
     running: "送信者の時差を推測しています",
     done: "送信者の時差を推測",
   },
+  infer_sender_norms: {
+    running: "送信者の業務時間を推測しています",
+    done: "送信者の業務時間を推測",
+  },
 
   // Entity / facts / memory
   lookup_entity: {
@@ -210,6 +214,10 @@ const EN_LABELS: LocaleMap = {
   infer_sender_timezone: {
     running: "Detecting sender's timezone",
     done: "Detected sender's timezone",
+  },
+  infer_sender_norms: {
+    running: "Inferring sender's working hours",
+    done: "Inferred sender's working hours",
   },
 
   // Entity / facts / memory

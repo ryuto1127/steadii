@@ -139,29 +139,79 @@ export function ToolCallSummary({
           isOpen ? "block" : "hidden"
         )}
       >
-        {items.map((it, i) =>
-          it.kind === "narration" ? (
-            <p
-              key={`n-${i}`}
-              className="whitespace-pre-wrap text-small italic text-[hsl(var(--muted-foreground))]"
-            >
-              {it.text}
-            </p>
-          ) : (
-            <ToolCallCard
-              key={`t-${it.event.id}`}
-              toolName={it.event.toolName}
-              status={it.event.status as ToolCallStatus}
-              args={it.event.args}
-              result={it.event.result}
-              pendingId={it.event.pendingId}
-              onConfirm={(d) =>
-                it.event.pendingId &&
-                onConfirmPending?.(it.event.pendingId, d)
-              }
-            />
-          )
-        )}
+        {(() => {
+          // 2026-05-18 — collapse consecutive same-tool runs in the
+          // expanded bullet list (e.g. 4× convert_timezone for 2 slots ×
+          // 2 endpoints → one card with "× 4" badge). The chip-level
+          // collapse already does this via summarizeToolCalls; this
+          // mirrors the behavior so the expanded view doesn't repeat
+          // identical-looking bullets. Args / result reflect the LAST
+          // call in the run (final state); per-call breakdown can be
+          // added later if a real need surfaces.
+          type RenderItem =
+            | { kind: "narration"; text: string }
+            | {
+                kind: "tool-run";
+                toolName: string;
+                lastEvent: (typeof items)[number] extends infer T
+                  ? T extends { kind: "tool"; event: infer E }
+                    ? E
+                    : never
+                  : never;
+                count: number;
+              };
+          const grouped: RenderItem[] = [];
+          for (const it of items) {
+            if (it.kind === "narration") {
+              grouped.push({ kind: "narration", text: it.text });
+              continue;
+            }
+            const last = grouped[grouped.length - 1];
+            if (
+              last &&
+              last.kind === "tool-run" &&
+              last.toolName === it.event.toolName &&
+              // Don't collapse a pending row into a finished run — the
+              // user needs the pending row's confirm UI visibly distinct.
+              it.event.status !== "pending" &&
+              last.lastEvent.status !== "pending"
+            ) {
+              last.count += 1;
+              last.lastEvent = it.event;
+            } else {
+              grouped.push({
+                kind: "tool-run",
+                toolName: it.event.toolName,
+                lastEvent: it.event,
+                count: 1,
+              });
+            }
+          }
+          return grouped.map((g, i) =>
+            g.kind === "narration" ? (
+              <p
+                key={`n-${i}`}
+                className="whitespace-pre-wrap text-small italic text-[hsl(var(--muted-foreground))]"
+              >
+                {g.text}
+              </p>
+            ) : (
+              <ToolCallCard
+                key={`t-${g.lastEvent.id}`}
+                toolName={g.toolName}
+                status={g.lastEvent.status as ToolCallStatus}
+                args={g.lastEvent.args}
+                result={g.lastEvent.result}
+                pendingId={g.lastEvent.pendingId}
+                count={g.count}
+                onConfirm={(d) =>
+                  g.lastEvent.pendingId &&
+                  onConfirmPending?.(g.lastEvent.pendingId, d)
+                }
+              />
+            )
+          );
+        })()}
       </div>
     </div>
   );
