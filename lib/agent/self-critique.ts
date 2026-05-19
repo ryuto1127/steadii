@@ -14,6 +14,8 @@
 // final pass + structured-output JSON schema that already enforces
 // non-empty fields.
 
+import { detectDraftBlocks } from "@/lib/chat/draft-detect";
+
 export type PlaceholderLeakDetection = {
   hasLeak: boolean;
   matched: string[];
@@ -364,6 +366,21 @@ export function detectPlaceholderLeak(
         matched.push("reply intent without email_get_new_content_only");
       }
     }
+
+    // (3) 2026-05-18 — SILENT_DOUBLE_DRAFT detector. On a reply-intent
+    // turn the agent MUST emit exactly one draft (MUST-rule 13). When
+    // the response contains ≥2 draft-shaped fenced blocks (greeting +
+    // closing markers, per draft-detect.ts), the UI ends up with two
+    // Send/Edit pairs and the user can't tell which is primary. Reuses
+    // the same detection helper the UI uses (`detectDraftBlocks`) so
+    // the detector fires on exactly the surfaces that show two action
+    // bars to the user.
+    if (replyIntent) {
+      const draftBlocks = detectDraftBlocks(text);
+      if (draftBlocks.length >= 2) {
+        matched.push("multiple drafts in one turn");
+      }
+    }
   }
 
   return { hasLeak: matched.length > 0, matched };
@@ -409,6 +426,11 @@ export function buildPlaceholderLeakCorrection(
   if (matched.includes("reply intent without email_get_new_content_only")) {
     extras.push(
       "- THREAD_ROLE_CONFUSED risk: you drafted a slot-list reply, and you called `email_get_body`, but you did NOT call `email_get_new_content_only` — the structural slot-extraction surface (MUST-rule 2). Extracting slots from `email_get_body`'s output means you may have pulled them from quoted history (previous-round candidates), which is the THREAD_ROLE_CONFUSED failure shape from the 2026-05-14 dogfood. Call `email_get_new_content_only` for the same inboxItemId, re-extract slots from its `newContentBody` ONLY, then re-emit the draft. If `stripperFlagged: true` comes back, fall back to `email_get_body` AND disclose to the user."
+    );
+  }
+  if (matched.includes("multiple drafts in one turn")) {
+    extras.push(
+      "- SILENT_DOUBLE_DRAFT / MUST-rule 13 violation: your response contains TWO email-draft fenced code blocks. The UI renders one Send/Edit affordance per block, so the user now sees two ambiguous primaries with no clear which-to-act-on. Re-emit ONE complete draft inside a single code block. If you wanted to offer a variant, append a single-line prose offer OUTSIDE the block (e.g. `より短くしたい場合はおっしゃってください` / `Want a more formal tone?`) — the user will request the alternative explicitly. Never ship two drafts in one reply-intent turn."
     );
   }
   return [
