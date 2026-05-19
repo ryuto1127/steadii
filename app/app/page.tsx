@@ -1,24 +1,13 @@
 import { redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
-import { and, asc, eq, isNull, lte, ne } from "drizzle-orm";
 import { auth } from "@/lib/auth/config";
-import { db } from "@/lib/db/client";
-import { assignments as assignmentsTable, classes as classesTable } from "@/lib/db/schema";
 import { CommandPalette } from "@/components/chat/command-palette";
 import { QueueList } from "@/components/agent/queue-list";
 import { QueueEmptyState } from "@/components/agent/queue-empty-state";
-import { TodayBriefing } from "@/components/agent/today-briefing";
 import { RecentActivity } from "@/components/agent/recent-activity";
 import { buildQueueForUser } from "@/lib/agent/queue/build";
-import {
-  getDueSoonAssignments,
-  getTodaysEvents,
-  todayDateInTz,
-} from "@/lib/dashboard/today";
 import { getUserTimezone } from "@/lib/agent/preferences";
-import { FALLBACK_TZ, addDaysToDateStr, localMidnightAsUtc } from "@/lib/calendar/tz-utils";
-import { fetchUpcomingTasks } from "@/lib/integrations/google/tasks";
-import { fetchMsUpcomingTasks } from "@/lib/integrations/microsoft/tasks";
+import { FALLBACK_TZ } from "@/lib/calendar/tz-utils";
 import {
   queueConfirmAction,
   queueCorrectAction,
@@ -49,17 +38,8 @@ export default async function HomePage() {
   const locale = await getLocale();
 
   // One round-trip burst — every panel that needs DB reads is parallel.
-  const [
-    queueCards,
-    events,
-    dueSoon,
-    todayTasks,
-    tzPref,
-  ] = await Promise.all([
+  const [queueCards, tzPref] = await Promise.all([
     buildQueueForUser(userId, locale),
-    getTodaysEvents(userId),
-    getDueSoonAssignments(userId, 168),
-    fetchTodayTasks(userId),
     getUserTimezone(userId),
   ]);
   const tz = tzPref ?? FALLBACK_TZ;
@@ -98,19 +78,13 @@ export default async function HomePage() {
         <CommandPalette autoFocus />
       </div>
 
-      {/* Today briefing surfaces ABOVE the queue per Ryuto's lock 2026-05-01:
-          calendar / tasks / deadlines are universal context the user must
-          see at a glance every visit. The queue (decisions / drafts /
-          notices) sits below — it's important but action-oriented, and
-          requires more attention than a quick scan. */}
-      <TodayBriefing
-        events={events}
-        todayTasks={todayTasks}
-        upcomingDeadlines={dueSoon}
-        tz={tz}
-      />
-
-      <div className="mt-10 md:mt-12">
+      {/* 2026-05-18 — TodayBriefing (calendar/tasks/deadlines) removed
+          from in-app home per maintainer decision. The same data lands
+          via the daily/weekly digest cron emails; the in-app home is now
+          queue-first (action items) + RecentActivity. The daily/weekly
+          briefing data still feeds the email pipeline — only the in-app
+          surface is gone. */}
+      <div className="mt-2 md:mt-4">
         {queueCards.length > 0 ? (
           <QueueList
             cards={queueCards}
@@ -139,16 +113,16 @@ export default async function HomePage() {
   );
 }
 
-// Today + 7-day window, source-aware. Engineer-37 widened the window
-// from "today only" to "today + next 7 days" so the home briefing
-// surfaces a real week-ahead view, and added a `kind` discriminator
-// so the one-click checkbox can route a complete back to the right
-// provider (Steadii DB / Google Tasks / Microsoft To Do).
-//
-// Pulls from THREE sources for /app/tasks parity:
+// Source-aware task shape consumed by the digest email pipeline and the
+// /app/tasks one-click checkbox. The `kind` discriminator routes a
+// complete back to the right provider (Steadii DB / Google Tasks /
+// Microsoft To Do). Pulls from three sources for /app/tasks parity:
 //   1. Steadii assignments (DB, canonical academic-deadline store)
 //   2. Google Tasks (live)
 //   3. Microsoft To Do (live, when connected)
+//
+// 2026-05-18 — the in-app today briefing was removed but this type
+// stays since the digest cron + unit tests still depend on it.
 export type TodayTask =
   | {
       kind: "steadii";
@@ -172,71 +146,12 @@ export type TodayTask =
       due: string; // YYYY-MM-DD
     };
 
-async function fetchTodayTasks(userId: string): Promise<TodayTask[]> {
-  const tz = (await getUserTimezone(userId)) ?? FALLBACK_TZ;
-  const today = todayDateInTz(tz);
-  // Engineer-37: widen the upper bound from +1d to +7d so a real
-  // week-ahead horizon surfaces. The merge helper still keeps overdue
-  // external rows, so the visible window is "overdue → 7 days out".
-  const end = localMidnightAsUtc(addDaysToDateStr(today, 7), tz);
-
-  const [steadiiRows, googleTasks, msTasks] = await Promise.all([
-    db
-      .select({
-        id: assignmentsTable.id,
-        title: assignmentsTable.title,
-        classTitle: classesTable.name,
-        dueAt: assignmentsTable.dueAt,
-      })
-      .from(assignmentsTable)
-      .leftJoin(classesTable, eq(classesTable.id, assignmentsTable.classId))
-      .where(
-        and(
-          eq(assignmentsTable.userId, userId),
-          isNull(assignmentsTable.deletedAt),
-          ne(assignmentsTable.status, "done"),
-          // Drop the lower bound — show every still-pending assignment
-          // whose due date has either arrived or already passed, not
-          // just today's. Overdue items deserve top-of-mind treatment.
-          lte(assignmentsTable.dueAt, end)
-        )
-      )
-      .orderBy(asc(assignmentsTable.dueAt))
-      .limit(25),
-    // External fetchers soft-fail when the integration isn't connected;
-    // .catch keeps a single broken provider from blanking today's
-    // briefing for the user. `daysBack: 30` opens the API filter so
-    // overdue tasks (still-pending past-due items) are returned, then
-    // mergeTodayTasks's `task.due <= weekEnd` filter narrows to
-    // overdue → 7 days out. Without daysBack, the API's dueMin sits
-    // at today UTC and overdue items never make it to the client.
-    fetchUpcomingTasks(userId, { days: 7, daysBack: 30, max: 50 }).catch(
-      () => []
-    ),
-    fetchMsUpcomingTasks(userId, { days: 7, daysBack: 30, max: 50 }).catch(
-      () => []
-    ),
-  ]);
-
-  return mergeTodayTasks(
-    steadiiRows.map((r) => ({
-      id: r.id,
-      title: r.title,
-      classTitle: r.classTitle ?? null,
-      due: r.dueAt ? r.dueAt.toISOString().slice(0, 10) : null,
-    })),
-    googleTasks,
-    msTasks,
-    today,
-    addDaysToDateStr(today, 7)
-  );
-}
-
-// Pure helper — extracted so the merge logic can be unit-tested
-// without mocking three sources of side-effects. Filters external
-// tasks to "overdue → next 7 days" so the home briefing surfaces
-// every task in the user's week-ahead horizon plus anything still
-// pending and past due.
+// Pure helper kept after the in-app today briefing was removed
+// (2026-05-18) because the digest email pipeline + the unit tests at
+// tests/home-today-tasks-merge.test.ts still depend on it. Filters
+// external tasks to "overdue → next 7 days" so any reusing surface
+// (email digest, /app/tasks, dev preview) gets a week-ahead horizon
+// plus still-pending past-due items.
 export function mergeTodayTasks(
   steadii: Array<{
     id: string;
