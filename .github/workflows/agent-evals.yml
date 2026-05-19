@@ -28,9 +28,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 2026-05-18 — `version:` removed. pnpm/action-setup@v4 now reads
+      # the version from package.json's `packageManager` field. Specifying
+      # both causes ERR_PNPM_BAD_PM_VERSION. package.json is the canonical
+      # source — keep it there, let the action follow.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:
