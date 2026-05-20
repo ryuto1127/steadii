@@ -36,6 +36,11 @@ import {
   CLASSIFIER_VERSION,
   hashTitleForClassifier,
 } from "./intent-classifier-version";
+import {
+  classifyWithLLMIfNeeded,
+  type IntentLLMRunner,
+} from "./intent-classifier-llm";
+import { prefetchDraftEmailReplyPreview } from "./intent-prefetch";
 
 // Re-export so callers that already import from this module keep working.
 export { CLASSIFIER_VERSION, hashTitleForClassifier };
@@ -81,18 +86,61 @@ export type ClassifyAndPersistArgs = {
   source: TaskIntentSourceValue;
   externalId: string;
   title: string;
+  // Test seam — when present, replaces the OpenAI client call inside
+  // the LLM fallback. Production code never passes this.
+  llmRunnerOverride?: IntentLLMRunner;
 };
 
 export type ClassifyAndPersistResult = IntentClassification & {
   // Whether a row already existed and was updated, vs newly inserted.
   upserted: "inserted" | "updated";
+  // True when the LLM fallback was invoked. Glass-box UI (Phase 3) uses
+  // this to disclose "Steadii used LLM-fallback intent classification".
+  llmFallbackUsed: boolean;
+  // True when a non-null preview was attached. Phase 3 keys the smart-
+  // action button render on this flag.
+  previewAttached: boolean;
 };
 
 export async function classifyAndPersistTaskIntent(
   args: ClassifyAndPersistArgs,
 ): Promise<ClassifyAndPersistResult> {
   const context = await loadClassifierContext(args.userId);
-  const result = classifyTaskIntent(args.title, context);
+  const regexResult = classifyTaskIntent(args.title, context);
+
+  // Phase 2b — LLM fallback when regex confidence is below the trust
+  // threshold (0.6). Falls back to the regex result if the LLM call
+  // fails or yields a less-confident verdict. Tests inject the runner.
+  const result = await classifyWithLLMIfNeeded({
+    regexResult,
+    title: args.title,
+    context,
+    runner: args.llmRunnerOverride,
+  });
+  const llmFallbackUsed = result !== regexResult;
+
+  // Phase 2b — per-intent context pre-fetch. Only DRAFT_EMAIL_REPLY
+  // populates a preview today (the canonical use case from
+  // 「<会社名>への返信」 tasks). Other intents land as preview=null.
+  let preview: TaskIntentPreview | null = null;
+  if (
+    result.intent === "DRAFT_EMAIL_REPLY" &&
+    result.matchedEntityId &&
+    typeof result.matchedEntityId === "string"
+  ) {
+    try {
+      preview = await prefetchDraftEmailReplyPreview({
+        userId: args.userId,
+        entityId: result.matchedEntityId,
+      });
+    } catch (err) {
+      // Pre-fetch failure is non-fatal — the smart-action button
+      // simply doesn't include the snippet preview line on this turn.
+      // eslint-disable-next-line no-console
+      console.warn("[intent-metadata-store] prefetch failed:", err);
+    }
+  }
+
   const titleHash = hashTitleForClassifier(args.title);
 
   // Drizzle's onConflictDoUpdate doesn't tell us whether the row was
@@ -123,7 +171,7 @@ export async function classifyAndPersistTaskIntent(
       matchedPattern: result.matchedPattern ?? null,
       matchedEntityId: result.matchedEntityId ?? null,
       matchedClassCode: result.matchedClassCode ?? null,
-      preview: null,
+      preview,
       titleHash,
       classifierVersion: CLASSIFIER_VERSION,
     })
@@ -140,13 +188,19 @@ export async function classifyAndPersistTaskIntent(
         matchedPattern: result.matchedPattern ?? null,
         matchedEntityId: result.matchedEntityId ?? null,
         matchedClassCode: result.matchedClassCode ?? null,
+        preview,
         titleHash,
         classifierVersion: CLASSIFIER_VERSION,
         classifiedAt: new Date(),
       },
     });
 
-  return { ...result, upserted: existing ? "updated" : "inserted" };
+  return {
+    ...result,
+    upserted: existing ? "updated" : "inserted",
+    llmFallbackUsed,
+    previewAttached: preview !== null,
+  };
 }
 
 // ---------- Read ----------
