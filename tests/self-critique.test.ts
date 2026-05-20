@@ -740,6 +740,131 @@ describe("detectCounterWindowVague", () => {
   });
 });
 
+// 2026-05-19 (sparring inline post-#294 dogfood) — LOCATION_NOT_DISCLOSED
+// detector covers two trigger paths now: (1) explicit user-TZ token in
+// the draft, (2) scheduling-counter content from the user's frame
+// without an explicit TZ. Ryuto called this out after the post-#294
+// dogfood produced a polite counter without any Vancouver / 海外在住
+// line — the recipient had no anchor for 「平日の日中帯」.
+
+describe("detectLocationNotDisclosed", () => {
+  it("flags a draft with こちらの時間 but no Vancouver / 海外 / Pacific anchor", () => {
+    const text = `\`\`\`text
+お世話になっております。
+
+ご提案いただいた候補ですが、こちらの時間では深夜帯となるため、別の日程でご調整いただけますと幸いです。
+
+何卒よろしくお願いいたします。
+田中 太郎
+\`\`\``;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).toContain(
+      "draft references user-TZ without location disclosure"
+    );
+  });
+
+  it("flags a draft with 私の対応可能時間 (previously missed by the regex)", () => {
+    const text = `\`\`\`text
+お世話になっております。
+
+私の対応可能時間は、平日 09:00–17:00 となっております。
+
+よろしくお願いいたします。
+田中 太郎
+\`\`\``;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).toContain(
+      "draft references user-TZ without location disclosure"
+    );
+  });
+
+  it("flags the post-#294 shape: scheduling-counter content with no explicit TZ token", () => {
+    const text = `\`\`\`text
+お世話になっております。
+
+ご提案の候補はいずれも対応が難しく、平日の日中帯で再度ご調整いただけますと幸いです。
+
+何卒よろしくお願いいたします。
+田中 太郎
+\`\`\``;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).toContain(
+      "draft references user-TZ without location disclosure"
+    );
+  });
+
+  it("flags a counter with 別日程 / 改めてご調整 phrasing", () => {
+    const text = `\`\`\`text
+お世話になっております。
+
+恐縮ですが、改めてご調整いただけますでしょうか。別日程でも結構です。
+
+何卒よろしくお願いいたします。
+田中 太郎
+\`\`\``;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).toContain(
+      "draft references user-TZ without location disclosure"
+    );
+  });
+
+  it("does NOT flag when a Vancouver / バンクーバー anchor is present", () => {
+    const text = `\`\`\`text
+お世話になっております。
+
+現在バンクーバー在住のため、ご提案の候補はいずれも私の現地時間では深夜帯となり、対応が難しく…平日の日中帯で再度ご調整いただけますと幸いです。
+
+何卒よろしくお願いいたします。
+田中 太郎
+\`\`\``;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain(
+      "draft references user-TZ without location disclosure"
+    );
+  });
+
+  it("does NOT flag when 海外在住 phrasing covers the disclosure", () => {
+    const text = `\`\`\`text
+お世話になっております。
+
+海外在住のため、こちらの時間では深夜帯となる候補は対応が難しく、再度ご調整いただけますと幸いです。
+
+何卒よろしくお願いいたします。
+田中 太郎
+\`\`\``;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain(
+      "draft references user-TZ without location disclosure"
+    );
+  });
+
+  it("does NOT flag a draft with no scheduling content (greetings-only reply)", () => {
+    const text = `\`\`\`text
+お世話になっております。
+
+ご返信ありがとうございます。資料拝見いたしました。
+
+何卒よろしくお願いいたします。
+田中 太郎
+\`\`\``;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain(
+      "draft references user-TZ without location disclosure"
+    );
+  });
+
+  it("does NOT flag content outside a fenced code block (intro / meta prose)", () => {
+    // The CONTEXT prose ABOVE the draft can use こちらの時間 freely —
+    // it's the user's own reasoning surface, not the send-side body.
+    const text =
+      "候補は 5/20 18:00 JST / 5/20 02:00 PDT で、こちらの時間ではかなり遅く、平日の日中帯では難しいです。";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain(
+      "draft references user-TZ without location disclosure"
+    );
+  });
+});
+
 // 2026-05-19 — ROLE_FLIPPED_GREETING detector. Catches the post-#291
 // dogfood failure where the agent put the user's own name at the top
 // of the draft AND in the sign-off — so the email reads as addressed

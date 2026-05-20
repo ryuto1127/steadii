@@ -182,10 +182,30 @@ const WORKING_HOURS_IGNORED_PROXIMITY = 80;
 // currently based in / based out of), the recipient can't frame the
 // times — "こちら" is ambiguous, PDT unexplained. MUST-rule 12.
 //
+// 2026-05-19 (sparring inline post-#294 dogfood) — broadened to fire
+// even when the draft body avoids explicit TZ tokens but still implies
+// a counter / decline / scheduling discussion from the user's TZ frame
+// (e.g. "平日の日中帯で再度ご調整いただけますと" / "対応が難しく").
+// Without a location anchor the recipient cannot frame WHO is asking
+// — Ryuto called this out 2026-05-19 after the post-#294 dogfood
+// produced a polite counter-draft with zero Vancouver / 海外在住 line.
+//
 // Implementation: extract fenced code-block bodies; for each, check
-// for user-TZ tokens vs location-disclosure tokens. Flag if mismatch.
+// (1) explicit user-TZ tokens OR (2) scheduling-counter content. If
+// either is present AND no location anchor → flag.
 const USER_TZ_IN_DRAFT_RE =
-  /(\bP(D|S)?T\b|\bE(D|S)?T\b|\bC(D|S)?T\b|\bM(D|S)?T\b|\bCEST?\b|\bBST\b|\bNZST\b|Pacific Time|Eastern Time|Central Time|Mountain Time|こちらの時間|現地時間|私の時間)/i;
+  /(\bP(D|S)?T\b|\bE(D|S)?T\b|\bC(D|S)?T\b|\bM(D|S)?T\b|\bCEST?\b|\bBST\b|\bNZST\b|Pacific Time|Eastern Time|Central Time|Mountain Time|こちらの時間|現地時間|私の時間|私の対応可能時間|私の方では|私の側では)/i;
+
+// 2026-05-19 — scheduling-counter context that implies user-TZ frame
+// WITHOUT a verbatim TZ token. The post-#294 dogfood draft used these
+// shapes verbatim and dodged USER_TZ_IN_DRAFT_RE entirely:
+//   - "平日の日中帯で再度ご調整いただけますと幸いです"
+//   - "ご提案の候補はいずれも対応が難しく…"
+// Each implies "from my (user's) frame" without saying so. Pair this
+// with a missing-disclosure check to catch the broader first-mention
+// case Ryuto called out.
+const SCHEDULING_COUNTER_CONTENT_RE =
+  /(再度ご?調整|改めてご?調整|別(の)?(日程|候補|時間|日)|別途(調整|ご相談|ご提示)|平日(の)?(日中|夕方|午前|午後|早朝|時間)|(日中|夕方|午前|午後|早朝|深夜)帯|対応(が)?(難しく|難しい|可能な時間|できかね|できません)|お時間(が|を)?(合わない|合いません|限られ)|候補日(時|を)?(再度|改めて|別途)|ご都合の(良|よ|い)い時間)/;
 const LOCATION_DISCLOSURE_RE =
   /(海外|北米|アメリカ|カナダ|Pacific\s+(?:Time|Standard|Daylight)|Mountain\s+(?:Time|Standard|Daylight)|Eastern\s+(?:Time|Standard|Daylight)|Central\s+(?:Time|Standard|Daylight)|Vancouver|Toronto|Berlin|London|New York|Auckland|バンクーバー|トロント|ベルリン|ロンドン|ニューヨーク|オークランド|シドニー|在住|住んで|currently based|based in|based out of|住んでおり|海外におり)/i;
 
@@ -218,9 +238,16 @@ function detectLocationNotDisclosed(text: string): boolean {
         block
       );
     if (!hasGreeting || !hasClosing) continue;
-    if (!USER_TZ_IN_DRAFT_RE.test(block)) continue;
+    // 2026-05-19 — two trigger paths:
+    //   (1) explicit user-TZ token (こちらの時間 / PDT / 私の対応可能時間 …)
+    //   (2) scheduling-counter content (平日の日中帯 / 再度ご調整 /
+    //       対応が難しく…) — first-mention failure shape from
+    //       post-#294 dogfood.
+    // Either path requires a location anchor; missing one → flag.
+    const explicitTz = USER_TZ_IN_DRAFT_RE.test(block);
+    const counterContent = SCHEDULING_COUNTER_CONTENT_RE.test(block);
+    if (!explicitTz && !counterContent) continue;
     if (LOCATION_DISCLOSURE_RE.test(block)) continue;
-    // Draft references user-TZ but lacks a location disclosure → flag.
     return true;
   }
   return false;
@@ -657,7 +684,7 @@ export function buildPlaceholderLeakCorrection(
   }
   if (matched.includes("draft references user-TZ without location disclosure")) {
     extras.push(
-      "- LOCATION_NOT_DISCLOSED_TO_SENDER / MUST-rule 12 violation: your draft body (inside the fenced code block) references a user-local TZ — a TZ abbreviation (PT / PDT / EST / etc.) OR a phrase like こちらの時間 / 現地時間 / 私の時間 — WITHOUT a location anchor naming your region. The recipient does not know where you are based; without a city/region they can't frame the times. Add a one-sentence disclosure right after お世話になっております (or the EN equivalent greeting) — shape (JA): 「現在 <region> 在住のため、…」or 「海外在住のため、…」。Shape (EN): 'I'm currently based in <region>, …'. Pull <region> from USER CONTEXT (USER_TIMEZONE) — never hard-code. The disclosure is a SEND-side concern only (inside the code block); meta-prose ABOVE the code block can keep using こちら freely."
+      "- LOCATION_NOT_DISCLOSED_TO_SENDER / MUST-rule 12 violation: your draft body (inside the fenced code block) discusses scheduling from your TZ frame — either via an explicit TZ abbreviation (PT / PDT / EST / etc.), or a phrase like こちらの時間 / 現地時間 / 私の時間 / 私の対応可能時間, or counter / decline language (平日の日中帯で再度ご調整 / 対応が難しく / 別日程 / 改めてご調整) — WITHOUT a location anchor naming your region. The recipient does not yet know where you are based, so without a city/region they cannot frame the request. Add a one-sentence disclosure right after お世話になっております (or the EN equivalent greeting) — shape (JA): 「現在 <region> (<TZ name>) 在住のため、…」or 「海外在住のため、…」。Shape (EN): 'I'm currently based in <region> (<TZ name>), …'. Pull <region> from USER CONTEXT (USER_TIMEZONE) — never hard-code. The disclosure may be SKIPPED only if the quoted prior reply in the email body (the `> …` lines below the new message) explicitly shows you already told this recipient your location (Vancouver / バンクーバー / 海外 / Pacific / 在住 / based in). Otherwise it must be present. The disclosure is a SEND-side concern only (inside the code block); meta-prose ABOVE the code block can keep using こちら freely."
     );
   }
   if (matched.includes("slot list without convert_timezone")) {
