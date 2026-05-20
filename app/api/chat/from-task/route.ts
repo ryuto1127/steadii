@@ -19,6 +19,7 @@ import {
   taskIntentMetadata,
   type TaskIntentSourceValue,
 } from "@/lib/db/schema";
+import { buildSeededMessage } from "@/lib/agent/from-task-seed";
 
 export const runtime = "nodejs";
 
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest) {
   const seededMessage = buildSeededMessage({
     intent: row.intent,
     title: row.title,
+    preview: row.preview,
   });
 
   const [chat] = await db
@@ -90,14 +92,6 @@ export async function POST(request: NextRequest) {
   redirect(`/app/chat/${chat.id}?stream=1`);
 }
 
-// Constructs the user-facing seed message. Intentionally short — the
-// agent will re-classify + run its full email-reply / scheduling flow
-// on this string. The task title alone is sufficient context; the
-// classifier metadata in the DB just tells the UI WHICH affordance to
-// surface, not what to say.
-export function buildSeededMessage(args: {
-  intent: string;
-  title: string;
-}): string {
-  return args.title;
-}
+// buildSeededMessage lives in lib/agent/from-task-seed.ts (no auth /
+// next-server deps) so unit tests can import it directly.
+export { buildSeededMessage } from "@/lib/agent/from-task-seed";
