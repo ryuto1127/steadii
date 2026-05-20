@@ -3021,3 +3021,100 @@ export const agentEvalRuns = pgTable(
 
 export type AgentEvalRunRow = typeof agentEvalRuns.$inferSelect;
 export type NewAgentEvalRunRow = typeof agentEvalRuns.$inferInsert;
+
+// 2026-05-19 — task_intent_metadata.
+//
+// Persists the result of the intent classifier (lib/agent/intent-
+// classifier.ts) per external task. One row per (user_id, source,
+// external_id) triple. Re-classified opportunistically when the
+// classifier_version bumps or the title_hash changes.
+//
+// `preview` shape depends on intent:
+//   - DRAFT_EMAIL_REPLY → { inboxItemId, subject, snippet, receivedAt }
+//   - CALENDAR_EVENT    → { suggestedStart, suggestedEnd, conflicts: [] }
+//   - STUDY_SESSION     → { classId, recentMistakeCount }
+//   - ASSIGNMENT_WORK   → { classId, assignmentId, dueAt }
+//   - OTHER             → null
+//
+// Phase 2a (this migration) creates the table + indexes. Phase 2b adds
+// the LLM-fallback path and the per-intent preview population.
+export type TaskIntentValue =
+  | "DRAFT_EMAIL_REPLY"
+  | "CALENDAR_EVENT"
+  | "STUDY_SESSION"
+  | "ASSIGNMENT_WORK"
+  | "OTHER";
+export type TaskIntentSourceValue =
+  | "google_tasks"
+  | "microsoft_todo"
+  | "steadii";
+
+export type TaskIntentPreview =
+  | {
+      kind: "draft_email_reply";
+      inboxItemId: string;
+      subject: string;
+      snippet: string;
+      receivedAt: string;
+    }
+  | {
+      kind: "calendar_event";
+      suggestedStart: string | null;
+      suggestedEnd: string | null;
+      conflicts: ReadonlyArray<{ eventId: string; title: string }>;
+    }
+  | {
+      kind: "study_session";
+      classId: string;
+      recentMistakeCount: number;
+    }
+  | {
+      kind: "assignment_work";
+      classId: string | null;
+      assignmentId: string | null;
+      dueAt: string | null;
+    };
+
+export const taskIntentMetadata = pgTable(
+  "task_intent_metadata",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    source: text("source").$type<TaskIntentSourceValue>().notNull(),
+    externalId: text("external_id").notNull(),
+    title: text("title").notNull(),
+    intent: text("intent").$type<TaskIntentValue>().notNull(),
+    confidence: real("confidence").notNull(),
+    matchedPattern: text("matched_pattern"),
+    matchedEntityId: uuid("matched_entity_id").references(() => entities.id, {
+      onDelete: "set null",
+    }),
+    matchedClassCode: text("matched_class_code"),
+    preview: jsonb("preview").$type<TaskIntentPreview | null>(),
+    titleHash: text("title_hash").notNull(),
+    classifierVersion: text("classifier_version").notNull(),
+    classifiedAt: timestamp("classified_at", {
+      withTimezone: true,
+      mode: "date",
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniq: uniqueIndex("task_intent_metadata_uk").on(
+      t.userId,
+      t.source,
+      t.externalId,
+    ),
+    userIdx: index("task_intent_metadata_user_idx").on(t.userId),
+    userIntentIdx: index("task_intent_metadata_user_intent_idx").on(
+      t.userId,
+      t.intent,
+    ),
+  }),
+);
+
+export type TaskIntentMetadataRow = typeof taskIntentMetadata.$inferSelect;
+export type NewTaskIntentMetadataRow = typeof taskIntentMetadata.$inferInsert;

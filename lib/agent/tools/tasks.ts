@@ -30,6 +30,8 @@ import {
   lookupEventSource,
 } from "./connected-providers";
 import type { ToolExecutor } from "./types";
+import { classifyAndPersistTaskIntent } from "@/lib/agent/intent-metadata-store";
+import type { TaskIntentSourceValue } from "@/lib/db/schema";
 
 async function logAudit(args: {
   userId: string;
@@ -270,6 +272,37 @@ export const tasksCreateTask: ToolExecutor<
     if (createdIn.length === 0) {
       const first = failedIn[0]?.error ?? "no tasks provider connected";
       throw new Error(first);
+    }
+
+    // 2026-05-19 — Phase 2a intent classification.
+    //
+    // Run synchronously so the metadata is persisted BEFORE we return,
+    // guaranteeing the task UI's first render sees the smart-action
+    // metadata. At Phase 2a the classifier is regex-only (sub-1ms);
+    // total overhead is dominated by the DB upsert (~10ms). Fail-safe:
+    // any classifier / persistence error logs and is swallowed —
+    // task creation itself already succeeded and the user's UI just
+    // misses the smart action this cycle.
+    const primarySource: TaskIntentSourceValue = createdIn[0] === "microsoft_todo"
+      ? "microsoft_todo"
+      : "google_tasks";
+    try {
+      await classifyAndPersistTaskIntent({
+        userId: ctx.userId,
+        source: primarySource,
+        externalId: primaryTaskId,
+        title: args.title,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await logAudit({
+        userId: ctx.userId,
+        action: "tasks.task.classify",
+        toolName: "tasks_create",
+        resourceId: primaryTaskId,
+        result: "failure",
+        detail: { message, phase: "classify" },
+      });
     }
 
     return {
