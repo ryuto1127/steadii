@@ -23,6 +23,12 @@ import { ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { CreateTaskForm } from "@/components/tasks/create-task-form";
 import { createTaskAction } from "@/lib/agent/tasks-actions";
+import { TaskSmartAction } from "@/components/tasks/task-smart-action";
+import {
+  getIntentMetadataBatch,
+  type IntentMetadataView,
+} from "@/lib/agent/intent-metadata-store";
+import type { TaskIntentSourceValue } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +39,11 @@ type AdapterResult<T> = { ok: true; items: T[] } | { ok: false; error: string };
 type UnifiedRow = {
   key: string;
   source: Source;
+  // 2026-05-19 — Phase 3 of proactive-task UX. The external task ID is
+  // the join key into `task_intent_metadata`. Null when the source is
+  // 'steadii' AND there's no analogue external ID (Steadii assignments
+  // currently route through their own page, not the task handoff).
+  externalId: string | null;
   title: string;
   // Used for sorting; null sorts last.
   dueAt: Date | null;
@@ -79,6 +90,27 @@ export default async function TasksPage() {
   }
   rows.sort(compareByDue);
 
+  // Phase 3 of proactive-task UX: batch-fetch the per-task intent
+  // metadata so each row can decide whether to render a smart-action
+  // affordance. Soft-fails to an empty map if the table is missing
+  // (e.g., migration 0045 hasn't been applied) so the tasks page
+  // still renders.
+  const intentRefs = rows
+    .filter((r) => r.externalId !== null)
+    .map((r) => ({
+      source: r.source as TaskIntentSourceValue,
+      externalId: r.externalId as string,
+    }));
+  let intentMap = new Map<string, IntentMetadataView>();
+  try {
+    intentMap = await getIntentMetadataBatch({ userId, refs: intentRefs });
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { feature: "tasks_page", phase: "intent_metadata_batch" },
+      user: { id: userId },
+    });
+  }
+
   if (rows.length === 0) {
     return (
       <div className="mx-auto max-w-3xl py-2 md:py-6">
@@ -113,8 +145,31 @@ export default async function TasksPage() {
 
       <section className="mt-6">
         <DenseList ariaLabel={t("aria_pending_tasks")}>
-          {rows.map((r) =>
-            r.href ? (
+          {rows.map((r) => {
+            const intent =
+              r.externalId !== null
+                ? intentMap.get(`${r.source}:${r.externalId}`)
+                : undefined;
+            const right = (
+              <div className="inline-flex items-center gap-2">
+                {intent &&
+                intent.intent !== "OTHER" &&
+                r.externalId !== null &&
+                r.source !== "steadii" ? (
+                  <TaskSmartAction
+                    source={r.source}
+                    externalId={r.externalId}
+                    intent={intent.intent as Exclude<
+                      IntentMetadataView["intent"],
+                      "OTHER"
+                    >}
+                    label={t(`smart_action.${intent.intent}` as const)}
+                  />
+                ) : null}
+                <SourceBadge source={r.source} t={t} />
+              </div>
+            );
+            return r.href ? (
               <DenseRowLink
                 key={r.key}
                 href={r.href}
@@ -122,7 +177,7 @@ export default async function TasksPage() {
                 title={r.title}
                 secondary={r.secondary}
                 metadata={r.metadata}
-                rightContent={<SourceBadge source={r.source} t={t} />}
+                rightContent={right}
               />
             ) : (
               <DenseRow
@@ -131,10 +186,10 @@ export default async function TasksPage() {
                 title={r.title}
                 secondary={r.secondary}
                 metadata={r.metadata}
-                rightContent={<SourceBadge source={r.source} t={t} />}
+                rightContent={right}
               />
-            )
-          )}
+            );
+          })}
         </DenseList>
       </section>
     </div>
@@ -203,6 +258,7 @@ async function safelyFetchSteadii(
     const items: UnifiedRow[] = rows.map((r) => ({
       key: `steadii:${r.id}`,
       source: "steadii",
+      externalId: r.id,
       title: r.title,
       dueAt: r.dueAt,
       href: r.classId
@@ -309,6 +365,7 @@ function projectExternalTask(
   return {
     key: `${source}:${task.due}:${index}:${task.title}`,
     source,
+    externalId: task.taskId,
     title: task.title,
     dueAt,
     // External tasks are read-only here; clicking through to the

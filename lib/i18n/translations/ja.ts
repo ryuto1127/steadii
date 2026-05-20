@@ -553,6 +553,12 @@ export const ja: Messages = {
     source_google: "Google",
     source_microsoft: "Microsoft",
     aria_pending_tasks: "保留中のタスク",
+    smart_action: {
+      DRAFT_EMAIL_REPLY: "下書きを始める",
+      CALENDAR_EVENT: "予定に入れる",
+      STUDY_SESSION: "復習する",
+      ASSIGNMENT_WORK: "作業を開く",
+    },
     no_due_date: "期限なし",
     in_progress: "進行中",
     high_priority: "優先度: 高",
