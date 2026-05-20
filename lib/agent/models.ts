@@ -43,7 +43,14 @@ export type TaskType =
   // proper scoring head, not raw capability — a small model with
   // structured output is enough. Logged for analytics; treated as 0
   // credit at α (precision is the value, not metered token spend).
-  | "rerank";
+  | "rerank"
+  // 2026-05-19 — task intent classifier fallback. Phase 2b: when the
+  // regex layer in lib/agent/intent-classifier.ts returns conf < 0.6,
+  // we fall back to gpt-5.4-nano with structured output. Cost: ~$0.0001
+  // per task at α volume. Logged for analytics; treated as 0 credit —
+  // intent classification is internal UX scaffolding, not a metered
+  // user action.
+  | "task_intent_classify";
 
 // Canonical model defaults. These are the target IDs; the operator can
 // override them at runtime with OPENAI_CHAT_MODEL / OPENAI_COMPLEX_MODEL /
@@ -118,6 +125,7 @@ export function selectModel(
     case "chat_title":
     case "tag_suggest":
     case "voice_cleanup":
+    case "task_intent_classify":
       return env.OPENAI_NANO_MODEL?.trim() || DEFAULTS.nano;
     case "email_embed":
       return env.OPENAI_EMBEDDING_MODEL?.trim() || DEFAULTS.embedding;
@@ -186,6 +194,7 @@ export function taskTypeMetersCredits(t: TaskType): boolean {
     case "tag_suggest":
     case "voice_cleanup":
     case "rerank":
+    case "task_intent_classify":
       return false;
   }
 }
