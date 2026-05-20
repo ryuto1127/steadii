@@ -968,11 +968,21 @@ export function ChatView({
 }
 
 function flushNarrationAndAddTool(msg: Message, event: ToolEvent): Message {
-  const items = [...(msg.items ?? [])];
-  const pending = msg.content.trim();
-  if (pending) items.push({ kind: "narration", text: msg.content });
-  items.push({ kind: "tool", event });
-  return { ...msg, content: "", items };
+  // 2026-05-19 — was: "flush" the current streaming `content` into an
+  // `items` narration entry (hidden inside the collapsed tool-chip) and
+  // reset `content` to "". That sequence made streaming text disappear
+  // from the visible area every time a tool fired — observable as a
+  // mid-stream flicker where prose appeared, vanished into the chip,
+  // and then started accumulating again from empty.
+  //
+  // Fix: just append the tool to `items` and leave `content` alone.
+  // Subsequent text-deltas keep appending to the same buffer, so the
+  // user sees one continuous top-to-bottom stream while the chip
+  // chronicles the tool runs alongside. The "narration" kind is kept
+  // in TurnItem for backwards-compatible deserialization of historical
+  // rows, but no new narration items are produced from this path.
+  const items = [...(msg.items ?? []), { kind: "tool" as const, event }];
+  return { ...msg, items };
 }
 
 function updateToolStatus(
