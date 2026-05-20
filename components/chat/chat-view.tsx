@@ -669,8 +669,21 @@ export function ChatView({
         </div>
       </header>
 
-    <div className="flex h-[calc(100dvh-12rem)] flex-col md:h-[calc(100vh-8rem)]">
-      <div className="flex-1 overflow-y-auto py-4">
+    {/*
+      2026-05-19 — switched from fixed-height + inner-scroll to page-level
+      scroll (ChatGPT-style). The chat now grows naturally and the page
+      scroll moves through messages. The composer sticks to the viewport
+      bottom via `sticky bottom-0` below.
+
+      Trade-off: long chats now scroll the whole page including the
+      header above. ChatGPT does the same — keeps the conversation as
+      one tall document rather than a fixed pane with two scrollbars
+      (one inside, one outside) competing. The `scrollIntoView` in the
+      auto-scroll effect still works — it now scrolls the window
+      instead of the inner container.
+    */}
+    <div className="flex flex-col">
+      <div className="pt-4 pb-8">
         <ul className="space-y-5">
           {messages.map((m, idx) => {
             const isLastAssistant =
@@ -798,7 +811,7 @@ export function ChatView({
         <div ref={scrollAnchor} />
       </div>
 
-      <div className="border-t border-[hsl(var(--border))] py-3">
+      <div className="sticky bottom-0 z-10 border-t border-[hsl(var(--border))] bg-[hsl(var(--background))] py-3">
         {!blobConfigured && (
           <div className="mb-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2 text-small text-[hsl(var(--muted-foreground))]">
             {tChat("blob_disabled_prefix")}
