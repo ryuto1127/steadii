@@ -30,8 +30,17 @@ const args = z.object({
     .string()
     .min(3)
     .max(254)
+    // 2026-05-19 — must contain `@`. Without this, the agent has been
+    // observed passing an `inbox_item.id` UUID (from a prior tool result)
+    // where this parameter is expected (post-#292 dogfood). Failing here
+    // is preferable to silently running a domain heuristic on a UUID:
+    // it kicks back a clear error the agent's retry path can fix.
+    .regex(
+      /@/,
+      "senderEmail must be an email address with `@` (e.g., 'recruiter@example.com'). Do NOT pass an inbox_item.id, UUID, or any other identifier — pull the actual address from inbox_item.senderEmail."
+    )
     .describe(
-      "The sender's email address (e.g. 'recruiter@acme-travel.example.co.jp'). Used for TLD-based TZ inference."
+      "The sender's email address (e.g. 'recruiter@acme-travel.example.co.jp'). MUST contain `@`. Do NOT pass an inbox_item.id / UUID; pull the actual email address from `inbox_item.senderEmail` after calling email_get_body. Used for TLD-based TZ inference."
     ),
   emailBody: z
     .string()
