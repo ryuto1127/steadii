@@ -740,6 +740,135 @@ describe("detectCounterWindowVague", () => {
   });
 });
 
+// 2026-05-19 — ROLE_FLIPPED_GREETING detector. Catches the post-#291
+// dogfood failure where the agent put the user's own name at the top
+// of the draft AND in the sign-off — so the email reads as addressed
+// to the user themselves.
+
+describe("detectRoleFlippedGreeting", () => {
+  it("flags a draft whose greeting and sign-off are the same name", () => {
+    const text = `返信案を作りました。
+
+\`\`\`text
+田中 太郎 さま
+
+お世話になっております。
+ご調整ありがとうございます。
+よろしくお願いいたします。
+
+田中 太郎
+\`\`\``;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).toContain("role-flipped greeting");
+  });
+
+  it("does NOT flag a draft addressed to a different recipient", () => {
+    const text = `返信案を作りました。
+
+\`\`\`text
+アクメトラベル 採用担当者さま
+
+お世話になっております。
+ご調整ありがとうございます。
+よろしくお願いいたします。
+
+田中 太郎
+\`\`\``;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("role-flipped greeting");
+  });
+
+  it("does NOT flag a team-level greeting with no name", () => {
+    const text = `返信案を作りました。
+
+\`\`\`text
+ご担当者さま
+
+お世話になっております。
+ご調整ありがとうございます。
+よろしくお願いいたします。
+
+田中 太郎
+\`\`\``;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("role-flipped greeting");
+  });
+
+  it("does NOT false-positive on partial family-name overlap", () => {
+    const text = `返信案を作りました。
+
+\`\`\`text
+田中 一郎 さま
+
+お世話になっております。
+ご調整ありがとうございます。
+よろしくお願いいたします。
+
+田中 太郎
+\`\`\``;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("role-flipped greeting");
+  });
+
+  it("flags the EN shape — Dear <user> + sign-off <user>", () => {
+    const text = `Drafted reply:
+
+\`\`\`text
+Dear Taro Tanaka,
+
+Thanks for reaching out.
+Best regards,
+
+Taro Tanaka
+\`\`\``;
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).toContain("role-flipped greeting");
+  });
+
+  it("does NOT flag a response without a draft code block", () => {
+    const text = "Just a plain status response: you have 3 tasks today.";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("role-flipped greeting");
+  });
+});
+
+// 2026-05-19 — slot-list-without-convert_timezone detector loosened
+// from ≥3 to ≥2. Verify the new threshold catches the 2-slot dogfood
+// shape that previously slipped through.
+
+describe("slot list without convert_timezone — loosened threshold (≥2)", () => {
+  it("flags a 2-slot dual-TZ list when convert_timezone was never called", () => {
+    const text = `候補は
+- 5/20(水) 18:00 JST / 5/20(水) 02:00 PDT
+- 5/21(木) 15:00 JST / 5/21(木) 07:00 PDT
+です。`;
+    const r = detectPlaceholderLeak(text, {
+      toolCallHistory: [
+        { toolName: "email_get_body" },
+        { toolName: "infer_sender_timezone" },
+      ],
+      userMessage: "アクメトラベルへの返信",
+    });
+    expect(r.matched).toContain("slot list without convert_timezone");
+  });
+
+  it("does NOT flag when convert_timezone WAS called even with 2 slots", () => {
+    const text = `候補は
+- 5/20(水) 18:00 JST / 5/20(水) 02:00 PDT
+- 5/21(木) 15:00 JST / 5/20(水) 23:00 PDT
+です。`;
+    const r = detectPlaceholderLeak(text, {
+      toolCallHistory: [
+        { toolName: "email_get_body" },
+        { toolName: "convert_timezone" },
+        { toolName: "convert_timezone" },
+      ],
+      userMessage: "アクメトラベルへの返信",
+    });
+    expect(r.matched).not.toContain("slot list without convert_timezone");
+  });
+});
+
 describe("buildPlaceholderLeakCorrection", () => {
   it("includes the matched token names", () => {
     const msg = buildPlaceholderLeakCorrection(["〇〇", "{placeholder}"]);
@@ -849,5 +978,14 @@ describe("buildPlaceholderLeakCorrection", () => {
     expect(msg).toContain("COUNTER-PROPOSAL PATTERN");
     expect(msg).toContain("infer_sender_norms");
     expect(msg.toLowerCase()).toContain("vague");
+  });
+
+  // 2026-05-19 — ROLE_FLIPPED_GREETING corrective note.
+  it("appends a ROLE_FLIPPED_GREETING note when the matched token fires", () => {
+    const msg = buildPlaceholderLeakCorrection(["role-flipped greeting"]);
+    expect(msg).toContain("ROLE_FLIPPED_GREETING");
+    expect(msg).toContain("MUST-rule 5b");
+    expect(msg).toContain("sign-off");
+    expect(msg.toLowerCase()).toContain("recipient");
   });
 });

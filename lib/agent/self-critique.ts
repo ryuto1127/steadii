@@ -304,6 +304,76 @@ const COUNTER_PUSH_RE =
 // the check. Distinct from `detectCounterWindowNotDualTZ` which fires
 // when a CONCRETE range is present in only one TZ — this detector fires
 // when there's no concrete range at all.
+
+// 2026-05-19 — ROLE_FLIPPED_GREETING. The draft's greeting line addresses
+// the USER (not the recipient). Shape: 「<user's own name> さま」 at the
+// top of the draft body, with the SAME name in the sign-off. The user's
+// name appeared at the top of the email body the agent READ (because
+// the recruiter / professor was addressing the user there) — but in
+// the REPLY draft, roles flip: the user is now the sender, the original
+// sender is now the recipient. Echoing the user's name back as a
+// greeting ships an email addressed to the user themselves.
+//
+// Detection: extract the draft fenced block, compare the first non-empty
+// line (greeting candidate, with honorifics stripped) against the last
+// non-empty line that isn't a closing phrase (sign-off candidate).
+// Strict equality (after stripping honorifics) avoids the false-positive
+// where two unrelated people share a family-name token (「田中 一郎」 ≠
+// 「田中 太郎」).
+
+const GREETING_HONORIFICS_RE =
+  /\s*(さま|様|さん|-san|-sama|,?\s*$)\s*$/;
+// EN greeting prefixes ("Dear …", "Hi …", etc.) stripped so the cleaned
+// greeting-name matches the sign-off-name on JP-style draftsAND EN-style
+// drafts. JA greetings carry honorifics as a SUFFIX (already handled by
+// GREETING_HONORIFICS_RE); EN carries them as a PREFIX.
+const GREETING_PREFIX_RE = /^(Dear|Hi|Hello|To)\s+/i;
+const CLOSING_PHRASE_RE =
+  /(よろしくお願い|Best,?$|Sincerely,?$|Regards,?$|Best regards,?$|敬具|何卒よろしく)/;
+
+function detectRoleFlippedGreeting(text: string): boolean {
+  const blocks = extractCodeBlocks(text);
+  for (const block of blocks) {
+    if (!DRAFT_GREETING_RE.test(block) || !DRAFT_CLOSING_RE.test(block)) continue;
+    const lines = block
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    if (lines.length < 4) continue;
+
+    const firstLine = lines[0];
+    // Only fire when the first line LOOKS like a named greeting
+    // (carries an honorific OR Dear/Hi prefix). Skip standard "お世話に
+    // なっております" alone, "Hi team", etc.
+    if (!/(さま|様|さん|-san|-sama|^Dear\s|^Hi\s)/.test(firstLine)) continue;
+
+    const greetingName = firstLine
+      .replace(GREETING_PREFIX_RE, "")
+      .replace(GREETING_HONORIFICS_RE, "")
+      .trim();
+    if (greetingName.length < 2) continue;
+
+    // Walk backwards through lines to find the sign-off: first line from
+    // the end that is NOT itself a closing phrase like "よろしくお願い".
+    let signOff: string | null = null;
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      const line = lines[i];
+      if (CLOSING_PHRASE_RE.test(line)) continue;
+      signOff = line;
+      break;
+    }
+    if (!signOff || signOff.length < 2) continue;
+
+    // Strict equality on cleaned forms — avoids false positives from
+    // partial-name collisions. The dogfood failure (「田中 太郎 さま」
+    // greeting + 「田中 太郎」 sign-off) hits this branch cleanly.
+    if (greetingName === signOff) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function detectCounterWindowVague(text: string): boolean {
   COUNTER_PUSH_RE.lastIndex = 0;
   const m = COUNTER_PUSH_RE.exec(text);
@@ -471,6 +541,9 @@ export function detectPlaceholderLeak(
   if (detectCounterWindowVague(text)) {
     matched.push("counter window vague");
   }
+  if (detectRoleFlippedGreeting(text)) {
+    matched.push("role-flipped greeting");
+  }
 
   // engineer-62 — cascade-failure detectors. Fire only when the
   // orchestrator (or the harness) handed us tool-call history. Text-
@@ -491,7 +564,14 @@ export function detectPlaceholderLeak(
     // Requiring a TZ marker per slot line is what separates this from a
     // legit "here are your calendar events today" listing (which lives
     // entirely in the user's TZ and needs no conversion).
-    if (tzSlotLineCount >= 3) {
+    // 2026-05-19 — loosened from ≥3 to ≥2. The 2-slot dogfood case
+    // (recruiter offers 2 alternative times) shipped a dual-TZ slot
+    // list that the prior threshold ignored, letting the failure mode
+    // (agent shows dual-TZ slots without ever calling convert_timezone,
+    // producing wrong TZ math) land in production. 2 lines is still a
+    // strong signal — there's no legitimate scenario where 2+ TZ-tagged
+    // slot lines exist in a response without the tool having been called.
+    if (tzSlotLineCount >= 2) {
       const hasConvertTimezone = history.some(
         (h) => h.toolName === "convert_timezone"
       );
@@ -613,6 +693,11 @@ export function buildPlaceholderLeakCorrection(
   if (matched.includes("counter window vague")) {
     extras.push(
       "- COUNTER_WINDOW_VAGUE / COUNTER-PROPOSAL PATTERN rule 3 violation: you used counter / push-back language (再度ご調整 / もう少し早い時間 / earlier / different / etc.) but proposed NO concrete HH:MM window. Phrases like 「平日の日中〜夕方」 / 「ご都合の良い時間で」 / 「なるべく早めで」 / \"any weekday afternoon\" / \"sometime next week\" are unactionable — the recipient has no anchor to choose from, and the thread gets stuck in another vague round. Re-emit with a concrete HH:MM–HH:MM range in BOTH TZs (sender-TZ first): 「JST 9:00–13:00 (バンクーバー時間 17:00–21:00) であれば調整しやすく…」. If you genuinely don't have enough information to propose a concrete range, call `infer_sender_norms` first OR fall back to the empty-intersection branch (rule 3e: 「お互いの対応時間が重ならないようで、土日や時間外のご対応もご相談できますでしょうか。」). Never ship a vague counter."
+    );
+  }
+  if (matched.includes("role-flipped greeting")) {
+    extras.push(
+      "- ROLE_FLIPPED_GREETING / MUST-rule 5b violation: the draft body's greeting addresses the USER, not the recipient. The user's own name appears at the TOP of the draft — but you're drafting a REPLY, so the user is the SENDER and the original sender is the recipient. The user's name belongs ONLY in the sign-off at the bottom. Re-write the greeting line to address the recipient by name — pull from `inbox_item.senderName` / `lookup_entity.displayName` / the sender's org. Shape (JA): 「<recruiter / org / professor> さま」 / 「<姓> 先生」. Shape (EN): \"Dear <recipient name>\" / \"Hi <first name>\". When no recipient name is available, use a generic team-level greeting (「ご担当者さま」 / \"Dear team\") — NEVER substitute the user's name as a fallback. The user's name appeared at the top of the body you READ because the sender was addressing the user there; in your REPLY, that role flips."
     );
   }
   return [
