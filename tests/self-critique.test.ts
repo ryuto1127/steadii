@@ -696,6 +696,50 @@ describe("detectCounterWindowNotDualTZ", () => {
   });
 });
 
+// 2026-05-19 — COUNTER_WINDOW_VAGUE detector. Counter-push language
+// fires but no concrete HH:MM in the counter scope. Catches the post-#282
+// production dogfood shape ("平日の日中〜夕方で再度ご調整いただけますと幸いです").
+
+describe("detectCounterWindowVague", () => {
+  it("flags counter language with no HH:MM in the 300-char scope", () => {
+    const text =
+      "もし可能でしたら、平日の日中〜夕方で再度ご調整いただけますと幸いです。お手数をおかけしますが、何卒よろしくお願いいたします。";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).toContain("counter window vague");
+  });
+
+  it("does NOT flag a counter window with a concrete HH:MM range nearby", () => {
+    const text =
+      "もし可能でしたら、JST 9:00–13:00 (バンクーバー時間 17:00–21:00) であれば調整しやすく、再度ご調整いただけますと幸いです。";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("counter window vague");
+  });
+
+  it("does NOT flag when counter scope contains ≥2 distinct HH:MM tokens (multi-slot proposal)", () => {
+    const text =
+      "もう少し早い時間で、5/22 14:00 か 5/23 10:00 でいかがでしょうか。";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("counter window vague");
+  });
+
+  it("does NOT flag when no counter-push language is present (different failure path)", () => {
+    const text = "今週の予定は朝の会議が3つ、午後の課題が2つあります。";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).not.toContain("counter window vague");
+  });
+
+  it("flags even when an HH:MM range exists far away (e.g., in the intro discussing the original slots)", () => {
+    // The intro mentions the SENDER's slots in dual-TZ form, then the
+    // draft body has a vague counter. The detector scopes to the
+    // counter-push position, so an HH:MM range in the intro doesn't
+    // satisfy the check.
+    const text =
+      "候補は 5/20(水) 18:00–18:45 JST / 5/20(水) 02:00–02:45 PDT と、5/21(木) 15:00–15:45 JST / 5/20(水) 23:00–23:45 PDT で、どちらもこちらの時間ではかなり遅いです。\n\n```text\nお世話になっております。\n\nもし可能でしたら、平日の日中〜夕方で再度ご調整いただけますと幸いです。\n\n何卒よろしくお願いいたします。\n田中 太郎\n```";
+    const r = detectPlaceholderLeak(text);
+    expect(r.matched).toContain("counter window vague");
+  });
+});
+
 describe("buildPlaceholderLeakCorrection", () => {
   it("includes the matched token names", () => {
     const msg = buildPlaceholderLeakCorrection(["〇〇", "{placeholder}"]);
@@ -796,5 +840,14 @@ describe("buildPlaceholderLeakCorrection", () => {
     expect(msg).toContain("COUNTER_WINDOW_NOT_DUAL_TZ");
     expect(msg).toContain("COUNTER-PROPOSAL PATTERN");
     expect(msg.toLowerCase()).toContain("convert_timezone");
+  });
+
+  // 2026-05-19 — corrective note for the new vague-counter detector.
+  it("appends a COUNTER_WINDOW_VAGUE note when the counter-vague token matches", () => {
+    const msg = buildPlaceholderLeakCorrection(["counter window vague"]);
+    expect(msg).toContain("COUNTER_WINDOW_VAGUE");
+    expect(msg).toContain("COUNTER-PROPOSAL PATTERN");
+    expect(msg).toContain("infer_sender_norms");
+    expect(msg.toLowerCase()).toContain("vague");
   });
 });
