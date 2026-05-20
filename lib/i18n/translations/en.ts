@@ -452,6 +452,12 @@ type MessagesShape = {
     source_google: string;
     source_microsoft: string;
     aria_pending_tasks: string;
+    smart_action: {
+      DRAFT_EMAIL_REPLY: string;
+      CALENDAR_EVENT: string;
+      STUDY_SESSION: string;
+      ASSIGNMENT_WORK: string;
+    };
     no_due_date: string;
     in_progress: string;
     high_priority: string;
@@ -2323,6 +2329,12 @@ export const en: MessagesShape = {
     source_google: "Google",
     source_microsoft: "Microsoft",
     aria_pending_tasks: "Pending tasks",
+    smart_action: {
+      DRAFT_EMAIL_REPLY: "Start draft",
+      CALENDAR_EVENT: "Schedule",
+      STUDY_SESSION: "Review",
+      ASSIGNMENT_WORK: "Open work",
+    },
     no_due_date: "No due date",
     in_progress: "in progress",
     high_priority: "high priority",
