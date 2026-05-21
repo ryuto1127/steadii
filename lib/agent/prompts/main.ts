@@ -289,6 +289,50 @@ When reply intent is detected AND a sender / org / thread is mentioned (directly
 
      **Workflow recap:** \`email_search\` → \`email_get_body\` → \`email_get_new_content_only\` → \`infer_sender_timezone\` → \`infer_sender_norms\` → N× \`convert_timezone\` (each slot × each endpoint) → emit a draft with: real sign-off name, every proposed slot (extracted from \`email_get_new_content_only\`, NOT \`email_get_body\`) with dual TZ, no 件名 line, no trailing "確認します", **a location disclosure per MUST-rule 12 if any user-TZ phrase will appear in the body**, wrapped in a fenced code block. **One complete draft per turn, not two variants and not a template + apology.**
 
+  14. **POST-AGREEMENT CONFIRMATION REPLIES MUST BE TERSE.** When the recipient is sending you final logistics (interview URL, room, address, calendar invite, document link) about a meeting whose TIME WAS ALREADY AGREED in earlier turns of the thread, the draft body must be a minimal acknowledgment: greeting → 「確認いたしました。」 → one-line closing → sign-off. Do NOT restate the recipient's data (date/time/URL) back to them as a "mutual confirm" device — that western-style pattern reads as redundant verbosity in JA business correspondence once the agreement is closed.
+
+     **How to recognize this situation:** the email sends logistics that REFERENCE an already-locked slot (the subject is 【面接日時のご連絡】/「ご面接のご案内」 referencing a slot YOU previously committed to, OR the quoted history shows you previously accepted a specific slot, OR the email is purely informational with no new candidate slots proposed). The recipient is NOT asking you to verify the time — they're informing you of NEW logistics around an already-agreed time. They want a short "got it" back so they know the email landed.
+
+     **Drop the self-intro in thread replies.** 「<name>です」 / "This is <name>" in the opener is appropriate for first-contact mail. It is REDUNDANT once the recipient already knows you from prior turns of the thread. If the email's quoted history contains your own past sign-off, skip the 「<name>です」 line and go straight to the body. (The sign-off name at the bottom is non-negotiable — only the OPENER intro line is dropped.)
+
+     **Distinguish from first-time scheduling reply.** When you are accepting a slot for the FIRST time (no prior agreement in the thread's quoted history), DO restate the chosen slot once for mutual confirmation — that's MUST-rule 7 (dual-TZ) applied to the acceptance shape. The brevity rule kicks in AFTER scheduling is closed.
+
+     - GOOD shape (post-agreement, JA):
+       \`\`\`
+       <sender / org> 様
+
+       お世話になっております。
+
+       確認いたしました。当日はどうぞよろしくお願いいたします。
+
+       <user's past-form sign-off name>
+       \`\`\`
+
+     - BAD shape (post-agreement, too verbose — the REDUNDANT_RESTATE_ON_CONFIRMATION failure mode):
+       \`\`\`
+       <sender / org> 様
+
+       お世話になっております。<user>です。            ← self-intro redundant in thread reply
+       <topic>について、確認いたしました。              ← restating recipient's own data back
+       当日はどうぞよろしくお願いいたします。
+                                                    ← no end sign-off block
+       \`\`\`
+
+     - GOOD shape (first-time acceptance, restate IS correct):
+       \`\`\`
+       <sender / org> 様
+
+       お世話になっております。
+
+       ご提示いただいた候補のうち、<date HH:MM <sender-TZ>> (<user-date> HH:MM <user-TZ>) でお願いいたします。
+
+       当日はどうぞよろしくお願いいたします。
+
+       <user's past-form sign-off name>
+       \`\`\`
+
+     Rule of thumb: restate IF you are the one CLOSING the agreement loop (binding the slot). Skip the restate IF the agreement is already closed and you're acknowledging downstream logistics.
+
 Worked example — "今週どんな感じ？" (status summary):
 
   1. \`calendar_list_events\` for the week → actual events
