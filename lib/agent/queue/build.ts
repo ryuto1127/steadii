@@ -1166,12 +1166,21 @@ async function fetchPendingAutoCalRows(
 }
 
 function autoCalToTypeG(row: AutoCreatedCalendarEventRow): QueueCardG {
-  const slotLabel = formatAgreedSlot(row.agreedSlot);
+  const isDeadline = row.kind === "deadline";
+  const slotLabel = isDeadline
+    ? formatDeadlineSlot(row.agreedSlot)
+    : formatAgreedSlot(row.agreedSlot);
+  const title = isDeadline
+    ? "Steadii がこの締切を入れました"
+    : "Steadii がこの予定を入れました";
+  const body = isDeadline
+    ? `${slotLabel} の締切をカレンダーに入れました。24時間以内にキャンセルすれば取り消せます。`
+    : `${slotLabel} の予定をカレンダーに入れました。24時間以内にキャンセルすれば取り消せます。`;
   return {
     id: `autocal:${row.id}`,
     archetype: "G",
-    title: "Steadii がこの予定を入れました",
-    body: `${slotLabel} の予定をカレンダーに入れました。24時間以内にキャンセルすれば取り消せます。`,
+    title,
+    body,
     confidence: "medium",
     createdAt: row.createdAt.toISOString(),
     sources: [
@@ -1187,11 +1196,20 @@ function autoCalToTypeG(row: AutoCreatedCalendarEventRow): QueueCardG {
     originLabel: row.eventRefs[0]?.htmlLink ? "カレンダーで開く" : undefined,
     reversible: true,
     autoCreateId: row.id,
+    kind: row.kind,
     eventRefs: row.eventRefs,
     slotLabel,
     graceExpiresAt: row.graceExpiresAt.toISOString(),
     inboxItemId: row.inboxItemId,
   };
+}
+
+function formatDeadlineSlot(slot: AutoCreatedAgreedSlot): string {
+  // Deadline slot has no time component — render date + 締切 marker only.
+  const [year, month, day] = slot.date.split("-").map((s) => parseInt(s, 10));
+  const probe = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  const weekday = JA_WEEKDAYS[probe.getUTCDay()] ?? "";
+  return `${month}/${day} (${weekday}) 締切`;
 }
 
 const JA_WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];

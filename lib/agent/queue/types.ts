@@ -208,14 +208,19 @@ export type QueueCardF = QueueCardBase & {
 
 // 2026-05-21 — Phase 3 of α-auto-cal. Surfaces a provisional event
 // that Steadii auto-created from a detected mutual scheduling
-// agreement. The user has until `graceExpiresAt` to cancel; after that
-// the Phase 4 cron promotes the event to confirmed (drops the
-// `[Steadii] ` prefix from the calendar title).
+// agreement OR a single-mention deadline (Phase 5). The user has
+// until `graceExpiresAt` to cancel; after that the Phase 4 cron
+// promotes the event to confirmed (drops the `[Steadii] ` prefix
+// from the calendar title).
 export type QueueCardG = QueueCardBase & {
   archetype: "G";
   // The auto_created_calendar_events row id — passed to cancel /
   // confirm endpoints.
   autoCreateId: string;
+  // 2026-05-21 — Phase 5. 'mutual_agreement' = scheduling close
+  // (timed event); 'deadline' = single-mention deadline (all-day).
+  // Drives the card title + icon variant.
+  kind: "mutual_agreement" | "deadline";
   // Calendar event(s) created — typically one per provider. Surfaced
   // so the card can link out to the actual event when there's only
   // one provider, or note "added to 2 calendars" for dual-write.
@@ -224,7 +229,8 @@ export type QueueCardG = QueueCardBase & {
     eventId: string;
     htmlLink: string | null;
   }>;
-  // Human-readable slot label (e.g. "5/22 (水) 14:00 JST").
+  // Human-readable slot label. For mutual_agreement: "5/22 (水) 14:00 JST".
+  // For deadline: "5/30 (金) 締切" (no time, no TZ).
   slotLabel: string;
   // ISO timestamp grace_expires_at — the client ticks down a "23h
   // remaining" label from this.

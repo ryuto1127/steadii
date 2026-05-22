@@ -208,6 +208,8 @@ export async function ingestLast24h(
             await maybeAutoCreateCalendarEvent({
               userId,
               row,
+              inputBody: input.bodySnippet ?? input.snippet ?? "",
+              inputSubject: input.subject ?? "",
             });
           } catch (err) {
             Sentry.captureException(err, {
@@ -331,51 +333,90 @@ function errorMessage(err: unknown): string {
 async function maybeAutoCreateCalendarEvent(args: {
   userId: string;
   row: { id: string; threadExternalId: string | null; senderEmail: string; receivedAt: Date };
+  inputBody: string;
+  inputSubject: string;
 }): Promise<void> {
-  const { userId, row } = args;
-  if (!row.threadExternalId) return;
+  const { userId, row, inputBody, inputSubject } = args;
 
-  const { fetchThreadForAutoCal } = await import("./thread-for-autocal");
-  const thread = await fetchThreadForAutoCal({
-    userId,
-    threadExternalId: row.threadExternalId,
-  });
-  if (!thread || thread.length < 2) return;
-
-  // Sender TZ from domain + body heuristic. Use the latest inbound's
-  // body for the language signal (the just-arrived message).
-  const latestInbound = [...thread]
-    .reverse()
-    .find((m) => m.direction === "inbound");
-  const { inferSenderTimezone } = await import("./sender-timezone-heuristic");
-  const senderTzInference = inferSenderTimezone({
-    domain: row.senderEmail.includes("@")
-      ? row.senderEmail.split("@").pop() ?? null
-      : null,
-    body: latestInbound?.body ?? null,
-  });
-  // Fall back to UTC if nothing reliable (multi-TZ countries, generic
-  // domains with English-only bodies). The detector will resolve TZ
-  // markers in the slot text itself when present.
-  const defaultTimezone = senderTzInference.tz ?? "UTC";
-
-  // Look up the user's TZ for the evaluator. inboxItems.receivedAt
-  // anchors the referenceYear so undated slot text ("5/22") binds to
+  // Look up the user's TZ for the evaluators. inboxItems.receivedAt
+  // anchors the referenceYear so undated date text ("5/22") binds to
   // the right year.
   const userTimezone = await loadUserTimezone(userId);
   const referenceYear = row.receivedAt.getUTCFullYear();
 
-  const { evaluateAndCreateIfAgreed } = await import(
-    "@/lib/agent/proactive/auto-calendar-create"
-  );
-  await evaluateAndCreateIfAgreed({
-    userId,
-    inboxItemId: row.id,
-    thread,
-    userTimezone,
-    defaultTimezone,
-    referenceYear,
+  const { inferSenderTimezone } = await import("./sender-timezone-heuristic");
+
+  // --------- (a) mutual-agreement (thread-based) ---------
+  if (row.threadExternalId) {
+    const { fetchThreadForAutoCal } = await import("./thread-for-autocal");
+    const thread = await fetchThreadForAutoCal({
+      userId,
+      threadExternalId: row.threadExternalId,
+    });
+    if (thread && thread.length >= 2) {
+      const latestInbound = [...thread]
+        .reverse()
+        .find((m) => m.direction === "inbound");
+      const senderTzInference = inferSenderTimezone({
+        domain: row.senderEmail.includes("@")
+          ? row.senderEmail.split("@").pop() ?? null
+          : null,
+        body: latestInbound?.body ?? null,
+      });
+      const defaultTimezone = senderTzInference.tz ?? "UTC";
+
+      const { evaluateAndCreateIfAgreed } = await import(
+        "@/lib/agent/proactive/auto-calendar-create"
+      );
+      try {
+        await evaluateAndCreateIfAgreed({
+          userId,
+          inboxItemId: row.id,
+          thread,
+          userTimezone,
+          defaultTimezone,
+          referenceYear,
+        });
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: { feature: "auto_cal", phase: "ingest_mutual" },
+          user: { id: userId },
+        });
+      }
+    }
+  }
+
+  // --------- (b) deadline (single-mail body scan) ---------
+  // 2026-05-21 — Phase 5. Independent of thread context — fires on
+  // single inbound mails that mention a strong deadline keyword
+  // + date. The mutual-agreement and deadline detectors can BOTH
+  // fire on the same inbox_item (idempotency is keyed on `kind`).
+  const deadlineSenderTz = inferSenderTimezone({
+    domain: row.senderEmail.includes("@")
+      ? row.senderEmail.split("@").pop() ?? null
+      : null,
+    body: inputBody,
   });
+  const defaultDeadlineTz = deadlineSenderTz.tz ?? userTimezone;
+
+  const { evaluateAndAddDeadlineIfDetected } = await import(
+    "@/lib/agent/proactive/auto-deadline-create"
+  );
+  try {
+    await evaluateAndAddDeadlineIfDetected({
+      userId,
+      inboxItemId: row.id,
+      body: inputBody,
+      subject: inputSubject,
+      defaultTimezone: defaultDeadlineTz,
+      referenceYear,
+    });
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { feature: "auto_cal", phase: "ingest_deadline" },
+      user: { id: userId },
+    });
+  }
 }
 
 async function loadUserTimezone(userId: string): Promise<string> {
