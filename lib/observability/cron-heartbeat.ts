@@ -26,6 +26,12 @@ export const CRON_EXPECTED_INTERVAL_MS: Record<string, number> = {
   "scanner": 5 * 60 * 1000, // every 5 minutes
   "groups": 6 * 60 * 60 * 1000, // every 6 hours
   "ical-sync": 30 * 60 * 1000, // every 30 minutes
+  // 2026-05-22 — Consolidated master cron that fan-outs to pre-brief,
+  // ingest-sweep, auto-cal-grace, draft-superseded, digest, and
+  // weekly-digest via modulo math. Cuts Neon CU-hour burn ~3x by
+  // collapsing 4+ overlapping schedules into a single 15-min cadence.
+  // See app/api/cron/master-sweep/route.ts.
+  "master-sweep": 15 * 60 * 1000,
   // engineer-38 — writing-style learner. Daily 08:00 UTC.
   "style-learner": 24 * 60 * 60 * 1000,
   // engineer-43 — Gmail Push watch refresh. Daily 04:00 UTC; Gmail
