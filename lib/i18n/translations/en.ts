@@ -466,6 +466,20 @@ type MessagesShape = {
     due_tomorrow: string;
     due_in_days: string;
     due_short_date: string;
+    priority: {
+      low: string;
+      medium: string;
+      high: string;
+    };
+    detail: {
+      back: string;
+      mark_done: string;
+      done_label: string;
+      done_toast: string;
+      notes: string;
+      open_in_google: string;
+      open_in_microsoft: string;
+    };
     create: {
       open_button: string;
       form_title: string;
@@ -2343,6 +2357,20 @@ export const en: MessagesShape = {
     due_tomorrow: "Due tomorrow",
     due_in_days: "Due in {n}d",
     due_short_date: "Due {date}",
+    priority: {
+      low: "Low priority",
+      medium: "Medium priority",
+      high: "High priority",
+    },
+    detail: {
+      back: "All tasks",
+      mark_done: "Mark done",
+      done_label: "Done",
+      done_toast: "Marked done.",
+      notes: "Notes",
+      open_in_google: "Open in Google Tasks",
+      open_in_microsoft: "Open in Microsoft To Do",
+    },
     create: {
       open_button: "New task",
       form_title: "Add a task",
