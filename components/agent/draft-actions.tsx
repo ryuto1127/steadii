@@ -68,7 +68,11 @@ type Status =
   | "sent_pending"
   | "dismissed"
   | "paused"
-  | "expired";
+  | "expired"
+  // 2026-05-21 — draft was auto-resolved because the user replied
+  // directly via Gmail. Rendered the same way as 'sent' (the user
+  // dealt with it) but kept distinct for analytics.
+  | "superseded_by_user_send";
 
 export function DraftActions({
   draftId,
@@ -263,7 +267,7 @@ export function DraftActions({
         />
       ) : null}
 
-      {status === "sent" ? (
+      {status === "sent" || status === "superseded_by_user_send" ? (
         <SentBanner sentAt={sentAt} autoSent={autoSent} />
       ) : pendingSend ? (
         <UndoBar

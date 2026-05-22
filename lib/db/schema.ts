@@ -984,7 +984,15 @@ export type AgentDraftStatus =
   // dispatch. A send_queue row with status='pending' exists for this draft.
   // Cancellation flips back to 'approved'; successful worker dispatch flips
   // to 'sent'. Exists only in TS; DB column is plain text.
-  | "sent_pending";
+  | "sent_pending"
+  // 2026-05-21 — auto-resolution when the user replied DIRECTLY via
+  // Gmail (not through Steadii's Send button). The sweep cron at
+  // /api/cron/draft-superseded-sweep finds threads with a SENT-labeled
+  // email newer than the originating inbox_item.receivedAt and flips
+  // the matching pending draft_reply to this status. Surfaces as
+  // "out of queue" but the row remains for analytics (Steadii-send
+  // vs Gmail-direct ratio is a Phase 4 retention signal).
+  | "superseded_by_user_send";
 
 // Retrieval provenance blob. Populated by L2 deep pass + (Phase 7 W1)
 // the multi-source fanout retriever. Surfaces in the inbox-detail
