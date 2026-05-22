@@ -10,6 +10,7 @@ import {
   agentContactPersonas,
   agentDrafts,
   agentProposals,
+  autoCreatedCalendarEvents,
   chats,
   eventPreBriefs,
   groupProjects,
@@ -39,6 +40,7 @@ import {
   applyUserConfirmedFact,
   normalizeStructuredFactKey,
 } from "@/lib/agent/queue/confirmation-fact-merge";
+import { calendarDeleteEvent } from "@/lib/agent/tools/calendar";
 
 // Wave 2 — server actions that back the Steadii queue cards on Home.
 // Each action accepts a card id of the form `<kind>:<uuid>`; the prefix
@@ -55,7 +57,8 @@ type CardKind =
   | "pre_brief"
   | "group_detect"
   | "office_hours"
-  | "confirmation";
+  | "confirmation"
+  | "autocal";
 
 const CARD_KINDS: readonly CardKind[] = [
   "proposal",
@@ -64,6 +67,7 @@ const CARD_KINDS: readonly CardKind[] = [
   "group_detect",
   "office_hours",
   "confirmation",
+  "autocal",
 ];
 
 const cardIdSchema = z
@@ -708,4 +712,94 @@ async function upsertStructuredFact(args: {
       structuredFacts: facts,
     });
   }
+}
+
+// ── 2026-05-21 — Phase 3 of α-auto-cal. Type G (auto-created event) ──
+
+// Cancel = user says the auto-created event was wrong. Delete the
+// calendar event(s) and flip the row's status to 'cancelled'.
+// Calendar-delete failures are Sentry-logged but don't block the
+// status flip — the user pressed Cancel and we owe them the row
+// disappearance regardless.
+export async function queueCancelAutoCalAction(rawCardId: string): Promise<void> {
+  const userId = await getUserId();
+  const { kind, id } = parseCardId(rawCardId);
+  if (kind !== "autocal") {
+    throw new Error("Card is not an auto-cal event");
+  }
+  const [row] = await db
+    .select()
+    .from(autoCreatedCalendarEvents)
+    .where(
+      and(
+        eq(autoCreatedCalendarEvents.id, id),
+        eq(autoCreatedCalendarEvents.userId, userId),
+      ),
+    )
+    .limit(1);
+  if (!row) return; // already gone → idempotent
+  if (row.status !== "provisional") return; // already resolved → no-op
+
+  for (const ref of row.eventRefs) {
+    try {
+      await calendarDeleteEvent.execute(
+        { userId },
+        { eventId: ref.eventId },
+      );
+    } catch {
+      // Best-effort. The caller has Sentry instrumentation upstream;
+      // we suppress to keep the status flip atomic from the user's
+      // perspective.
+    }
+  }
+
+  await db
+    .update(autoCreatedCalendarEvents)
+    .set({
+      status: "cancelled",
+      cancelledAt: new Date(),
+    })
+    .where(eq(autoCreatedCalendarEvents.id, id));
+
+  revalidatePath("/app");
+}
+
+// Confirm = user explicitly approves the auto-created event before
+// grace expires. Flip status to 'confirmed' early and short-circuit
+// the Phase 4 grace cron. The [Steadii] prefix removal happens in
+// the Phase 4 cron path (shared rename code); for the early-confirm
+// path we accept the prefix staying until the cron processes the
+// row — α scope deferral.
+export async function queueConfirmAutoCalAction(rawCardId: string): Promise<void> {
+  const userId = await getUserId();
+  const { kind, id } = parseCardId(rawCardId);
+  if (kind !== "autocal") {
+    throw new Error("Card is not an auto-cal event");
+  }
+  const [row] = await db
+    .select()
+    .from(autoCreatedCalendarEvents)
+    .where(
+      and(
+        eq(autoCreatedCalendarEvents.id, id),
+        eq(autoCreatedCalendarEvents.userId, userId),
+      ),
+    )
+    .limit(1);
+  if (!row) return;
+  if (row.status !== "provisional") return;
+
+  const now = new Date();
+  await db
+    .update(autoCreatedCalendarEvents)
+    .set({
+      status: "confirmed",
+      // Set grace_expires_at to now so the Phase 4 grace cron treats
+      // this row as already-eligible-for-prefix-removal on its next
+      // sweep (instead of waiting another up-to-24h).
+      graceExpiresAt: now,
+    })
+    .where(eq(autoCreatedCalendarEvents.id, id));
+
+  revalidatePath("/app");
 }

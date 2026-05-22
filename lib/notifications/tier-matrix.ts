@@ -42,6 +42,12 @@ export const DEFAULT_NOTIFICATION_TIER_PREFS: NotificationTierPrefs = {
   D: "in_app",
   E: "in_app",
   F: "in_app",
+  // G (auto-cal cancel) — in-app only per Ryuto's 2026-05-21 decision:
+  // the queue card itself is the surface, and the 24h grace window
+  // tolerates "user-sees-it-on-next-Home-visit" latency. Push would be
+  // intrusive at α; post-α decision can revisit if false-positive rate
+  // turns out higher than expected.
+  G: "in_app",
 };
 
 // Read a user's effective preferences from the JSONB blob, filling in

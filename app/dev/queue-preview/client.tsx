@@ -64,6 +64,8 @@ export function QueuePreviewClient({
             sendOfficeHours: NOOP,
             confirm: NOOP,
             correct: NOOP,
+            cancelAutoCal: NOOP,
+            confirmAutoCal: NOOP,
           }}
         />
       )}

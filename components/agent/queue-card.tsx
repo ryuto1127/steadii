@@ -32,6 +32,7 @@ import type {
   QueueCardD,
   QueueCardE,
   QueueCardF,
+  QueueCardG,
   QueueSourceChip,
 } from "@/lib/agent/queue/types";
 import { confidenceBorderClass } from "@/lib/agent/queue/visual";
@@ -120,6 +121,20 @@ type CardFProps = CommonProps & {
   card: QueueCardF;
   onConfirm: () => Promise<ActionResult> | ActionResult;
   onCorrect: (correctedValue: string) => Promise<ActionResult> | ActionResult;
+};
+
+// 2026-05-21 — Type G (auto-cal cancel). Two actions:
+//   cancelAutoCal  → delete the auto-created calendar event(s) and
+//                    flip status to 'cancelled'. 1-tap (no modal) per
+//                    spec; the action is recoverable in that the user
+//                    can manually re-add the event from email
+//   confirmAutoCal → user explicitly approves; flip status to 'confirmed'
+//                    immediately, drop the [Steadii] prefix from the
+//                    calendar event title (skip the 24h grace wait)
+type CardGProps = CommonProps & {
+  card: QueueCardG;
+  onCancelAutoCal: () => Promise<ActionResult> | ActionResult;
+  onConfirmAutoCal: () => Promise<ActionResult> | ActionResult;
 };
 
 // Source chip — one per origin record the agent referenced. Visual
@@ -1250,6 +1265,8 @@ export type QueueCardActions = {
   onTalkInChat?: CardEProps["onTalkInChat"];
   onConfirm?: CardFProps["onConfirm"];
   onCorrect?: CardFProps["onCorrect"];
+  onCancelAutoCal?: CardGProps["onCancelAutoCal"];
+  onConfirmAutoCal?: CardGProps["onConfirmAutoCal"];
   onDismiss: CommonProps["onDismiss"];
   onSnooze: CommonProps["onSnooze"];
   onPermanentDismiss: CommonProps["onPermanentDismiss"];
@@ -1331,7 +1348,155 @@ export function QueueCardRenderer({
           onPermanentDismiss={actions.onPermanentDismiss}
         />
       );
+    case "G":
+      return (
+        <QueueCardGRender
+          card={card}
+          onCancelAutoCal={actions.onCancelAutoCal ?? noopAsync}
+          onConfirmAutoCal={actions.onConfirmAutoCal ?? noopAsync}
+          onDismiss={actions.onDismiss}
+          onSnooze={actions.onSnooze}
+          onPermanentDismiss={actions.onPermanentDismiss}
+        />
+      );
   }
+}
+
+// ── Type G (auto-cal cancel) ─────────────────────────────────────────
+// 2026-05-21 — Phase 3 of α-auto-cal. Surfaces a provisional event
+// that Steadii auto-created from a detected mutual scheduling
+// agreement. 1-tap Cancel (no modal) + 1-tap これ正しい (early
+// promote, skip 24h grace).
+
+export function QueueCardGRender({
+  card,
+  onCancelAutoCal,
+  onConfirmAutoCal,
+  onSnooze,
+  onPermanentDismiss,
+}: CardGProps) {
+  const locale = useLocaleHint();
+  const [pending, startTransition] = useTransition();
+  const [resolved, setResolved] = useState(false);
+  const [graceRemaining, setGraceRemaining] = useState(() =>
+    formatGraceRemaining(card.graceExpiresAt, locale),
+  );
+  const { bindings, menu } = useQuickMenu({ onSnooze, onPermanentDismiss });
+
+  // Live-tick the grace label so a user sitting on Home sees the
+  // countdown decay in near-real time. Update every minute — finer
+  // granularity wastes renders without changing visible text.
+  useEffect(() => {
+    const tick = () => setGraceRemaining(
+      formatGraceRemaining(card.graceExpiresAt, locale),
+    );
+    tick();
+    const interval = setInterval(tick, 60_000);
+    return () => clearInterval(interval);
+  }, [card.graceExpiresAt, locale]);
+
+  const cancel = () => {
+    if (pending || resolved) return;
+    startTransition(async () => {
+      await onCancelAutoCal();
+      setResolved(true);
+    });
+  };
+
+  const confirm = () => {
+    if (pending || resolved) return;
+    startTransition(async () => {
+      await onConfirmAutoCal();
+      setResolved(true);
+    });
+  };
+
+  return (
+    <>
+      <CardShell
+        card={card}
+        size="md"
+        variant="decision"
+        onContextMenu={bindings.onContextMenu}
+      >
+        <div
+          {...bindings}
+          aria-disabled={resolved}
+          className={cn(resolved && "opacity-60")}
+        >
+          <header className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-2">
+              <span
+                aria-hidden
+                className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[hsl(var(--surface))] text-[hsl(var(--primary))]"
+              >
+                <Sparkles size={14} strokeWidth={2} />
+              </span>
+              <h3 className="text-[15px] font-semibold leading-snug text-[hsl(var(--foreground))]">
+                {card.title}
+              </h3>
+            </div>
+            <span
+              className="shrink-0 font-mono text-[10px] tabular-nums text-[hsl(var(--muted-foreground))]"
+              title={new Date(card.createdAt).toLocaleString()}
+            >
+              {formatRelative(card.createdAt, locale)}
+            </span>
+          </header>
+          <div className="mt-2 flex items-center gap-2 text-[12px] text-[hsl(var(--muted-foreground))]">
+            <CalendarIcon size={12} strokeWidth={2} />
+            <span className="font-medium text-[hsl(var(--foreground))]">
+              {card.slotLabel}
+            </span>
+            <span aria-hidden>·</span>
+            <Clock size={12} strokeWidth={2} />
+            <span>{graceRemaining}</span>
+          </div>
+          {card.body ? (
+            <p className="mt-2 text-[12px] leading-snug text-[hsl(var(--muted-foreground))]">
+              {card.body}
+            </p>
+          ) : null}
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={cancel}
+              disabled={pending || resolved}
+              className="inline-flex h-8 items-center rounded-full border border-[hsl(var(--border))] bg-transparent px-3 text-[12px] font-medium text-[hsl(var(--foreground))] transition-default hover:border-[hsl(var(--destructive)/0.6)] hover:text-[hsl(var(--destructive))] disabled:opacity-50"
+            >
+              {locale === "ja" ? "キャンセル" : "Cancel"}
+            </button>
+            <button
+              type="button"
+              onClick={confirm}
+              disabled={pending || resolved}
+              className="inline-flex h-8 items-center rounded-full bg-[hsl(var(--foreground))] px-3 text-[12px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90 disabled:opacity-50"
+            >
+              {locale === "ja" ? "これで正しい" : "Looks right"}
+            </button>
+          </div>
+        </div>
+      </CardShell>
+      {menu}
+    </>
+  );
+}
+
+function formatGraceRemaining(graceExpiresIso: string, locale: "en" | "ja"): string {
+  const expiresMs = Date.parse(graceExpiresIso);
+  const nowMs = Date.now();
+  const diffMs = expiresMs - nowMs;
+  if (diffMs <= 0) {
+    return locale === "ja" ? "まもなく確定" : "promoting soon";
+  }
+  const hours = Math.floor(diffMs / (60 * 60 * 1000));
+  const minutes = Math.floor((diffMs % (60 * 60 * 1000)) / (60 * 1000));
+  if (locale === "ja") {
+    if (hours > 0) return `${hours}時間後に確定`;
+    return `${minutes}分後に確定`;
+  }
+  if (hours > 0) return `confirms in ${hours}h`;
+  return `confirms in ${minutes}m`;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────

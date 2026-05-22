@@ -48,6 +48,10 @@ type ServerActions = {
   // engineer-42 — Type F (interactive confirmations).
   confirm: (cardId: string) => Promise<void>;
   correct: (cardId: string, correctedValue: string) => Promise<void>;
+  // 2026-05-21 — Phase 3 of α-auto-cal. Type G (auto-created calendar
+  // event provisional cancel / early-confirm).
+  cancelAutoCal: (cardId: string) => Promise<void>;
+  confirmAutoCal: (cardId: string) => Promise<void>;
 };
 
 export function QueueList({
@@ -258,6 +262,38 @@ export function QueueList({
                       await actions.correct(card.id, correctedValue);
                     } catch (err) {
                       toast.error(message(err, "Save failed"));
+                    }
+                    refresh();
+                  }
+                : undefined,
+            onCancelAutoCal:
+              card.archetype === "G"
+                ? async () => {
+                    try {
+                      await actions.cancelAutoCal(card.id);
+                      toast.success(
+                        t("card_g.cancel_toast", {
+                          default: "予定をキャンセルしました",
+                        }),
+                      );
+                    } catch (err) {
+                      toast.error(message(err, "Cancel failed"));
+                    }
+                    refresh();
+                  }
+                : undefined,
+            onConfirmAutoCal:
+              card.archetype === "G"
+                ? async () => {
+                    try {
+                      await actions.confirmAutoCal(card.id);
+                      toast.success(
+                        t("card_g.confirm_toast", {
+                          default: "予定を確定しました",
+                        }),
+                      );
+                    } catch (err) {
+                      toast.error(message(err, "Confirm failed"));
                     }
                     refresh();
                   }

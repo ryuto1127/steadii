@@ -20,7 +20,7 @@ import type {
   ProposalSourceRef,
 } from "@/lib/db/schema";
 
-export type QueueArchetype = "A" | "B" | "C" | "D" | "E" | "F";
+export type QueueArchetype = "A" | "B" | "C" | "D" | "E" | "F" | "G";
 
 // 3-tier confidence visual. Numeric % is intentionally NOT shown (see
 // memory `project_wave_2_home_design.md` "Confidence indicator"). The
@@ -206,13 +206,41 @@ export type QueueCardF = QueueCardBase & {
   originatingDraftId: string | null;
 };
 
+// 2026-05-21 — Phase 3 of α-auto-cal. Surfaces a provisional event
+// that Steadii auto-created from a detected mutual scheduling
+// agreement. The user has until `graceExpiresAt` to cancel; after that
+// the Phase 4 cron promotes the event to confirmed (drops the
+// `[Steadii] ` prefix from the calendar title).
+export type QueueCardG = QueueCardBase & {
+  archetype: "G";
+  // The auto_created_calendar_events row id — passed to cancel /
+  // confirm endpoints.
+  autoCreateId: string;
+  // Calendar event(s) created — typically one per provider. Surfaced
+  // so the card can link out to the actual event when there's only
+  // one provider, or note "added to 2 calendars" for dual-write.
+  eventRefs: Array<{
+    provider: "google_calendar" | "microsoft_graph";
+    eventId: string;
+    htmlLink: string | null;
+  }>;
+  // Human-readable slot label (e.g. "5/22 (水) 14:00 JST").
+  slotLabel: string;
+  // ISO timestamp grace_expires_at — the client ticks down a "23h
+  // remaining" label from this.
+  graceExpiresAt: string;
+  // The originating inbox_item — surfaced as a source chip.
+  inboxItemId: string;
+};
+
 export type QueueCard =
   | QueueCardA
   | QueueCardB
   | QueueCardC
   | QueueCardD
   | QueueCardE
-  | QueueCardF;
+  | QueueCardF
+  | QueueCardG;
 
 // Re-exported so callers (test fixtures, UI props) can import without
 // reaching into schema directly.
