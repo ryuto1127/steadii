@@ -796,6 +796,8 @@ type MessagesShape = {
       send: string;
       skip: string;
       dismiss: string;
+      inbound_label: string;
+      draft_label: string;
     };
     card_b_secondary: {
       open_detail: string;
@@ -2707,6 +2709,8 @@ export const en: MessagesShape = {
       send: "Send",
       skip: "Skip",
       dismiss: "Dismiss",
+      inbound_label: "Original email",
+      draft_label: "Steadii's draft reply",
     },
     card_b_secondary: {
       open_detail: "Open detail",

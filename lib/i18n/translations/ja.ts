@@ -1431,6 +1431,8 @@ export const ja: Messages = {
       send: "送信",
       skip: "スキップ",
       dismiss: "却下",
+      inbound_label: "受信メール",
+      draft_label: "Steadii の返信案",
     },
     card_b_secondary: {
       open_detail: "詳細を開く",

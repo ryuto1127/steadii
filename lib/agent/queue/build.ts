@@ -370,13 +370,18 @@ function isReversibleProposal(issue: AgentProposalIssueType): boolean {
 
 // ── Drafts → Type B / C / E ──────────────────────────────────────────
 
-type DraftWithInbox = {
+export type DraftWithInbox = {
   draft: AgentDraft;
   inbox: {
     id: string;
     senderName: string | null;
     senderEmail: string;
     subject: string | null;
+    // 2026-05-22 — Surfaced on Type B Draft cards so the user can
+    // evaluate the inbound mail in 1 click instead of navigating to
+    // /app/inbox/<id>. Null when the joined inbox_items.snippet is
+    // null (legacy rows before snippet population was added).
+    snippet: string | null;
   };
 };
 
@@ -404,6 +409,7 @@ async function fetchPendingDrafts(
       senderName: inboxItems.senderName,
       senderEmail: inboxItems.senderEmail,
       subject: inboxItems.subject,
+      snippet: inboxItems.snippet,
       gmailReadAt: inboxItems.gmailReadAt,
     })
     .from(agentDrafts)
@@ -489,6 +495,10 @@ export type PendingDraftRow = {
   senderName: string | null;
   senderEmail: string;
   subject: string | null;
+  // 2026-05-22 — inbox_items.snippet, surfaced on the Type B Draft
+  // card. Optional in this shape because pre-snippet callers may not
+  // populate it; the dedup function defaults to null.
+  snippet?: string | null;
 };
 
 export function dedupePendingDraftsByThread(
@@ -508,6 +518,7 @@ export function dedupePendingDraftsByThread(
         senderName: r.senderName,
         senderEmail: r.senderEmail,
         subject: r.subject,
+        snippet: r.snippet ?? null,
       },
     });
   }
@@ -534,7 +545,10 @@ function partitionDrafts(
   return { bCards, cCards, eCards };
 }
 
-function draftToTypeB(
+// Exported for tests. Production callers reach this via `partitionDrafts`
+// which routes draft_reply rows here, ask_clarifying to draftToTypeE,
+// and notify_only to draftToTypeC.
+export function draftToTypeB(
   row: DraftWithInbox,
   tShared: (key: string) => string
 ): QueueCardB {
@@ -559,7 +573,21 @@ function draftToTypeB(
       draft.draftTo && draft.draftTo.length > 0
         ? `To: ${draft.draftTo.join(", ")}`
         : undefined,
+    inboundSnippet: truncateInboundSnippet(inbox.snippet),
   };
+}
+
+// 2026-05-22 — Inbound mail snippet shown on Type B Draft cards.
+// Capped at 200 chars (per the queue-card UX brief: ~150-200 chars,
+// line-clamped to 3 lines on the card itself). Null in → null out so
+// the renderer can short-circuit cleanly for the Steadii-initiated
+// office-hours path that has no inbound to display.
+function truncateInboundSnippet(raw: string | null): string | null {
+  if (raw === null) return null;
+  const trimmed = raw.trim().replace(/\s+/g, " ");
+  if (trimmed.length === 0) return null;
+  if (trimmed.length <= 200) return trimmed;
+  return trimmed.slice(0, 199) + "…";
 }
 
 function draftToTypeC(
@@ -1026,6 +1054,9 @@ function officeHoursToTypeB(row: OfficeHoursRequestRow): QueueCardB {
     draftPreview: bodyPreview,
     subjectLine,
     toLabel: row.draftTo ? `To: ${row.draftTo}` : undefined,
+    // Steadii-initiated request — there is no inbound to surface, so
+    // the card renders without the inbound block.
+    inboundSnippet: null,
   };
 }
 

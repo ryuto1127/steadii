@@ -681,21 +681,36 @@ export function QueueCardBRender({
             </p>
           ) : null}
           {card.mode === "draft" ? (
-            <div className="mt-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2">
-              {card.subjectLine ? (
-                <p className="mb-1 text-[12px] font-medium text-[hsl(var(--foreground))]">
-                  {card.subjectLine}
-                </p>
+            <>
+              {card.inboundSnippet ? (
+                <div className="mt-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-2.5">
+                  <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                    {t("inbound_label")}
+                  </div>
+                  <p className="line-clamp-3 text-[12px] leading-snug text-[hsl(var(--foreground))]">
+                    {card.inboundSnippet}
+                  </p>
+                </div>
               ) : null}
-              {card.toLabel ? (
-                <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                  {card.toLabel}
+              <div className="mt-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-3 py-2">
+                <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                  {t("draft_label")}
+                </div>
+                {card.subjectLine ? (
+                  <p className="mb-1 text-[12px] font-medium text-[hsl(var(--foreground))]">
+                    {card.subjectLine}
+                  </p>
+                ) : null}
+                {card.toLabel ? (
+                  <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                    {card.toLabel}
+                  </p>
+                ) : null}
+                <p className="line-clamp-3 text-[12px] leading-snug text-[hsl(var(--muted-foreground))]">
+                  {card.draftPreview}
                 </p>
-              ) : null}
-              <p className="line-clamp-3 text-[12px] leading-snug text-[hsl(var(--muted-foreground))]">
-                {card.draftPreview}
-              </p>
-            </div>
+              </div>
+            </>
           ) : (
             <ul className="mt-3 flex flex-col gap-1.5 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2">
               {card.bullets.map((b, i) => (
