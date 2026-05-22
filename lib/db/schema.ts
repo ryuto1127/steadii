@@ -3131,7 +3131,14 @@ export type NewTaskIntentMetadataRow = typeof taskIntentMetadata.$inferInsert;
 //   - Phase 3 cancel UI can find the event(s) to delete
 //   - Phase 4 grace cron can promote [Steadii]-prefixed events to normal
 //   - The evaluator can detect "already created for this inbox_item" and skip
+//
+// 2026-05-21 — Phase 5 adds a `kind` discriminator so both
+// 'mutual_agreement' (scheduling close) and 'deadline' (inbound mail
+// mentions a due date) share the same lifecycle + Type G UI + grace
+// cron.
 export type AutoCreatedEventStatus = "provisional" | "confirmed" | "cancelled";
+
+export type AutoCreatedEventKind = "mutual_agreement" | "deadline";
 
 export type AutoCreatedEventRef = {
   provider: "google_calendar" | "microsoft_graph";
@@ -3168,6 +3175,13 @@ export const autoCreatedCalendarEvents = pgTable(
       .notNull()
       .default("provisional"),
     agreedSlot: jsonb("agreed_slot").$type<AutoCreatedAgreedSlot>().notNull(),
+    // 2026-05-21 — Phase 5. Discriminator for the kind of detection
+    // that produced this row. Defaults to 'mutual_agreement' so
+    // pre-Phase-5 rows stay valid.
+    kind: text("kind")
+      .$type<AutoCreatedEventKind>()
+      .notNull()
+      .default("mutual_agreement"),
     confidence: real("confidence").notNull(),
     createdAt: timestamp("created_at", {
       withTimezone: true,

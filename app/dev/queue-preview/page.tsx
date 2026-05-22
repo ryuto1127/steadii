@@ -202,6 +202,7 @@ const MOCK_CARDS: QueueCard[] = [
     detailHref: undefined,
     originHref: undefined,
     autoCreateId: "00000000-0000-0000-0000-000000000006",
+    kind: "mutual_agreement",
     eventRefs: [
       {
         provider: "google_calendar",
@@ -214,6 +215,43 @@ const MOCK_CARDS: QueueCard[] = [
       NOW.getTime() + 23 * 60 * 60 * 1000 + 30 * 60 * 1000,
     ).toISOString(),
     inboxItemId: "inbox-demo-1",
+  },
+  // 2026-05-21 — Phase 5 of α-auto-cal. Deadline detected in an
+  // inbound mail (single-side trigger) → all-day [Steadii] reminder
+  // event. Differs from the mutual_agreement card above in title +
+  // slot label (no time, just 締切 marker).
+  {
+    id: "autocal:00000000-0000-0000-0000-000000000007",
+    archetype: "G",
+    title: "Steadii がこの締切を入れました",
+    body: "メール本文に締切が記載されていたので、カレンダーに入れました。24時間以内にキャンセルすれば取り消せます。",
+    confidence: "medium",
+    createdAt: FIXED_DATE(8),
+    reversible: true,
+    sources: [
+      {
+        kind: "email",
+        index: 0,
+        label: "元のメール",
+        href: "#",
+      },
+    ],
+    detailHref: undefined,
+    originHref: undefined,
+    autoCreateId: "00000000-0000-0000-0000-000000000007",
+    kind: "deadline",
+    eventRefs: [
+      {
+        provider: "google_calendar",
+        eventId: "evt_demo_2",
+        htmlLink: "https://calendar.google.com/event?eid=demo2",
+      },
+    ],
+    slotLabel: "5/30 (金) 締切",
+    graceExpiresAt: new Date(
+      NOW.getTime() + 23 * 60 * 60 * 1000 + 45 * 60 * 1000,
+    ).toISOString(),
+    inboxItemId: "inbox-demo-2",
   },
 ];
 
