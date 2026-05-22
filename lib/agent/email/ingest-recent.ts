@@ -20,6 +20,12 @@ import { processL2 } from "./l2";
 import { resolveEntitiesInBackground } from "@/lib/agent/entity-graph/resolver";
 import type { ClassifyInput } from "./types";
 
+// Auto-cal modules are lazy-imported inside maybeAutoCreateCalendarEvent
+// so the existing ingest-recent-routing.test.ts (which mocks specific
+// dependencies but not @/lib/db/client) still sees the unchanged
+// top-level import surface. Dynamic imports add ~0 cost in prod after
+// the first call (module cache).
+
 export type IngestSummary = {
   scanned: number;
   created: number;
@@ -182,6 +188,33 @@ export async function ingestLast24h(
               user: { id: userId },
             });
           }
+
+          // 2026-05-21 — Phase 2.5 of α-auto-cal. After L2 lands, check
+          // whether the thread has reached mutual scheduling agreement
+          // and (if so) auto-create a [Steadii]-prefixed calendar event.
+          //
+          // Gating: only scheduling-likely buckets (auto_high /
+          // auto_medium / l2_pending), and only when the message is part
+          // of a real Gmail thread (threadExternalId set). The detector
+          // is conservative (≥ 0.80 threshold + both-side requirements),
+          // and the evaluator's idempotency partial unique index
+          // prevents duplicate creates if this hook re-fires on retry.
+          //
+          // Fail-soft: any error here (Gmail rate limit, calendar API
+          // hiccup, missing user.timezone) is swallowed + reported via
+          // Sentry. Auto-cal is best-effort; failures must never poison
+          // the inbox ingest.
+          try {
+            await maybeAutoCreateCalendarEvent({
+              userId,
+              row,
+            });
+          } catch (err) {
+            Sentry.captureException(err, {
+              tags: { feature: "auto_cal", phase: "ingest" },
+              user: { id: userId },
+            });
+          }
         }
       } else {
         skipped++;
@@ -286,4 +319,73 @@ function emptySummary(durationMs: number): IngestSummary {
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
+}
+
+// ---------------------------------------------------------------------------
+// 2026-05-21 — Phase 2.5 of α-auto-cal. Assemble the thread context
+// required by detectMutualAgreement and call the evaluator. The
+// evaluator handles all the gating (opt-in, idempotency, threshold)
+// internally — this wrapper just fetches the inputs.
+// ---------------------------------------------------------------------------
+
+async function maybeAutoCreateCalendarEvent(args: {
+  userId: string;
+  row: { id: string; threadExternalId: string | null; senderEmail: string; receivedAt: Date };
+}): Promise<void> {
+  const { userId, row } = args;
+  if (!row.threadExternalId) return;
+
+  const { fetchThreadForAutoCal } = await import("./thread-for-autocal");
+  const thread = await fetchThreadForAutoCal({
+    userId,
+    threadExternalId: row.threadExternalId,
+  });
+  if (!thread || thread.length < 2) return;
+
+  // Sender TZ from domain + body heuristic. Use the latest inbound's
+  // body for the language signal (the just-arrived message).
+  const latestInbound = [...thread]
+    .reverse()
+    .find((m) => m.direction === "inbound");
+  const { inferSenderTimezone } = await import("./sender-timezone-heuristic");
+  const senderTzInference = inferSenderTimezone({
+    domain: row.senderEmail.includes("@")
+      ? row.senderEmail.split("@").pop() ?? null
+      : null,
+    body: latestInbound?.body ?? null,
+  });
+  // Fall back to UTC if nothing reliable (multi-TZ countries, generic
+  // domains with English-only bodies). The detector will resolve TZ
+  // markers in the slot text itself when present.
+  const defaultTimezone = senderTzInference.tz ?? "UTC";
+
+  // Look up the user's TZ for the evaluator. inboxItems.receivedAt
+  // anchors the referenceYear so undated slot text ("5/22") binds to
+  // the right year.
+  const userTimezone = await loadUserTimezone(userId);
+  const referenceYear = row.receivedAt.getUTCFullYear();
+
+  const { evaluateAndCreateIfAgreed } = await import(
+    "@/lib/agent/proactive/auto-calendar-create"
+  );
+  await evaluateAndCreateIfAgreed({
+    userId,
+    inboxItemId: row.id,
+    thread,
+    userTimezone,
+    defaultTimezone,
+    referenceYear,
+  });
+}
+
+async function loadUserTimezone(userId: string): Promise<string> {
+  const { db } = await import("@/lib/db/client");
+  const { users } = await import("@/lib/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const [u] = await db
+    .select({ timezone: users.timezone })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return u?.timezone ?? "UTC";
 }
