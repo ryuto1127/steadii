@@ -17,22 +17,27 @@ import { generatePreBrief } from "./generate";
 import type { PreBriefAttendee, PreBriefInput } from "./types";
 
 // Wave 3.1 — meeting pre-brief scanner.
-// Runs every 5 min via QStash. For each user with pre_brief_enabled=true,
-// finds events starting in the next 13-18 min that have attendees, and
-// generates / refreshes the brief.
+// Runs every 15 min via the master-sweep cron (see
+// app/api/cron/master-sweep/route.ts). For each user with
+// pre_brief_enabled=true, finds events starting in the next 13-30 min
+// that have attendees, and generates / refreshes the brief.
 //
 // Cost gate: SKIP_THRESHOLD_USERS_PER_TICK keeps the cron's worst-case
 // cost bounded. Each user iteration is gated by a per-user existence
 // check that short-circuits when a fresh brief already covers the
 // upcoming window.
 
-// Window (in minutes-from-now) we look at for events to brief. Picking
-// 13-18 instead of "exactly 15" gives the 5-min cron slack: a tick at
-// minute T catches events at T+13..T+18, the next tick at T+5 catches
-// T+18..T+23, etc. Each event is briefed at most once thanks to the
-// (user_id, event_id) unique index on event_pre_briefs.
+// Window (in minutes-from-now) we look at for events to brief.
+//
+// 2026-05-22 — Widened upper bound from 18 to 30 to match the
+// master-sweep refactor's 15-min cadence. At minute T a tick catches
+// events at T+13..T+30; the next tick at T+15 catches T+28..T+45, so
+// every event in the future gets at least one window that contains
+// it. The 2-min overlap (T+28..T+30) can't double-brief because the
+// (user_id, event_id) unique index on event_pre_briefs is the safety
+// net.
 const PRE_BRIEF_WINDOW_MIN_FROM_NOW = 13;
-const PRE_BRIEF_WINDOW_MAX_FROM_NOW = 18;
+const PRE_BRIEF_WINDOW_MAX_FROM_NOW = 30;
 
 // Maximum number of meetings a single user can have briefed per cron
 // tick — guards against runaway spend on a calendar with 30+ meetings
