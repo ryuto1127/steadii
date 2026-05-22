@@ -60,6 +60,8 @@ const MOCK_CARDS: QueueCard[] = [
     reversible: true,
     draftPreview:
       "Tanaka 教授、お世話になっております。来週の水曜日のオフィスアワーに参加したく、15 分ほどお時間をいただけますでしょうか。MAT223 の章 5 の質問が中心で、事前に整理しておきます。よろしくお願いします。",
+    inboundSnippet:
+      "来週のオフィスアワーですが、水曜の 14:00 から 16:00 まで MP203 で実施します。事前に質問内容を共有してもらえると当日スムーズです。スロットは先着順なので、希望時間があれば早めに教えてください。",
     subjectLine: "Office hours availability — MAT223",
     toLabel: "To: tanaka.pro@u-tokyo.ac.jp",
     sources: [

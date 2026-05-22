@@ -83,6 +83,7 @@ describe("Type B informational variant", () => {
       sources: [],
       reversible: true,
       draftPreview: "preview",
+      inboundSnippet: null,
     };
 
     function previewLength(c: QueueCardB): number {

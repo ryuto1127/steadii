@@ -133,6 +133,13 @@ export type QueueCardBDraft = QueueCardBase & {
   subjectLine?: string;
   // Recipient summary ("To: prof@school.edu") for context. Optional.
   toLabel?: string;
+  // 2026-05-22 — Snippet of the inbound email this draft is replying
+  // to (~150-200 chars, truncated by the builder). Rendered above the
+  // draft block on the card so users can decide Send in one click
+  // without navigating to /app/inbox/<id>. Null when no inbound exists
+  // (e.g. Steadii-initiated office-hours request cards) — in that case
+  // the renderer skips the inbound block entirely.
+  inboundSnippet: string | null;
 };
 
 export type QueueCardBInformational = QueueCardBase & {
