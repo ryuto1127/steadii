@@ -261,9 +261,11 @@ async function safelyFetchSteadii(
       externalId: r.id,
       title: r.title,
       dueAt: r.dueAt,
-      href: r.classId
-        ? `/app/classes/${r.classId}?tab=assignments`
-        : "/app/classes",
+      // 2026-05-21 — was `/app/classes/<id>?tab=assignments` (jumped
+      // the user OUT of the tasks view into the class detail). Now
+      // links to the dedicated task detail page where Done / Open in
+      // class chip / notes all live.
+      href: `/app/tasks/steadii/${r.id}`,
       secondary: r.classCode ?? r.className ?? null,
       metadata: buildSteadiiMetadata(
         {
@@ -368,9 +370,11 @@ function projectExternalTask(
     externalId: task.taskId,
     title: task.title,
     dueAt,
-    // External tasks are read-only here; clicking through to the
-    // source app would need per-provider deep-links we don't track.
-    href: null,
+    // 2026-05-21 — was null. External tasks now route to the unified
+    // detail page where Done + "Open in <source>" deep link live. The
+    // taskListId is passed as a search param (cleaner than a colon-
+    // joined path segment, and survives ids that contain colons).
+    href: `/app/tasks/${source}/${encodeURIComponent(task.taskId)}?list=${encodeURIComponent(task.taskListId)}`,
     secondary: null,
     metadata: dueAt ? [formatDueAt(dueAt, t, tz)] : [task.due],
     leadingDot: null,

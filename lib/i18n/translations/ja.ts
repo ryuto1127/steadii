@@ -567,6 +567,20 @@ export const ja: Messages = {
     due_tomorrow: "明日が期限",
     due_in_days: "あと {n} 日",
     due_short_date: "期限 {date}",
+    priority: {
+      low: "優先度: 低",
+      medium: "優先度: 中",
+      high: "優先度: 高",
+    },
+    detail: {
+      back: "タスク一覧",
+      mark_done: "完了にする",
+      done_label: "完了済み",
+      done_toast: "完了にしました",
+      notes: "メモ",
+      open_in_google: "Google Tasks で開く",
+      open_in_microsoft: "Microsoft To Do で開く",
+    },
     create: {
       open_button: "新しいタスク",
       form_title: "タスクを追加",
