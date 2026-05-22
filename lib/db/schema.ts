@@ -115,6 +115,13 @@ export const users = pgTable("users", {
     // JSONB row stays bounded. See lib/agent/preferences.ts for the
     // read/write API + computeInferredWindow().
     acceptedSlotSamplesLocal?: string[];
+    // 2026-05-21 — Phase 2 of α-auto-cal. When true (the α default),
+    // the proactive scanner auto-creates [Steadii]-prefixed calendar
+    // events when mutual scheduling agreement is detected in an email
+    // thread (see lib/agent/proactive/mutual-agreement-detector.ts).
+    // Set false to opt out. The B-strategy default is ON; the 24h
+    // grace + cancel UI mitigate false positives.
+    autoCalendarCreate?: boolean;
   }>().default({}),
   timezone: text("timezone"),
   onboardingStep: integer("onboarding_step").notNull().default(0),
@@ -3118,3 +3125,75 @@ export const taskIntentMetadata = pgTable(
 
 export type TaskIntentMetadataRow = typeof taskIntentMetadata.$inferSelect;
 export type NewTaskIntentMetadataRow = typeof taskIntentMetadata.$inferInsert;
+
+// 2026-05-21 — Phase 2 of α-auto-cal. Tracks calendar events the agent
+// auto-created from detected mutual scheduling agreement, so:
+//   - Phase 3 cancel UI can find the event(s) to delete
+//   - Phase 4 grace cron can promote [Steadii]-prefixed events to normal
+//   - The evaluator can detect "already created for this inbox_item" and skip
+export type AutoCreatedEventStatus = "provisional" | "confirmed" | "cancelled";
+
+export type AutoCreatedEventRef = {
+  provider: "google_calendar" | "microsoft_graph";
+  eventId: string;
+  htmlLink: string | null;
+};
+
+// Mirrors AgreedSlot from lib/agent/proactive/mutual-agreement-detector.ts.
+// Duplicated here as a row-shape type so the schema file doesn't need to
+// import the detector module.
+export type AutoCreatedAgreedSlot = {
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:MM 24h
+  timezone: string; // IANA
+  durationMin: number;
+};
+
+export const autoCreatedCalendarEvents = pgTable(
+  "auto_created_calendar_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    inboxItemId: uuid("inbox_item_id")
+      .notNull()
+      .references(() => inboxItems.id, { onDelete: "cascade" }),
+    eventRefs: jsonb("event_refs")
+      .$type<AutoCreatedEventRef[]>()
+      .notNull()
+      .default([]),
+    status: text("status")
+      .$type<AutoCreatedEventStatus>()
+      .notNull()
+      .default("provisional"),
+    agreedSlot: jsonb("agreed_slot").$type<AutoCreatedAgreedSlot>().notNull(),
+    confidence: real("confidence").notNull(),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "date",
+    })
+      .notNull()
+      .defaultNow(),
+    graceExpiresAt: timestamp("grace_expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    cancelledAt: timestamp("cancelled_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (t) => ({
+    // Cheap lookup of provisional rows past their grace window (Phase 4 cron).
+    graceIdx: index("auto_created_calendar_events_grace_idx").on(
+      t.status,
+      t.graceExpiresAt,
+    ),
+  }),
+);
+
+export type AutoCreatedCalendarEventRow =
+  typeof autoCreatedCalendarEvents.$inferSelect;
+export type NewAutoCreatedCalendarEventRow =
+  typeof autoCreatedCalendarEvents.$inferInsert;
