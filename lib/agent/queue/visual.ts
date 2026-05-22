@@ -56,5 +56,7 @@ export function archetypePillKey(archetype: QueueArchetype): string {
       return "archetype_e_pill";
     case "F":
       return "archetype_f_pill";
+    case "G":
+      return "archetype_g_pill";
   }
 }

@@ -41,6 +41,7 @@ describe("readTierPrefs", () => {
       D: "digest", // overridden
       E: "in_app", // default kept
       F: "in_app", // default kept (engineer-42)
+      G: "in_app", // default kept (2026-05-21 — α-auto-cal Phase 3)
     });
   });
 

@@ -179,6 +179,42 @@ const MOCK_CARDS: QueueCard[] = [
     reversible: true,
     sources: [],
   },
+  // 2026-05-21 — Phase 3 of α-auto-cal. Mutual scheduling agreement
+  // detected in an inbound thread → Steadii auto-created a
+  // [Steadii]-prefixed provisional calendar event. The card surfaces
+  // the cancel + early-confirm affordances.
+  {
+    id: "autocal:00000000-0000-0000-0000-000000000006",
+    archetype: "G",
+    title: "Steadii がこの予定を入れました",
+    body: "メールスレッドで日程が合意されたので、カレンダーに入れました。24時間以内にキャンセルすれば取り消せます。",
+    confidence: "medium",
+    createdAt: FIXED_DATE(15),
+    reversible: true,
+    sources: [
+      {
+        kind: "email",
+        index: 0,
+        label: "元のメール",
+        href: "#",
+      },
+    ],
+    detailHref: undefined,
+    originHref: undefined,
+    autoCreateId: "00000000-0000-0000-0000-000000000006",
+    eventRefs: [
+      {
+        provider: "google_calendar",
+        eventId: "evt_demo_1",
+        htmlLink: "https://calendar.google.com/event?eid=demo",
+      },
+    ],
+    slotLabel: "5/22 (水) 14:00 JST",
+    graceExpiresAt: new Date(
+      NOW.getTime() + 23 * 60 * 60 * 1000 + 30 * 60 * 1000,
+    ).toISOString(),
+    inboxItemId: "inbox-demo-1",
+  },
 ];
 
 export default async function QueuePreview({

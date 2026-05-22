@@ -9,7 +9,9 @@ import { buildQueueForUser } from "@/lib/agent/queue/build";
 import { getUserTimezone } from "@/lib/agent/preferences";
 import { FALLBACK_TZ } from "@/lib/calendar/tz-utils";
 import {
+  queueCancelAutoCalAction,
   queueConfirmAction,
+  queueConfirmAutoCalAction,
   queueCorrectAction,
   queueDismissAction,
   queuePermanentDismissAction,
@@ -99,6 +101,8 @@ export default async function HomePage() {
               sendOfficeHours: queueSendOfficeHoursAction,
               confirm: queueConfirmAction,
               correct: queueCorrectAction,
+              cancelAutoCal: queueCancelAutoCalAction,
+              confirmAutoCal: queueConfirmAutoCalAction,
             }}
           />
         ) : (

@@ -6,6 +6,7 @@ import {
   agentConfirmations,
   agentDrafts,
   agentProposals,
+  autoCreatedCalendarEvents,
   events as eventsTable,
   eventPreBriefs,
   inboxItems,
@@ -16,6 +17,8 @@ import {
   type AgentDraft,
   type AgentProposalIssueType,
   type AgentProposalRow,
+  type AutoCreatedAgreedSlot,
+  type AutoCreatedCalendarEventRow,
   type EventPreBriefRow,
   type EventRow,
   type OfficeHoursRequestRow,
@@ -32,6 +35,7 @@ import {
   type QueueCardC,
   type QueueCardE,
   type QueueCardF,
+  type QueueCardG,
   type QueueConfidence,
   type QueueDecisionOption,
   type QueueSourceChip,
@@ -75,12 +79,14 @@ export async function buildQueueForUser(
     preBriefRows,
     officeHoursRows,
     confirmationRows,
+    autoCalRows,
   ] = await Promise.all([
     fetchPendingProposals(userId),
     fetchPendingDrafts(userId, { hideRead }),
     fetchPendingPreBriefs(userId),
     fetchPendingOfficeHoursRequests(userId),
     fetchPendingConfirmations(userId),
+    fetchPendingAutoCalRows(userId),
   ]);
 
   // Wave 3.2 — proposals split across Type A / C / E by issueType.
@@ -121,6 +127,7 @@ export async function buildQueueForUser(
   const allECards: QueueCardE[] = [...eCards, ...eFromProposals];
 
   const fCards: QueueCardF[] = confirmationRows.map(confirmationToTypeF);
+  const gCards: QueueCardG[] = autoCalRows.map(autoCalToTypeG);
 
   // engineer-42 sort: F + A interleave at the top because pending
   // confirmations block downstream draft generation (the L2 loop reads
@@ -128,9 +135,17 @@ export async function buildQueueForUser(
   // createdAt DESC so the newest question lands first. Then B → C → E
   // follow the existing order. (D folds into Recent activity, never
   // appears here.)
+  //
+  // 2026-05-21 — G (auto-cal cancel) lands between F+A and B. Rationale:
+  // auto-cal items are time-sensitive (24h grace) and the user's action
+  // is binary (Cancel vs accept), so they belong near the top of the
+  // queue alongside other "answer this now" cards (F/A). They sit just
+  // below F+A because confirmations gate downstream draft generation
+  // (a higher dependency) while G is leaf-level.
   const allFAndACards = sortByCreatedDesc([...fCards, ...allACards]);
   return [
     ...allFAndACards,
+    ...sortByCreatedDesc(gCards),
     ...sortByCreatedDesc(allBCards),
     ...sortByCreatedDesc(allCCards),
     ...sortByCreatedDesc(allECards),
@@ -1120,6 +1135,92 @@ function buildConfirmationOptions(): ConfirmationOption[] {
     { key: "correct", label: "correct", type: "correct" },
     { key: "dismiss", label: "dismiss", type: "dismiss" },
   ];
+}
+
+// ── auto_created_calendar_events → Type G ────────────────────────────
+// 2026-05-21 — Phase 3 of α-auto-cal. Provisional events that the
+// proactive ingest auto-created from detected mutual scheduling
+// agreement. Surfaced so the user can Cancel within the 24h grace
+// window before Phase 4 cron promotes them to confirmed.
+
+async function fetchPendingAutoCalRows(
+  userId: string,
+): Promise<AutoCreatedCalendarEventRow[]> {
+  try {
+    return await db
+      .select()
+      .from(autoCreatedCalendarEvents)
+      .where(
+        and(
+          eq(autoCreatedCalendarEvents.userId, userId),
+          eq(autoCreatedCalendarEvents.status, "provisional"),
+        ),
+      )
+      .orderBy(desc(autoCreatedCalendarEvents.createdAt))
+      .limit(QUEUE_FETCH_LIMIT);
+  } catch {
+    // Schema-drift defense — pre-migration deploys lacking the table
+    // degrade to empty instead of crashing Home.
+    return [];
+  }
+}
+
+function autoCalToTypeG(row: AutoCreatedCalendarEventRow): QueueCardG {
+  const slotLabel = formatAgreedSlot(row.agreedSlot);
+  return {
+    id: `autocal:${row.id}`,
+    archetype: "G",
+    title: "Steadii がこの予定を入れました",
+    body: `${slotLabel} の予定をカレンダーに入れました。24時間以内にキャンセルすれば取り消せます。`,
+    confidence: "medium",
+    createdAt: row.createdAt.toISOString(),
+    sources: [
+      {
+        kind: "email",
+        index: 0,
+        label: "元のメール",
+        href: `/app/inbox/${row.inboxItemId}`,
+      },
+    ],
+    detailHref: undefined,
+    originHref: row.eventRefs[0]?.htmlLink ?? undefined,
+    originLabel: row.eventRefs[0]?.htmlLink ? "カレンダーで開く" : undefined,
+    reversible: true,
+    autoCreateId: row.id,
+    eventRefs: row.eventRefs,
+    slotLabel,
+    graceExpiresAt: row.graceExpiresAt.toISOString(),
+    inboxItemId: row.inboxItemId,
+  };
+}
+
+const JA_WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+
+function formatAgreedSlot(slot: AutoCreatedAgreedSlot): string {
+  // slot.date = "YYYY-MM-DD"; render as "M/D (曜) HH:MM TZ"
+  const [year, month, day] = slot.date.split("-").map((s) => parseInt(s, 10));
+  // Derive weekday from the wall-clock date interpreted as UTC noon
+  // (anchor far from DST boundaries so JS Date weekday math is stable).
+  const probe = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  const weekday = JA_WEEKDAYS[probe.getUTCDay()] ?? "";
+  const tzLabel = shortTzLabel(slot.timezone);
+  return `${month}/${day} (${weekday}) ${slot.startTime} ${tzLabel}`;
+}
+
+function shortTzLabel(tz: string): string {
+  // Pick the most-recognizable token from each IANA name. The detector
+  // and evaluator already normalized to standard IANA, so this map
+  // matches their output.
+  if (tz === "Asia/Tokyo") return "JST";
+  if (tz === "Asia/Seoul") return "KST";
+  if (tz === "Asia/Shanghai") return "CST";
+  if (tz === "America/Vancouver" || tz === "America/Los_Angeles") return "PT";
+  if (tz === "America/New_York" || tz === "America/Toronto") return "ET";
+  if (tz === "America/Chicago") return "CT";
+  if (tz === "America/Denver") return "MT";
+  if (tz === "Europe/London") return "GMT";
+  if (tz === "Europe/Berlin" || tz === "Europe/Paris") return "CET";
+  return tz;
 }
 
 // ── Re-exports / accessors used by Recent Activity (Scope 5) ─────────
