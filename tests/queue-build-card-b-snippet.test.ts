@@ -65,6 +65,8 @@ function makeRow(args: {
       senderEmail: "sender@example.com",
       subject: args.subject ?? "subject",
       snippet: args.snippet,
+      sourceType: "gmail",
+      threadExternalId: "thread_abc",
     },
   };
 }

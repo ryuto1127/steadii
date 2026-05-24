@@ -41,6 +41,19 @@ export function archetypeShellVariant(
   }
 }
 
+// True when the card's originHref points at a different origin (Gmail
+// web, Google Calendar, etc.) rather than an internal /app/* route.
+// Drives `target="_blank" rel="noopener noreferrer"` on the CardFooter
+// anchor so external context jumps don't unmount the user's queue.
+// Detected by `http(s)://` prefix — the queue builders use absolute
+// URLs only for external destinations.
+export function isExternalOriginHref(
+  originHref: string | null | undefined
+): boolean {
+  if (!originHref) return false;
+  return originHref.startsWith("http://") || originHref.startsWith("https://");
+}
+
 // Pretty-name for an archetype (one-letter pill on the card head).
 export function archetypePillKey(archetype: QueueArchetype): string {
   switch (archetype) {

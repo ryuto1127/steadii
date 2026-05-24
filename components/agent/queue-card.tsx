@@ -35,7 +35,10 @@ import type {
   QueueCardG,
   QueueSourceChip,
 } from "@/lib/agent/queue/types";
-import { confidenceBorderClass } from "@/lib/agent/queue/visual";
+import {
+  confidenceBorderClass,
+  isExternalOriginHref,
+} from "@/lib/agent/queue/visual";
 
 // Wave 2 queue card — the unified primitive for the 5 archetypes
 // (A/B/C/D/E) on the new Home page. Built as a single client component
@@ -415,6 +418,11 @@ function CardHeader({
 
 function CardFooter({ card }: { card: QueueCard }) {
   if (card.sources.length === 0 && !card.originHref) return null;
+  // External origin URLs (Gmail web, Google Calendar) open in a new tab
+  // so the user keeps their Steadii queue context. Internal app paths
+  // navigate in-tab as usual. See isExternalOriginHref for the
+  // detection rule.
+  const isExternal = isExternalOriginHref(card.originHref);
   return (
     <footer className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-[hsl(var(--border))] pt-3">
       {card.sources.slice(0, 4).map((s, i) => (
@@ -428,6 +436,8 @@ function CardFooter({ card }: { card: QueueCard }) {
       {card.originHref ? (
         <a
           href={card.originHref}
+          target={isExternal ? "_blank" : undefined}
+          rel={isExternal ? "noopener noreferrer" : undefined}
           className="ml-auto inline-flex items-center gap-1 text-[11px] font-medium text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
         >
           <span>{card.originLabel ?? "open"}</span>

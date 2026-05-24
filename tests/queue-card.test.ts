@@ -3,6 +3,7 @@ import {
   archetypePillKey,
   archetypeShellVariant,
   confidenceBorderClass,
+  isExternalOriginHref,
 } from "@/lib/agent/queue/visual";
 
 // Tests focus on the queue card's visual decisions — these are the
@@ -50,5 +51,39 @@ describe("queue-card visual helpers", () => {
     for (const a of archs) {
       expect(archetypePillKey(a)).toMatch(/^archetype_[a-e]_pill$/);
     }
+  });
+});
+
+describe("isExternalOriginHref", () => {
+  it("returns true for absolute https URLs (Gmail web, Calendar)", () => {
+    expect(
+      isExternalOriginHref("https://mail.google.com/mail/u/0/#inbox/thread_abc")
+    ).toBe(true);
+    expect(
+      isExternalOriginHref("https://calendar.google.com/event?eid=abc")
+    ).toBe(true);
+  });
+
+  it("returns true for absolute http URLs", () => {
+    expect(isExternalOriginHref("http://example.example/path")).toBe(true);
+  });
+
+  it("returns false for internal /app/* routes", () => {
+    expect(isExternalOriginHref("/app/inbox/draft-1")).toBe(false);
+    expect(isExternalOriginHref("/app/groups/group-1")).toBe(false);
+  });
+
+  it("returns false for null / undefined / empty", () => {
+    expect(isExternalOriginHref(null)).toBe(false);
+    expect(isExternalOriginHref(undefined)).toBe(false);
+    expect(isExternalOriginHref("")).toBe(false);
+  });
+
+  it("returns false for protocol-relative or malformed strings (defensive)", () => {
+    // We require an explicit http(s) prefix — anything else stays
+    // in-tab. This means a future "//host/path" link would NOT get
+    // target=_blank, which is the safe default.
+    expect(isExternalOriginHref("//mail.google.com/")).toBe(false);
+    expect(isExternalOriginHref("mail.google.com")).toBe(false);
   });
 });

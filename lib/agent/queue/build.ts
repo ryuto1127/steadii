@@ -40,6 +40,7 @@ import {
   type QueueDecisionOption,
   type QueueSourceChip,
 } from "./types";
+import { buildExternalThreadUrl } from "./external-url";
 
 // ── Public API ───────────────────────────────────────────────────────
 
@@ -382,6 +383,12 @@ export type DraftWithInbox = {
     // /app/inbox/<id>. Null when the joined inbox_items.snippet is
     // null (legacy rows before snippet population was added).
     snippet: string | null;
+    // 2026-05-24 — Used by buildExternalThreadUrl to deep-link the
+    // "Open thread" footer button to the source app (Gmail web UI).
+    // sourceType is 'gmail' | 'outlook' | future provider tokens;
+    // threadExternalId is the provider's thread/conversation ID.
+    sourceType: string;
+    threadExternalId: string | null;
   };
 };
 
@@ -405,6 +412,7 @@ async function fetchPendingDrafts(
     .select({
       draft: agentDrafts,
       inboxId: inboxItems.id,
+      sourceType: inboxItems.sourceType,
       threadExternalId: inboxItems.threadExternalId,
       senderName: inboxItems.senderName,
       senderEmail: inboxItems.senderEmail,
@@ -499,6 +507,12 @@ export type PendingDraftRow = {
   // card. Optional in this shape because pre-snippet callers may not
   // populate it; the dedup function defaults to null.
   snippet?: string | null;
+  // 2026-05-24 — inbox_items.source_type, surfaced so the queue
+  // builder can construct an external thread URL (Gmail web UI today;
+  // Outlook when Mail.Read scope lands). Optional so test fixtures
+  // pre-dating this change continue to compile; the dedup function
+  // defaults to 'gmail' for safety (queue today is Gmail-only).
+  sourceType?: string;
 };
 
 export function dedupePendingDraftsByThread(
@@ -519,6 +533,8 @@ export function dedupePendingDraftsByThread(
         senderEmail: r.senderEmail,
         subject: r.subject,
         snippet: r.snippet ?? null,
+        sourceType: r.sourceType ?? "gmail",
+        threadExternalId: r.threadExternalId,
       },
     });
   }
@@ -564,7 +580,9 @@ export function draftToTypeB(
     createdAt: draft.createdAt.toISOString(),
     sources: sourceChipsFromProvenance(draft.retrievalProvenance ?? null),
     detailHref: `/app/inbox/${draft.id}`,
-    originHref: `/app/inbox/${draft.id}`,
+    originHref:
+      buildExternalThreadUrl(inbox.sourceType, inbox.threadExternalId) ??
+      undefined,
     originLabel: tShared("open_thread"),
     reversible: true,
     draftPreview: truncatePreview(draft.draftBody ?? ""),
@@ -616,7 +634,9 @@ function draftToTypeC(
     createdAt: draft.createdAt.toISOString(),
     sources: sourceChipsFromProvenance(draft.retrievalProvenance ?? null),
     detailHref: `/app/inbox/${draft.id}`,
-    originHref: `/app/inbox/${draft.id}`,
+    originHref:
+      buildExternalThreadUrl(inbox.sourceType, inbox.threadExternalId) ??
+      undefined,
     originLabel: tShared("open"),
     reversible: false,
     primaryActionLabel: tShared("take_action"),
@@ -640,7 +660,9 @@ function draftToTypeE(
     createdAt: draft.createdAt.toISOString(),
     sources: sourceChipsFromProvenance(draft.retrievalProvenance ?? null),
     detailHref: `/app/inbox/${draft.id}`,
-    originHref: `/app/inbox/${draft.id}`,
+    originHref:
+      buildExternalThreadUrl(inbox.sourceType, inbox.threadExternalId) ??
+      undefined,
     originLabel: tShared("open_thread"),
     reversible: false,
     // Wave 2 ships a single free-text fallback. Per-draft radio choices
