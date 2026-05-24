@@ -1442,6 +1442,13 @@ export const ja: Messages = {
       open_calendar: "カレンダーで開く",
       mark_reviewed: "確認済みにする",
     },
+    card_b_disposition: {
+      resolved: "対応済み",
+      skipped: "スキップ",
+      ignored: "無視中",
+      ignored_confirm:
+        "このカードを今後表示しません。よろしいですか?",
+    },
     card_d: {
       detail: "詳細",
       undo: "取り消し",

@@ -807,6 +807,12 @@ type MessagesShape = {
       open_calendar: string;
       mark_reviewed: string;
     };
+    card_b_disposition: {
+      resolved: string;
+      skipped: string;
+      ignored: string;
+      ignored_confirm: string;
+    };
     card_d: {
       detail: string;
       undo: string;
@@ -2722,6 +2728,13 @@ export const en: MessagesShape = {
       open_detail: "Open detail",
       open_calendar: "Open in Calendar",
       mark_reviewed: "Mark reviewed",
+    },
+    card_b_disposition: {
+      resolved: "Handled",
+      skipped: "Skip",
+      ignored: "Ignore",
+      ignored_confirm:
+        "Hide this card permanently? It will not re-surface.",
     },
     card_d: {
       detail: "Detail",

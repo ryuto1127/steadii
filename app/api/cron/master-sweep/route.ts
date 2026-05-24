@@ -12,6 +12,7 @@ import {
   defaultSentSinceProbe,
   runDraftSupersededSweep,
 } from "@/lib/agent/email/draft-superseded-sweep";
+import { runDispositionResurfaceSweep } from "@/lib/agent/email/disposition-resurface";
 import { runDigestSweep, runWeeklyDigestSweep } from "@/lib/digest/sweep";
 import { verifyQStashSignature } from "@/lib/integrations/qstash/verify";
 import { withHeartbeat } from "@/lib/observability/cron-heartbeat";
@@ -90,6 +91,8 @@ export async function POST(req: Request) {
             const probe = await defaultSentSinceProbe();
             return runDraftSupersededSweep({ probe });
           },
+          "disposition-resurface": () =>
+            runDispositionResurfaceSweep({ now: new Date(nowMs) }),
           digest: () => runDigestSweep(),
           "weekly-digest": () => runWeeklyDigestSweep(),
         };

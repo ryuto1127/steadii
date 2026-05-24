@@ -6,18 +6,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 //      with skipPreSendCheck=true
 //   2. any other prefix throws "Card is not a draft" before any DB work
 //
+// PR 3 — queueSetDispositionAction is the corresponding wrapper for
+// the new 3-way disposition buttons. Same routing check + a Zod-
+// validated disposition input.
+//
 // We mock out the heavy dependencies (auth, db, approveAgentDraftAction)
 // so the test stays a pure routing check.
 
 const mocks = vi.hoisted(() => ({
   approveAgentDraftAction: vi.fn(),
   revalidatePath: vi.fn(),
+  capturedDispositionSet: null as Record<string, unknown> | null,
+  logEmailAudit: vi.fn(),
 }));
 
 vi.mock("@/lib/agent/email/draft-actions", () => ({
   approveAgentDraftAction: mocks.approveAgentDraftAction,
   dismissAgentDraftAction: vi.fn(),
   snoozeAgentDraftAction: vi.fn(),
+}));
+
+vi.mock("@/lib/agent/email/audit", () => ({
+  logEmailAudit: mocks.logEmailAudit,
 }));
 
 vi.mock("next/cache", () => ({
@@ -31,7 +41,16 @@ vi.mock("@/lib/auth/config", () => ({
 }));
 
 vi.mock("@/lib/db/client", () => ({
-  db: {},
+  db: {
+    update: () => ({
+      set: (vals: Record<string, unknown>) => {
+        mocks.capturedDispositionSet = vals;
+        return {
+          where: async () => undefined,
+        };
+      },
+    }),
+  },
 }));
 
 vi.mock("@/lib/db/schema", () => ({
@@ -61,9 +80,6 @@ vi.mock("@/lib/agent/proactive/action-executor", () => ({
   stampLastMonthlyReviewAt: vi.fn(),
 }));
 
-vi.mock("@/lib/agent/email/audit", () => ({
-  logEmailAudit: vi.fn(),
-}));
 
 vi.mock("@/lib/agent/groups/detect-actions", () => ({
   resolveGroupDetectClarification: vi.fn(),
@@ -132,5 +148,104 @@ describe("queueSendDraftAction", () => {
     await expect(
       queueSendDraftAction("draft:00000000-0000-0000-0000-000000000004")
     ).rejects.toThrow("Draft not found");
+  });
+});
+
+describe("queueSetDispositionAction", () => {
+  beforeEach(() => {
+    mocks.capturedDispositionSet = null;
+    mocks.logEmailAudit.mockReset();
+    mocks.revalidatePath.mockReset();
+  });
+
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it("writes disposition='resolved' (and clears skippedAt) for a draft card", async () => {
+    const { queueSetDispositionAction } = await import(
+      "@/app/app/queue-actions"
+    );
+    await queueSetDispositionAction(
+      "draft:00000000-0000-0000-0000-000000000010",
+      "resolved"
+    );
+    expect(mocks.capturedDispositionSet?.disposition).toBe("resolved");
+    expect(mocks.capturedDispositionSet?.skippedAt).toBeNull();
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/app");
+  });
+
+  it("stamps skippedAt to the current Date when transitioning to 'skipped'", async () => {
+    const { queueSetDispositionAction } = await import(
+      "@/app/app/queue-actions"
+    );
+    const before = Date.now();
+    await queueSetDispositionAction(
+      "draft:00000000-0000-0000-0000-000000000011",
+      "skipped"
+    );
+    const after = Date.now();
+    expect(mocks.capturedDispositionSet?.disposition).toBe("skipped");
+    const stamped = mocks.capturedDispositionSet?.skippedAt;
+    expect(stamped).toBeInstanceOf(Date);
+    const ts = (stamped as Date).getTime();
+    expect(ts).toBeGreaterThanOrEqual(before);
+    expect(ts).toBeLessThanOrEqual(after);
+  });
+
+  it("clears skippedAt when transitioning to 'ignored'", async () => {
+    const { queueSetDispositionAction } = await import(
+      "@/app/app/queue-actions"
+    );
+    await queueSetDispositionAction(
+      "draft:00000000-0000-0000-0000-000000000012",
+      "ignored"
+    );
+    expect(mocks.capturedDispositionSet?.disposition).toBe("ignored");
+    expect(mocks.capturedDispositionSet?.skippedAt).toBeNull();
+  });
+
+  it("rejects invalid disposition values via the Zod enum", async () => {
+    const { queueSetDispositionAction } = await import(
+      "@/app/app/queue-actions"
+    );
+    await expect(
+      queueSetDispositionAction(
+        "draft:00000000-0000-0000-0000-000000000013",
+        // @ts-expect-error — intentionally bad input
+        "totally_made_up"
+      )
+    ).rejects.toThrow();
+    expect(mocks.capturedDispositionSet).toBeNull();
+  });
+
+  it("throws when card id is not a draft prefix", async () => {
+    const { queueSetDispositionAction } = await import(
+      "@/app/app/queue-actions"
+    );
+    await expect(
+      queueSetDispositionAction(
+        "proposal:00000000-0000-0000-0000-000000000014",
+        "resolved"
+      )
+    ).rejects.toThrow("Disposition only applies to Draft cards");
+    expect(mocks.capturedDispositionSet).toBeNull();
+  });
+
+  it("audits the disposition transition", async () => {
+    const { queueSetDispositionAction } = await import(
+      "@/app/app/queue-actions"
+    );
+    await queueSetDispositionAction(
+      "draft:00000000-0000-0000-0000-000000000015",
+      "skipped"
+    );
+    expect(mocks.logEmailAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "email_l2_completed",
+        result: "success",
+        detail: expect.objectContaining({ subAction: "disposition_skipped" }),
+      })
+    );
   });
 });

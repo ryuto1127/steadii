@@ -16,7 +16,11 @@ const mocks = vi.hoisted(() => ({
       threadExternalId: string | null;
       receivedAt: Date;
     }>,
-    updates: [] as Array<{ id: string; status: string }>,
+    updates: [] as Array<{
+      id: string;
+      status: string;
+      disposition?: string;
+    }>,
   },
 }));
 
@@ -38,9 +42,13 @@ vi.mock("@/lib/db/client", () => {
     db: {
       select: () => chain(mocks.state.rows),
       update: () => ({
-        set: (vals: { status: string }) => ({
+        set: (vals: { status: string; disposition?: string }) => ({
           where: async () => {
-            mocks.state.updates.push({ id: "*", status: vals.status });
+            mocks.state.updates.push({
+              id: "*",
+              status: vals.status,
+              disposition: vals.disposition,
+            });
           },
         }),
       }),
@@ -79,7 +87,11 @@ describe("runDraftSupersededSweep — happy path", () => {
     expect(r.superseded).toBe(1);
     expect(r.skipped).toBe(0);
     expect(mocks.state.updates).toEqual([
-      { id: "*", status: "superseded_by_user_send" },
+      {
+        id: "*",
+        status: "superseded_by_user_send",
+        disposition: "resolved",
+      },
     ]);
   });
 
@@ -144,6 +156,19 @@ describe("runDraftSupersededSweep — skip paths", () => {
     expect(r.superseded).toBe(0);
     expect(r.skipped).toBe(0);
     expect(probe).not.toHaveBeenCalled();
+  });
+});
+
+describe("runDraftSupersededSweep — PR 3 disposition mirror", () => {
+  it("writes disposition='resolved' alongside the legacy status flip", async () => {
+    mocks.state.rows = [draftRow({ draftId: "d-pr3" })];
+    const probe = vi.fn().mockResolvedValue(true);
+    await runDraftSupersededSweep({ probe });
+    expect(mocks.state.updates).toHaveLength(1);
+    expect(mocks.state.updates[0]).toMatchObject({
+      status: "superseded_by_user_send",
+      disposition: "resolved",
+    });
   });
 });
 
