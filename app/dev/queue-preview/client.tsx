@@ -61,6 +61,7 @@ export function QueuePreviewClient({
             snooze: NOOP_SNOOZE,
             permanentDismiss: NOOP,
             secondaryAction: NOOP,
+            sendDraft: NOOP,
             sendOfficeHours: NOOP,
             confirm: NOOP,
             correct: NOOP,
