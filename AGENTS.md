@@ -278,7 +278,25 @@ Memory locations are listed at the top of this file (`project_*.md`, `feedback_*
 
 ---
 
-## 13. Verification screenshots — capture them yourself
+## 13. Subagents — engineer / evaluator pipeline
+
+As of 2026-05-24 the Steadii dev loop runs in a single Claude Code session: **sparring** is the parent, **engineer** and **evaluator** are project-local subagents under `.claude/agents/`. Sparring invokes them via the `Agent` tool with `subagent_type: "engineer"` / `"evaluator"`. See [`feedback_role_split.md`](~/.claude/projects/-Users-ryuto-Documents-steadii/memory/feedback_role_split.md) for the full role contract.
+
+**Default flow:**
+1. Ryuto + sparring agree on a spec
+2. Sparring writes the handoff prompt (English) and calls `Agent(subagent_type="engineer", ...)`
+3. Engineer ships end-to-end per the contract in [`engineer.md`](.claude/agents/engineer.md) — branch → code → tests → typecheck (strict) → PII scan → commit → push → PR → merge if green
+4. Sparring calls `Agent(subagent_type="evaluator", ...)` with the spec + PR URL
+5. Evaluator independently verifies per [`evaluator.md`](.claude/agents/evaluator.md) and returns PASS / FAIL with findings
+6. FAIL → sparring relays findings back to engineer for a fix pass. PASS → sparring reports to Ryuto.
+
+**Recommended harness config:** engineer = fast mode + max thinking budget. Evaluator = fast mode + medium budget. Both `model: opus`.
+
+The agent definition files are the source of truth for tool scopes, MUST-rules each subagent enforces, and stop-conditions — read them before tweaking the loop.
+
+---
+
+## 14. Verification screenshots — capture them yourself
 
 When a task affects something visible in the browser (UI change, layout, animation, color, copy), you take the verification screenshot via the Claude_Preview MCP — do **not** ask Ryuto to capture it.
 
