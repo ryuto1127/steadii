@@ -6,7 +6,6 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { OfflineStrip } from "@/components/layout/offline-strip";
 import { RouteTransition } from "@/components/layout/route-transition";
 import { ReauthBanner } from "@/components/layout/reauth-banner";
-import { NotificationBell } from "@/components/layout/notification-bell";
 import { Logo } from "@/components/layout/logo";
 import {
   MobileNavProvider,
@@ -151,7 +150,7 @@ export default async function AppLayout({
      <VoiceAppProvider voiceTriggerKey={voiceTriggerKey}>
       <div className="flex h-[100dvh] flex-col bg-[hsl(var(--background))] md:h-screen md:flex-row md:gap-3 md:p-3">
         {/* Mobile top bar — md:hidden. Sticky-on-canvas above the main
-            island. Holds the hamburger, the brand mark, and the bell. */}
+            island. Holds the hamburger and the brand mark. */}
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 md:hidden">
           <MobileNavTrigger />
           <Link
@@ -162,11 +161,6 @@ export default async function AppLayout({
             <Logo size={24} />
             <span>Steadii</span>
           </Link>
-          {gmailConnected ? (
-            <div className="ml-auto">
-              <NotificationBell userId={session.user.id} />
-            </div>
-          ) : null}
         </header>
 
         {/* Desktop rail — md+ only. The original w-14 hover-to-w-60
@@ -193,13 +187,6 @@ export default async function AppLayout({
 
         <main className="app-island-bg relative flex-1 overflow-y-auto md:rounded-xl md:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(0,0,0,0.08)] md:ring-1 md:ring-black/[0.04]">
           <OfflineStrip />
-          {/* Desktop-only floating bell (top-right of the island). Mobile
-              gets the bell inside the top bar above. */}
-          {gmailConnected ? (
-            <div className="absolute right-4 top-4 z-10 hidden md:block">
-              <NotificationBell userId={session.user.id} />
-            </div>
-          ) : null}
           <div className="px-4 py-5 sm:px-6 md:px-10 md:py-8">
             {!gmailConnected && <ReauthBanner />}
             {showGmailRevokedBanner && <GmailRevokedBanner />}
