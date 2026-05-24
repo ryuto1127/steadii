@@ -33,9 +33,11 @@
 
 ALTER TABLE "agent_drafts"
   ADD COLUMN IF NOT EXISTS "disposition" text NOT NULL DEFAULT 'active';
+--> statement-breakpoint
 
 ALTER TABLE "agent_drafts"
   ADD COLUMN IF NOT EXISTS "skipped_at" timestamp with time zone;
+--> statement-breakpoint
 
 -- Backfill 1: drafts that were already in a terminal "user dealt with it"
 -- status. The set covers explicit sends (sent / sent_pending / approved),
@@ -45,6 +47,7 @@ UPDATE "agent_drafts"
   SET "disposition" = 'resolved'
   WHERE "disposition" = 'active'
     AND "status" IN ('sent', 'sent_pending', 'approved', 'dismissed', 'superseded_by_user_send');
+--> statement-breakpoint
 
 -- Backfill 2: any draft whose parent inbox row was auto-archived by
 -- the Wave 5 Tier-1 sweep. Those rows were never going to surface in
@@ -58,10 +61,12 @@ UPDATE "agent_drafts" AS d
       WHERE i."id" = d."inbox_item_id"
         AND i."auto_archived" = true
     );
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS "agent_drafts_user_disposition_idx"
   ON "agent_drafts" ("user_id", "disposition", "created_at")
   WHERE "disposition" = 'active';
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS "agent_drafts_skipped_at_idx"
   ON "agent_drafts" ("skipped_at")
