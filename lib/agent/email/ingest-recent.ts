@@ -117,6 +117,15 @@ export async function ingestLast24h(
         skipped++;
         continue;
       }
+      // Self-filter — Steadii's own outbound mail (digest, drafts, system
+      // messages) sent from @mysteadii.com (or legacy @mysteadii.xyz) must
+      // never reach the user's inbox queue. Gate before classify so we
+      // don't burn LLM credits on our own outbound traffic. Case-insensitive
+      // + trim guards against header oddities from intermediate relays.
+      if (isSteadiiSelfSender(input.fromEmail)) {
+        skipped++;
+        continue;
+      }
       const result = await triageMessage(userId, input);
       bucketCounts[result.bucket] = (bucketCounts[result.bucket] ?? 0) + 1;
       const row = await applyTriageResult(
@@ -306,6 +315,17 @@ function normalizeMessage(
     autoSubmittedHeader: getHeader(msg, "Auto-Submitted"),
     precedenceHeader: getHeader(msg, "Precedence"),
   };
+}
+
+// Steadii's own outbound senders. The .xyz suffix is the legacy domain
+// retained for backward compat with rows ingested before the .com cutover;
+// once a sweep confirms no live mail is sent from .xyz it can be dropped.
+const SELF_SENDER_DOMAINS = ["@mysteadii.com", "@mysteadii.xyz"] as const;
+
+export function isSteadiiSelfSender(senderEmail: string | null | undefined): boolean {
+  if (!senderEmail) return false;
+  const normalized = senderEmail.trim().toLowerCase();
+  return SELF_SENDER_DOMAINS.some((domain) => normalized.endsWith(domain));
 }
 
 function emptySummary(durationMs: number): IngestSummary {
