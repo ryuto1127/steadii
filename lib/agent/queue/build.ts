@@ -426,6 +426,12 @@ async function fetchPendingDrafts(
       and(
         eq(agentDrafts.userId, userId),
         eq(agentDrafts.status, "pending"),
+        // PR 3 — disposition is the canonical visibility signal. The
+        // user's explicit "対応済み" / "無視中" buttons + the
+        // auto-resolve sweep all write disposition='resolved' /
+        // 'ignored'; 'skipped' rows stay hidden until the master-sweep
+        // cron flips them back to 'active' after 24h.
+        eq(agentDrafts.disposition, "active"),
         inArray(agentDrafts.action, [
           "draft_reply",
           "ask_clarifying",

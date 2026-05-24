@@ -994,6 +994,31 @@ export type AgentDraftStatus =
   // vs Gmail-direct ratio is a Phase 4 retention signal).
   | "superseded_by_user_send";
 
+// 2026-05-24 (PR 3) — orthogonal lifecycle dimension layered on top of
+// `status`. Where `status` describes WHAT happened to the draft
+// (pending / sent / dismissed / superseded by Gmail-direct reply / etc.),
+// `disposition` describes the USER'S INTENT on the queue card:
+//
+//   active   — card is live in the queue and awaiting user attention
+//   resolved — user handled it (either via Steadii Send, the Gmail-direct
+//              auto-resolve sweep, or the explicit "対応済み" button)
+//   skipped  — user said "not now"; re-surfaces after 24h via the cron
+//              that flips `disposition='skipped' AND skipped_at < now-24h`
+//              back to 'active'.
+//   ignored  — user said "permanently hide"; never re-surfaces.
+//
+// We DO NOT drop legacy `status` columns or the inbox-side `status` enum
+// here — they continue to carry the existing semantics. The queue UI
+// reads `disposition` as the source of truth for visibility; the auto-
+// resolve sweep (#304) and the manual dismiss path (queueDismissAction
+// /permanentDismiss) both mirror their writes into `disposition` so the
+// new column is the canonical signal going forward.
+export type AgentDraftDisposition =
+  | "active"
+  | "resolved"
+  | "skipped"
+  | "ignored";
+
 // Retrieval provenance blob. Populated by L2 deep pass + (Phase 7 W1)
 // the multi-source fanout retriever. Surfaces in the inbox-detail
 // "Thinking · complete" pill row and the per-decision Settings →
@@ -1221,6 +1246,18 @@ export const agentDrafts = pgTable(
     // chars at write time so the queue card body stays readable.
     shortSummary: text("short_summary"),
 
+    // 2026-05-24 (PR 3) — 3-way disposition layered on top of `status`.
+    // Queue UI reads this as the source of truth; legacy `status`
+    // stays for analytics + thread cascade behaviour.
+    disposition: text("disposition")
+      .$type<AgentDraftDisposition>()
+      .notNull()
+      .default("active"),
+    // 2026-05-24 (PR 3) — set ONLY when disposition transitions to
+    // 'skipped'. The master-sweep cron flips disposition back to
+    // 'active' (and clears this column) once skipped_at < now() - 24h.
+    skippedAt: timestamp("skipped_at", { mode: "date", withTimezone: true }),
+
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1235,6 +1272,19 @@ export const agentDrafts = pgTable(
       t.createdAt
     ),
     inboxItemIdx: index("agent_drafts_inbox_item_idx").on(t.inboxItemId),
+    // 2026-05-24 (PR 3) — partial index for the queue read path. The
+    // typical query filters by (user_id, disposition='active'); a
+    // partial index keeps the candidate set tight (most rows quickly
+    // age into 'resolved' / 'ignored').
+    userDispositionIdx: index("agent_drafts_user_disposition_idx")
+      .on(t.userId, t.disposition, t.createdAt)
+      .where(sql`disposition = 'active'`),
+    // 2026-05-24 (PR 3) — partial index for the re-surface cron.
+    // Filters on skipped rows with a non-null timestamp so the
+    // 24h-ago sweep is a small bounded scan.
+    skippedAtIdx: index("agent_drafts_skipped_at_idx")
+      .on(t.skippedAt)
+      .where(sql`disposition = 'skipped' AND skipped_at IS NOT NULL`),
   })
 );
 

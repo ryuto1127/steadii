@@ -25,6 +25,10 @@ export type SubSweepName =
   | "ingest-sweep"
   | "auto-cal-grace"
   | "draft-superseded"
+  // PR 3 (2026-05-24) — re-surface Draft cards the user explicitly
+  // スキップ'd more than 24 hours ago. Pure DB update, runs on the
+  // same 30-min cadence as draft-superseded.
+  | "disposition-resurface"
   | "digest"
   | "weekly-digest";
 
@@ -69,8 +73,13 @@ export async function dispatchMasterSweep(args: {
   if (minute % 30 === 0) {
     await tryRun(summary, "auto-cal-grace", subSweeps);
     await tryRun(summary, "draft-superseded", subSweeps);
+    await tryRun(summary, "disposition-resurface", subSweeps);
   } else {
-    summary.skipped.push("auto-cal-grace", "draft-superseded");
+    summary.skipped.push(
+      "auto-cal-grace",
+      "draft-superseded",
+      "disposition-resurface",
+    );
   }
 
   if (minute === 0) {

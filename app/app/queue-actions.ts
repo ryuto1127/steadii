@@ -197,6 +197,58 @@ export async function queueSecondaryAction(
   }
 }
 
+// 2026-05-24 (PR 3) — 3-way disposition setter for Type B Draft cards.
+//
+// The disposition row on the card writes one of three values:
+//   - 'resolved' (対応済み)  — user handled it; mirrors what the
+//                                inbox-side dismiss does on the legacy
+//                                status field but uses the canonical
+//                                disposition column.
+//   - 'skipped'  (スキップ)   — "not now"; re-surfaces after 24h via
+//                                the disposition-resurface sweep.
+//   - 'ignored'  (無視中)     — never re-surface; the UI guards this
+//                                behind a confirm dialog.
+//
+// Only Type B Draft cards carry the disposition row. Other card kinds
+// (proposals, pre-briefs, etc.) keep their existing single-action
+// dismiss/snooze flow; the parser rejects non-draft card ids so a
+// bug in a future renderer can't write to the wrong table.
+const DISPOSITION_INPUT = z.enum(["resolved", "skipped", "ignored"]);
+
+export type QueueDispositionInput = z.infer<typeof DISPOSITION_INPUT>;
+
+export async function queueSetDispositionAction(
+  rawCardId: string,
+  disposition: QueueDispositionInput
+): Promise<void> {
+  const userId = await getUserId();
+  const parsedDisposition = DISPOSITION_INPUT.parse(disposition);
+  const { kind, id } = parseCardId(rawCardId);
+  if (kind !== "draft") {
+    throw new Error("Disposition only applies to Draft cards");
+  }
+  const now = new Date();
+  await db
+    .update(agentDrafts)
+    .set({
+      disposition: parsedDisposition,
+      // Only stamp skipped_at when transitioning TO skipped; clear it
+      // for the other two so a future re-skip starts fresh.
+      skippedAt: parsedDisposition === "skipped" ? now : null,
+      updatedAt: now,
+    })
+    .where(and(eq(agentDrafts.id, id), eq(agentDrafts.userId, userId)));
+
+  await logEmailAudit({
+    userId,
+    action: "email_l2_completed",
+    result: "success",
+    resourceId: id,
+    detail: { subAction: `disposition_${parsedDisposition}` },
+  });
+  revalidatePath("/app");
+}
+
 // 2026-05-24 (PR 2) — inline Send for Type B draft cards on /app.
 //
 // Fires after the client-side 10s undo window elapses. The card id is

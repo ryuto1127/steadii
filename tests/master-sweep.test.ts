@@ -29,12 +29,17 @@ const ALL_SUB_SWEEPS: SubSweepName[] = [
   "ingest-sweep",
   "auto-cal-grace",
   "draft-superseded",
+  "disposition-resurface",
   "digest",
   "weekly-digest",
 ];
 
 const ALWAYS: SubSweepName[] = ["pre-brief", "ingest-sweep"];
-const THIRTY_MIN: SubSweepName[] = ["auto-cal-grace", "draft-superseded"];
+const THIRTY_MIN: SubSweepName[] = [
+  "auto-cal-grace",
+  "draft-superseded",
+  "disposition-resurface",
+];
 const HOURLY: SubSweepName[] = ["digest", "weekly-digest"];
 
 function makeSubs(): SubSweeps {
@@ -49,6 +54,9 @@ function makeSubs(): SubSweeps {
     "draft-superseded": vi
       .fn()
       .mockResolvedValue({ ok: true, kind: "draft-superseded" }),
+    "disposition-resurface": vi
+      .fn()
+      .mockResolvedValue({ ok: true, kind: "disposition-resurface" }),
     digest: vi.fn().mockResolvedValue({ ok: true, kind: "digest" }),
     "weekly-digest": vi
       .fn()
@@ -170,6 +178,7 @@ describe("dispatchMasterSweep — failure isolation", () => {
     expect(r.ran).toContain("pre-brief");
     expect(r.ran).toContain("auto-cal-grace");
     expect(r.ran).toContain("draft-superseded");
+    expect(r.ran).toContain("disposition-resurface");
     expect(r.ran).toContain("weekly-digest");
   });
 
@@ -226,6 +235,10 @@ describe("dispatchMasterSweep — result capture", () => {
       ok: true,
       kind: "draft-superseded",
     });
+    expect(r.results["disposition-resurface"]).toEqual({
+      ok: true,
+      kind: "disposition-resurface",
+    });
     expect(r.results.digest).toEqual({ ok: true, kind: "digest" });
     expect(r.results["weekly-digest"]).toEqual({
       ok: true,
@@ -246,5 +259,6 @@ describe("dispatchMasterSweep — result capture", () => {
     expect(r.results["weekly-digest"]).toBeUndefined();
     expect(r.results["auto-cal-grace"]).toBeUndefined();
     expect(r.results["draft-superseded"]).toBeUndefined();
+    expect(r.results["disposition-resurface"]).toBeUndefined();
   });
 });

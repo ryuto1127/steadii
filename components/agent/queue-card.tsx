@@ -94,6 +94,14 @@ type CardBProps = CommonProps & {
   // without needing a router.refresh — local resolved state would have
   // gotten stuck otherwise.
   isSendingPending?: boolean;
+  // PR 3 — 3-way disposition setter. Renders the 対応済み / スキップ /
+  // 無視中 row below the primary action row on Draft-mode cards.
+  // 無視中 is gated behind a window.confirm dialog (no extra primitive
+  // — the rest of the queue UI uses native confirms for destructive
+  // bulk paths, e.g. account-delete).
+  onSetDisposition?: (
+    disposition: "resolved" | "skipped" | "ignored"
+  ) => Promise<ActionResult> | ActionResult;
 };
 
 type CardCProps = CommonProps & {
@@ -624,6 +632,7 @@ export function QueueCardBRender({
   onSend,
   onSkip,
   onSecondaryAction,
+  onSetDisposition,
   onDismiss,
   onSnooze,
   onPermanentDismiss,
@@ -631,6 +640,7 @@ export function QueueCardBRender({
   isSendingPending = false,
 }: CardBProps) {
   const t = useTranslations("queue.card_b");
+  const tDispo = useTranslations("queue.card_b_disposition");
   const tShared = useTranslations("queue.shared");
   const tSecondary = useTranslations("queue.card_b_secondary");
   const locale = useLocaleHint();
@@ -692,6 +702,38 @@ export function QueueCardBRender({
     startTransition(async () => {
       await onSecondaryAction(key);
       setResolved(true);
+    });
+  };
+
+  // PR 3 — disposition row. 'resolved' / 'skipped' fire optimistically;
+  // 'ignored' first surfaces a native confirm dialog because the user
+  // can't recover from "never re-surface" without manual DB work. We
+  // use window.confirm here because the rest of the queue surface
+  // doesn't have a shadcn Dialog primitive yet and adding one for a
+  // single destructive gate would be larger than this PR scope.
+  const setDisposition = (
+    disposition: "resolved" | "skipped" | "ignored"
+  ) => {
+    if (!onSetDisposition || pending || effectiveResolved) return;
+    if (disposition === "ignored") {
+      const ok =
+        typeof window !== "undefined"
+          ? window.confirm(tDispo("ignored_confirm"))
+          : true;
+      if (!ok) return;
+    }
+    // Optimistically dim the card so it disappears from the UI on the
+    // same tick. The server action's refresh re-pulls the queue; on
+    // failure the parent restores the card by re-running refresh.
+    setResolved(true);
+    startTransition(async () => {
+      try {
+        await onSetDisposition(disposition);
+      } catch {
+        // Parent surfaced the toast; let the un-resolve happen via
+        // the refresh in the parent's catch path.
+        setResolved(false);
+      }
     });
   };
 
@@ -855,7 +897,41 @@ export function QueueCardBRender({
               <X size={14} strokeWidth={1.75} />
             </button>
           </div>
-          {/* PR 3 secondary disposition row slot — see comment above. */}
+          {/*
+            PR 3 — secondary disposition row. Renders ONLY on Draft mode
+            and only when a setter is wired. Three buttons:
+              対応済み — neutral filled (handled it via Gmail directly)
+              スキップ — ghost (not now; re-surfaces after 24h)
+              無視中  — destructive (gated by window.confirm)
+          */}
+          {card.mode === "draft" && onSetDisposition ? (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setDisposition("resolved")}
+                disabled={pending || effectiveResolved}
+                className="inline-flex h-7 items-center rounded-full bg-[hsl(var(--surface-raised))] px-3 text-[12px] font-medium text-[hsl(var(--foreground))] transition-default hover:bg-[hsl(var(--surface))] disabled:opacity-50"
+              >
+                {tDispo("resolved")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDisposition("skipped")}
+                disabled={pending || effectiveResolved}
+                className="inline-flex h-7 items-center rounded-full border border-[hsl(var(--border))] px-3 text-[12px] text-[hsl(var(--muted-foreground))] transition-default hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))] disabled:opacity-50"
+              >
+                {tDispo("skipped")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDisposition("ignored")}
+                disabled={pending || effectiveResolved}
+                className="inline-flex h-7 items-center rounded-full border border-[hsl(var(--destructive)/0.3)] px-3 text-[12px] text-[hsl(var(--destructive))] transition-default hover:bg-[hsl(var(--destructive)/0.08)] disabled:opacity-50"
+              >
+                {tDispo("ignored")}
+              </button>
+            </div>
+          ) : null}
           <CardFooter card={card} />
         </div>
         <UndoBanner
@@ -1332,6 +1408,7 @@ export type QueueCardActions = {
   onSend?: CardBProps["onSend"];
   onSkip?: CardBProps["onSkip"];
   onSecondaryAction?: CardBProps["onSecondaryAction"];
+  onSetDisposition?: CardBProps["onSetDisposition"];
   onTakeAction?: CardCProps["onTakeAction"];
   onSubmit?: CardEProps["onSubmit"];
   onTalkInChat?: CardEProps["onTalkInChat"];
@@ -1376,6 +1453,7 @@ export function QueueCardRenderer({
           onSend={actions.onSend ?? noopAsync}
           onSkip={actions.onSkip ?? noopAsync}
           onSecondaryAction={actions.onSecondaryAction}
+          onSetDisposition={actions.onSetDisposition}
           onDismiss={actions.onDismiss}
           onSnooze={actions.onSnooze}
           onPermanentDismiss={actions.onPermanentDismiss}

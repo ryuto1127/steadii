@@ -92,9 +92,17 @@ export async function runDraftSupersededSweep(args: {
       if (!hasSentReply) continue;
 
       const newStatus: AgentDraftStatus = "superseded_by_user_send";
+      // 2026-05-24 (PR 3) — also write the canonical disposition signal.
+      // The queue read path filters on disposition='active'; without
+      // this mirror the auto-resolved draft would stay visible until
+      // a release of the queue builder.
       await db
         .update(agentDrafts)
-        .set({ status: newStatus, updatedAt: new Date() })
+        .set({
+          status: newStatus,
+          disposition: "resolved",
+          updatedAt: new Date(),
+        })
         .where(eq(agentDrafts.id, row.draftId));
       superseded++;
     } catch (err) {

@@ -54,6 +54,13 @@ type ServerActions = {
   // elapses for a Type B Draft card. Wraps approveAgentDraftAction with
   // skipPreSendCheck=true; see queue-actions.ts:queueSendDraftAction.
   sendDraft: (cardId: string) => Promise<void>;
+  // 2026-05-24 (PR 3) — sets disposition on a Type B Draft card.
+  // 'resolved' / 'skipped' / 'ignored'; 'ignored' is gated behind a
+  // confirm dialog on the UI side.
+  setDisposition: (
+    cardId: string,
+    disposition: "resolved" | "skipped" | "ignored"
+  ) => Promise<void>;
   // engineer-42 — Type F (interactive confirmations).
   confirm: (cardId: string) => Promise<void>;
   correct: (cardId: string, correctedValue: string) => Promise<void>;
@@ -324,6 +331,19 @@ export function QueueList({
                       await actions.secondaryAction(card.id, actionKey);
                     } catch (err) {
                       toast.error(message(err, "Action failed"));
+                    }
+                    refresh();
+                  }
+                : undefined,
+            onSetDisposition:
+              card.archetype === "B" && card.mode === "draft"
+                ? async (disposition) => {
+                    try {
+                      await actions.setDisposition(card.id, disposition);
+                    } catch (err) {
+                      toast.error(message(err, "Action failed"));
+                      refresh();
+                      throw err;
                     }
                     refresh();
                   }
