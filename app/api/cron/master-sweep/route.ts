@@ -4,10 +4,7 @@ import { NextResponse } from "next/server";
 import { dispatchMasterSweep, type SubSweeps } from "@/lib/cron/master-sweep";
 import { runPreBriefScan } from "@/lib/agent/pre-brief/scanner";
 import { runIngestSweep } from "@/lib/agent/email/ingest-sweep";
-import {
-  defaultCalendarTitleEditor,
-  runAutoCalGraceSweep,
-} from "@/lib/agent/proactive/auto-cal-grace";
+import { runAutoCalProposalExpirySweep } from "@/lib/agent/proactive/auto-cal-proposal-expiry";
 import {
   defaultSentSinceProbe,
   runDraftSupersededSweep,
@@ -35,9 +32,18 @@ export const runtime = "nodejs";
 //
 // MODULO DISPATCH (the pure logic lives in lib/cron/master-sweep.ts):
 //   - ALWAYS  (every 15 min)     → runPreBriefScan, runIngestSweep
-//   - WHEN minute % 30 === 0     → runAutoCalGraceSweep,
-//                                  runDraftSupersededSweep
+//   - WHEN minute % 30 === 0     → runAutoCalProposalExpirySweep,
+//                                  runDraftSupersededSweep,
+//                                  runDispositionResurfaceSweep
 //   - WHEN minute === 0 (hourly) → runDigestSweep, runWeeklyDigestSweep
+//
+// 2026-05-24 — Round-3 propose-confirm. The legacy
+// runAutoCalGraceSweep that promoted provisional → confirmed and
+// renamed the calendar event title is deregistered. Events only
+// land on the user's calendar via the explicit Add action now, so
+// there's no prefix to drop and no row to promote. The new
+// runAutoCalProposalExpirySweep flips untouched 'proposed' rows to
+// 'cancelled' after 7 days — no calendar API call needed.
 //
 // The pre-brief look-ahead window was widened from 13-18 min to
 // 13-30 min to accommodate the new 15-min cadence (see
@@ -83,10 +89,8 @@ export async function POST(req: Request) {
         const subSweeps: SubSweeps = {
           "pre-brief": () => runPreBriefScan(),
           "ingest-sweep": () => runIngestSweep(),
-          "auto-cal-grace": async () => {
-            const editor = await defaultCalendarTitleEditor();
-            return runAutoCalGraceSweep({ nowMs, editor });
-          },
+          "auto-cal-proposal-expiry": () =>
+            runAutoCalProposalExpirySweep({ nowMs }),
           "draft-superseded": async () => {
             const probe = await defaultSentSinceProbe();
             return runDraftSupersededSweep({ probe });

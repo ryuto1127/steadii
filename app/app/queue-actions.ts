@@ -41,7 +41,13 @@ import {
   applyUserConfirmedFact,
   normalizeStructuredFactKey,
 } from "@/lib/agent/queue/confirmation-fact-merge";
-import { calendarDeleteEvent } from "@/lib/agent/tools/calendar";
+import { calendarCreateEvent } from "@/lib/agent/tools/calendar";
+import {
+  buildDeadlineDescription,
+  buildDeadlineSummary,
+  buildIsoStartEnd,
+} from "@/lib/agent/proactive/auto-cal-slot";
+import type { AutoCreatedEventRef } from "@/lib/db/schema";
 
 // Wave 2 — server actions that back the Steadii queue cards on Home.
 // Each action accepts a card id of the form `<kind>:<uuid>`; the prefix
@@ -790,18 +796,248 @@ async function upsertStructuredFact(args: {
   }
 }
 
-// ── 2026-05-21 — Phase 3 of α-auto-cal. Type G (auto-created event) ──
+// ── 2026-05-24 — Round-3 propose-confirm auto-cal Type G' actions ────
+//
+// The agent now PROPOSES events instead of writing them to Google
+// Calendar before user confirmation. The three actions below cover
+// the user's three response paths on a Type G' card:
+//
+//   Add to calendar   → call calendarCreateEvent NOW with the
+//                       proposal's agreed slot, persist event_refs,
+//                       flip status to 'confirmed'. The actual user
+//                       calendar is only touched here, never at
+//                       propose time.
+//   Edit              → mutate agreedSlot in DB only (no calendar
+//                       call). User must follow up with Add to commit.
+//   Dismiss           → flip status to 'cancelled' (no calendar
+//                       call since event_refs is empty for proposals).
+//
+// All three are scoped to userId, audit-logged, and idempotent.
 
-// Cancel = user says the auto-created event was wrong. Delete the
-// calendar event(s) and flip the row's status to 'cancelled'.
-// Calendar-delete failures are Sentry-logged but don't block the
-// status flip — the user pressed Cancel and we owe them the row
-// disappearance regardless.
-export async function queueCancelAutoCalAction(rawCardId: string): Promise<void> {
+// Title used when calendarCreateEvent runs from a Type G' Add action.
+// Falls back to a generic label if the agreedSlot doesn't carry a
+// topic (legacy mutual_agreement rows don't store one — for those
+// the card surfaces the inbound subject which the client passes via
+// the editProposal "title" mutation, persisted to a fresh
+// proposal-side metadata column post-α). For now use a stable default.
+const DEFAULT_MUTUAL_AGREEMENT_TITLE = "Meeting";
+
+// Add = user clicked カレンダーに追加 on a Type G' proposal card.
+// Calls calendarCreateEvent with the agreed slot, persists the
+// resulting event refs, and flips status to 'confirmed'. Errors in
+// the calendar create surface back to the caller so the toast can
+// distinguish "succeeded but couldn't reach the calendar" from
+// "proposal not actionable anymore".
+export async function autoCalProposalAddAction(
+  rawCardId: string,
+): Promise<{ undoToken?: string }> {
   const userId = await getUserId();
   const { kind, id } = parseCardId(rawCardId);
   if (kind !== "autocal") {
-    throw new Error("Card is not an auto-cal event");
+    throw new Error("Card is not an auto-cal proposal");
+  }
+  const [row] = await db
+    .select()
+    .from(autoCreatedCalendarEvents)
+    .where(
+      and(
+        eq(autoCreatedCalendarEvents.id, id),
+        eq(autoCreatedCalendarEvents.userId, userId),
+      ),
+    )
+    .limit(1);
+  if (!row) {
+    throw new Error("Proposal not found");
+  }
+  // Only 'proposed' rows are actionable here. 'confirmed' = already
+  // added; 'cancelled' = user already dismissed. 'provisional' is
+  // legacy — those rows shouldn't surface in the Type G' queue but
+  // are guarded against just in case.
+  if (row.status !== "proposed") {
+    throw new Error(`Proposal is not in 'proposed' state (status=${row.status})`);
+  }
+
+  const slot = row.agreedSlot;
+  const isAllDay = slot.durationMin === 0;
+
+  // Build the calendar event payload from the agreed slot. For
+  // all-day deadline-kind rows, calendarCreateEvent treats
+  // YYYY-MM-DD strings as all-day; for timed mutual_agreement rows
+  // we go through buildIsoStartEnd for RFC3339 + correct offset.
+  let summary: string;
+  let start: string;
+  let end: string;
+  let description: string;
+
+  if (row.kind === "deadline") {
+    // Deadline proposals store the topic in a custom field added when
+    // edit lands; pre-edit rows fall back to a stable default.
+    const topic =
+      (row.agreedSlot as { topic?: string }).topic?.trim() ||
+      "Deadline";
+    summary = buildDeadlineSummary(topic);
+    start = slot.date;
+    end = slot.date;
+    description = buildDeadlineDescription({
+      reasoning: `Confirmed by user from Steadii queue at ${new Date().toISOString()}.`,
+      date: slot.date,
+      timezone: slot.timezone,
+      topic,
+    });
+  } else {
+    // mutual_agreement: timed event. Use stored title override if
+    // the user edited it; otherwise the stable default.
+    summary =
+      (row.agreedSlot as { title?: string }).title?.trim() ||
+      DEFAULT_MUTUAL_AGREEMENT_TITLE;
+    const { startIso, endIso } = buildIsoStartEnd(slot);
+    start = startIso;
+    end = endIso;
+    description = `Added to your calendar from a detected mutual scheduling agreement, confirmed by you in Steadii queue.\n\nAgreed slot: ${slot.date} ${slot.startTime} ${slot.timezone}${
+      isAllDay ? "" : ` (${slot.durationMin} min)`
+    }.`;
+  }
+
+  const created = await calendarCreateEvent.execute(
+    { userId },
+    {
+      summary,
+      start,
+      end,
+      description,
+    },
+  );
+
+  const eventRefs: AutoCreatedEventRef[] = created.createdIn.map(
+    (provider) => ({
+      provider,
+      eventId: created.eventId,
+      htmlLink: created.htmlLink,
+    }),
+  );
+
+  await db
+    .update(autoCreatedCalendarEvents)
+    .set({
+      status: "confirmed",
+      eventRefs,
+    })
+    .where(eq(autoCreatedCalendarEvents.id, id));
+
+  await logEmailAudit({
+    userId,
+    action: "auto_cal_proposal_added",
+    result: "success",
+    resourceId: id,
+    detail: {
+      autoCreateId: id,
+      kind: row.kind,
+      agreedSlot: row.agreedSlot,
+      eventRefs,
+    },
+  });
+
+  revalidatePath("/app");
+  return {};
+}
+
+// Edit = user changed date / start / end / title on a proposal via
+// the inline editor. Mutates agreedSlot in DB only — does NOT touch
+// the calendar. The user still has to click Add to commit. The
+// schema's agreedSlot blob already accommodates date / startTime /
+// durationMin; title and (deadline-kind) topic are stored alongside
+// in the same JSONB column so this PR doesn't need a fresh schema
+// change.
+const editProposalArgsSchema = z
+  .object({
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    startTime: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/)
+      .optional(),
+    durationMin: z.number().int().min(0).max(60 * 24).optional(),
+    title: z.string().min(1).max(200).optional(),
+  })
+  .strict();
+
+export type AutoCalProposalEditArgs = z.infer<typeof editProposalArgsSchema>;
+
+export async function autoCalProposalEditAction(
+  rawCardId: string,
+  rawArgs: AutoCalProposalEditArgs,
+): Promise<void> {
+  const userId = await getUserId();
+  const { kind, id } = parseCardId(rawCardId);
+  if (kind !== "autocal") {
+    throw new Error("Card is not an auto-cal proposal");
+  }
+  const args = editProposalArgsSchema.parse(rawArgs);
+
+  const [row] = await db
+    .select()
+    .from(autoCreatedCalendarEvents)
+    .where(
+      and(
+        eq(autoCreatedCalendarEvents.id, id),
+        eq(autoCreatedCalendarEvents.userId, userId),
+      ),
+    )
+    .limit(1);
+  if (!row) {
+    throw new Error("Proposal not found");
+  }
+  if (row.status !== "proposed") {
+    throw new Error(`Proposal is not in 'proposed' state (status=${row.status})`);
+  }
+
+  // Merge the requested fields onto the existing slot blob. Untouched
+  // fields stay as-is. The `title` field is stored in the same JSONB
+  // alongside the structural slot — keeps the schema flat without
+  // a separate column at α scope.
+  const merged: typeof row.agreedSlot & { title?: string } = {
+    ...(row.agreedSlot as typeof row.agreedSlot & { title?: string }),
+    ...(args.date ? { date: args.date } : {}),
+    ...(args.startTime ? { startTime: args.startTime } : {}),
+    ...(args.durationMin !== undefined ? { durationMin: args.durationMin } : {}),
+    ...(args.title ? { title: args.title } : {}),
+  };
+
+  await db
+    .update(autoCreatedCalendarEvents)
+    .set({
+      agreedSlot: merged,
+    })
+    .where(eq(autoCreatedCalendarEvents.id, id));
+
+  await logEmailAudit({
+    userId,
+    action: "auto_cal_proposal_edited",
+    result: "success",
+    resourceId: id,
+    detail: {
+      autoCreateId: id,
+      kind: row.kind,
+      before: row.agreedSlot,
+      after: merged,
+    },
+  });
+
+  revalidatePath("/app");
+}
+
+// Dismiss = user clicked 破棄 on a proposal. Flip status to
+// 'cancelled' — no calendar API call since event_refs is empty
+// (proposals never created a calendar event in the first place).
+export async function autoCalProposalDismissAction(
+  rawCardId: string,
+): Promise<void> {
+  const userId = await getUserId();
+  const { kind, id } = parseCardId(rawCardId);
+  if (kind !== "autocal") {
+    throw new Error("Card is not an auto-cal proposal");
   }
   const [row] = await db
     .select()
@@ -814,20 +1050,12 @@ export async function queueCancelAutoCalAction(rawCardId: string): Promise<void>
     )
     .limit(1);
   if (!row) return; // already gone → idempotent
-  if (row.status !== "provisional") return; // already resolved → no-op
-
-  for (const ref of row.eventRefs) {
-    try {
-      await calendarDeleteEvent.execute(
-        { userId },
-        { eventId: ref.eventId },
-      );
-    } catch {
-      // Best-effort. The caller has Sentry instrumentation upstream;
-      // we suppress to keep the status flip atomic from the user's
-      // perspective.
-    }
-  }
+  // Idempotent on already-dismissed rows. We deliberately allow
+  // dismissing 'proposed' AND legacy 'provisional' rows — the latter
+  // lets users clean up rows from before the propose-confirm flow
+  // shipped. Confirmed rows are no-ops (the calendar event is the
+  // user's now; deletion belongs in Google Calendar).
+  if (row.status !== "proposed" && row.status !== "provisional") return;
 
   await db
     .update(autoCreatedCalendarEvents)
@@ -837,45 +1065,37 @@ export async function queueCancelAutoCalAction(rawCardId: string): Promise<void>
     })
     .where(eq(autoCreatedCalendarEvents.id, id));
 
+  await logEmailAudit({
+    userId,
+    action: "auto_cal_proposal_dismissed",
+    result: "success",
+    resourceId: id,
+    detail: {
+      autoCreateId: id,
+      kind: row.kind,
+      priorStatus: row.status,
+    },
+  });
+
   revalidatePath("/app");
 }
 
-// Confirm = user explicitly approves the auto-created event before
-// grace expires. Flip status to 'confirmed' early and short-circuit
-// the Phase 4 grace cron. The [Steadii] prefix removal happens in
-// the Phase 4 cron path (shared rename code); for the early-confirm
-// path we accept the prefix staying until the cron processes the
-// row — α scope deferral.
-export async function queueConfirmAutoCalAction(rawCardId: string): Promise<void> {
-  const userId = await getUserId();
-  const { kind, id } = parseCardId(rawCardId);
-  if (kind !== "autocal") {
-    throw new Error("Card is not an auto-cal event");
-  }
-  const [row] = await db
-    .select()
-    .from(autoCreatedCalendarEvents)
-    .where(
-      and(
-        eq(autoCreatedCalendarEvents.id, id),
-        eq(autoCreatedCalendarEvents.userId, userId),
-      ),
-    )
-    .limit(1);
-  if (!row) return;
-  if (row.status !== "provisional") return;
+// ── Legacy shim: queueCancelAutoCalAction / queueConfirmAutoCalAction ─
+//
+// The Wave-3-era queue card on Home wires the two legacy handlers
+// (`onCancelAutoCal` / `onConfirmAutoCal`) — those names persist until
+// PR B rewires the Type G card to the Add/Edit/Dismiss surface. Both
+// shims route to the propose-confirm equivalents so the build stays
+// green between PR A merge and PR B merge:
+//   Cancel  → Dismiss   (no calendar API call; proposal cancelled)
+//   Confirm → Add       (calendar event finally created)
+// Remove these shims once PR B lands.
+export async function queueCancelAutoCalAction(rawCardId: string): Promise<void> {
+  await autoCalProposalDismissAction(rawCardId);
+}
 
-  const now = new Date();
-  await db
-    .update(autoCreatedCalendarEvents)
-    .set({
-      status: "confirmed",
-      // Set grace_expires_at to now so the Phase 4 grace cron treats
-      // this row as already-eligible-for-prefix-removal on its next
-      // sweep (instead of waiting another up-to-24h).
-      graceExpiresAt: now,
-    })
-    .where(eq(autoCreatedCalendarEvents.id, id));
-
-  revalidatePath("/app");
+export async function queueConfirmAutoCalAction(
+  rawCardId: string,
+): Promise<void> {
+  await autoCalProposalAddAction(rawCardId);
 }

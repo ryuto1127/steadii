@@ -50,10 +50,14 @@ vi.mock("@/lib/db/client", () => {
   };
 });
 
+// Round-3 propose-confirm: the deadline orchestrator no longer imports
+// the calendar tool. The mock stays as a regression guard.
 vi.mock("@/lib/agent/tools/calendar", () => ({
   calendarCreateEvent: {
     execute: vi.fn().mockRejectedValue(
-      new Error("calendarCreateEvent.execute should not run in unit tests"),
+      new Error(
+        "calendarCreateEvent.execute MUST NOT run from the propose orchestrator",
+      ),
     ),
   },
 }));
@@ -69,43 +73,24 @@ function resetMocks(): void {
 
 beforeEach(resetMocks);
 
-describe("evaluateAndAddDeadlineIfDetected — happy path", () => {
-  it("auto-adds an all-day event with [Steadii] prefix when a strong deadline is detected", async () => {
-    const calendarMock = vi.fn().mockResolvedValue({
-      eventId: "evt-deadline-1",
-      htmlLink: "https://calendar.example.com/evt-1",
-      createdIn: ["google_calendar"],
-    });
-
+describe("evaluateAndAddDeadlineIfDetected — happy path (propose-confirm)", () => {
+  it("persists a deadline-kind 'proposed' row without calling the calendar tool", async () => {
     const r = await evaluateAndAddDeadlineIfDetected({
       userId: "user-1",
       inboxItemId: "inbox-1",
       body: "課題の提出期限は 5/30 までとなります。",
-      subject: "PSY100 提出のご連絡",
+      subject: "Assignment due notice",
       defaultTimezone: "Asia/Tokyo",
       referenceYear: 2026,
-      options: { calendarCreate: calendarMock },
     });
 
-    expect(r.action).toBe("created");
-    expect(calendarMock).toHaveBeenCalledOnce();
-    const callArgs = calendarMock.mock.calls[0][0] as {
-      userId: string;
-      summary: string;
-      start: string;
-      end: string;
-      description: string;
-    };
-    expect(callArgs.userId).toBe("user-1");
-    expect(callArgs.summary.startsWith("[Steadii] ")).toBe(true);
-    expect(callArgs.summary).toContain("締切");
-    expect(callArgs.start).toBe("2026-05-30");
-    expect(callArgs.end).toBe("2026-05-30");
-    expect(callArgs.description).toMatch(/Deadline:/);
+    expect(r.action).toBe("proposed");
 
     expect(mocks.state.insertCalledWith).toHaveLength(1);
     const inserted = mocks.state.insertCalledWith[0];
     expect(inserted.kind).toBe("deadline");
+    expect(inserted.status).toBe("proposed");
+    expect(inserted.eventRefs).toEqual([]);
     expect(inserted.userId).toBe("user-1");
     expect(inserted.inboxItemId).toBe("inbox-1");
     expect(inserted.confidence).toBeGreaterThanOrEqual(0.8);
@@ -118,67 +103,78 @@ describe("evaluateAndAddDeadlineIfDetected — happy path", () => {
 describe("evaluateAndAddDeadlineIfDetected — opt-in / idempotency", () => {
   it("skips when user has opted out", async () => {
     mocks.state.userRow = { preferences: { autoCalendarCreate: false } };
-    const calendarMock = vi.fn();
     const r = await evaluateAndAddDeadlineIfDetected({
       userId: "user-1",
       inboxItemId: "inbox-1",
       body: "提出期限は 5/30 までです。",
       defaultTimezone: "Asia/Tokyo",
       referenceYear: 2026,
-      options: { calendarCreate: calendarMock },
     });
     expect(r.action).toBe("skipped");
     if (r.action === "skipped") {
       expect(r.reason).toMatch(/opted out/);
     }
-    expect(calendarMock).not.toHaveBeenCalled();
+    expect(mocks.state.insertCalledWith).toHaveLength(0);
   });
 
   it("skips when a deadline-kind row already exists for this inbox_item", async () => {
     mocks.state.existingAutoCreates = [{ id: "prior-deadline-1" }];
-    const calendarMock = vi.fn();
     const r = await evaluateAndAddDeadlineIfDetected({
       userId: "user-1",
       inboxItemId: "inbox-1",
       body: "提出期限は 5/30 までです。",
       defaultTimezone: "Asia/Tokyo",
       referenceYear: 2026,
-      options: { calendarCreate: calendarMock },
     });
     expect(r.action).toBe("skipped");
     if (r.action === "skipped") {
       expect(r.reason).toMatch(/already exists/);
     }
-    expect(calendarMock).not.toHaveBeenCalled();
+    expect(mocks.state.insertCalledWith).toHaveLength(0);
   });
 });
 
 describe("evaluateAndAddDeadlineIfDetected — detector gating", () => {
   it("skips when no deadline is detected in the body", async () => {
-    const calendarMock = vi.fn();
     const r = await evaluateAndAddDeadlineIfDetected({
       userId: "user-1",
       inboxItemId: "inbox-1",
       body: "ご連絡ありがとうございます。引き続きよろしくお願いします。",
       defaultTimezone: "Asia/Tokyo",
       referenceYear: 2026,
-      options: { calendarCreate: calendarMock },
     });
     expect(r.action).toBe("skipped");
-    expect(calendarMock).not.toHaveBeenCalled();
+    expect(mocks.state.insertCalledWith).toHaveLength(0);
   });
 
   it("skips on a hedged 'できれば by X' phrasing (single-sided false-positive guard)", async () => {
-    const calendarMock = vi.fn();
     const r = await evaluateAndAddDeadlineIfDetected({
       userId: "user-1",
       inboxItemId: "inbox-1",
       body: "できれば 5/30 までにご対応いただけると幸いです。",
       defaultTimezone: "Asia/Tokyo",
       referenceYear: 2026,
-      options: { calendarCreate: calendarMock },
     });
     expect(r.action).toBe("skipped");
-    expect(calendarMock).not.toHaveBeenCalled();
+    expect(mocks.state.insertCalledWith).toHaveLength(0);
+  });
+});
+
+describe("evaluateAndAddDeadlineIfDetected — expiry window", () => {
+  it("sets grace_expires_at to nowMs + 7 days by default", async () => {
+    const baseMs = Date.UTC(2026, 4, 20, 12, 0, 0);
+    const r = await evaluateAndAddDeadlineIfDetected({
+      userId: "user-1",
+      inboxItemId: "inbox-1",
+      body: "課題の提出期限は 5/30 までとなります。",
+      subject: "Assignment due notice",
+      defaultTimezone: "Asia/Tokyo",
+      referenceYear: 2026,
+      options: { nowMs: baseMs },
+    });
+    expect(r.action).toBe("proposed");
+    if (r.action === "proposed") {
+      expect(r.expiresAt.getTime()).toBe(baseMs + 7 * 24 * 60 * 60 * 1000);
+    }
   });
 });

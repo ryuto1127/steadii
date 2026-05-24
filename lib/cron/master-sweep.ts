@@ -17,13 +17,25 @@ import * as Sentry from "@sentry/nextjs";
 //
 // Schedule (the master cron fires every 15 min via QStash):
 //   - ALWAYS  (every 15 min)     → pre-brief, ingest-sweep
-//   - WHEN minute % 30 === 0     → auto-cal-grace, draft-superseded
+//   - WHEN minute % 30 === 0     → auto-cal-proposal-expiry,
+//                                  draft-superseded,
+//                                  disposition-resurface
 //   - WHEN minute === 0 (hourly) → digest, weekly-digest
+//
+// 2026-05-24 — Round-3 propose-confirm flow. The legacy
+// `auto-cal-grace` sub-sweep promoted provisional → confirmed and
+// renamed the calendar event (dropped the [Steadii] prefix). That
+// path is now obsolete — events only land on the user's calendar
+// after explicit per-event Add click, so there's no prefix and no
+// grace promotion to perform. The `auto-cal-proposal-expiry`
+// sub-sweep replaces it: untouched 'proposed' rows past their
+// 7-day expiry get flipped to 'cancelled' (no calendar API call).
 
 export type SubSweepName =
   | "pre-brief"
   | "ingest-sweep"
-  | "auto-cal-grace"
+  // 2026-05-24 — Round-3 propose-confirm. Replaces "auto-cal-grace".
+  | "auto-cal-proposal-expiry"
   | "draft-superseded"
   // PR 3 (2026-05-24) — re-surface Draft cards the user explicitly
   // スキップ'd more than 24 hours ago. Pure DB update, runs on the
@@ -71,12 +83,12 @@ export async function dispatchMasterSweep(args: {
   await tryRun(summary, "ingest-sweep", subSweeps);
 
   if (minute % 30 === 0) {
-    await tryRun(summary, "auto-cal-grace", subSweeps);
+    await tryRun(summary, "auto-cal-proposal-expiry", subSweeps);
     await tryRun(summary, "draft-superseded", subSweeps);
     await tryRun(summary, "disposition-resurface", subSweeps);
   } else {
     summary.skipped.push(
-      "auto-cal-grace",
+      "auto-cal-proposal-expiry",
       "draft-superseded",
       "disposition-resurface",
     );

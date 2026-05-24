@@ -63,22 +63,22 @@ vi.mock("@/lib/db/client", () => {
   };
 });
 
-// Block the production calendar tool from being reachable at import
-// time — the evaluator's default fallback would try to touch
-// google-auth. Tests inject `calendarCreate` instead.
+// Round-3 propose-confirm: the orchestrator no longer imports the
+// calendar tool. The mock stays as a belt-and-suspenders guard so a
+// regression that brings the import back is caught loudly.
 vi.mock("@/lib/agent/tools/calendar", () => ({
   calendarCreateEvent: {
     execute: vi.fn().mockRejectedValue(
-      new Error("calendarCreateEvent.execute should not run in unit tests"),
+      new Error(
+        "calendarCreateEvent.execute MUST NOT run from the propose orchestrator",
+      ),
     ),
   },
 }));
 
 // Import AFTER mocks so module-scope side-effects pick them up.
-import {
-  evaluateAndCreateIfAgreed,
-  buildIsoStartEnd,
-} from "@/lib/agent/proactive/auto-calendar-create";
+import { evaluateAndCreateIfAgreed } from "@/lib/agent/proactive/auto-calendar-create";
+import { buildIsoStartEnd } from "@/lib/agent/proactive/auto-cal-slot";
 import type { EmailSnapshot } from "@/lib/agent/proactive/mutual-agreement-detector";
 
 function resetMocks(): void {
@@ -96,19 +96,19 @@ const happyThread: EmailSnapshot[] = [
   {
     direction: "inbound",
     sentAt: "2026-05-19T08:00:00Z",
-    subject: "面接日程のご案内",
+    subject: "Interview schedule",
     body: "5/22 14:00 / 5/23 10:00 のどちらかでいかがでしょうか。",
   },
   {
     direction: "outbound",
     sentAt: "2026-05-19T15:00:00Z",
-    subject: "Re: 面接日程のご案内",
+    subject: "Re: Interview schedule",
     body: "5/22(水) 14:00 JST でお願いいたします。",
   },
   {
     direction: "inbound",
     sentAt: "2026-05-20T01:00:00Z",
-    subject: "Re: Re: 面接日程のご案内",
+    subject: "Re: Re: Interview schedule",
     body: "承知いたしました。当日はよろしくお願いいたします。",
   },
 ];
@@ -124,7 +124,6 @@ describe("evaluateAndCreateIfAgreed — opt-in gate", () => {
       userTimezone: "America/Vancouver",
       defaultTimezone: "Asia/Tokyo",
       referenceYear: 2026,
-      options: { calendarCreate: vi.fn() },
     });
 
     expect(r.action).toBe("skipped");
@@ -135,11 +134,6 @@ describe("evaluateAndCreateIfAgreed — opt-in gate", () => {
 
   it("opts in by default when preferences.autoCalendarCreate is undefined", async () => {
     mocks.state.userRow = { preferences: {} };
-    const calendarMock = vi.fn().mockResolvedValue({
-      eventId: "evt-1",
-      htmlLink: "https://calendar.example.com/evt-1",
-      createdIn: ["google_calendar"],
-    });
 
     const r = await evaluateAndCreateIfAgreed({
       userId: "user-1",
@@ -148,11 +142,10 @@ describe("evaluateAndCreateIfAgreed — opt-in gate", () => {
       userTimezone: "America/Vancouver",
       defaultTimezone: "Asia/Tokyo",
       referenceYear: 2026,
-      options: { calendarCreate: calendarMock },
     });
 
-    expect(r.action).toBe("created");
-    expect(calendarMock).toHaveBeenCalledOnce();
+    expect(r.action).toBe("proposed");
+    expect(mocks.state.insertCalledWith).toHaveLength(1);
   });
 
   it("skips when the user row is missing", async () => {
@@ -164,7 +157,6 @@ describe("evaluateAndCreateIfAgreed — opt-in gate", () => {
       userTimezone: "America/Vancouver",
       defaultTimezone: "Asia/Tokyo",
       referenceYear: 2026,
-      options: { calendarCreate: vi.fn() },
     });
     expect(r.action).toBe("skipped");
     if (r.action === "skipped") {
@@ -176,7 +168,6 @@ describe("evaluateAndCreateIfAgreed — opt-in gate", () => {
 describe("evaluateAndCreateIfAgreed — idempotency", () => {
   it("skips when a non-cancelled auto-create already exists for this inbox_item", async () => {
     mocks.state.existingAutoCreates = [{ id: "prior-auto-create-1" }];
-    const calendarMock = vi.fn();
 
     const r = await evaluateAndCreateIfAgreed({
       userId: "user-1",
@@ -185,14 +176,13 @@ describe("evaluateAndCreateIfAgreed — idempotency", () => {
       userTimezone: "America/Vancouver",
       defaultTimezone: "Asia/Tokyo",
       referenceYear: 2026,
-      options: { calendarCreate: calendarMock },
     });
 
     expect(r.action).toBe("skipped");
     if (r.action === "skipped") {
       expect(r.reason).toMatch(/already exists/);
     }
-    expect(calendarMock).not.toHaveBeenCalled();
+    expect(mocks.state.insertCalledWith).toHaveLength(0);
   });
 });
 
@@ -210,7 +200,6 @@ describe("evaluateAndCreateIfAgreed — detector gating", () => {
         body: "ご連絡いただきありがとうございます。",
       },
     ];
-    const calendarMock = vi.fn();
 
     const r = await evaluateAndCreateIfAgreed({
       userId: "user-1",
@@ -219,11 +208,10 @@ describe("evaluateAndCreateIfAgreed — detector gating", () => {
       userTimezone: "America/Vancouver",
       defaultTimezone: "Asia/Tokyo",
       referenceYear: 2026,
-      options: { calendarCreate: calendarMock },
     });
 
     expect(r.action).toBe("skipped");
-    expect(calendarMock).not.toHaveBeenCalled();
+    expect(mocks.state.insertCalledWith).toHaveLength(0);
   });
 
   it("skips when the inbound contains a counter-proposal (kill switch)", async () => {
@@ -239,7 +227,6 @@ describe("evaluateAndCreateIfAgreed — detector gating", () => {
         body: "申し訳ございません、別の日程で改めてご調整いただけますでしょうか。",
       },
     ];
-    const calendarMock = vi.fn();
 
     const r = await evaluateAndCreateIfAgreed({
       userId: "user-1",
@@ -248,15 +235,13 @@ describe("evaluateAndCreateIfAgreed — detector gating", () => {
       userTimezone: "America/Vancouver",
       defaultTimezone: "Asia/Tokyo",
       referenceYear: 2026,
-      options: { calendarCreate: calendarMock },
     });
 
     expect(r.action).toBe("skipped");
-    expect(calendarMock).not.toHaveBeenCalled();
+    expect(mocks.state.insertCalledWith).toHaveLength(0);
   });
 
   it("respects a custom threshold higher than the detector's confidence", async () => {
-    const calendarMock = vi.fn();
     const r = await evaluateAndCreateIfAgreed({
       userId: "user-1",
       inboxItemId: "inbox-1",
@@ -264,7 +249,7 @@ describe("evaluateAndCreateIfAgreed — detector gating", () => {
       userTimezone: "America/Vancouver",
       defaultTimezone: "Asia/Tokyo",
       referenceYear: 2026,
-      options: { threshold: 0.99, calendarCreate: calendarMock },
+      options: { threshold: 0.99 },
     });
     expect(r.action).toBe("skipped");
     if (r.action === "skipped") {
@@ -273,14 +258,8 @@ describe("evaluateAndCreateIfAgreed — detector gating", () => {
   });
 });
 
-describe("evaluateAndCreateIfAgreed — happy path", () => {
-  it("calls the calendar tool with [Steadii] prefix and persists when mutual agreement is detected", async () => {
-    const calendarMock = vi.fn().mockResolvedValue({
-      eventId: "evt-google-1",
-      htmlLink: "https://calendar.example.com/evt-google-1",
-      createdIn: ["google_calendar"],
-    });
-
+describe("evaluateAndCreateIfAgreed — happy path (propose-confirm)", () => {
+  it("persists a 'proposed' row with empty event_refs and does NOT call the calendar tool", async () => {
     const r = await evaluateAndCreateIfAgreed({
       userId: "user-1",
       inboxItemId: "inbox-1",
@@ -288,38 +267,24 @@ describe("evaluateAndCreateIfAgreed — happy path", () => {
       userTimezone: "America/Vancouver",
       defaultTimezone: "Asia/Tokyo",
       referenceYear: 2026,
-      options: { calendarCreate: calendarMock },
     });
 
-    expect(r.action).toBe("created");
-    expect(calendarMock).toHaveBeenCalledOnce();
+    expect(r.action).toBe("proposed");
 
-    const callArgs = calendarMock.mock.calls[0][0] as {
-      userId: string;
-      summary: string;
-      start: string;
-      end: string;
-      description: string;
-    };
-    expect(callArgs.userId).toBe("user-1");
-    expect(callArgs.summary.startsWith("[Steadii] ")).toBe(true);
-    // The agreed slot is 5/22 14:00 Asia/Tokyo. RFC3339 with +09:00.
-    expect(callArgs.start).toMatch(/^2026-05-22T14:00:00\+09:00$/);
-    // Default duration 60 min → end = 15:00 JST.
-    expect(callArgs.end).toMatch(/^2026-05-22T15:00:00\+09:00$/);
-    expect(callArgs.description).toMatch(/Auto-created by Steadii/);
-
-    // Persistence row inserted with correct fields.
+    // Persistence row inserted with correct fields. The calendar tool
+    // mock is configured to throw if executed; the test would fail
+    // loudly if the propose path ever calls it.
     expect(mocks.state.insertCalledWith).toHaveLength(1);
     const inserted = mocks.state.insertCalledWith[0];
     expect(inserted.userId).toBe("user-1");
     expect(inserted.inboxItemId).toBe("inbox-1");
+    expect(inserted.status).toBe("proposed");
+    expect(inserted.eventRefs).toEqual([]);
     expect(inserted.confidence).toBeGreaterThanOrEqual(0.8);
     expect((inserted.agreedSlot as { date: string }).date).toBe("2026-05-22");
   });
 
-  it("dry-run mode returns 'skipped' without calling calendar or persisting", async () => {
-    const calendarMock = vi.fn();
+  it("dry-run mode returns 'skipped' without persisting", async () => {
     const r = await evaluateAndCreateIfAgreed({
       userId: "user-1",
       inboxItemId: "inbox-1",
@@ -327,41 +292,16 @@ describe("evaluateAndCreateIfAgreed — happy path", () => {
       userTimezone: "America/Vancouver",
       defaultTimezone: "Asia/Tokyo",
       referenceYear: 2026,
-      options: { dryRun: true, calendarCreate: calendarMock },
+      options: { dryRun: true },
     });
     expect(r.action).toBe("skipped");
     if (r.action === "skipped") {
       expect(r.reason).toMatch(/dry-run/);
     }
-    expect(calendarMock).not.toHaveBeenCalled();
     expect(mocks.state.insertCalledWith).toHaveLength(0);
   });
 
-  it("uses the inbound subject (Re: stripped) for the event title", async () => {
-    const calendarMock = vi.fn().mockResolvedValue({
-      eventId: "evt-1",
-      htmlLink: null,
-      createdIn: ["google_calendar"],
-    });
-    await evaluateAndCreateIfAgreed({
-      userId: "user-1",
-      inboxItemId: "inbox-1",
-      thread: happyThread,
-      userTimezone: "America/Vancouver",
-      defaultTimezone: "Asia/Tokyo",
-      referenceYear: 2026,
-      options: { calendarCreate: calendarMock },
-    });
-    const callArgs = calendarMock.mock.calls[0][0] as { summary: string };
-    expect(callArgs.summary).toBe("[Steadii] 面接日程のご案内");
-  });
-
-  it("sets grace_expires_at to nowMs + 24h by default", async () => {
-    const calendarMock = vi.fn().mockResolvedValue({
-      eventId: "evt-1",
-      htmlLink: null,
-      createdIn: ["google_calendar"],
-    });
+  it("sets grace_expires_at to nowMs + 7d by default (expiry, not grace)", async () => {
     const baseMs = Date.UTC(2026, 4, 20, 12, 0, 0); // 2026-05-20 12:00 UTC
     const r = await evaluateAndCreateIfAgreed({
       userId: "user-1",
@@ -370,11 +310,11 @@ describe("evaluateAndCreateIfAgreed — happy path", () => {
       userTimezone: "America/Vancouver",
       defaultTimezone: "Asia/Tokyo",
       referenceYear: 2026,
-      options: { calendarCreate: calendarMock, nowMs: baseMs },
+      options: { nowMs: baseMs },
     });
-    expect(r.action).toBe("created");
-    if (r.action === "created") {
-      expect(r.graceExpiresAt.getTime()).toBe(baseMs + 24 * 60 * 60 * 1000);
+    expect(r.action).toBe("proposed");
+    if (r.action === "proposed") {
+      expect(r.expiresAt.getTime()).toBe(baseMs + 7 * 24 * 60 * 60 * 1000);
     }
   });
 });
