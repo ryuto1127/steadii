@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ChevronDown, ChevronUp } from "lucide-react";
@@ -9,6 +9,11 @@ import {
   QueueCardRenderer,
   type QueueCardActions,
 } from "@/components/agent/queue-card";
+import {
+  SEND_UNDO_WINDOW_MS,
+  startInlineSendTimer,
+  type InlineSendTimer,
+} from "@/lib/agent/queue/inline-send-timer";
 import { QUEUE_VISIBLE_LIMIT, type QueueCard } from "@/lib/agent/queue/types";
 
 // Client wrapper around the queue. Handles:
@@ -45,6 +50,10 @@ type ServerActions = {
   // provisional calendar event). For non-office-hours B cards the page
   // routes the user to the existing detail page.
   sendOfficeHours: (cardId: string) => Promise<void>;
+  // 2026-05-24 (PR 2) — fires after the client-side 10s undo window
+  // elapses for a Type B Draft card. Wraps approveAgentDraftAction with
+  // skipPreSendCheck=true; see queue-actions.ts:queueSendDraftAction.
+  sendDraft: (cardId: string) => Promise<void>;
   // engineer-42 — Type F (interactive confirmations).
   confirm: (cardId: string) => Promise<void>;
   correct: (cardId: string, correctedValue: string) => Promise<void>;
@@ -65,6 +74,28 @@ export function QueueList({
   const tShared = useTranslations("queue.shared");
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
+  // PR 2 — per-card pending send timers. The map is keyed by card id so
+  // the user can fire 送信 across multiple Draft cards in parallel and
+  // each card's 10s window is independent. Held in a ref because the
+  // timer machine is identity-stable and we never want a render to
+  // re-create one.
+  const inlineSendTimers = useRef<Map<string, InlineSendTimer>>(new Map());
+  // PR 2 — set of card ids currently mid-undo-window. Lifted into state
+  // so the card can dim itself when sending is pending and un-dim on
+  // undo without waiting for router.refresh (which only fires after the
+  // 10s timer elapses and the server actually accepts the send).
+  const [sendingCardIds, setSendingCardIds] = useState<Set<string>>(() => new Set());
+
+  // On unmount (route navigation, hot reload), cancel every pending send
+  // timer. Without this a stale timer would fire against the unmounted
+  // tree and attempt a router.refresh on a route that no longer exists.
+  useEffect(() => {
+    const timers = inlineSendTimers.current;
+    return () => {
+      for (const timer of timers.values()) timer.cancel();
+      timers.clear();
+    };
+  }, []);
 
   const visible = useMemo(() => {
     if (expanded) return cards;
@@ -78,6 +109,93 @@ export function QueueList({
   }
 
   const refresh = () => router.refresh();
+
+  // PR 2 — kicks the client-side 10s timer for a Draft card's Send
+  // click. Returns a Promise that resolves immediately so the card's
+  // useTransition flow lands in the dimmed/resolved state right away;
+  // the actual server send fires (or doesn't) when the timer elapses.
+  const beginInlineSend = (cardId: string) => {
+    // If a second click lands while the first timer is still pending,
+    // treat it as "yes, definitely send" — cancel the still-pending
+    // timer (idempotent) and start fresh. This matches the visible
+    // behavior of clicking Send again: the toast resets to 10s.
+    const existing = inlineSendTimers.current.get(cardId);
+    if (existing) existing.cancel();
+
+    const toastId = `queue-send:${cardId}`;
+    setSendingCardIds((prev) => {
+      const next = new Set(prev);
+      next.add(cardId);
+      return next;
+    });
+
+    const cancelTimer = () => {
+      const timer = inlineSendTimers.current.get(cardId);
+      const cancelled = timer ? timer.cancel() : false;
+      inlineSendTimers.current.delete(cardId);
+      setSendingCardIds((prev) => {
+        if (!prev.has(cardId)) return prev;
+        const next = new Set(prev);
+        next.delete(cardId);
+        return next;
+      });
+      toast.dismiss(toastId);
+      return cancelled;
+    };
+
+    const timer = startInlineSendTimer({
+      cardId,
+      onElapse: () => {
+        // Timer fired without an undo — kick the actual server send.
+        // Keep the card dim (isSendingPending stays true) for the
+        // duration of the API call so the user sees a continuous
+        // "sending" state through to refresh. On success the
+        // approveAgentDraftAction flips agent_drafts.status to
+        // sent_pending, so the next router.refresh drops the card from
+        // the queue and our flag never matters again. On failure we
+        // clear the flag and restore the card.
+        inlineSendTimers.current.delete(cardId);
+        toast.dismiss(toastId);
+        void actions
+          .sendDraft(cardId)
+          .then(() => {
+            // Refresh first; the card disappears via fresh DB read.
+            // Clearing the sending-id set after refresh keeps the dim
+            // state coherent during the brief render gap.
+            refresh();
+            setSendingCardIds((prev) => {
+              if (!prev.has(cardId)) return prev;
+              const next = new Set(prev);
+              next.delete(cardId);
+              return next;
+            });
+          })
+          .catch((err) => {
+            setSendingCardIds((prev) => {
+              if (!prev.has(cardId)) return prev;
+              const next = new Set(prev);
+              next.delete(cardId);
+              return next;
+            });
+            toast.error(message(err, "Send failed"));
+            refresh();
+          });
+      },
+    });
+    inlineSendTimers.current.set(cardId, timer);
+
+    toast(t("toast_sending"), {
+      id: toastId,
+      duration: SEND_UNDO_WINDOW_MS,
+      action: {
+        label: t("toast_undo"),
+        onClick: () => {
+          cancelTimer();
+          toast.success(t("toast_send_cancelled"));
+        },
+      },
+    });
+  };
 
   return (
     <section
@@ -118,7 +236,9 @@ export function QueueList({
       </header>
       <ul className="flex flex-col gap-2.5 sm:gap-3">
         {visible.map((card) => {
+          const isSendingPending = sendingCardIds.has(card.id);
           const cardActions: QueueCardActions = {
+            isSendingPending,
             onDismiss: async () => {
               try {
                 await actions.dismiss(card.id);
@@ -169,9 +289,10 @@ export function QueueList({
                 ? async () => {
                     // Office hours Type B drafts run their own send
                     // pipeline (Gmail draft + send + provisional
-                    // calendar event). Other Type B drafts route to
-                    // the existing inbox detail page where the W1
-                    // send + 10s undo machinery is wired.
+                    // calendar event). Other Type B drafts run the
+                    // PR 2 inline send: a 10s client-side undo
+                    // window via sonner toast, then the actual
+                    // server send fires.
                     if (card.id.startsWith("office_hours:")) {
                       try {
                         await actions.sendOfficeHours(card.id);
@@ -182,7 +303,7 @@ export function QueueList({
                       refresh();
                       return;
                     }
-                    if (card.detailHref) router.push(card.detailHref);
+                    beginInlineSend(card.id);
                   }
                 : undefined,
             onSkip:

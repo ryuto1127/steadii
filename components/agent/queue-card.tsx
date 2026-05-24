@@ -87,6 +87,13 @@ type CardBProps = CommonProps & {
   // the [Mark reviewed] secondary action (or any other inline-action
   // secondary). The parent records the review and removes the card.
   onSecondaryAction?: (key: string) => Promise<ActionResult> | ActionResult;
+  // PR 2 — controlled "send is mid-undo-window" flag. When the parent
+  // is running the 10s client timer for this card, it sets this to true
+  // so the card dims/disables in lockstep with the toast countdown. On
+  // undo the parent flips it back to false and the card un-dims
+  // without needing a router.refresh — local resolved state would have
+  // gotten stuck otherwise.
+  isSendingPending?: boolean;
 };
 
 type CardCProps = CommonProps & {
@@ -621,6 +628,7 @@ export function QueueCardBRender({
   onSnooze,
   onPermanentDismiss,
   onUndo,
+  isSendingPending = false,
 }: CardBProps) {
   const t = useTranslations("queue.card_b");
   const tShared = useTranslations("queue.shared");
@@ -630,6 +638,10 @@ export function QueueCardBRender({
   const [undoToken, setUndoToken] = useState<string | null>(null);
   const [resolved, setResolved] = useState(false);
   const { bindings, menu } = useQuickMenu({ onSnooze, onPermanentDismiss });
+  // PR 2 — effective dim/disabled state. When the parent's inline-send
+  // timer is running for this card, the card dims like a resolved card
+  // but the source of truth is the parent (so undo can flip it back).
+  const effectiveResolved = resolved || isSendingPending;
 
   const labelFor = (sa: { key: string; label: string }): string => {
     // Known keys come from the queue builder (server-side, English).
@@ -648,17 +660,20 @@ export function QueueCardBRender({
   };
 
   const send = () => {
-    if (pending || resolved) return;
+    if (pending || effectiveResolved) return;
     startTransition(async () => {
       const result = await onSend();
       const token = isUndoResult(result) ? result.undoToken : undefined;
       if (token) setUndoToken(token);
+      // PR 2 — for the inline-send flow the parent owns the dim state
+      // via isSendingPending; we still flip local resolved so a
+      // double-click during transition is a no-op via the guard above.
       setResolved(true);
     });
   };
 
   const skip = () => {
-    if (pending || resolved) return;
+    if (pending || effectiveResolved) return;
     startTransition(async () => {
       await onSkip();
       setResolved(true);
@@ -673,17 +688,36 @@ export function QueueCardBRender({
   );
 
   const runSecondary = (key: string) => {
-    if (!onSecondaryAction || pending || resolved) return;
+    if (!onSecondaryAction || pending || effectiveResolved) return;
     startTransition(async () => {
       await onSecondaryAction(key);
       setResolved(true);
     });
   };
 
+  // PR 2 — when the parent stops the inline-send timer (user clicked
+  // undo within the 10s window), the local resolved flag from the
+  // optimistic transition above needs to fall back to false so the
+  // card buttons re-enable. Without this the row stays dim+disabled
+  // even though the toast vanished.
+  useEffect(() => {
+    if (!isSendingPending && resolved) {
+      // Only auto-un-resolve when the local flag was set BECAUSE of an
+      // inline-send transition. Heuristic: we never call setResolved
+      // synchronously without isSendingPending also flipping true on
+      // the same tick (the parent toggles it before the transition
+      // resolves). Safe to reset here.
+      setResolved(false);
+    }
+    // We intentionally depend on isSendingPending only — local resolved
+    // changes are driven by user clicks, not by parent prop changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSendingPending]);
+
   return (
     <>
       <CardShell card={card} size="md" variant="default" onContextMenu={bindings.onContextMenu}>
-        <div {...bindings} className={cn(resolved && "opacity-60")}>
+        <div {...bindings} className={cn(effectiveResolved && "opacity-60")}>
           <CardHeader card={card} icon={headerIcon} locale={locale} />
           {card.body ? (
             <p className="mt-1 text-[12px] text-[hsl(var(--muted-foreground))]">
@@ -742,13 +776,25 @@ export function QueueCardBRender({
               {tShared("verify_recommended")}
             </p>
           ) : null}
+          {/*
+            Primary action row for Draft mode: [Review] [Send (primary)]
+            [...spacer] [Skip].
+
+            PR 3 placeholder — disposition trio (対応済み / スキップ / 無視中)
+            will land as a SECONDARY action row, rendered immediately
+            below this primary row. The disposition row should be
+            visually smaller (h-7 vs h-9 here), use ghost/outline styling
+            for 対応済み + スキップ, and a destructive variant for 無視中
+            (with a confirm dialog). Slot the new row right after the
+            closing `</div>` of this primary row, before <CardFooter />.
+          */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {card.mode === "draft" ? (
               <>
                 <button
                   type="button"
                   onClick={onReview}
-                  disabled={pending || resolved}
+                  disabled={pending || effectiveResolved}
                   className="inline-flex h-9 items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 text-[13px] font-medium text-[hsl(var(--foreground))] transition-default hover:bg-[hsl(var(--surface-raised))]"
                 >
                   {t("review")}
@@ -756,7 +802,7 @@ export function QueueCardBRender({
                 <button
                   type="button"
                   onClick={send}
-                  disabled={pending || resolved}
+                  disabled={pending || effectiveResolved}
                   className="inline-flex h-9 items-center gap-1 rounded-full bg-[hsl(var(--foreground))] px-4 text-[13px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90 disabled:opacity-50"
                 >
                   <Sparkles size={12} strokeWidth={2} />
@@ -765,7 +811,7 @@ export function QueueCardBRender({
                 <button
                   type="button"
                   onClick={skip}
-                  disabled={pending || resolved}
+                  disabled={pending || effectiveResolved}
                   className="ml-auto inline-flex h-9 items-center rounded-full px-3 text-[13px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
                 >
                   {t("skip")}
@@ -787,7 +833,7 @@ export function QueueCardBRender({
                       key={sa.key}
                       type="button"
                       onClick={() => runSecondary(sa.key)}
-                      disabled={pending || resolved}
+                      disabled={pending || effectiveResolved}
                       className="inline-flex h-9 items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 text-[13px] font-medium text-[hsl(var(--foreground))] transition-default hover:bg-[hsl(var(--surface-raised))] disabled:opacity-50"
                     >
                       {labelFor(sa)}
@@ -799,7 +845,7 @@ export function QueueCardBRender({
             <button
               type="button"
               onClick={() => void onDismiss()}
-              disabled={pending || resolved}
+              disabled={pending || effectiveResolved}
               className={cn(
                 "inline-flex h-9 items-center rounded-full px-2 text-[13px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]",
                 card.mode === "informational" && "ml-auto"
@@ -809,6 +855,7 @@ export function QueueCardBRender({
               <X size={14} strokeWidth={1.75} />
             </button>
           </div>
+          {/* PR 3 secondary disposition row slot — see comment above. */}
           <CardFooter card={card} />
         </div>
         <UndoBanner
@@ -1296,6 +1343,10 @@ export type QueueCardActions = {
   onSnooze: CommonProps["onSnooze"];
   onPermanentDismiss: CommonProps["onPermanentDismiss"];
   onUndo?: CommonProps["onUndo"];
+  // PR 2 — Type B Draft only. When true, the parent's inline-send 10s
+  // timer is running OR the post-timer server send is in flight; the
+  // card dims and disables its buttons in lockstep.
+  isSendingPending?: boolean;
 };
 
 export function QueueCardRenderer({
@@ -1329,6 +1380,7 @@ export function QueueCardRenderer({
           onSnooze={actions.onSnooze}
           onPermanentDismiss={actions.onPermanentDismiss}
           onUndo={actions.onUndo}
+          isSendingPending={actions.isSendingPending}
         />
       );
     case "C":

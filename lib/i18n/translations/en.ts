@@ -749,6 +749,9 @@ type MessagesShape = {
     empty_body: string;
     empty_cta: string;
     toast_sent: string;
+    toast_sending: string;
+    toast_undo: string;
+    toast_send_cancelled: string;
     archetype_a_pill: string;
     archetype_b_pill: string;
     archetype_c_pill: string;
@@ -2661,6 +2664,9 @@ export const en: MessagesShape = {
       "Steadii is watching. New email, deadline, or conflict will land here.",
     empty_cta: "Ask Steadii to do something",
     toast_sent: "Sent.",
+    toast_sending: "Sending…",
+    toast_undo: "Undo",
+    toast_send_cancelled: "Send cancelled",
     archetype_a_pill: "Decide",
     archetype_b_pill: "Draft ready",
     archetype_c_pill: "Notice",

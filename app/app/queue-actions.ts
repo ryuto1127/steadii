@@ -21,6 +21,7 @@ import {
   type AgentConfirmation,
 } from "@/lib/db/schema";
 import {
+  approveAgentDraftAction,
   dismissAgentDraftAction,
   snoozeAgentDraftAction,
 } from "@/lib/agent/email/draft-actions";
@@ -194,6 +195,29 @@ export async function queueSecondaryAction(
       );
     revalidatePath("/app");
   }
+}
+
+// 2026-05-24 (PR 2) — inline Send for Type B draft cards on /app.
+//
+// Fires after the client-side 10s undo window elapses. The card id is
+// `draft:<uuid>`; we extract the underlying agent_drafts row and delegate
+// to the shared approveAgentDraftAction. That helper does its own
+// server-side QStash undo (defense-in-depth on top of the client wait)
+// + the pre-send fact-checker.
+//
+// Pre-send check policy: skipped here. The queue card is the fast lane
+// — when the fact-checker flags a draft the user clicks 確認 to open the
+// detail page where the warning modal is wired. Surfacing a modal from
+// a sonner toast would clash with the card's fire-and-forget feel.
+// Power users who never deviate from the queue still get safety from
+// the client undo + the server undo.
+export async function queueSendDraftAction(rawCardId: string): Promise<void> {
+  const { kind, id } = parseCardId(rawCardId);
+  if (kind !== "draft") {
+    throw new Error("Card is not a draft");
+  }
+  await approveAgentDraftAction(id, { skipPreSendCheck: true });
+  revalidatePath("/app");
 }
 
 // Wave 3.3 — office-hours Type B "Send" handler.
