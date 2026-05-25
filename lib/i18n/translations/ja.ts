@@ -1532,6 +1532,7 @@ export const ja: Messages = {
     open_in_chat_link: "チャットを開く",
     keyboard_hint: "⌘K",
     voice_hint: "Caps Lock を押しっぱなしで話す · ⌘K で入力欄へ",
+    voice_hint_alt: "右 ⌥ を押しっぱなしで話す · ⌘K で入力欄へ",
   },
   home_v2: {
     queue_label: "キュー",

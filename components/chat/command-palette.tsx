@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils/cn";
+import { useVoiceAppOptional } from "@/components/voice/voice-app-provider";
 import { detectTutorScope } from "@/lib/chat/scope-detection";
 import { reportDetectedTimezone } from "@/lib/utils/report-timezone";
 import {
@@ -48,6 +49,13 @@ export function CommandPalette({
   const tTutorOffer = useTranslations("chat.tutor_offer");
   const tNCI = useTranslations("new_chat_input");
   const router = useRouter();
+  // Voice trigger hint must follow the user's per-account trigger
+  // preference + the macOS Caps-Lock auto-fallback. The provider lives
+  // on /app/* — landing/onboarding/dev mounts of CommandPalette render
+  // outside it, so fall back to the generic Caps Lock copy when null.
+  const voiceApp = useVoiceAppOptional();
+  const voiceHintKey =
+    voiceApp?.effectiveKey === "alt_right" ? "voice_hint_alt" : "voice_hint";
   const [value, setValue] = useState("");
   const [focused, setFocused] = useState(false);
   // `dropdownOpen` separates the visual focus state of the input chrome
@@ -383,7 +391,7 @@ export function CommandPalette({
         aria-hidden
         className="mt-2 text-center text-[11px] text-[hsl(var(--muted-foreground))]"
       >
-        {t("voice_hint")}
+        {t(voiceHintKey)}
       </p>
 
       {dropdownOpen && !tutorOffer ? (
