@@ -20,8 +20,8 @@
 -- with explicit user authorization).
 --
 -- Per failure-mode `MIGRATION_JOURNAL_DRIFT`: journal entry registered
--- in meta/_journal.json and --> statement-breakpoint between every
--- statement so neon-http migrator can split them.
+-- in meta/_journal.json and breakpoint markers (see line below)
+-- between every statement so neon-http migrator can split them.
 --
 -- Manual application post-merge per memory feedback_prod_migration_manual.md.
 

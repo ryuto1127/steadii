@@ -15,11 +15,13 @@
 -- Manual application post-merge per memory feedback_prod_migration_manual.md.
 
 ALTER TABLE "auto_created_calendar_events"
-  ADD COLUMN "kind" text NOT NULL DEFAULT 'mutual_agreement';
+  ADD COLUMN IF NOT EXISTS "kind" text NOT NULL DEFAULT 'mutual_agreement';
+--> statement-breakpoint
 
 -- Drop the old (user_id, inbox_item_id) unique index and recreate with
 -- `kind` included. The `IF EXISTS` keeps this re-runnable.
 DROP INDEX IF EXISTS "auto_created_calendar_events_active_unique_idx";
+--> statement-breakpoint
 
 CREATE UNIQUE INDEX IF NOT EXISTS "auto_created_calendar_events_active_unique_idx"
   ON "auto_created_calendar_events"("user_id", "inbox_item_id", "kind")

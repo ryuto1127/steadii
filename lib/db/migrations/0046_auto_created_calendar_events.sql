@@ -18,6 +18,7 @@ CREATE TYPE auto_created_event_status AS ENUM (
   'confirmed',   -- grace expired, [Steadii] prefix dropped, now a normal event
   'cancelled'    -- user cancelled within grace; calendar event deleted
 );
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS "auto_created_calendar_events" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -40,12 +41,14 @@ CREATE TABLE IF NOT EXISTS "auto_created_calendar_events" (
   "grace_expires_at" timestamp with time zone NOT NULL,
   "cancelled_at" timestamp with time zone
 );
+--> statement-breakpoint
 
 -- Idempotency: at most one non-cancelled auto-create per inbox_item.
 -- Cancelled rows are allowed to coexist (audit trail of past attempts).
 CREATE UNIQUE INDEX IF NOT EXISTS "auto_created_calendar_events_active_unique_idx"
   ON "auto_created_calendar_events"("user_id", "inbox_item_id")
   WHERE "status" != 'cancelled';
+--> statement-breakpoint
 
 -- For the Phase 4 grace cron: cheap lookup of provisional rows past their
 -- grace window.
