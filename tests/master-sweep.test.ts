@@ -27,7 +27,7 @@ import {
 const ALL_SUB_SWEEPS: SubSweepName[] = [
   "pre-brief",
   "ingest-sweep",
-  "auto-cal-grace",
+  "auto-cal-proposal-expiry",
   "draft-superseded",
   "disposition-resurface",
   "digest",
@@ -36,7 +36,7 @@ const ALL_SUB_SWEEPS: SubSweepName[] = [
 
 const ALWAYS: SubSweepName[] = ["pre-brief", "ingest-sweep"];
 const THIRTY_MIN: SubSweepName[] = [
-  "auto-cal-grace",
+  "auto-cal-proposal-expiry",
   "draft-superseded",
   "disposition-resurface",
 ];
@@ -48,9 +48,10 @@ function makeSubs(): SubSweeps {
     "ingest-sweep": vi
       .fn()
       .mockResolvedValue({ ok: true, kind: "ingest-sweep" }),
-    "auto-cal-grace": vi
+    "auto-cal-proposal-expiry": vi
       .fn()
-      .mockResolvedValue({ ok: true, kind: "auto-cal-grace" }),
+      .mockResolvedValue({ ok: true, kind: "auto-cal-proposal-expiry" }),
+    // legacy values omitted — the type was narrowed in PR Round-3.
     "draft-superseded": vi
       .fn()
       .mockResolvedValue({ ok: true, kind: "draft-superseded" }),
@@ -102,7 +103,7 @@ describe("dispatchMasterSweep — modulo dispatch", () => {
     expect(r.ran).toEqual(ALWAYS);
     expect(r.skipped).toEqual([...THIRTY_MIN, ...HOURLY]);
     expect(callsCalled(subs)).toEqual(ALWAYS);
-    expect(subs["auto-cal-grace"]).not.toHaveBeenCalled();
+    expect(subs["auto-cal-proposal-expiry"]).not.toHaveBeenCalled();
     expect(subs.digest).not.toHaveBeenCalled();
   });
 
@@ -112,7 +113,7 @@ describe("dispatchMasterSweep — modulo dispatch", () => {
 
     expect(r.ran).toEqual([...ALWAYS, ...THIRTY_MIN]);
     expect(r.skipped).toEqual(HOURLY);
-    expect(subs["auto-cal-grace"]).toHaveBeenCalledTimes(1);
+    expect(subs["auto-cal-proposal-expiry"]).toHaveBeenCalledTimes(1);
     expect(subs.digest).not.toHaveBeenCalled();
     expect(subs["weekly-digest"]).not.toHaveBeenCalled();
   });
@@ -176,7 +177,7 @@ describe("dispatchMasterSweep — failure isolation", () => {
     });
     // Non-failing sub-sweeps at minute=0 still ran.
     expect(r.ran).toContain("pre-brief");
-    expect(r.ran).toContain("auto-cal-grace");
+    expect(r.ran).toContain("auto-cal-proposal-expiry");
     expect(r.ran).toContain("draft-superseded");
     expect(r.ran).toContain("disposition-resurface");
     expect(r.ran).toContain("weekly-digest");
@@ -227,9 +228,9 @@ describe("dispatchMasterSweep — result capture", () => {
       ok: true,
       kind: "ingest-sweep",
     });
-    expect(r.results["auto-cal-grace"]).toEqual({
+    expect(r.results["auto-cal-proposal-expiry"]).toEqual({
       ok: true,
-      kind: "auto-cal-grace",
+      kind: "auto-cal-proposal-expiry",
     });
     expect(r.results["draft-superseded"]).toEqual({
       ok: true,
@@ -257,7 +258,7 @@ describe("dispatchMasterSweep — result capture", () => {
     expect(r.results["ingest-sweep"]).toBeDefined();
     expect(r.results.digest).toBeUndefined();
     expect(r.results["weekly-digest"]).toBeUndefined();
-    expect(r.results["auto-cal-grace"]).toBeUndefined();
+    expect(r.results["auto-cal-proposal-expiry"]).toBeUndefined();
     expect(r.results["draft-superseded"]).toBeUndefined();
     expect(r.results["disposition-resurface"]).toBeUndefined();
   });

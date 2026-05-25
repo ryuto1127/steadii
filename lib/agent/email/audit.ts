@@ -39,7 +39,18 @@ export type EmailAuditAction =
   // slate. Detail payload carries phase + before/after counts +
   // dropped ids + token cost so the audit log can prove the precision
   // lift.
-  | "retrieval_reranked";
+  | "retrieval_reranked"
+  // 2026-05-24 — Round-3 propose-confirm auto-cal lifecycle. One row
+  // per user action on a Type G' card. `auto_cal_proposal_added` =
+  // user clicked Add → calendarCreateEvent ran → status='confirmed'.
+  // `auto_cal_proposal_dismissed` = user clicked 破棄 → status flipped
+  // to 'cancelled' with no calendar API call. `auto_cal_proposal_edited`
+  // = user changed date/time/title via the inline editor (DB-only,
+  // commit still requires a subsequent Add). Detail payload includes
+  // autoCreateId + agreedSlot snapshot for auditability.
+  | "auto_cal_proposal_added"
+  | "auto_cal_proposal_edited"
+  | "auto_cal_proposal_dismissed";
 
 export async function logEmailAudit(params: {
   userId: string;

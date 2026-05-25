@@ -1197,10 +1197,17 @@ function buildConfirmationOptions(): ConfirmationOption[] {
 }
 
 // ── auto_created_calendar_events → Type G ────────────────────────────
-// 2026-05-21 — Phase 3 of α-auto-cal. Provisional events that the
-// proactive ingest auto-created from detected mutual scheduling
-// agreement. Surfaced so the user can Cancel within the 24h grace
-// window before Phase 4 cron promotes them to confirmed.
+// 2026-05-24 — Round-3 propose-confirm. Proposed events that the
+// proactive ingest detected and queued for user confirmation. NO
+// calendar event has been created yet — the user clicks Add on the
+// Type G' card to fire calendarCreateEvent. The 7-day expiry
+// auto-cancels untouched proposals via the auto-cal-proposal-expiry
+// sub-sweep (no calendar action since event_refs is empty).
+//
+// We also include legacy 'provisional' rows for back-compat: rows
+// created by the pre-Round-3 act-first flow that haven't been
+// cleaned up yet. Sparring's manual cleanup migrates these out
+// post-deploy.
 
 async function fetchPendingAutoCalRows(
   userId: string,
@@ -1212,7 +1219,10 @@ async function fetchPendingAutoCalRows(
       .where(
         and(
           eq(autoCreatedCalendarEvents.userId, userId),
-          eq(autoCreatedCalendarEvents.status, "provisional"),
+          inArray(autoCreatedCalendarEvents.status, [
+            "proposed",
+            "provisional",
+          ]),
         ),
       )
       .orderBy(desc(autoCreatedCalendarEvents.createdAt))
@@ -1229,12 +1239,17 @@ function autoCalToTypeG(row: AutoCreatedCalendarEventRow): QueueCardG {
   const slotLabel = isDeadline
     ? formatDeadlineSlot(row.agreedSlot)
     : formatAgreedSlot(row.agreedSlot);
+  // Round-3 voice: the agent has NOT touched the calendar yet. Copy
+  // reflects "Steadii suggests" rather than the previous "Steadii
+  // added". The Type G' UI (PR B) replaces these strings with i18n
+  // keys; the inline strings here keep the home queue readable
+  // between PR A merge and PR B merge.
   const title = isDeadline
-    ? "Steadii がこの締切を入れました"
-    : "Steadii がこの予定を入れました";
+    ? "Steadii がこの締切を提案しています"
+    : "Steadii がこの予定を提案しています";
   const body = isDeadline
-    ? `${slotLabel} の締切をカレンダーに入れました。24時間以内にキャンセルすれば取り消せます。`
-    : `${slotLabel} の予定をカレンダーに入れました。24時間以内にキャンセルすれば取り消せます。`;
+    ? `${slotLabel} の締切をカレンダーに追加しますか?`
+    : `${slotLabel} の予定をカレンダーに追加しますか?`;
   return {
     id: `autocal:${row.id}`,
     archetype: "G",

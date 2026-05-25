@@ -1,16 +1,23 @@
 import "server-only";
 
-// 2026-05-21 — Phase 5 of α-auto-cal. Orchestrates the chain:
+// 2026-05-21 — Phase 5 of α-auto-cal.
+// 2026-05-24 — Round-3 propose-confirm flow. The orchestrator no
+// longer calls calendarCreateEvent: it INSERTs a `status='proposed'`
+// row and lets the Type G' queue card surface
+// [追加 / 編集 / 破棄] actions. The actual calendar API call only
+// fires from the Add action in app/app/queue-actions.ts.
 //
 //   inbound email body + subject
 //     → detectDeadlineMention(...)
-//     → calendar_create_event (all-day, summary: "[Steadii] <topic>")
-//     → INSERT into auto_created_calendar_events (kind='deadline', status='provisional')
+//     → INSERT into auto_created_calendar_events
+//       (kind='deadline', status='proposed', event_refs=[],
+//        grace_expires_at = now + 7d)
 //
-// Shares table + lifecycle + Type G card + grace cron with the
+// Shares table + lifecycle + Type G card + expiry cron with the
 // Phase 2 mutual-agreement evaluator. The only differences are:
 //   - The detector is single-sided (inbound mail only, no thread)
-//   - The calendar event is all-day (date only, no time)
+//   - When the user clicks Add, the calendar event is created as
+//     all-day (date only, no time)
 //   - The agreed_slot.timezone stores the deadline TZ for display
 //     (durationMin is meaningless for all-day events — stored as 0)
 
@@ -21,46 +28,28 @@ import {
   autoCreatedCalendarEvents,
   users,
   type AutoCreatedAgreedSlot,
-  type AutoCreatedEventRef,
 } from "@/lib/db/schema";
-import { calendarCreateEvent } from "@/lib/agent/tools/calendar";
 import { detectDeadlineMention } from "./deadline-detector";
 
 export type AutoDeadlineCreateOptions = {
   threshold?: number;
-  graceWindowMinutes?: number;
+  expiryWindowMinutes?: number;
   dryRun?: boolean;
-  calendarCreate?: CalendarCreateFn;
   nowMs?: number;
 };
-
-// Same shape as Phase 2 — kept identical so a single mocked
-// implementation can serve both evaluator tests.
-export type CalendarCreateFn = (args: {
-  userId: string;
-  summary: string;
-  start: string;
-  end: string;
-  description: string;
-}) => Promise<{
-  eventId: string;
-  htmlLink: string | null;
-  createdIn: Array<"google_calendar" | "microsoft_graph">;
-}>;
 
 export type AutoDeadlineResult =
   | { action: "skipped"; reason: string; confidence: number }
   | {
-      action: "created";
+      action: "proposed";
       autoCreateId: string;
       confidence: number;
-      eventRefs: AutoCreatedEventRef[];
       deadlineDate: string;
-      graceExpiresAt: Date;
+      expiresAt: Date;
     };
 
 const DEFAULT_THRESHOLD = 0.8;
-const DEFAULT_GRACE_MINUTES = 24 * 60;
+const DEFAULT_EXPIRY_MINUTES = 7 * 24 * 60;
 
 export async function evaluateAndAddDeadlineIfDetected(args: {
   userId: string;
@@ -86,9 +75,8 @@ export async function evaluateAndAddDeadlineIfDetected(args: {
   } = args;
 
   const threshold = options.threshold ?? DEFAULT_THRESHOLD;
-  const graceWindowMinutes =
-    options.graceWindowMinutes ?? DEFAULT_GRACE_MINUTES;
-  const calendarCreate = options.calendarCreate ?? defaultCalendarCreate;
+  const expiryWindowMinutes =
+    options.expiryWindowMinutes ?? DEFAULT_EXPIRY_MINUTES;
   const now = new Date(options.nowMs ?? Date.now());
 
   // Opt-in gate — same flag as Phase 2 (mutual-agreement).
@@ -105,9 +93,10 @@ export async function evaluateAndAddDeadlineIfDetected(args: {
     return notCreated("user has opted out of auto-calendar-create", 0);
   }
 
-  // Idempotency — partial unique index on (user_id, inbox_item_id, kind).
-  // Lookup the deadline-kind row specifically; a mutual_agreement row
-  // for the same inbox_item is fine and allowed to coexist.
+  // Idempotency — partial unique index on (user_id, inbox_item_id, kind)
+  // WHERE status != 'cancelled'. Lookup the deadline-kind row
+  // specifically; a mutual_agreement row for the same inbox_item is
+  // fine and allowed to coexist.
   const existing = await db
     .select({ id: autoCreatedCalendarEvents.id })
     .from(autoCreatedCalendarEvents)
@@ -147,37 +136,17 @@ export async function evaluateAndAddDeadlineIfDetected(args: {
 
   const deadline = detection.deadline;
 
-  // All-day event payload — calendar_create_event accepts YYYY-MM-DD
-  // strings for `start` and `end` (treated as all-day by Google).
-  const summary = `[Steadii] ${deadline.topic} (締切)`;
-  const description = buildDescription(detection.reasoning, deadline);
-
   if (options.dryRun) {
     return notCreated(
-      "dry-run mode — would have created with confidence " +
+      "dry-run mode — would have proposed with confidence " +
         detection.confidence.toFixed(2),
       detection.confidence,
     );
   }
 
-  const created = await calendarCreate({
-    userId,
-    summary,
-    start: deadline.date,
-    end: deadline.date,
-    description,
-  });
-
-  const eventRefs: AutoCreatedEventRef[] = created.createdIn.map(
-    (provider) => ({
-      provider,
-      eventId: created.eventId,
-      htmlLink: created.htmlLink,
-    }),
-  );
-
   // Persist via the same table — kind='deadline', timezone preserved
-  // for display, durationMin=0 since it's all-day.
+  // for display, durationMin=0 since it's all-day. NO calendar API
+  // call: the event is only created if/when the user clicks Add.
   const agreedSlot: AutoCreatedAgreedSlot = {
     date: deadline.date,
     startTime: "00:00",
@@ -185,8 +154,8 @@ export async function evaluateAndAddDeadlineIfDetected(args: {
     durationMin: 0,
   };
 
-  const graceExpiresAt = new Date(
-    now.getTime() + graceWindowMinutes * 60 * 1000,
+  const expiresAt = new Date(
+    now.getTime() + expiryWindowMinutes * 60 * 1000,
   );
 
   const [row] = await db
@@ -194,68 +163,24 @@ export async function evaluateAndAddDeadlineIfDetected(args: {
     .values({
       userId,
       inboxItemId,
-      eventRefs,
+      eventRefs: [],
+      status: "proposed",
       agreedSlot,
       kind: "deadline",
       confidence: detection.confidence,
-      graceExpiresAt,
+      graceExpiresAt: expiresAt,
     })
     .returning({ id: autoCreatedCalendarEvents.id });
 
   return {
-    action: "created",
+    action: "proposed",
     autoCreateId: row.id,
     confidence: detection.confidence,
-    eventRefs,
     deadlineDate: deadline.date,
-    graceExpiresAt,
+    expiresAt,
   };
 }
 
 function notCreated(reason: string, confidence: number): AutoDeadlineResult {
   return { action: "skipped", reason, confidence };
-}
-
-function buildDescription(
-  reasoning: string,
-  deadline: { date: string; timezone: string; topic: string },
-): string {
-  return [
-    "Auto-added by Steadii from a deadline detected in your email.",
-    "",
-    `Deadline: ${deadline.date} (${deadline.timezone}).`,
-    `Topic: ${deadline.topic}`,
-    "",
-    "Detector reasoning:",
-    reasoning,
-    "",
-    "If this isn't an actual deadline, cancel within 24 hours from your Steadii queue and the event will be removed. After 24 hours the [Steadii] prefix drops automatically.",
-  ].join("\n");
-}
-
-async function defaultCalendarCreate(args: {
-  userId: string;
-  summary: string;
-  start: string;
-  end: string;
-  description: string;
-}): Promise<{
-  eventId: string;
-  htmlLink: string | null;
-  createdIn: Array<"google_calendar" | "microsoft_graph">;
-}> {
-  const result = await calendarCreateEvent.execute(
-    { userId: args.userId },
-    {
-      summary: args.summary,
-      start: args.start,
-      end: args.end,
-      description: args.description,
-    },
-  );
-  return {
-    eventId: result.eventId,
-    htmlLink: result.htmlLink,
-    createdIn: result.createdIn,
-  };
 }

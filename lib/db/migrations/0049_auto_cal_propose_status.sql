@@ -1,0 +1,39 @@
+-- 2026-05-24 — Round 3 of post-α quality batch. Propose-confirm flow
+-- for auto-cal: the agent now PROPOSES events instead of writing to
+-- the user's Google Calendar before confirmation.
+--
+-- Pre-PR-3 flow (legacy): detector fires → calendarCreateEvent called
+-- with [Steadii] prefix → row inserted as 'provisional' → 24h grace
+-- cron promotes to 'confirmed' (drops prefix). User's calendar gets
+-- touched without explicit per-event consent.
+--
+-- Post-PR-3 flow: detector fires → row inserted as 'proposed' with
+-- empty event_refs and a 7-day expiry → Type G' queue card surfaces
+-- with [Add to calendar / Edit / Dismiss] → only on user click does
+-- calendarCreateEvent fire and status flip to 'confirmed'. Untouched
+-- proposals auto-cancel after 7 days.
+--
+-- Schema impact: extend the existing PG enum
+-- `auto_created_event_status` to include 'proposed'. The legacy
+-- 'provisional' value stays valid (existing rows aren't migrated;
+-- they'll be cleaned up by sparring in a separate prod-write step
+-- with explicit user authorization).
+--
+-- Per failure-mode `MIGRATION_JOURNAL_DRIFT`: journal entry registered
+-- in meta/_journal.json and --> statement-breakpoint between every
+-- statement so neon-http migrator can split them.
+--
+-- Manual application post-merge per memory feedback_prod_migration_manual.md.
+
+-- ALTER TYPE ... ADD VALUE cannot run inside a transaction block in
+-- some Postgres setups. Drizzle migrator wraps each statement in its
+-- own implicit txn so this single ALTER is fine; if a future migration
+-- bundles this with other DDL the transaction-block error can resurface.
+ALTER TYPE "auto_created_event_status" ADD VALUE IF NOT EXISTS 'proposed' BEFORE 'provisional';
+--> statement-breakpoint
+
+-- Refresh the partial index for the new propose path. The legacy index
+-- already covers (user_id, inbox_item_id, kind) WHERE status != 'cancelled'
+-- so 'proposed' rows are picked up by the existing idempotency check
+-- automatically; no DDL needed here. Recorded as a no-op comment so a
+-- future reader doesn't wonder why this migration has only one statement.

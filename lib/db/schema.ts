@@ -3194,7 +3194,20 @@ export type NewTaskIntentMetadataRow = typeof taskIntentMetadata.$inferInsert;
 // 'mutual_agreement' (scheduling close) and 'deadline' (inbound mail
 // mentions a due date) share the same lifecycle + Type G UI + grace
 // cron.
-export type AutoCreatedEventStatus = "provisional" | "confirmed" | "cancelled";
+//
+// 2026-05-24 — Round-3 propose-confirm flow. The detector now writes
+// 'proposed' instead of calling calendarCreateEvent directly. The user
+// flips it to 'confirmed' from the queue (triggering the actual
+// calendar API call) or 'cancelled' (no API call). 'provisional' is
+// kept for back-compat — legacy rows pre-PR keep that status until
+// sparring's manual cleanup migrates them. The grace-promotion cron
+// is disabled in this PR; a new propose-expiry cron flips untouched
+// 'proposed' rows to 'cancelled' after 7 days.
+export type AutoCreatedEventStatus =
+  | "proposed"
+  | "provisional"
+  | "confirmed"
+  | "cancelled";
 
 export type AutoCreatedEventKind = "mutual_agreement" | "deadline";
 
