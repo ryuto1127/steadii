@@ -37,6 +37,12 @@ import * as Sentry from "@sentry/nextjs";
 // inbox_items.proposed_archive_at on rows older than 7 days. Items
 // stay visible in the inbox; no archive happens. A single audit row
 // per user carries the count and ids of cleared rows.
+//
+// 2026-05-24 — Round-5 notify-with-undo. The new
+// `notification-expiry` sub-sweep clears agent_notifications.
+// undoable_until on rows past their reversibility window. Pure DB
+// update; the row stays visible in the activity feed without the undo
+// button.
 
 export type SubSweepName =
   | "pre-brief"
@@ -51,6 +57,9 @@ export type SubSweepName =
   // スキップ'd more than 24 hours ago. Pure DB update, runs on the
   // same 30-min cadence as draft-superseded.
   | "disposition-resurface"
+  // 2026-05-24 — Round-5 notify-with-undo. Clears
+  // agent_notifications.undoable_until on rows past their 24h window.
+  | "notification-expiry"
   | "digest"
   | "weekly-digest";
 
@@ -97,12 +106,14 @@ export async function dispatchMasterSweep(args: {
     await tryRun(summary, "proposed-archive-expiry", subSweeps);
     await tryRun(summary, "draft-superseded", subSweeps);
     await tryRun(summary, "disposition-resurface", subSweeps);
+    await tryRun(summary, "notification-expiry", subSweeps);
   } else {
     summary.skipped.push(
       "auto-cal-proposal-expiry",
       "proposed-archive-expiry",
       "draft-superseded",
       "disposition-resurface",
+      "notification-expiry",
     );
   }
 

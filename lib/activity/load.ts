@@ -1,7 +1,12 @@
 import "server-only";
 import { and, desc, eq, gt, inArray, lt } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { agentDrafts, agentProposals, auditLog } from "@/lib/db/schema";
+import {
+  agentDrafts,
+  agentNotifications,
+  agentProposals,
+  auditLog,
+} from "@/lib/db/schema";
 
 // Unified activity loader. Single source of truth for the Home footer
 // (`recent-activity.tsx`) and the full /app/activity page. Pulls from the
@@ -38,6 +43,11 @@ export type ActivityKind =
   // detector is now written by the queue-actions confirm path).
   | "auto_archive_proposed"
   | "auto_archive_dismissed_batch"
+  // Round 5 (2026-05-24) — notify-with-undo for the Gmail-direct-reply
+  // auto-resolve. Surfaced from agent_notifications (not audit_log).
+  // The inline [元に戻す] button is rendered when `undoableNotificationId`
+  // is set on the row AND the window is still open.
+  | "auto_resolved_draft"
   | "generic";
 
 export type ActivityRow = {
@@ -48,6 +58,11 @@ export type ActivityRow = {
   // Optional secondary line (sender, class, etc).
   secondary?: string;
   detailHref?: string;
+  // Round 5 — when set, the row renders an inline [元に戻す] button
+  // wired to undoAutoResolveDraftAction({ notificationId }). Only
+  // populated on `kind='auto_resolved_draft'` rows whose
+  // `undoable_until > now` at load time.
+  undoableNotificationId?: string;
 };
 
 export type ActivityCursor = {
@@ -165,6 +180,50 @@ export async function loadActivityRows(
       secondary: recipient,
       detailHref: `/app/inbox/${d.id}`,
     });
+  }
+
+  // Round 5 — Notifications surface. agent_notifications carries
+  // notify-with-undo records (currently only `auto_resolved_draft`).
+  // We surface the row in the activity timeline and attach the
+  // notification id when `undoable_until > now` so the renderer can
+  // show the inline undo button.
+  try {
+    const now = new Date();
+    const notifConds = [
+      eq(agentNotifications.userId, args.userId),
+      eq(agentNotifications.kind, "auto_resolved_draft"),
+    ];
+    if (args.since) notifConds.push(gt(agentNotifications.createdAt, args.since));
+    if (args.until) notifConds.push(lt(agentNotifications.createdAt, args.until));
+    if (cursorTime) notifConds.push(lt(agentNotifications.createdAt, cursorTime));
+    const notifs = await db
+      .select({
+        id: agentNotifications.id,
+        kind: agentNotifications.kind,
+        subjectId: agentNotifications.subjectId,
+        summary: agentNotifications.summary,
+        createdAt: agentNotifications.createdAt,
+        undoableUntil: agentNotifications.undoableUntil,
+      })
+      .from(agentNotifications)
+      .where(and(...notifConds))
+      .orderBy(desc(agentNotifications.createdAt))
+      .limit(fetchLimit);
+    for (const n of notifs) {
+      const isUndoable =
+        n.undoableUntil !== null && n.undoableUntil.getTime() > now.getTime();
+      rows.push({
+        id: `notif:${n.id}`,
+        occurredAt: n.createdAt,
+        kind: "auto_resolved_draft",
+        primary: n.summary,
+        detailHref: `/app/inbox/${n.subjectId}`,
+        undoableNotificationId: isUndoable ? n.id : undefined,
+      });
+    }
+  } catch {
+    // agent_notifications table missing (pre-migration env) — degrade
+    // silently rather than break the page load.
   }
 
   // Audit log — calendar imports, archives, mistake-note saves.
@@ -323,9 +382,12 @@ export async function loadActivityStats(args: {
       case "auto_cal_edited":
       case "auto_archive_proposed":
       case "auto_archive_dismissed_batch":
-        // Tracked in the audit log but not surfaced as a stats bucket
-        // today. Counted only in `total`. (Proposed-without-confirm
-        // would skew the "archived this week" metric if counted here.)
+      case "auto_resolved_draft":
+        // Tracked in the audit log / notifications surface but not
+        // surfaced as a stats bucket today. Counted only in `total`.
+        // (Proposed-without-confirm would skew the "archived this
+        // week" metric if counted here. Auto-resolve is queue cleanup,
+        // not a time-saved primitive.)
         break;
       case "generic":
         break;

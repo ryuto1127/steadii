@@ -28,8 +28,10 @@ const ALL_SUB_SWEEPS: SubSweepName[] = [
   "pre-brief",
   "ingest-sweep",
   "auto-cal-proposal-expiry",
+  "proposed-archive-expiry",
   "draft-superseded",
   "disposition-resurface",
+  "notification-expiry",
   "digest",
   "weekly-digest",
 ];
@@ -40,6 +42,8 @@ const THIRTY_MIN: SubSweepName[] = [
   "proposed-archive-expiry",
   "draft-superseded",
   "disposition-resurface",
+  // 2026-05-24 — Round-5 notify-with-undo bookkeeping.
+  "notification-expiry",
 ];
 const HOURLY: SubSweepName[] = ["digest", "weekly-digest"];
 
@@ -63,6 +67,11 @@ function makeSubs(): SubSweeps {
     "disposition-resurface": vi
       .fn()
       .mockResolvedValue({ ok: true, kind: "disposition-resurface" }),
+    // 2026-05-24 — Round-5 notify-with-undo. Clears
+    // agent_notifications.undoable_until on rows past their 24h window.
+    "notification-expiry": vi
+      .fn()
+      .mockResolvedValue({ ok: true, kind: "notification-expiry" }),
     digest: vi.fn().mockResolvedValue({ ok: true, kind: "digest" }),
     "weekly-digest": vi
       .fn()
@@ -185,6 +194,7 @@ describe("dispatchMasterSweep — failure isolation", () => {
     expect(r.ran).toContain("auto-cal-proposal-expiry");
     expect(r.ran).toContain("draft-superseded");
     expect(r.ran).toContain("disposition-resurface");
+    expect(r.ran).toContain("notification-expiry");
     expect(r.ran).toContain("weekly-digest");
   });
 
@@ -245,6 +255,10 @@ describe("dispatchMasterSweep — result capture", () => {
       ok: true,
       kind: "disposition-resurface",
     });
+    expect(r.results["notification-expiry"]).toEqual({
+      ok: true,
+      kind: "notification-expiry",
+    });
     expect(r.results.digest).toEqual({ ok: true, kind: "digest" });
     expect(r.results["weekly-digest"]).toEqual({
       ok: true,
@@ -266,5 +280,6 @@ describe("dispatchMasterSweep — result capture", () => {
     expect(r.results["auto-cal-proposal-expiry"]).toBeUndefined();
     expect(r.results["draft-superseded"]).toBeUndefined();
     expect(r.results["disposition-resurface"]).toBeUndefined();
+    expect(r.results["notification-expiry"]).toBeUndefined();
   });
 });

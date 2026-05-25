@@ -1560,6 +1560,7 @@ export const ja: Messages = {
       auto_cal_edited: "提案を編集",
       auto_archive_proposed: "アーカイブを提案",
       auto_archive_dismissed_batch: "受信箱に残す",
+      auto_resolved_draft: "自動解決",
       generic: "アクション",
     },
     more_this_week: "+ {n} 件 今週中",
@@ -1591,6 +1592,14 @@ export const ja: Messages = {
     empty_description_no_gmail:
       "Steadii はまだ何もしていません — Gmail を接続して始めましょう。",
     empty_cta_connect: "設定を開く",
+    undo_label: "元に戻す",
+    undo_aria: "自動解決を元に戻す",
+    undo_done: "戻しました",
+    undo_failed: "戻せませんでした",
+    toast_auto_resolved_one: "下書きを 1 件 自動で解決しました",
+    toast_auto_resolved_many: "下書きを {n} 件 自動で解決しました",
+    toast_review: "確認",
+    toast_dismiss: "閉じる",
   },
   onboarding_wait: {
     title: "Steadii が動いています。",

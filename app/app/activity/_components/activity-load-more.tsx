@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { loadActivityPage, type SerializedRow } from "../actions";
 import type { ActivityCursor, ActivityKind } from "@/lib/activity/load";
+import { UndoAutoResolveButton } from "./undo-auto-resolve-button";
 
 const KIND_ICON: Record<
   ActivityKind,
@@ -33,6 +34,9 @@ const KIND_ICON: Record<
   // Round 4 propose-confirm auto-archive lifecycle.
   auto_archive_proposed: Archive,
   auto_archive_dismissed_batch: X,
+  // Round 5 notify-with-undo. Mail icon (same as draft_sent) — verb
+  // label differentiates; undo button anchors the reversibility.
+  auto_resolved_draft: Mail,
   generic: Activity,
 };
 
@@ -103,21 +107,27 @@ export function ActivityLoadMore({
                 </time>
               </>
             );
+            const linkInner = row.detailHref ? (
+              <Link
+                href={row.detailHref}
+                className="flex min-w-0 flex-1 items-center gap-3 transition-hover hover:opacity-90"
+              >
+                {inner}
+              </Link>
+            ) : (
+              <div className="flex min-w-0 flex-1 items-center gap-3">{inner}</div>
+            );
             return (
               <li
                 key={row.id}
                 className="flex items-center gap-3 border-b border-[hsl(var(--border)/0.4)] px-3 py-2 last:border-b-0"
               >
-                {row.detailHref ? (
-                  <Link
-                    href={row.detailHref}
-                    className="flex w-full items-center gap-3 transition-hover hover:opacity-90"
-                  >
-                    {inner}
-                  </Link>
-                ) : (
-                  <div className="flex w-full items-center gap-3">{inner}</div>
-                )}
+                {linkInner}
+                {row.undoableNotificationId ? (
+                  <UndoAutoResolveButton
+                    notificationId={row.undoableNotificationId}
+                  />
+                ) : null}
               </li>
             );
           })}

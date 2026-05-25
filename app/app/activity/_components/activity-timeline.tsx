@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import type { ActivityKind, ActivityRow } from "@/lib/activity/load";
+import { UndoAutoResolveButton } from "./undo-auto-resolve-button";
 
 const KIND_ICON: Record<
   ActivityKind,
@@ -30,6 +31,11 @@ const KIND_ICON: Record<
   // "you said no". The verb label differentiates them.
   auto_archive_proposed: Archive,
   auto_archive_dismissed_batch: X,
+  // Round 5 notify-with-undo for the Gmail-direct-reply auto-resolve.
+  // Mail icon because the artifact is still an email draft — the verb
+  // label ("auto-resolved" / 自動解決) communicates the cleanup
+  // semantics, and the inline undo button anchors the reversibility.
+  auto_resolved_draft: Mail,
   generic: Activity,
 };
 
@@ -110,21 +116,32 @@ function TimelineGroupView({
               </time>
             </>
           );
+          // Row chrome: when the row is auto-resolve and still
+          // undoable, we render the link + an inline undo button
+          // outside the link so the click isn't consumed by the Link
+          // wrapper. The undo button is a client component; the rest
+          // stays server-rendered.
+          const linkInner = row.detailHref ? (
+            <Link
+              href={row.detailHref}
+              className="flex min-w-0 flex-1 items-center gap-3 transition-hover hover:opacity-90"
+            >
+              {inner}
+            </Link>
+          ) : (
+            <div className="flex min-w-0 flex-1 items-center gap-3">{inner}</div>
+          );
           return (
             <li
               key={row.id}
               className="flex items-center gap-3 border-b border-[hsl(var(--border)/0.4)] px-3 py-2 last:border-b-0"
             >
-              {row.detailHref ? (
-                <Link
-                  href={row.detailHref}
-                  className="flex w-full items-center gap-3 transition-hover hover:opacity-90"
-                >
-                  {inner}
-                </Link>
-              ) : (
-                <div className="flex w-full items-center gap-3">{inner}</div>
-              )}
+              {linkInner}
+              {row.undoableNotificationId ? (
+                <UndoAutoResolveButton
+                  notificationId={row.undoableNotificationId}
+                />
+              ) : null}
             </li>
           );
         })}

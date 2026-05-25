@@ -926,6 +926,14 @@ type MessagesShape = {
     empty_description_connected: string;
     empty_description_no_gmail: string;
     empty_cta_connect: string;
+    undo_label: string;
+    undo_aria: string;
+    undo_done: string;
+    undo_failed: string;
+    toast_auto_resolved_one: string;
+    toast_auto_resolved_many: string;
+    toast_review: string;
+    toast_dismiss: string;
   };
   onboarding_wait: {
     title: string;
@@ -2882,6 +2890,7 @@ export const en: MessagesShape = {
       auto_cal_edited: "Edited proposal",
       auto_archive_proposed: "Suggested archive",
       auto_archive_dismissed_batch: "Kept in inbox",
+      auto_resolved_draft: "Auto-resolved",
       generic: "Action",
     },
     more_this_week: "+ {n} more this week",
@@ -2913,6 +2922,14 @@ export const en: MessagesShape = {
     empty_description_no_gmail:
       "Steadii hasn't done anything yet — connect Gmail to get started.",
     empty_cta_connect: "Open Settings",
+    undo_label: "Undo",
+    undo_aria: "Undo auto-resolve",
+    undo_done: "Reverted",
+    undo_failed: "Couldn't undo",
+    toast_auto_resolved_one: "Auto-resolved 1 draft",
+    toast_auto_resolved_many: "Auto-resolved {n} drafts",
+    toast_review: "Review",
+    toast_dismiss: "Dismiss",
   },
   onboarding_wait: {
     title: "Steadii is on it.",
