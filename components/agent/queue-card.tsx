@@ -36,6 +36,12 @@ import type {
   QueueSourceChip,
 } from "@/lib/agent/queue/types";
 import {
+  cardGBuildEditPatch,
+  cardGDaysUntilExpiry,
+  cardGProposalHeaderKey,
+  cardGShouldShowExpiry,
+  cardGShouldShowTimePickers,
+  cardGValidateEdit,
   confidenceBorderClass,
   isExternalOriginHref,
 } from "@/lib/agent/queue/visual";
@@ -141,18 +147,36 @@ type CardFProps = CommonProps & {
   onCorrect: (correctedValue: string) => Promise<ActionResult> | ActionResult;
 };
 
-// 2026-05-21 — Type G (auto-cal cancel). Two actions:
-//   cancelAutoCal  → delete the auto-created calendar event(s) and
-//                    flip status to 'cancelled'. 1-tap (no modal) per
-//                    spec; the action is recoverable in that the user
-//                    can manually re-add the event from email
-//   confirmAutoCal → user explicitly approves; flip status to 'confirmed'
-//                    immediately, drop the [Steadii] prefix from the
-//                    calendar event title (skip the 24h grace wait)
+// 2026-05-24 — Type G' (auto-cal propose-confirm). Three actions:
+//   onAddToCalendar  → user clicks カレンダーに追加 on a `proposed` row.
+//                      The server action fires calendarCreateEvent NOW
+//                      with the agreed slot and flips status to
+//                      'confirmed'. The calendar is only touched here.
+//   onEditProposal   → user opens the inline editor, mutates date /
+//                      startTime / durationMin / title, and saves. The
+//                      server action merges into agreedSlot only — NO
+//                      calendar API call. The user still has to click
+//                      Add to actually commit. The editor wires this
+//                      followed by onAddToCalendar on `[更新して追加]`.
+//   onDismissProposal→ user clicks 破棄. Status flips to 'cancelled'
+//                      with no calendar API call (event_refs is empty
+//                      for proposals). No confirm modal per spec —
+//                      recoverable in the sense that the row stays in
+//                      DB as 'cancelled' and the user can manually
+//                      re-add from the original email.
+type CardGEditPatch = {
+  date?: string;
+  startTime?: string;
+  durationMin?: number;
+  title?: string;
+};
 type CardGProps = CommonProps & {
   card: QueueCardG;
-  onCancelAutoCal: () => Promise<ActionResult> | ActionResult;
-  onConfirmAutoCal: () => Promise<ActionResult> | ActionResult;
+  onAddToCalendar: () => Promise<ActionResult> | ActionResult;
+  onEditProposal: (
+    updates: CardGEditPatch,
+  ) => Promise<ActionResult> | ActionResult;
+  onDismissProposal: () => Promise<ActionResult> | ActionResult;
 };
 
 // Source chip — one per origin record the agent referenced. Visual
@@ -1414,8 +1438,9 @@ export type QueueCardActions = {
   onTalkInChat?: CardEProps["onTalkInChat"];
   onConfirm?: CardFProps["onConfirm"];
   onCorrect?: CardFProps["onCorrect"];
-  onCancelAutoCal?: CardGProps["onCancelAutoCal"];
-  onConfirmAutoCal?: CardGProps["onConfirmAutoCal"];
+  onAddToCalendar?: CardGProps["onAddToCalendar"];
+  onEditProposal?: CardGProps["onEditProposal"];
+  onDismissProposal?: CardGProps["onDismissProposal"];
   onDismiss: CommonProps["onDismiss"];
   onSnooze: CommonProps["onSnooze"];
   onPermanentDismiss: CommonProps["onPermanentDismiss"];
@@ -1507,8 +1532,9 @@ export function QueueCardRenderer({
       return (
         <QueueCardGRender
           card={card}
-          onCancelAutoCal={actions.onCancelAutoCal ?? noopAsync}
-          onConfirmAutoCal={actions.onConfirmAutoCal ?? noopAsync}
+          onAddToCalendar={actions.onAddToCalendar ?? noopAsync}
+          onEditProposal={actions.onEditProposal ?? noopAsyncEdit}
+          onDismissProposal={actions.onDismissProposal ?? noopAsync}
           onDismiss={actions.onDismiss}
           onSnooze={actions.onSnooze}
           onPermanentDismiss={actions.onPermanentDismiss}
@@ -1517,51 +1543,66 @@ export function QueueCardRenderer({
   }
 }
 
-// ── Type G (auto-cal cancel) ─────────────────────────────────────────
-// 2026-05-21 — Phase 3 of α-auto-cal. Surfaces a provisional event
-// that Steadii auto-created from a detected mutual scheduling
-// agreement. 1-tap Cancel (no modal) + 1-tap これ正しい (early
-// promote, skip 24h grace).
+// ── Type G' (auto-cal propose-confirm) ───────────────────────────────
+// 2026-05-24 — PR B of Round 3. The card now mirrors the propose-confirm
+// flow: nothing has touched the user's calendar yet. Three actions:
+//   [カレンダーに追加] (primary, filled)
+//   [編集]            (ghost — opens inline editor)
+//   [破棄]            (ghost, destructive tone — no modal)
+//
+// The inline editor (NOT a modal) lets the user mutate date / start
+// time / duration / title. For deadline-kind proposals the time
+// pickers are hidden — those are all-day. Validation rules live in
+// `cardGValidateEdit` and surface inline; past-date is a warning,
+// not a block.
 
 export function QueueCardGRender({
   card,
-  onCancelAutoCal,
-  onConfirmAutoCal,
+  onAddToCalendar,
+  onEditProposal,
+  onDismissProposal,
   onSnooze,
   onPermanentDismiss,
 }: CardGProps) {
+  const t = useTranslations("queue.card_g");
   const locale = useLocaleHint();
   const [pending, startTransition] = useTransition();
   const [resolved, setResolved] = useState(false);
-  const [graceRemaining, setGraceRemaining] = useState(() =>
-    formatGraceRemaining(card.graceExpiresAt, locale),
-  );
+  const [editing, setEditing] = useState(false);
   const { bindings, menu } = useQuickMenu({ onSnooze, onPermanentDismiss });
 
-  // Live-tick the grace label so a user sitting on Home sees the
-  // countdown decay in near-real time. Update every minute — finer
-  // granularity wastes renders without changing visible text.
+  const showTimePickers = cardGShouldShowTimePickers(card.kind);
+  const proposalHeaderKey = cardGProposalHeaderKey(card.kind);
+
+  // "Expires in N days" countdown re-evaluated each minute. We render
+  // it iff the proposal is close to auto-dismiss (per
+  // `cardGShouldShowExpiry`); the heading prose carries the main
+  // proposal copy regardless.
+  const [daysUntilExpiry, setDaysUntilExpiry] = useState(() =>
+    cardGDaysUntilExpiry(card.graceExpiresAt),
+  );
   useEffect(() => {
-    const tick = () => setGraceRemaining(
-      formatGraceRemaining(card.graceExpiresAt, locale),
-    );
+    const tick = () => setDaysUntilExpiry(cardGDaysUntilExpiry(card.graceExpiresAt));
     tick();
     const interval = setInterval(tick, 60_000);
     return () => clearInterval(interval);
-  }, [card.graceExpiresAt, locale]);
+  }, [card.graceExpiresAt]);
+  const showExpiry = cardGShouldShowExpiry(daysUntilExpiry);
 
-  const cancel = () => {
+  const add = () => {
     if (pending || resolved) return;
     startTransition(async () => {
-      await onCancelAutoCal();
+      await onAddToCalendar();
       setResolved(true);
     });
   };
 
-  const confirm = () => {
+  const dismiss = () => {
     if (pending || resolved) return;
+    // Per spec: no confirm modal. The cancelled row stays in DB so
+    // the user can manually re-add from the original email.
     startTransition(async () => {
-      await onConfirmAutoCal();
+      await onDismissProposal();
       setResolved(true);
     });
   };
@@ -1588,7 +1629,7 @@ export function QueueCardGRender({
                 <Sparkles size={14} strokeWidth={2} />
               </span>
               <h3 className="text-[15px] font-semibold leading-snug text-[hsl(var(--foreground))]">
-                {card.title}
+                {t(proposalHeaderKey)}
               </h3>
             </div>
             <span
@@ -1603,33 +1644,72 @@ export function QueueCardGRender({
             <span className="font-medium text-[hsl(var(--foreground))]">
               {card.slotLabel}
             </span>
-            <span aria-hidden>·</span>
-            <Clock size={12} strokeWidth={2} />
-            <span>{graceRemaining}</span>
+            {showExpiry ? (
+              <>
+                <span aria-hidden>·</span>
+                <Clock size={12} strokeWidth={2} />
+                <span>{t("expires_in_days", { days: daysUntilExpiry ?? 0 })}</span>
+              </>
+            ) : null}
           </div>
           {card.body ? (
             <p className="mt-2 text-[12px] leading-snug text-[hsl(var(--muted-foreground))]">
               {card.body}
             </p>
           ) : null}
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={cancel}
-              disabled={pending || resolved}
-              className="inline-flex h-8 items-center rounded-full border border-[hsl(var(--border))] bg-transparent px-3 text-[12px] font-medium text-[hsl(var(--foreground))] transition-default hover:border-[hsl(var(--destructive)/0.6)] hover:text-[hsl(var(--destructive))] disabled:opacity-50"
-            >
-              {locale === "ja" ? "キャンセル" : "Cancel"}
-            </button>
-            <button
-              type="button"
-              onClick={confirm}
-              disabled={pending || resolved}
-              className="inline-flex h-8 items-center rounded-full bg-[hsl(var(--foreground))] px-3 text-[12px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90 disabled:opacity-50"
-            >
-              {locale === "ja" ? "これで正しい" : "Looks right"}
-            </button>
-          </div>
+          {editing ? (
+            <CardGEditor
+              card={card}
+              showTimePickers={showTimePickers}
+              pending={pending}
+              onCancel={() => setEditing(false)}
+              onCommit={(updates) => {
+                if (pending || resolved) return;
+                startTransition(async () => {
+                  await onEditProposal(updates);
+                  // Chain straight into Add per spec — the editor's
+                  // primary CTA is [更新して追加]. The server has merged
+                  // the slot now, so the calendarCreateEvent in
+                  // onAddToCalendar uses the freshly persisted shape.
+                  await onAddToCalendar();
+                  setResolved(true);
+                  setEditing(false);
+                });
+              }}
+            />
+          ) : (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={add}
+                disabled={pending || resolved}
+                data-testid="queue-card-g-add"
+                className="inline-flex h-9 items-center gap-1 rounded-full bg-[hsl(var(--primary))] px-4 text-[13px] font-medium text-[hsl(var(--primary-foreground))] transition-default hover:opacity-90 disabled:opacity-50"
+              >
+                <CalendarIcon size={12} strokeWidth={2} />
+                <span>{t("add_to_calendar")}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                disabled={pending || resolved}
+                data-testid="queue-card-g-edit"
+                className="inline-flex h-9 items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-[13px] font-medium text-[hsl(var(--foreground))] transition-default hover:bg-[hsl(var(--surface-raised))] disabled:opacity-50"
+              >
+                {t("edit")}
+              </button>
+              <button
+                type="button"
+                onClick={dismiss}
+                disabled={pending || resolved}
+                data-testid="queue-card-g-dismiss"
+                className="inline-flex h-9 items-center rounded-full px-3 text-[13px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--destructive))] disabled:opacity-50"
+              >
+                {t("dismiss")}
+              </button>
+            </div>
+          )}
+          <CardFooter card={card} />
         </div>
       </CardShell>
       {menu}
@@ -1637,21 +1717,182 @@ export function QueueCardGRender({
   );
 }
 
-function formatGraceRemaining(graceExpiresIso: string, locale: "en" | "ja"): string {
-  const expiresMs = Date.parse(graceExpiresIso);
-  const nowMs = Date.now();
-  const diffMs = expiresMs - nowMs;
-  if (diffMs <= 0) {
-    return locale === "ja" ? "まもなく確定" : "promoting soon";
-  }
-  const hours = Math.floor(diffMs / (60 * 60 * 1000));
-  const minutes = Math.floor((diffMs % (60 * 60 * 1000)) / (60 * 1000));
-  if (locale === "ja") {
-    if (hours > 0) return `${hours}時間後に確定`;
-    return `${minutes}分後に確定`;
-  }
-  if (hours > 0) return `confirms in ${hours}h`;
-  return `confirms in ${minutes}m`;
+// Inline editor. Pre-fills from the slot label the server already
+// computed for the card (we don't re-parse — the slot's raw fields
+// are passed through via the card's other props). For deadline-kind
+// proposals we render only date + title.
+function CardGEditor({
+  card,
+  showTimePickers,
+  pending,
+  onCancel,
+  onCommit,
+}: {
+  card: QueueCardG;
+  showTimePickers: boolean;
+  pending: boolean;
+  onCancel: () => void;
+  onCommit: (updates: CardGEditPatch) => void;
+}) {
+  const t = useTranslations("queue.card_g");
+  // The card's slotLabel is locale-pretty (e.g. "5/30 (金) 14:00 JST")
+  // — not parseable back into ISO. The DB-side shape is what the
+  // editor needs to mutate; we pull initial fields from the card's
+  // structured fields rather than rendering an empty form.
+  //
+  // For deadline-kind proposals the durationMin is 0; the editor never
+  // shows a start time. For mutual_agreement the start time is
+  // required (the proposal-detector won't propose a timed event
+  // without one).
+  const initialSlot = parseCardSlotForEditor(card);
+  const [date, setDate] = useState(initialSlot.date);
+  const [startTime, setStartTime] = useState(initialSlot.startTime ?? "");
+  const [durationMin, setDurationMin] = useState<number>(
+    initialSlot.durationMin ?? 30,
+  );
+  const [title, setTitle] = useState(initialSlot.title ?? "");
+
+  const validation = cardGValidateEdit({
+    kind: card.kind,
+    date,
+    startTime: showTimePickers ? startTime || undefined : undefined,
+    durationMin: showTimePickers ? durationMin : 0,
+  });
+  const hasError = !validation.ok;
+  const warningKey =
+    validation.ok && "warning" in validation
+      ? (validation as { warning: "validation_past_date_warning" }).warning
+      : null;
+
+  const submit = () => {
+    if (hasError || pending) return;
+    const patch = cardGBuildEditPatch({
+      kind: card.kind,
+      initial: {
+        date: initialSlot.date,
+        startTime: initialSlot.startTime,
+        durationMin: initialSlot.durationMin,
+        title: initialSlot.title,
+      },
+      next: {
+        date,
+        startTime,
+        durationMin,
+        title,
+      },
+    });
+    onCommit(patch);
+  };
+
+  return (
+    <div className="mt-3 flex flex-col gap-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3">
+      <label className="flex flex-col gap-1 text-[12px] text-[hsl(var(--muted-foreground))]">
+        <span>{t("editor_title_label")}</span>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          disabled={pending}
+          maxLength={200}
+          data-testid="queue-card-g-editor-title"
+          className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-2 py-1.5 text-[13px] text-[hsl(var(--foreground))] focus:border-[hsl(var(--primary))] focus:outline-none"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-[12px] text-[hsl(var(--muted-foreground))]">
+        <span>{t("editor_date_label")}</span>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          disabled={pending}
+          data-testid="queue-card-g-editor-date"
+          className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-2 py-1.5 text-[13px] text-[hsl(var(--foreground))] focus:border-[hsl(var(--primary))] focus:outline-none"
+        />
+      </label>
+      {showTimePickers ? (
+        <div className="flex gap-2">
+          <label className="flex flex-1 flex-col gap-1 text-[12px] text-[hsl(var(--muted-foreground))]">
+            <span>{t("editor_start_time_label")}</span>
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              disabled={pending}
+              data-testid="queue-card-g-editor-start"
+              className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-2 py-1.5 text-[13px] text-[hsl(var(--foreground))] focus:border-[hsl(var(--primary))] focus:outline-none"
+            />
+          </label>
+          <label className="flex flex-1 flex-col gap-1 text-[12px] text-[hsl(var(--muted-foreground))]">
+            <span>{t("editor_duration_label")}</span>
+            <input
+              type="number"
+              min={0}
+              max={24 * 60}
+              step={15}
+              value={durationMin}
+              onChange={(e) => {
+                const next = parseInt(e.target.value, 10);
+                setDurationMin(Number.isFinite(next) ? next : 0);
+              }}
+              disabled={pending}
+              data-testid="queue-card-g-editor-duration"
+              className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-2 py-1.5 text-[13px] text-[hsl(var(--foreground))] focus:border-[hsl(var(--primary))] focus:outline-none"
+            />
+          </label>
+        </div>
+      ) : null}
+      {hasError ? (
+        <p
+          role="alert"
+          className="text-[12px] text-[hsl(var(--destructive))]"
+        >
+          {t(validation.error)}
+        </p>
+      ) : warningKey ? (
+        <p className="text-[12px] italic text-[hsl(var(--muted-foreground))]">
+          {t(warningKey)}
+        </p>
+      ) : null}
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={submit}
+          disabled={hasError || pending}
+          data-testid="queue-card-g-editor-commit"
+          className="inline-flex h-8 items-center rounded-full bg-[hsl(var(--primary))] px-3 text-[12px] font-medium text-[hsl(var(--primary-foreground))] transition-default hover:opacity-90 disabled:opacity-50"
+        >
+          {t("update_and_add")}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={pending}
+          data-testid="queue-card-g-editor-cancel"
+          className="inline-flex h-8 items-center rounded-full px-3 text-[12px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+        >
+          {t("cancel_edit")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Pull the raw editable fields out of the card. The builder injects
+// `editorSlot` with the structured fields the editor mutates; this
+// helper just unwraps + maps to the editor's local-state shape.
+function parseCardSlotForEditor(card: QueueCardG): {
+  date: string;
+  startTime: string | null;
+  durationMin: number;
+  title: string;
+} {
+  const slot = card.editorSlot;
+  return {
+    date: slot.date,
+    startTime: card.kind === "deadline" ? null : slot.startTime,
+    durationMin: card.kind === "deadline" ? 0 : slot.durationMin,
+    title: slot.title ?? "",
+  };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -1667,6 +1908,7 @@ const noop = () => {};
 const noopAsync = async () => {};
 const noopSubmit = async (_picked: string | null, _free: string) => {};
 const noopAsyncCorrect = async (_value: string) => {};
+const noopAsyncEdit = async (_updates: CardGEditPatch) => {};
 
 // next-intl's `useTranslations` doesn't expose the active locale; we
 // derive it from `<html lang="…">` so the relative-time rendering and

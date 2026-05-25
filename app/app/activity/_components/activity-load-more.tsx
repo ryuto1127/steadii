@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Activity, Archive, CheckCircle2, Mail, X } from "lucide-react";
+import {
+  Activity,
+  Archive,
+  Calendar,
+  CheckCircle2,
+  Mail,
+  Pencil,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { loadActivityPage, type SerializedRow } from "../actions";
@@ -19,6 +27,9 @@ const KIND_ICON: Record<
   proposal_dismissed: X,
   calendar_imported: Activity,
   mistake_added: Activity,
+  auto_cal_added: Calendar,
+  auto_cal_dismissed: X,
+  auto_cal_edited: Pencil,
   generic: Activity,
 };
 

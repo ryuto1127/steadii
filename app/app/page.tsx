@@ -9,9 +9,10 @@ import { buildQueueForUser } from "@/lib/agent/queue/build";
 import { getUserTimezone } from "@/lib/agent/preferences";
 import { FALLBACK_TZ } from "@/lib/calendar/tz-utils";
 import {
-  queueCancelAutoCalAction,
+  autoCalProposalAddAction,
+  autoCalProposalDismissAction,
+  autoCalProposalEditAction,
   queueConfirmAction,
-  queueConfirmAutoCalAction,
   queueCorrectAction,
   queueDismissAction,
   queuePermanentDismissAction,
@@ -105,8 +106,13 @@ export default async function HomePage() {
               setDisposition: queueSetDispositionAction,
               confirm: queueConfirmAction,
               correct: queueCorrectAction,
-              cancelAutoCal: queueCancelAutoCalAction,
-              confirmAutoCal: queueConfirmAutoCalAction,
+              addToCalendar: async (cardId) => {
+                await autoCalProposalAddAction(cardId);
+              },
+              editProposal: async (cardId, updates) => {
+                await autoCalProposalEditAction(cardId, updates);
+              },
+              dismissProposal: autoCalProposalDismissAction,
             }}
           />
         ) : (

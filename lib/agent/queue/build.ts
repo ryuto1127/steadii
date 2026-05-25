@@ -1239,17 +1239,26 @@ function autoCalToTypeG(row: AutoCreatedCalendarEventRow): QueueCardG {
   const slotLabel = isDeadline
     ? formatDeadlineSlot(row.agreedSlot)
     : formatAgreedSlot(row.agreedSlot);
-  // Round-3 voice: the agent has NOT touched the calendar yet. Copy
-  // reflects "Steadii suggests" rather than the previous "Steadii
-  // added". The Type G' UI (PR B) replaces these strings with i18n
-  // keys; the inline strings here keep the home queue readable
-  // between PR A merge and PR B merge.
+  // 2026-05-24 (PR B) — title is rendered client-side from the
+  // queue.card_g.proposal_header_* i18n keys via cardGProposalHeaderKey.
+  // The legacy `title` field on the card is retained for older renderers
+  // (FYI feed, etc.) — we still set a plausible default so any caller
+  // that reads card.title doesn't crash. The Type G renderer ignores
+  // it and uses the i18n key directly.
   const title = isDeadline
-    ? "Steadii がこの締切を提案しています"
-    : "Steadii がこの予定を提案しています";
-  const body = isDeadline
-    ? `${slotLabel} の締切をカレンダーに追加しますか?`
-    : `${slotLabel} の予定をカレンダーに追加しますか?`;
+    ? "Steadii proposes this deadline"
+    : "Steadii proposes this event";
+  // Body is now redundant with the slot row in the Type G renderer; we
+  // pass an empty string so the renderer's "if (card.body)" guard
+  // suppresses the paragraph. (Pre-PR-B card.body was the "shall I
+  // add this?" prompt; that prompt is now implicit in the
+  // [カレンダーに追加] CTA.) Empty string keeps the base type happy.
+  const body = "";
+  // Pull the proposal title out of the JSONB slot if the user has
+  // edited it. The agreedSlot JSONB carries `title` alongside the
+  // structural fields when set; legacy rows don't have it.
+  const slotTitle =
+    (row.agreedSlot as { title?: string }).title?.trim() || null;
   return {
     id: `autocal:${row.id}`,
     archetype: "G",
@@ -1273,6 +1282,12 @@ function autoCalToTypeG(row: AutoCreatedCalendarEventRow): QueueCardG {
     kind: row.kind,
     eventRefs: row.eventRefs,
     slotLabel,
+    editorSlot: {
+      date: row.agreedSlot.date,
+      startTime: row.agreedSlot.startTime,
+      durationMin: row.agreedSlot.durationMin,
+      title: slotTitle,
+    },
     graceExpiresAt: row.graceExpiresAt.toISOString(),
     inboxItemId: row.inboxItemId,
   };

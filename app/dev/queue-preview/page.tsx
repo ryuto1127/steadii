@@ -213,6 +213,12 @@ const MOCK_CARDS: QueueCard[] = [
       },
     ],
     slotLabel: "5/22 (水) 14:00 JST",
+    editorSlot: {
+      date: "2026-05-22",
+      startTime: "14:00",
+      durationMin: 30,
+      title: null,
+    },
     graceExpiresAt: new Date(
       NOW.getTime() + 23 * 60 * 60 * 1000 + 30 * 60 * 1000,
     ).toISOString(),
@@ -250,6 +256,12 @@ const MOCK_CARDS: QueueCard[] = [
       },
     ],
     slotLabel: "5/30 (金) 締切",
+    editorSlot: {
+      date: "2026-05-30",
+      startTime: "00:00",
+      durationMin: 0,
+      title: null,
+    },
     graceExpiresAt: new Date(
       NOW.getTime() + 23 * 60 * 60 * 1000 + 45 * 60 * 1000,
     ).toISOString(),

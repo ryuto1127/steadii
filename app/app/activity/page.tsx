@@ -132,6 +132,9 @@ export default async function ActivityPage({
     proposal_dismissed: tActions("proposal_dismissed"),
     calendar_imported: tActions("calendar_imported"),
     mistake_added: tActions("mistake_added"),
+    auto_cal_added: tActions("auto_cal_added"),
+    auto_cal_dismissed: tActions("auto_cal_dismissed"),
+    auto_cal_edited: tActions("auto_cal_edited"),
     generic: tActions("generic"),
   };
 

@@ -26,6 +26,9 @@ export type ActivityKind =
   | "proposal_dismissed"
   | "calendar_imported"
   | "mistake_added"
+  | "auto_cal_added"
+  | "auto_cal_dismissed"
+  | "auto_cal_edited"
   | "generic";
 
 export type ActivityRow = {
@@ -164,6 +167,9 @@ export async function loadActivityRows(
         "syllabus_event_imported",
         "auto_archive",
         "mistake_note_saved",
+        "auto_cal_proposal_added",
+        "auto_cal_proposal_dismissed",
+        "auto_cal_proposal_edited",
       ]),
     ];
     if (args.since) auditConds.push(gt(auditLog.createdAt, args.since));
@@ -190,12 +196,25 @@ export async function loadActivityRows(
             ? "auto_archived"
             : a.action === "mistake_note_saved"
               ? "mistake_added"
-              : "generic";
+              : a.action === "auto_cal_proposal_added"
+                ? "auto_cal_added"
+                : a.action === "auto_cal_proposal_dismissed"
+                  ? "auto_cal_dismissed"
+                  : a.action === "auto_cal_proposal_edited"
+                    ? "auto_cal_edited"
+                    : "generic";
       const detail =
         typeof a.detail === "object" && a.detail !== null
           ? (a.detail as Record<string, unknown>)
           : null;
+      // For auto-cal rows, the audit detail holds `agreedSlot` (added /
+      // dismissed) or `after` (edited). Render a slot-style primary so
+      // the timeline shows what was added rather than the bare action
+      // name. Falls back to the generic detail.summary / detail.title /
+      // action label path used by the other audit kinds.
+      const slot = extractAutoCalSlot(detail);
       const primary =
+        slot ??
         (detail?.summary as string | undefined) ??
         (detail?.title as string | undefined) ??
         a.action.replace(/_/g, " ");
@@ -278,6 +297,17 @@ export async function loadActivityStats(args: {
       case "mistake_added":
         mistakeNotes++;
         break;
+      case "auto_cal_added":
+        // Auto-cal additions land in the calendar bucket so the stats
+        // card surfaces them alongside imports (both are "events that
+        // ended up on the calendar").
+        calendarImports++;
+        break;
+      case "auto_cal_dismissed":
+      case "auto_cal_edited":
+        // Tracked in the audit log but not surfaced as a stats bucket
+        // today. Counted only in `total`.
+        break;
       case "generic":
         break;
     }
@@ -291,4 +321,34 @@ export async function loadActivityStats(args: {
     mistakeNotes,
     total: rows.length,
   };
+}
+
+// Pull a human-readable slot label out of an auto-cal audit row's
+// detail blob. The proposal-add / dismiss paths persist `agreedSlot`;
+// the edit path persists `after`. Render shape mirrors the queue card
+// (M/D + start time for timed; M/D 締切 for deadlines) so the activity
+// row is recognizable without opening the detail page. Returns null
+// when the detail doesn't carry a slot — caller falls through to the
+// generic summary/title path.
+function extractAutoCalSlot(
+  detail: Record<string, unknown> | null
+): string | null {
+  if (!detail) return null;
+  const slot =
+    (detail.agreedSlot as Record<string, unknown> | undefined) ??
+    (detail.after as Record<string, unknown> | undefined);
+  if (!slot) return null;
+  const date = typeof slot.date === "string" ? slot.date : null;
+  if (!date) return null;
+  const startTime = typeof slot.startTime === "string" ? slot.startTime : null;
+  const durationMin =
+    typeof slot.durationMin === "number" ? slot.durationMin : null;
+  const isAllDay = durationMin === 0 || startTime === null || startTime === "00:00";
+  const [y, m, d] = date.split("-").map((s) => parseInt(s, 10));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
+    return null;
+  }
+  const datePart = `${m}/${d}`;
+  if (isAllDay) return `${datePart} 締切`;
+  return `${datePart} ${startTime}`;
 }

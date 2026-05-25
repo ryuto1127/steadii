@@ -64,10 +64,26 @@ type ServerActions = {
   // engineer-42 — Type F (interactive confirmations).
   confirm: (cardId: string) => Promise<void>;
   correct: (cardId: string, correctedValue: string) => Promise<void>;
-  // 2026-05-21 — Phase 3 of α-auto-cal. Type G (auto-created calendar
-  // event provisional cancel / early-confirm).
-  cancelAutoCal: (cardId: string) => Promise<void>;
-  confirmAutoCal: (cardId: string) => Promise<void>;
+  // 2026-05-24 (PR B / Round 3) — Type G' propose-confirm.
+  //   addToCalendar     → fires calendarCreateEvent + flips
+  //                       autoCreatedCalendarEvents.status='confirmed'.
+  //   editProposal      → mutates agreedSlot in DB only (no calendar
+  //                       API). The card pairs this with addToCalendar
+  //                       under the [更新して追加] CTA so a single
+  //                       click commits both.
+  //   dismissProposal   → flips status='cancelled' (no calendar API
+  //                       call since no event was ever created).
+  addToCalendar: (cardId: string) => Promise<void>;
+  editProposal: (
+    cardId: string,
+    updates: {
+      date?: string;
+      startTime?: string;
+      durationMin?: number;
+      title?: string;
+    },
+  ) => Promise<void>;
+  dismissProposal: (cardId: string) => Promise<void>;
 };
 
 export function QueueList({
@@ -407,34 +423,41 @@ export function QueueList({
                     refresh();
                   }
                 : undefined,
-            onCancelAutoCal:
+            onAddToCalendar:
               card.archetype === "G"
                 ? async () => {
                     try {
-                      await actions.cancelAutoCal(card.id);
-                      toast.success(
-                        t("card_g.cancel_toast", {
-                          default: "予定をキャンセルしました",
-                        }),
-                      );
+                      await actions.addToCalendar(card.id);
+                      toast.success(t("card_g.add_toast"));
                     } catch (err) {
-                      toast.error(message(err, "Cancel failed"));
+                      toast.error(message(err, "Add failed"));
                     }
                     refresh();
                   }
                 : undefined,
-            onConfirmAutoCal:
+            onEditProposal:
+              card.archetype === "G"
+                ? async (updates) => {
+                    try {
+                      await actions.editProposal(card.id, updates);
+                    } catch (err) {
+                      toast.error(message(err, "Update failed"));
+                      // Rethrow so the card's chained add doesn't run on
+                      // a stale slot — the [更新して追加] flow needs the
+                      // edit to land before the add fires.
+                      refresh();
+                      throw err;
+                    }
+                  }
+                : undefined,
+            onDismissProposal:
               card.archetype === "G"
                 ? async () => {
                     try {
-                      await actions.confirmAutoCal(card.id);
-                      toast.success(
-                        t("card_g.confirm_toast", {
-                          default: "予定を確定しました",
-                        }),
-                      );
+                      await actions.dismissProposal(card.id);
+                      toast.success(t("card_g.dismiss_toast"));
                     } catch (err) {
-                      toast.error(message(err, "Confirm failed"));
+                      toast.error(message(err, "Dismiss failed"));
                     }
                     refresh();
                   }

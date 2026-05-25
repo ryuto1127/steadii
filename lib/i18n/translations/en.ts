@@ -835,6 +835,24 @@ type MessagesShape = {
       save: string;
       dismiss: string;
     };
+    card_g: {
+      proposal_header_mutual: string;
+      proposal_header_deadline: string;
+      add_to_calendar: string;
+      edit: string;
+      dismiss: string;
+      update_and_add: string;
+      cancel_edit: string;
+      expires_in_days: string;
+      editor_date_label: string;
+      editor_start_time_label: string;
+      editor_duration_label: string;
+      editor_title_label: string;
+      editor_validation_end_before_start: string;
+      editor_validation_past_date_warning: string;
+      add_toast: string;
+      dismiss_toast: string;
+    };
   };
   command_palette: {
     placeholder_default: string;
@@ -2758,6 +2776,24 @@ export const en: MessagesShape = {
       save: "Save",
       dismiss: "Don't ask",
     },
+    card_g: {
+      proposal_header_mutual: "Steadii proposes this event",
+      proposal_header_deadline: "Steadii proposes this deadline",
+      add_to_calendar: "Add to calendar",
+      edit: "Edit",
+      dismiss: "Dismiss",
+      update_and_add: "Update and add",
+      cancel_edit: "Cancel",
+      expires_in_days: "Expires in {days} days",
+      editor_date_label: "Date",
+      editor_start_time_label: "Start",
+      editor_duration_label: "Duration (min)",
+      editor_title_label: "Title",
+      editor_validation_end_before_start: "End must be after start.",
+      editor_validation_past_date_warning: "This date is far in the past.",
+      add_toast: "Added to your calendar.",
+      dismiss_toast: "Proposal dismissed.",
+    },
   },
   command_palette: {
     placeholder_default: "Tell Steadii…",
@@ -2806,6 +2842,9 @@ export const en: MessagesShape = {
       proposal_dismissed: "Dismissed",
       calendar_imported: "Imported event",
       mistake_added: "Added note",
+      auto_cal_added: "Added to calendar",
+      auto_cal_dismissed: "Dismissed proposal",
+      auto_cal_edited: "Edited proposal",
       generic: "Action",
     },
     more_this_week: "+ {n} more this week",
