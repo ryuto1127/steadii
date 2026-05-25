@@ -5,10 +5,11 @@
  * from Steadii's own outbound mail (@mysteadii.com / @mysteadii.xyz).
  * The ingest-side gate at #308 skips these going forward, but pre-fix
  * legacy rows that already made it through keep surfacing as draft
- * cards on the queue (most visibly the "reply to Steadii's own digest"
- * loop). The queue-build defensive filter hides them at render time;
- * this script clears them at the source so adjacent surfaces
- * (/app/inbox, counts, activity, etc.) also reflect reality.
+ * cards on the queue (the "reply to Steadii's own digest" loop the
+ * user flagged 2026-05-25). The queue-build defensive filter hides
+ * them at render time; this script clears them at the source so
+ * adjacent surfaces (/app/inbox, counts, activity) also reflect
+ * reality.
  *
  * Behavior per matched inbox_items row:
  *   - status            → 'archived'
@@ -17,19 +18,22 @@
  * Per any pending agent_drafts row pointing at the matched inbox item:
  *   - status            → 'dismissed'
  *   - disposition       → 'ignored' (so re-surface sweep doesn't revive it)
- * Single audit row per inbox item: action='auto_archive',
+ * Single audit row per archived inbox item, action='auto_archive',
  * detail.triggeredBy='self_sender_cleanup_script'.
+ *
+ * Connects via the same Neon REST API path as scripts/migrate-prod.ts
+ * so we don't need full prod .env to run — only NEONCTL_API_KEY.
  *
  * Usage:
  *
- *   pnpm tsx scripts/cleanup-self-sender-inbox.ts            # all users
- *   pnpm tsx scripts/cleanup-self-sender-inbox.ts --dry      # plan only
- *   pnpm tsx scripts/cleanup-self-sender-inbox.ts --user=ID  # one user
+ *   pnpm tsx --require ./scripts/_register.cjs scripts/cleanup-self-sender-inbox.ts --dry
+ *   pnpm tsx --require ./scripts/_register.cjs scripts/cleanup-self-sender-inbox.ts
+ *   pnpm tsx --require ./scripts/_register.cjs scripts/cleanup-self-sender-inbox.ts --user=<UUID>
  */
-import { and, eq, ilike, ne, or } from "drizzle-orm";
-import { db } from "@/lib/db/client";
-import { agentDrafts, inboxItems } from "@/lib/db/schema";
-import { logEmailAudit } from "@/lib/agent/email/audit";
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
+import { and, eq, ilike, inArray, ne, or } from "drizzle-orm";
+import { agentDrafts, auditLog, inboxItems } from "@/lib/db/schema";
 import { isSteadiiSelfSender } from "@/lib/agent/email/ingest-recent";
 
 type Flags = {
@@ -47,9 +51,107 @@ function parseFlags(argv: string[]): Flags {
   return { dry, userId };
 }
 
+const NEON_API_KEY = process.env.NEONCTL_API_KEY;
+const NEON_PROJECT_ID = process.env.NEON_PROJECT_ID;
+const NEON_PROD_BRANCH = process.env.NEON_PROD_BRANCH ?? "production";
+const NEON_DATABASE = process.env.NEON_DATABASE ?? "neondb";
+const NEON_ROLE = process.env.NEON_ROLE ?? "neondb_owner";
+
+async function neonApi<T>(apiPath: string): Promise<T> {
+  if (!NEON_API_KEY) {
+    throw new Error(
+      "NEONCTL_API_KEY not set. Add it to .env.local — generate at Neon Console → Profile → API Keys."
+    );
+  }
+  const res = await fetch(`https://console.neon.tech/api/v2${apiPath}`, {
+    headers: {
+      Authorization: `Bearer ${NEON_API_KEY}`,
+      Accept: "application/json",
+    },
+  });
+  if (!res.ok) {
+    throw new Error(
+      `Neon API ${apiPath}: ${res.status} ${res.statusText} — ${await res.text()}`
+    );
+  }
+  return (await res.json()) as T;
+}
+
+async function discoverProdConnectionString(): Promise<string> {
+  let projectId = NEON_PROJECT_ID;
+  if (!projectId) {
+    type Proj = { id: string; name: string };
+    type Projects = { projects: Proj[] };
+    type Org = { id: string; name: string };
+    type Orgs = { organizations: Org[] };
+    let orgs: Org[] = [];
+    try {
+      const r = await neonApi<Orgs>("/users/me/organizations");
+      orgs = r.organizations ?? [];
+    } catch {
+      // personal-account fallback
+    }
+    const projectCandidates: Proj[] = [];
+    if (orgs.length > 0) {
+      for (const org of orgs) {
+        try {
+          const r = await neonApi<Projects>(
+            `/projects?org_id=${encodeURIComponent(org.id)}`
+          );
+          projectCandidates.push(...(r.projects ?? []));
+        } catch (e) {
+          console.warn(`Skipping org ${org.name}: ${String(e)}`);
+        }
+      }
+    } else {
+      const r = await neonApi<Projects>("/projects");
+      projectCandidates.push(...(r.projects ?? []));
+    }
+    const matched = projectCandidates.find((p) =>
+      p.name.toLowerCase().includes("steadii")
+    );
+    if (!matched) {
+      throw new Error(
+        `No 'steadii' project found. Available: ${projectCandidates
+          .map((p) => p.name)
+          .join(", ")}.`
+      );
+    }
+    projectId = matched.id;
+  }
+
+  type Branch = { id: string; name: string; primary?: boolean };
+  type Branches = { branches: Branch[] };
+  const { branches } = await neonApi<Branches>(
+    `/projects/${projectId}/branches`
+  );
+  const prodBranch =
+    branches.find((b) => b.name === NEON_PROD_BRANCH) ??
+    branches.find((b) => b.name === "main") ??
+    branches.find((b) => b.primary === true);
+  if (!prodBranch) {
+    throw new Error(
+      `No '${NEON_PROD_BRANCH}' branch found. Available: ${branches
+        .map((b) => b.name)
+        .join(", ")}`
+    );
+  }
+
+  type UriResp = { uri: string };
+  const { uri } = await neonApi<UriResp>(
+    `/projects/${projectId}/connection_uri?branch_id=${prodBranch.id}&database_name=${NEON_DATABASE}&role_name=${NEON_ROLE}&pooled=true`
+  );
+  return uri;
+}
+
 async function main() {
   const flags = parseFlags(process.argv);
   const startedAt = Date.now();
+
+  console.log("[cleanup-self-sender] resolving prod connection via Neon API…");
+  const connectionString = await discoverProdConnectionString();
+  const sqlClient = neon(connectionString);
+  const db = drizzle(sqlClient);
 
   const baseWhere = or(
     ilike(inboxItems.senderEmail, "%@mysteadii.com"),
@@ -76,14 +178,43 @@ async function main() {
     `[cleanup-self-sender] matched ${candidates.length} inbox_items rows`
   );
 
-  // Defense in depth — the SQL filter should already match the helper,
-  // but if a row has whitespace or other oddities the helper covers it
-  // too. Drop anything the helper rejects so we never archive a row
-  // that doesn't actually qualify.
   const safe = candidates.filter((r) => isSteadiiSelfSender(r.senderEmail));
   if (safe.length !== candidates.length) {
     console.log(
       `[cleanup-self-sender] dropped ${candidates.length - safe.length} false-positive rows after helper check`
+    );
+  }
+
+  // Per-status + per-user breakdown so dry output is informative.
+  const byStatus = new Map<string, number>();
+  const byUser = new Map<string, number>();
+  for (const r of safe) {
+    byStatus.set(r.status, (byStatus.get(r.status) ?? 0) + 1);
+    byUser.set(r.userId, (byUser.get(r.userId) ?? 0) + 1);
+  }
+  console.log(
+    "[cleanup-self-sender] breakdown by status:",
+    Object.fromEntries(byStatus)
+  );
+  console.log(
+    `[cleanup-self-sender] breakdown by user (${byUser.size} users):`,
+    Object.fromEntries(byUser)
+  );
+
+  // Count pending drafts that would also be dismissed.
+  if (safe.length > 0) {
+    const inboxIds = safe.map((r) => r.id);
+    const pendingDrafts = await db
+      .select({ id: agentDrafts.id })
+      .from(agentDrafts)
+      .where(
+        and(
+          ne(agentDrafts.status, "dismissed"),
+          inArray(agentDrafts.inboxItemId, inboxIds)
+        )
+      );
+    console.log(
+      `[cleanup-self-sender] would dismiss ${pendingDrafts.length} pending agent_drafts`
     );
   }
 
@@ -120,7 +251,7 @@ async function main() {
         .where(eq(inboxItems.id, row.id));
       inboxArchived++;
       try {
-        await logEmailAudit({
+        await db.insert(auditLog).values({
           userId: row.userId,
           action: "auto_archive",
           result: "success",

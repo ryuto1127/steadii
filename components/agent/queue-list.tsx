@@ -377,17 +377,6 @@ export function QueueList({
                     beginInlineSend(card.id);
                   }
                 : undefined,
-            onSkip:
-              card.archetype === "B"
-                ? async () => {
-                    try {
-                      await actions.dismiss(card.id);
-                    } catch (err) {
-                      toast.error(message(err, "Skip failed"));
-                    }
-                    refresh();
-                  }
-                : undefined,
             onSecondaryAction:
               card.archetype === "B"
                 ? async (actionKey) => {

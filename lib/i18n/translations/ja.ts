@@ -1449,7 +1449,7 @@ export const ja: Messages = {
     card_b_disposition: {
       resolved: "対応済み",
       skipped: "スキップ",
-      ignored: "無視中",
+      ignored: "無視",
       ignored_confirm:
         "このカードを今後表示しません。よろしいですか?",
     },
