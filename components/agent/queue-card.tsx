@@ -91,7 +91,6 @@ type CardBProps = CommonProps & {
   card: QueueCardB;
   onReview: () => void;
   onSend: () => Promise<ActionResult> | ActionResult;
-  onSkip: () => Promise<ActionResult> | ActionResult;
   // Wave 3.1 — informational variant only. Fires when the user clicks
   // the [Mark reviewed] secondary action (or any other inline-action
   // secondary). The parent records the review and removes the card.
@@ -677,7 +676,6 @@ export function QueueCardBRender({
   card,
   onReview,
   onSend,
-  onSkip,
   onSecondaryAction,
   onSetDisposition,
   onDismiss,
@@ -725,14 +723,6 @@ export function QueueCardBRender({
       // PR 2 — for the inline-send flow the parent owns the dim state
       // via isSendingPending; we still flip local resolved so a
       // double-click during transition is a no-op via the guard above.
-      setResolved(true);
-    });
-  };
-
-  const skip = () => {
-    if (pending || effectiveResolved) return;
-    startTransition(async () => {
-      await onSkip();
       setResolved(true);
     });
   };
@@ -897,15 +887,16 @@ export function QueueCardBRender({
                   <Sparkles size={12} strokeWidth={2} />
                   <span>{t("send")}</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={skip}
-                  disabled={pending || effectiveResolved}
-                  className="ml-auto inline-flex h-9 items-center rounded-full px-3 text-[13px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
-                >
-                  {t("skip")}
-                </button>
               </>
+              /*
+                2026-05-25 — Top-row Skip + × were removed on Draft cards.
+                The 3-way disposition row below ([対応済み][スキップ][無視])
+                already covers "skip 24h" + "stop showing" + "I handled it"
+                with clearer semantics; the duplicate top-row affordances
+                were confusing (two "Skip" buttons on the same card).
+                Informational cards still render the × so the user can
+                dismiss notify-only / pre-brief cards.
+              */
             ) : (
               <>
                 {card.secondaryActions.map((sa) =>
@@ -931,18 +922,20 @@ export function QueueCardBRender({
                 )}
               </>
             )}
-            <button
-              type="button"
-              onClick={() => void onDismiss()}
-              disabled={pending || effectiveResolved}
-              className={cn(
-                "inline-flex h-9 items-center rounded-full px-2 text-[13px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]",
-                card.mode === "informational" && "ml-auto"
-              )}
-              aria-label={t("dismiss")}
-            >
-              <X size={14} strokeWidth={1.75} />
-            </button>
+            {card.mode === "draft" ? null : (
+              <button
+                type="button"
+                onClick={() => void onDismiss()}
+                disabled={pending || effectiveResolved}
+                className={cn(
+                  "inline-flex h-9 items-center rounded-full px-2 text-[13px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]",
+                  card.mode === "informational" && "ml-auto"
+                )}
+                aria-label={t("dismiss")}
+              >
+                <X size={14} strokeWidth={1.75} />
+              </button>
+            )}
           </div>
           {/*
             PR 3 — secondary disposition row. Renders ONLY on Draft mode
@@ -1453,7 +1446,6 @@ export type QueueCardActions = {
   onPickOption?: CardAProps["onPickOption"];
   onReview?: CardBProps["onReview"];
   onSend?: CardBProps["onSend"];
-  onSkip?: CardBProps["onSkip"];
   onSecondaryAction?: CardBProps["onSecondaryAction"];
   onSetDisposition?: CardBProps["onSetDisposition"];
   onTakeAction?: CardCProps["onTakeAction"];
@@ -1503,7 +1495,6 @@ export function QueueCardRenderer({
           card={card}
           onReview={actions.onReview ?? noop}
           onSend={actions.onSend ?? noopAsync}
-          onSkip={actions.onSkip ?? noopAsync}
           onSecondaryAction={actions.onSecondaryAction}
           onSetDisposition={actions.onSetDisposition}
           onDismiss={actions.onDismiss}
