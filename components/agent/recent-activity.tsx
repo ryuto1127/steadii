@@ -37,6 +37,8 @@ const KIND_ICON: Record<
   // Round 4 propose-confirm auto-archive lifecycle.
   auto_archive_proposed: Archive,
   auto_archive_dismissed_batch: X,
+  // Round 5 notify-with-undo. Same Mail icon family as draft_sent.
+  auto_resolved_draft: Mail,
   generic: Activity,
 };
 

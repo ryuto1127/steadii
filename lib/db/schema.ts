@@ -3307,3 +3307,80 @@ export type AutoCreatedCalendarEventRow =
   typeof autoCreatedCalendarEvents.$inferSelect;
 export type NewAutoCreatedCalendarEventRow =
   typeof autoCreatedCalendarEvents.$inferInsert;
+
+// 2026-05-24 — Round 5 of the consent-first conversion. Generic
+// per-user in-app notification surface. The first wired `kind` is
+// `auto_resolved_draft`, recording that the Gmail-direct-reply
+// auto-resolve fired on a particular agent_drafts row. The
+// notify-with-undo flow surfaces these in the activity feed (with an
+// inline [元に戻す] button while `undoable_until > now`) and, when
+// applicable, in a one-shot toast on next page load.
+//
+// Designed generic on purpose — future kinds (other auto-actions,
+// system messages, etc.) can hang off this surface without re-
+// litigating the schema. The first listed kind is the only one wired
+// in PR #319 (Round 5).
+export type AgentNotificationKind = "auto_resolved_draft";
+
+export const agentNotifications = pgTable(
+  "agent_notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Discriminator for the notification kind. Extensible by adding
+    // new strings to AgentNotificationKind; the table doesn't change.
+    kind: text("kind").$type<AgentNotificationKind>().notNull(),
+    // Logical pointer to the row this notification is about. Not a
+    // hard FK because the subject table varies by kind; the kind
+    // value tells you which table to join.
+    subjectTable: text("subject_table").notNull(),
+    subjectId: uuid("subject_id").notNull(),
+    // Short human-readable description for the activity feed row.
+    // Built at write time by the producer (e.g. the draft-superseded
+    // sweep). Keep it under ~120 chars so the timeline stays scannable.
+    summary: text("summary").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    // Until this time, the action is reversible via the notification's
+    // undo path. NULL means undo is unavailable — either the user
+    // already clicked Undo, the action is intrinsically irreversible,
+    // OR the notification-expiry sub-sweep aged the window past.
+    undoableUntil: timestamp("undoable_until", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    // Set when the user explicitly dismisses the notification, OR
+    // when the Undo action is invoked (the row stays for audit but
+    // the activity surface treats it as dismissed).
+    dismissedAt: timestamp("dismissed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (t) => ({
+    // Drives the activity feed undo-button check + the one-shot toast
+    // probe. Partial over `undoable_until IS NOT NULL` so the candidate
+    // set stays tight (most rows quickly age out).
+    userUndoableIdx: index("agent_notifications_user_undoable_idx")
+      .on(t.userId, t.createdAt)
+      .where(sql`undoable_until IS NOT NULL`),
+    // Supports the chronological fetch on /app/activity (the row stays
+    // visible after the undo window closes; just the button disappears).
+    userCreatedIdx: index("agent_notifications_user_created_idx").on(
+      t.userId,
+      t.createdAt,
+    ),
+    // Drives the notification-expiry sub-sweep predicate. Same partial
+    // shape as userUndoableIdx but keyed on undoable_until for the
+    // bounded `< now()` scan.
+    expiryIdx: index("agent_notifications_expiry_idx")
+      .on(t.undoableUntil)
+      .where(sql`undoable_until IS NOT NULL`),
+  }),
+);
+
+export type AgentNotification = typeof agentNotifications.$inferSelect;
+export type NewAgentNotification = typeof agentNotifications.$inferInsert;

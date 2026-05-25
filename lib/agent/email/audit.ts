@@ -62,7 +62,12 @@ export type EmailAuditAction =
   // autoCreateId + agreedSlot snapshot for auditability.
   | "auto_cal_proposal_added"
   | "auto_cal_proposal_edited"
-  | "auto_cal_proposal_dismissed";
+  | "auto_cal_proposal_dismissed"
+  // 2026-05-24 — Round-5 notify-with-undo for the Gmail-direct-reply
+  // auto-resolve. The detector still emits `draft_superseded_by_user_send`
+  // when it fires; this row records the user clicking [元に戻す] on
+  // the activity-feed notification. Detail carries the notification id.
+  | "draft_auto_resolve_undone";
 
 export async function logEmailAudit(params: {
   userId: string;

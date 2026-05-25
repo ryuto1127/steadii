@@ -9,6 +9,7 @@ import { expireStaleProposedArchives } from "@/lib/agent/email/auto-archive";
 import {
   defaultSentSinceProbe,
   runDraftSupersededSweep,
+  runNotificationExpirySweep,
 } from "@/lib/agent/email/draft-superseded-sweep";
 import { runDispositionResurfaceSweep } from "@/lib/agent/email/disposition-resurface";
 import { runDigestSweep, runWeeklyDigestSweep } from "@/lib/digest/sweep";
@@ -101,6 +102,9 @@ export async function POST(req: Request) {
           },
           "disposition-resurface": () =>
             runDispositionResurfaceSweep({ now: new Date(nowMs) }),
+          // 2026-05-24 — Round-5 notify-with-undo bookkeeping.
+          "notification-expiry": () =>
+            runNotificationExpirySweep({ now: new Date(nowMs) }),
           digest: () => runDigestSweep(),
           "weekly-digest": () => runWeeklyDigestSweep(),
         };

@@ -138,6 +138,8 @@ export default async function ActivityPage({
     // Round 4 propose-confirm auto-archive lifecycle.
     auto_archive_proposed: tActions("auto_archive_proposed"),
     auto_archive_dismissed_batch: tActions("auto_archive_dismissed_batch"),
+    // Round 5 notify-with-undo for the Gmail-direct-reply auto-resolve.
+    auto_resolved_draft: tActions("auto_resolved_draft"),
     generic: tActions("generic"),
   };
 
