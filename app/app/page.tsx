@@ -109,18 +109,22 @@ export default async function HomePage() {
               confirm: queueConfirmAction,
               correct: queueCorrectAction,
               addToCalendar: async (cardId) => {
+                "use server";
                 await autoCalProposalAddAction(cardId);
               },
               editProposal: async (cardId, updates) => {
+                "use server";
                 await autoCalProposalEditAction(cardId, updates);
               },
               dismissProposal: autoCalProposalDismissAction,
               archiveProposalConfirm: async (inboxItemIds) => {
+                "use server";
                 await archiveProposalConfirmAllAction(
                   inboxItemIds ? { inboxItemIds } : undefined,
                 );
               },
               archiveProposalDismiss: async () => {
+                "use server";
                 await archiveProposalDismissAllAction();
               },
             }}

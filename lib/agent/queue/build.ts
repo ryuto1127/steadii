@@ -66,7 +66,8 @@ export async function buildQueueForUser(
   const tShared = (locale
     ? await getTranslations({ locale, namespace: "queue.shared" })
     : await getTranslations("queue.shared")) as unknown as (
-    key: string
+    key: string,
+    values?: Record<string, string | number>
   ) => string;
   // engineer-43 — read the user's hide-read preference once per build.
   // Default true: notify_only cards vanish 24h after Gmail push reported
@@ -194,7 +195,7 @@ function proposalToTypeE_GroupDetect(
 function proposalToTypeC_GroupSilent(
   p: AgentProposalRow,
   tIssue: IssueTitleFn,
-  tShared: (key: string) => string
+  tShared: (key: string, values?: Record<string, string | number>) => string
 ): QueueCardC {
   // The action_options[0] payload carries the group_project_id so we
   // can deep-link the "Take action" button straight to the detail page.
@@ -565,7 +566,7 @@ export function dedupePendingDraftsByThread(
 
 function partitionDrafts(
   rows: DraftWithInbox[],
-  tShared: (key: string) => string
+  tShared: (key: string, values?: Record<string, string | number>) => string
 ): {
   bCards: QueueCardB[];
   cCards: QueueCardC[];
@@ -588,7 +589,7 @@ function partitionDrafts(
 // and notify_only to draftToTypeC.
 export function draftToTypeB(
   row: DraftWithInbox,
-  tShared: (key: string) => string
+  tShared: (key: string, values?: Record<string, string | number>) => string
 ): QueueCardB {
   const { draft, inbox } = row;
   const senderLabel = inbox.senderName ?? inbox.senderEmail;
@@ -632,7 +633,7 @@ function truncateInboundSnippet(raw: string | null): string | null {
 
 function draftToTypeC(
   row: DraftWithInbox,
-  tShared: (key: string) => string
+  tShared: (key: string, values?: Record<string, string | number>) => string
 ): QueueCardC {
   const { draft, inbox } = row;
   const senderLabel = inbox.senderName ?? inbox.senderEmail;
@@ -646,7 +647,7 @@ function draftToTypeC(
   const body =
     summary.length > 0
       ? summary
-      : tShared("notify_only_body").replace("{sender}", senderLabel);
+      : tShared("notify_only_body", { sender: senderLabel });
   return {
     id: `draft:${draft.id}`,
     archetype: "C",
@@ -667,7 +668,7 @@ function draftToTypeC(
 
 function draftToTypeE(
   row: DraftWithInbox,
-  tShared: (key: string) => string
+  tShared: (key: string, values?: Record<string, string | number>) => string
 ): QueueCardE {
   const { draft, inbox } = row;
   const senderLabel = inbox.senderName ?? inbox.senderEmail;
@@ -677,7 +678,7 @@ function draftToTypeE(
     title: inbox.subject ?? senderLabel,
     body:
       draft.reasoning ??
-      tShared("clarify_fallback").replace("{sender}", senderLabel),
+      tShared("clarify_fallback", { sender: senderLabel }),
     confidence: confidenceForRiskTier(draft.riskTier),
     createdAt: draft.createdAt.toISOString(),
     sources: sourceChipsFromProvenance(draft.retrievalProvenance ?? null),
