@@ -239,6 +239,19 @@ export type QueueCardG = QueueCardBase & {
   // Human-readable slot label. For mutual_agreement: "5/22 (水) 14:00 JST".
   // For deadline: "5/30 (金) 締切" (no time, no TZ).
   slotLabel: string;
+  // 2026-05-24 (PR B) — raw structured slot for the inline editor on
+  // propose-confirm Type G' cards. The editor pre-fills its date /
+  // start time / duration / title from these fields. We pass the
+  // raw shape rather than re-parsing slotLabel (which is locale-
+  // pretty and ambiguous on year). `title` is the proposal title
+  // stored alongside the structural slot in agreedSlot JSONB; it's
+  // optional because legacy 'provisional' rows don't carry it.
+  editorSlot: {
+    date: string; // YYYY-MM-DD
+    startTime: string; // HH:MM 24h
+    durationMin: number; // minutes; 0 for deadline (all-day)
+    title: string | null;
+  };
   // ISO timestamp grace_expires_at — the client ticks down a "23h
   // remaining" label from this.
   graceExpiresAt: string;
