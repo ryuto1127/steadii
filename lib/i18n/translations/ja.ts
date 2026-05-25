@@ -1386,6 +1386,7 @@ export const ja: Messages = {
     empty_cta: "何か頼んでみる",
     toast_sent: "送信しました。",
     toast_sending: "送信中…",
+    toast_sending_countdown: "送信まで {seconds} 秒",
     toast_undo: "取り消し",
     toast_send_cancelled: "送信を取り消しました",
     archetype_a_pill: "決定",
