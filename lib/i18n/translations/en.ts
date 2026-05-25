@@ -884,6 +884,7 @@ type MessagesShape = {
     open_in_chat_link: string;
     keyboard_hint: string;
     voice_hint: string;
+    voice_hint_alt: string;
   };
   home_v2: {
     queue_label: string;
@@ -2863,6 +2864,7 @@ export const en: MessagesShape = {
     open_in_chat_link: "Open in chat",
     keyboard_hint: "⌘K",
     voice_hint: "Hold Caps Lock to talk · ⌘K to focus",
+    voice_hint_alt: "Hold Right ⌥ to talk · ⌘K to focus",
   },
   home_v2: {
     queue_label: "Queue",

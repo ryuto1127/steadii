@@ -64,6 +64,15 @@ export function useVoiceApp(): VoiceAppContextValue {
   return ctx;
 }
 
+// Same context, but returns null instead of throwing when the consumer
+// is rendered outside the provider (landing-page CommandPalette demo,
+// onboarding wait step, dev preview, etc.). Read-only consumers that
+// just want to localize a hint can branch on null and fall back to a
+// generic copy.
+export function useVoiceAppOptional(): VoiceAppContextValue | null {
+  return useContext(VoiceAppContext);
+}
+
 const FALLBACK_STORAGE_KEY = "steadii.voice.fallback_alt_right";
 // Phase 3 introduces a SEPARATE counter from Phase 1's `steadii.voice.hint_uses`
 // so the home composer hint and the global non-chat-page hint fade
