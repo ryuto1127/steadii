@@ -113,6 +113,13 @@ export function QueueList({
   // timer machine is identity-stable and we never want a render to
   // re-create one.
   const inlineSendTimers = useRef<Map<string, InlineSendTimer>>(new Map());
+  // Per-card countdown intervals that drive the toast text update each
+  // second. Keyed by card id so the user can fire 送信 across multiple
+  // Draft cards in parallel without one card's countdown clobbering
+  // another's. Cleared on undo, on elapse, and on unmount.
+  const inlineSendIntervals = useRef<Map<string, ReturnType<typeof setInterval>>>(
+    new Map()
+  );
   // PR 2 — set of card ids currently mid-undo-window. Lifted into state
   // so the card can dim itself when sending is pending and un-dim on
   // undo without waiting for router.refresh (which only fires after the
@@ -124,9 +131,12 @@ export function QueueList({
   // tree and attempt a router.refresh on a route that no longer exists.
   useEffect(() => {
     const timers = inlineSendTimers.current;
+    const intervals = inlineSendIntervals.current;
     return () => {
       for (const timer of timers.values()) timer.cancel();
       timers.clear();
+      for (const handle of intervals.values()) clearInterval(handle);
+      intervals.clear();
     };
   }, []);
 
@@ -162,10 +172,19 @@ export function QueueList({
       return next;
     });
 
+    const clearCountdown = () => {
+      const handle = inlineSendIntervals.current.get(cardId);
+      if (handle !== undefined) {
+        clearInterval(handle);
+        inlineSendIntervals.current.delete(cardId);
+      }
+    };
+
     const cancelTimer = () => {
       const timer = inlineSendTimers.current.get(cardId);
       const cancelled = timer ? timer.cancel() : false;
       inlineSendTimers.current.delete(cardId);
+      clearCountdown();
       setSendingCardIds((prev) => {
         if (!prev.has(cardId)) return prev;
         const next = new Set(prev);
@@ -188,6 +207,7 @@ export function QueueList({
         // the queue and our flag never matters again. On failure we
         // clear the flag and restore the card.
         inlineSendTimers.current.delete(cardId);
+        clearCountdown();
         toast.dismiss(toastId);
         void actions
           .sendDraft(cardId)
@@ -217,17 +237,35 @@ export function QueueList({
     });
     inlineSendTimers.current.set(cardId, timer);
 
-    toast(t("toast_sending"), {
-      id: toastId,
-      duration: SEND_UNDO_WINDOW_MS,
-      action: {
-        label: t("toast_undo"),
-        onClick: () => {
-          cancelTimer();
-          toast.success(t("toast_send_cancelled"));
+    // Live countdown: re-render the toast each second with the remaining
+    // whole seconds. Sonner re-uses an existing toast when the same id
+    // is passed, so the update lands in place without a flicker. The
+    // toast's own `duration` still drives the auto-dismiss at 10s in
+    // case the interval misses a beat (tab throttled, etc.).
+    let remainingSeconds = Math.ceil(SEND_UNDO_WINDOW_MS / 1000);
+    const renderToast = () => {
+      toast(t("toast_sending_countdown", { seconds: remainingSeconds }), {
+        id: toastId,
+        duration: SEND_UNDO_WINDOW_MS,
+        action: {
+          label: t("toast_undo"),
+          onClick: () => {
+            cancelTimer();
+            toast.success(t("toast_send_cancelled"));
+          },
         },
-      },
-    });
+      });
+    };
+    renderToast();
+    const intervalHandle = setInterval(() => {
+      remainingSeconds -= 1;
+      if (remainingSeconds <= 0) {
+        clearCountdown();
+        return;
+      }
+      renderToast();
+    }, 1000);
+    inlineSendIntervals.current.set(cardId, intervalHandle);
   };
 
   return (

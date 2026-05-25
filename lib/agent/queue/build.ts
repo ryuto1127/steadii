@@ -43,6 +43,7 @@ import {
   type QueueSourceChip,
 } from "./types";
 import { buildExternalThreadUrl } from "./external-url";
+import { isSteadiiSelfSender } from "@/lib/agent/email/ingest-recent";
 
 // ── Public API ───────────────────────────────────────────────────────
 
@@ -460,9 +461,19 @@ async function fetchPendingDrafts(
     .orderBy(desc(agentDrafts.createdAt))
     .limit(QUEUE_FETCH_LIMIT);
 
+  // Defensive self-sender drop. The ingest-side filter (#308) gates
+  // new rows, but pre-fix legacy rows that already made it into
+  // inbox_items keep surfacing draft cards otherwise — including the
+  // "reply to Steadii's own digest" loop the user flagged 2026-05-25.
+  // Belt-and-suspenders: the standalone backfill script clears the
+  // underlying inbox_items; this filter ensures the queue stays clean
+  // even if a new outbound path slips past ingest.
+  const withoutSelfSender = rows.filter(
+    (r) => !isSteadiiSelfSender(r.senderEmail)
+  );
   const filtered = options.hideRead
-    ? rows.filter((r) => !shouldHideReadNotifyOnly(r))
-    : rows;
+    ? withoutSelfSender.filter((r) => !shouldHideReadNotifyOnly(r))
+    : withoutSelfSender;
   return dedupePendingDraftsByThread(filtered);
 }
 

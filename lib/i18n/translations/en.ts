@@ -752,6 +752,7 @@ type MessagesShape = {
     empty_cta: string;
     toast_sent: string;
     toast_sending: string;
+    toast_sending_countdown: string;
     toast_undo: string;
     toast_send_cancelled: string;
     archetype_a_pill: string;
@@ -2717,6 +2718,7 @@ export const en: MessagesShape = {
     empty_cta: "Ask Steadii to do something",
     toast_sent: "Sent.",
     toast_sending: "Sending…",
+    toast_sending_countdown: "Sending in {seconds}s…",
     toast_undo: "Undo",
     toast_send_cancelled: "Send cancelled",
     archetype_a_pill: "Decide",
