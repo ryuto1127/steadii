@@ -1,27 +1,39 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull, lt } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { inboxItems, users, agentRules, type InboxItem } from "@/lib/db/schema";
 import { logEmailAudit } from "./audit";
 import { AUTO_ARCHIVE_CONFIDENCE_THRESHOLD } from "./rules";
 import type { TriageResult } from "./types";
 
-// Wave 5 — auto-archive the lowest-risk inbox items so a real-secretary
-// experience emerges (Steadii filters noise without surfacing it). Three
-// gates fire in series; failing any one keeps the row visible:
+// Wave 5 + Round 4 (2026-05-24) — auto-archive Tier 1.
+//
+// Round 4 converts this from act-first to PROPOSE-FIRST per
+// `project_consent_first_principle.md`. Three eligibility gates still
+// fire in series (failing any one keeps the row visible and unflagged):
 //
 //   1. user.auto_archive_enabled — Settings toggle. Defaults false during
-//      the α 2-week safety ramp. Tiny follow-up PR flips the default
-//      after the validation window per project_wave_5_design.md.
+//      the α 2-week safety ramp. Now relabeled "Suggest archiving low-
+//      risk emails" in the UI to reflect the propose semantics; the
+//      column name + default behavior stay the same.
 //   2. result.bucket === 'auto_low' — only the lowest L1 bucket qualifies.
 //   3. result.confidence ≥ AUTO_ARCHIVE_CONFIDENCE_THRESHOLD (0.95) AND
 //      !result.learnedOptOut — the user hasn't restored a previous
 //      similar item.
 //
-// On a successful auto-archive the row's status flips to 'archived' and
-// `auto_archived` is set true; an audit_log row tagged `auto_archive`
-// fires (also surfaces in the Home Recent activity footer + the Inbox
-// Hidden filter chip + the digest extension).
+// On all-pass the row is NOT archived. Instead:
+//   - inbox_items.proposed_archive_at is stamped to now()
+//   - inbox_items.proposed_archive_reason captures the gate values
+//   - audit_log row tagged 'auto_archive_proposed' fires
+//
+// The user sees a Type-H queue card asking them to confirm a batch
+// archive across all currently-proposed items. On confirm, the
+// queue-actions module flips status='archived'+auto_archived=true and
+// writes the existing 'auto_archive' audit_log row (preserving its
+// downstream consumers — digest, Hidden filter chip, etc.). On
+// dismiss the proposed flags clear and the items stay in inbox.
+// Untouched proposals are cleared by the propose-archive-expiry cron
+// sub-sweep after 7 days.
 
 /**
  * Returns true when the env-controlled default for new users is on.
@@ -45,6 +57,11 @@ export function autoArchiveDefaultEnabled(): boolean {
  * Pure decision — does this triage result qualify for auto-archive
  * given the user's settings? Pulled out so tests can drive each gate
  * independently without spinning up a DB.
+ *
+ * Round 4: the function's contract is unchanged — it still answers
+ * "is this row eligible for the auto-archive flow?". The downstream
+ * effect changed from "silently archive" to "propose for user
+ * confirmation", but the gate values are identical.
  */
 export function isAutoArchiveEligible(
   result: TriageResult,
@@ -57,37 +74,53 @@ export function isAutoArchiveEligible(
 }
 
 /**
- * Side-effecting: load user prefs, decide, archive + audit. Called by
- * `applyTriageResult` after the row insert. Failures are logged but
- * never propagated — the row is already created; auto-archive failing
- * just means it stays visible (the safe fallback).
+ * Build the reason string stamped onto inbox_items.proposed_archive_reason.
+ * Captures the L1 gate values so an admin or future audit reviewer can
+ * trace the propose back to its inputs without joining audit_log.
+ * Format is intentionally short + structured so it fits in a text
+ * column without sprawl.
  */
-export async function maybeAutoArchive(
+export function buildProposeArchiveReason(result: TriageResult): string {
+  return `Tier1 ${result.bucket} conf=${result.confidence.toFixed(2)} learned_opt_out=${result.learnedOptOut}`;
+}
+
+/**
+ * Side-effecting: load user prefs, decide, propose + audit. Called by
+ * `applyTriageResult` after the row insert. Failures are logged but
+ * never propagated — the row is already created; proposal failing
+ * just means it stays visible without the flag (the safe fallback).
+ *
+ * Round 4 rename: was `maybeAutoArchive` (act-first). The action is
+ * now "propose" (set proposed_archive_at) rather than "archive". The
+ * caller in `triage.ts` was updated to the new name in the same PR.
+ */
+export async function maybeProposeAutoArchive(
   userId: string,
   item: InboxItem,
   result: TriageResult
-): Promise<{ archived: boolean }> {
+): Promise<{ proposed: boolean }> {
   try {
     const [u] = await db
       .select({ autoArchiveEnabled: users.autoArchiveEnabled })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
-    if (!u) return { archived: false };
-    if (!isAutoArchiveEligible(result, u)) return { archived: false };
+    if (!u) return { proposed: false };
+    if (!isAutoArchiveEligible(result, u)) return { proposed: false };
 
+    const reason = buildProposeArchiveReason(result);
     await db
       .update(inboxItems)
       .set({
-        status: "archived",
-        autoArchived: true,
+        proposedArchiveAt: new Date(),
+        proposedArchiveReason: reason,
         updatedAt: new Date(),
       })
       .where(eq(inboxItems.id, item.id));
 
     await logEmailAudit({
       userId,
-      action: "auto_archive",
+      action: "auto_archive_proposed",
       result: "success",
       resourceId: item.id,
       detail: {
@@ -97,9 +130,10 @@ export async function maybeAutoArchive(
         senderDomain: item.senderDomain,
         subject: item.subject,
         senderRole: result.senderRole,
+        reason,
       },
     });
-    return { archived: true };
+    return { proposed: true };
   } catch (err) {
     // Audit-log the failure so admin can see the rate. Don't throw —
     // one bad item must not poison the ingest loop.
@@ -111,26 +145,30 @@ export async function maybeAutoArchive(
         resourceId: item.id,
         detail: {
           message: err instanceof Error ? err.message : String(err),
+          phase: "propose",
         },
       });
     } catch {
       // audit is best-effort
     }
-    return { archived: false };
+    return { proposed: false };
   }
 }
 
-/**
- * Restore a previously auto-archived item. Two effects:
- *   1. Flip status back to 'open', clear auto_archived flag, stamp
- *      user_restored_at so future analytics can attribute restores.
- *   2. Insert a learned agent_rules row scoped to the sender's email
- *      with risk_tier='medium' so future similar items don't qualify
- *      for auto-archive (learnedOptOut catches them in the classifier).
- *
- * Caller (the Inbox restore action) is responsible for auth — this
- * function trusts the userId/itemId pair.
- */
+// Restore a previously auto-archived item. Round 4 leaves this path
+// untouched — once a user has confirmed an archive, the restore flow
+// + learned-rule insertion are the same as Wave 5. Only the path
+// from detector → archive shifted to propose-first.
+//
+// Two effects:
+//   1. Flip status back to 'open', clear auto_archived flag, stamp
+//      user_restored_at so future analytics can attribute restores.
+//   2. Insert a learned agent_rules row scoped to the sender's email
+//      with risk_tier='medium' so future similar items don't qualify
+//      for auto-archive (learnedOptOut catches them in the classifier).
+//
+// Caller (the Inbox restore action) is responsible for auth — this
+// function trusts the userId/itemId pair.
 export async function restoreFromAutoArchive(
   userId: string,
   inboxItemId: string
@@ -212,4 +250,67 @@ export async function restoreFromAutoArchive(
   });
 
   return { ok: true };
+}
+
+// Used by the cron's propose-archive-expiry sub-sweep — defined here
+// (rather than in the cron module) so the propose / expire pair lives
+// together. Clears `proposed_archive_at` (and the reason) on rows
+// whose proposal is older than `staleAfterMs`. Items stay visible in
+// the inbox; no archive happens. Per-user audit row carries the
+// count and the cleared ids so admin can correlate sweeps to actions
+// taken (or, in this case, NOT taken).
+export async function expireStaleProposedArchives(args: {
+  nowMs: number;
+  // Default 7 days. Pass an explicit value in tests for determinism.
+  staleAfterMs?: number;
+}): Promise<{ scanned: number; cleared: number }> {
+  const staleAfterMs = args.staleAfterMs ?? 7 * 24 * 60 * 60 * 1000;
+  const cutoff = new Date(args.nowMs - staleAfterMs);
+  const stale = await db
+    .select({ id: inboxItems.id, userId: inboxItems.userId })
+    .from(inboxItems)
+    .where(
+      and(
+        isNotNull(inboxItems.proposedArchiveAt),
+        lt(inboxItems.proposedArchiveAt, cutoff),
+      ),
+    );
+  if (stale.length === 0) return { scanned: 0, cleared: 0 };
+
+  // Group by user so the audit log carries a single batch row per user
+  // (matches the dismiss-batch pattern in queue-actions).
+  const perUser = new Map<string, string[]>();
+  for (const row of stale) {
+    const arr = perUser.get(row.userId);
+    if (arr) arr.push(row.id);
+    else perUser.set(row.userId, [row.id]);
+  }
+
+  let cleared = 0;
+  const now = new Date();
+  for (const [userId, ids] of perUser) {
+    for (const id of ids) {
+      await db
+        .update(inboxItems)
+        .set({
+          proposedArchiveAt: null,
+          proposedArchiveReason: null,
+          updatedAt: now,
+        })
+        .where(eq(inboxItems.id, id));
+      cleared++;
+    }
+    try {
+      await logEmailAudit({
+        userId,
+        action: "auto_archive_proposal_expired",
+        result: "success",
+        resourceId: null,
+        detail: { count: ids.length, inboxItemIds: ids },
+      });
+    } catch {
+      // best-effort
+    }
+  }
+  return { scanned: stale.length, cleared };
 }

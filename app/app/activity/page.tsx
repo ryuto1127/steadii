@@ -135,6 +135,9 @@ export default async function ActivityPage({
     auto_cal_added: tActions("auto_cal_added"),
     auto_cal_dismissed: tActions("auto_cal_dismissed"),
     auto_cal_edited: tActions("auto_cal_edited"),
+    // Round 4 propose-confirm auto-archive lifecycle.
+    auto_archive_proposed: tActions("auto_archive_proposed"),
+    auto_archive_dismissed_batch: tActions("auto_archive_dismissed_batch"),
     generic: tActions("generic"),
   };
 

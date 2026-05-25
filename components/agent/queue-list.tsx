@@ -84,6 +84,16 @@ type ServerActions = {
     },
   ) => Promise<void>;
   dismissProposal: (cardId: string) => Promise<void>;
+  // 2026-05-24 — Round 4. Type H (auto-archive batch propose-confirm).
+  //   archiveProposalConfirm  → flips selected inbox_items.status to
+  //                             'archived' + auto_archived true. When
+  //                             inboxItemIds is undefined, every
+  //                             currently-proposed item on the user
+  //                             is archived.
+  //   archiveProposalDismiss  → clears every proposed_archive_at flag
+  //                             without archiving — items stay in inbox.
+  archiveProposalConfirm: (inboxItemIds?: string[]) => Promise<void>;
+  archiveProposalDismiss: () => Promise<void>;
 };
 
 export function QueueList({
@@ -458,6 +468,46 @@ export function QueueList({
                       toast.success(t("card_g.dismiss_toast"));
                     } catch (err) {
                       toast.error(message(err, "Dismiss failed"));
+                    }
+                    refresh();
+                  }
+                : undefined,
+            onArchiveAll:
+              card.archetype === "H"
+                ? async () => {
+                    try {
+                      await actions.archiveProposalConfirm();
+                      toast.success(
+                        t("card_h.archive_toast", { n: card.totalCount }),
+                      );
+                    } catch (err) {
+                      toast.error(message(err, "Archive failed"));
+                    }
+                    refresh();
+                  }
+                : undefined,
+            onArchiveSelected:
+              card.archetype === "H"
+                ? async (ids) => {
+                    try {
+                      await actions.archiveProposalConfirm(ids);
+                      toast.success(
+                        t("card_h.archive_toast", { n: ids.length }),
+                      );
+                    } catch (err) {
+                      toast.error(message(err, "Archive failed"));
+                    }
+                    refresh();
+                  }
+                : undefined,
+            onCancelAll:
+              card.archetype === "H"
+                ? async () => {
+                    try {
+                      await actions.archiveProposalDismiss();
+                      toast.success(t("card_h.cancel_toast"));
+                    } catch (err) {
+                      toast.error(message(err, "Cancel failed"));
                     }
                     refresh();
                   }

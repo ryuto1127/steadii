@@ -457,6 +457,9 @@ export const ja: Messages = {
     tier_classifying: "分類中",
     tier_ignore: "無視",
     new_sender_pill: "新規送信者",
+    archive_proposed_pill: "アーカイブ提案",
+    archive_proposed_pill_title:
+      "Steadii が低リスクとして検出しました。キューから確認またはキャンセルしてください。",
     question_pill: "確認",
     question_pill_title: "下書きの前に確認したいことがあります。",
     important_pill: "重要",
@@ -1103,8 +1106,8 @@ export const ja: Messages = {
     inbox_auto_archive: {
       section_title: "受信箱",
       description:
-        "マーケティング、no-reply、明らかなノイズメールを Steadii が自動的にアーカイブし、キューを散らかしません。週次ダイジェストや受信箱の「非表示」フィルタからいつでも確認できます。",
-      toggle_label: "低リスクメールを自動で非表示にする",
+        "オンにすると、マーケティング、no-reply、その他明らかなノイズメールを Steadii が「自動アーカイブ候補」としてキューカードで提案し、あなたが確認してからアーカイブされます。7 日間操作しなかった提案はキューから消え、メール自体は受信箱に残ります。",
+      toggle_label: "低リスクメールのアーカイブを提案する",
       on: "オン — オフにする",
       off: "オフ — オンにする",
       safety_ramp_note:
@@ -1489,6 +1492,21 @@ export const ja: Messages = {
       add_toast: "カレンダーに追加しました。",
       dismiss_toast: "提案を破棄しました。",
     },
+    card_h: {
+      header: "これらの低リスクメールを自動アーカイブしますか?",
+      summary: "Steadii が {n} 通を低リスクとして検出しました。",
+      summary_one: "Steadii が 1 通を低リスクとして検出しました。",
+      more_overflow: "他 {n} 件。",
+      review_individually: "個別に確認する",
+      review_close: "閉じる",
+      review_archive_selected: "選択した {n} 件をアーカイブ",
+      archive_all: "全部アーカイブする",
+      cancel_all: "全部キャンセル",
+      expires_soon: "1 日以内に期限切れになるものがあります。",
+      no_subject: "(件名なし)",
+      archive_toast: "{n} 件をアーカイブしました。",
+      cancel_toast: "提案をクリアしました。",
+    },
   },
   command_palette: {
     placeholder_default: "Steadii に頼む…",
@@ -1531,7 +1549,7 @@ export const ja: Messages = {
     activity_action_label: {
       draft_sent: "下書きを送信",
       draft_dismissed: "下書きをスキップ",
-      auto_archived: "自動アーカイブ",
+      auto_archived: "アーカイブ",
       auto_replied: "自動返信",
       proposal_resolved: "解決",
       proposal_dismissed: "却下",
@@ -1540,6 +1558,8 @@ export const ja: Messages = {
       auto_cal_added: "カレンダーに追加",
       auto_cal_dismissed: "提案を破棄",
       auto_cal_edited: "提案を編集",
+      auto_archive_proposed: "アーカイブを提案",
+      auto_archive_dismissed_batch: "受信箱に残す",
       generic: "アクション",
     },
     more_this_week: "+ {n} 件 今週中",

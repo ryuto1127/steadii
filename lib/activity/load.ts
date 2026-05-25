@@ -29,6 +29,15 @@ export type ActivityKind =
   | "auto_cal_added"
   | "auto_cal_dismissed"
   | "auto_cal_edited"
+  // Round 4 (2026-05-24) — propose-confirm auto-archive lifecycle.
+  // `auto_archive_proposed` lands when the detector flags an item;
+  // `auto_archive_dismissed_batch` lands when the user clears all
+  // proposals from the Type H queue card without archiving any. The
+  // existing `auto_archived` kind continues to fire on user confirm
+  // (the `auto_archive` audit row that was previously written by the
+  // detector is now written by the queue-actions confirm path).
+  | "auto_archive_proposed"
+  | "auto_archive_dismissed_batch"
   | "generic";
 
 export type ActivityRow = {
@@ -170,6 +179,9 @@ export async function loadActivityRows(
         "auto_cal_proposal_added",
         "auto_cal_proposal_dismissed",
         "auto_cal_proposal_edited",
+        // Round 4 propose-confirm auto-archive lifecycle.
+        "auto_archive_proposed",
+        "auto_archive_dismissed_batch",
       ]),
     ];
     if (args.since) auditConds.push(gt(auditLog.createdAt, args.since));
@@ -202,7 +214,11 @@ export async function loadActivityRows(
                   ? "auto_cal_dismissed"
                   : a.action === "auto_cal_proposal_edited"
                     ? "auto_cal_edited"
-                    : "generic";
+                    : a.action === "auto_archive_proposed"
+                      ? "auto_archive_proposed"
+                      : a.action === "auto_archive_dismissed_batch"
+                        ? "auto_archive_dismissed_batch"
+                        : "generic";
       const detail =
         typeof a.detail === "object" && a.detail !== null
           ? (a.detail as Record<string, unknown>)
@@ -305,8 +321,11 @@ export async function loadActivityStats(args: {
         break;
       case "auto_cal_dismissed":
       case "auto_cal_edited":
+      case "auto_archive_proposed":
+      case "auto_archive_dismissed_batch":
         // Tracked in the audit log but not surfaced as a stats bucket
-        // today. Counted only in `total`.
+        // today. Counted only in `total`. (Proposed-without-confirm
+        // would skew the "archived this week" metric if counted here.)
         break;
       case "generic":
         break;

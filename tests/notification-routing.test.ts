@@ -42,6 +42,7 @@ describe("readTierPrefs", () => {
       E: "in_app", // default kept
       F: "in_app", // default kept (engineer-42)
       G: "in_app", // default kept (2026-05-21 — α-auto-cal Phase 3)
+      H: "in_app", // default kept (2026-05-24 — Round 4 propose-archive)
     });
   });
 

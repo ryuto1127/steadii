@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Wave 5 — auto-archive integration test. End-to-end at the
-// applyTriageResult layer:
+// Wave 5 + Round 4 (2026-05-24) — auto-archive integration test.
+// End-to-end at the applyTriageResult layer:
 //   - email arrives → classifier labels auto_low + 0.96 confidence
 //   - user has auto_archive_enabled=true and no learned opt-out
-//   - applyTriageResult → maybeAutoArchive flips status='archived',
-//     auto_archived=true, and writes an audit_log row
+//   - applyTriageResult → maybeProposeAutoArchive stamps
+//     proposed_archive_at + proposed_archive_reason on the inbox row
+//     and writes an `auto_archive_proposed` audit_log row.
+//
+// Round 4 shift: the detector NO LONGER flips status='archived' /
+// auto_archived=true. Those flips only happen on user confirm via
+// the Type H queue card → archiveProposalConfirmAllAction. The
+// classifier-eligibility helper (`isAutoArchiveEligible`) is
+// unchanged.
 
 vi.mock("server-only", () => ({}));
 
@@ -114,8 +121,8 @@ beforeEach(() => {
   learnedRulesByUser.clear();
 });
 
-describe("applyTriageResult → maybeAutoArchive", () => {
-  it("auto-archives auto_low items above the confidence threshold", async () => {
+describe("applyTriageResult → maybeProposeAutoArchive (Round 4)", () => {
+  it("PROPOSES (not archives) auto_low items above the confidence threshold", async () => {
     const { applyTriageResult } = await import(
       "@/lib/agent/email/triage"
     );
@@ -150,18 +157,27 @@ describe("applyTriageResult → maybeAutoArchive", () => {
     // The inbox row insert went in with triage_confidence populated.
     expect(insertedRows[0]?.triageConfidence).toBe(0.96);
 
-    // We expect at least one update with status='archived' and
-    // autoArchived=true (the auto-archive helper flip). Audit logs
-    // also fire as separate INSERTs.
+    // Round 4 — propose path stamps proposed_archive_at +
+    // proposed_archive_reason; status/auto_archived stay untouched.
     const updates = ops.filter((o) => o.kind === "update");
+    const proposeUpdate = updates.find((u) => {
+      const v = (u.payload as { value: Record<string, unknown> }).value;
+      return (
+        v.proposedArchiveAt instanceof Date &&
+        typeof v.proposedArchiveReason === "string"
+      );
+    });
+    expect(proposeUpdate).toBeTruthy();
+
+    // Verify the legacy act-first flip is NOT present.
     const archiveUpdate = updates.find((u) => {
       const v = (u.payload as { value: Record<string, unknown> }).value;
       return v.status === "archived" && v.autoArchived === true;
     });
-    expect(archiveUpdate).toBeTruthy();
+    expect(archiveUpdate).toBeFalsy();
   });
 
-  it("leaves the row visible when toggle is off", async () => {
+  it("leaves the row visible AND unflagged when toggle is off", async () => {
     userPrefRow.autoArchiveEnabled = false;
     const { applyTriageResult } = await import(
       "@/lib/agent/email/triage"
@@ -195,6 +211,11 @@ describe("applyTriageResult → maybeAutoArchive", () => {
     await applyTriageResult("user-w5-toggle-off", "google-acct", input, result);
 
     const updates = ops.filter((o) => o.kind === "update");
+    const proposeUpdate = updates.find((u) => {
+      const v = (u.payload as { value: Record<string, unknown> }).value;
+      return v.proposedArchiveAt instanceof Date;
+    });
+    expect(proposeUpdate).toBeFalsy();
     const archiveUpdate = updates.find((u) => {
       const v = (u.payload as { value: Record<string, unknown> }).value;
       return v.status === "archived";
@@ -205,7 +226,7 @@ describe("applyTriageResult → maybeAutoArchive", () => {
     userPrefRow.autoArchiveEnabled = true;
   });
 
-  it("leaves the row visible when learnedOptOut is set", async () => {
+  it("leaves the row visible AND unflagged when learnedOptOut is set", async () => {
     const { applyTriageResult } = await import(
       "@/lib/agent/email/triage"
     );
@@ -238,6 +259,11 @@ describe("applyTriageResult → maybeAutoArchive", () => {
     await applyTriageResult("user-w5-optout", "google-acct", input, result);
 
     const updates = ops.filter((o) => o.kind === "update");
+    const proposeUpdate = updates.find((u) => {
+      const v = (u.payload as { value: Record<string, unknown> }).value;
+      return v.proposedArchiveAt instanceof Date;
+    });
+    expect(proposeUpdate).toBeFalsy();
     const archiveUpdate = updates.find((u) => {
       const v = (u.payload as { value: Record<string, unknown> }).value;
       return v.status === "archived";

@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, gt, gte, inArray, isNull, lte, ne, or } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, ne, or } from "drizzle-orm";
 import { getTranslations } from "next-intl/server";
 import { db } from "@/lib/db/client";
 import {
@@ -36,6 +36,8 @@ import {
   type QueueCardE,
   type QueueCardF,
   type QueueCardG,
+  type QueueCardH,
+  type QueueCardHItem,
   type QueueConfidence,
   type QueueDecisionOption,
   type QueueSourceChip,
@@ -81,6 +83,7 @@ export async function buildQueueForUser(
     officeHoursRows,
     confirmationRows,
     autoCalRows,
+    proposedArchiveRows,
   ] = await Promise.all([
     fetchPendingProposals(userId),
     fetchPendingDrafts(userId, { hideRead }),
@@ -88,6 +91,7 @@ export async function buildQueueForUser(
     fetchPendingOfficeHoursRequests(userId),
     fetchPendingConfirmations(userId),
     fetchPendingAutoCalRows(userId),
+    fetchProposedArchiveRows(userId),
   ]);
 
   // Wave 3.2 — proposals split across Type A / C / E by issueType.
@@ -129,6 +133,11 @@ export async function buildQueueForUser(
 
   const fCards: QueueCardF[] = confirmationRows.map(confirmationToTypeF);
   const gCards: QueueCardG[] = autoCalRows.map(autoCalToTypeG);
+  // Round 4 (2026-05-24) — Type H batches the user's currently-proposed
+  // auto-archives into a single card. Built once, regardless of N, so
+  // the queue doesn't flood with one card per proposed item.
+  const hCard = buildTypeHForUser(proposedArchiveRows);
+  const hCards: QueueCardH[] = hCard ? [hCard] : [];
 
   // engineer-42 sort: F + A interleave at the top because pending
   // confirmations block downstream draft generation (the L2 loop reads
@@ -143,6 +152,12 @@ export async function buildQueueForUser(
   // queue alongside other "answer this now" cards (F/A). They sit just
   // below F+A because confirmations gate downstream draft generation
   // (a higher dependency) while G is leaf-level.
+  //
+  // 2026-05-24 — H (auto-archive batch) sits below G/B/C/E because the
+  // proposals carry a 7d grace window — they're the lowest-urgency of
+  // the queue (the spec's "optional" expiry indicator captures the
+  // rare close-to-stale case). Tail position keeps the card from
+  // distracting from time-sensitive items above.
   const allFAndACards = sortByCreatedDesc([...fCards, ...allACards]);
   return [
     ...allFAndACards,
@@ -150,6 +165,7 @@ export async function buildQueueForUser(
     ...sortByCreatedDesc(allBCards),
     ...sortByCreatedDesc(allCCards),
     ...sortByCreatedDesc(allECards),
+    ...hCards,
   ].slice(0, QUEUE_FETCH_LIMIT);
 }
 
@@ -1328,6 +1344,130 @@ function shortTzLabel(tz: string): string {
   if (tz === "Europe/London") return "GMT";
   if (tz === "Europe/Berlin" || tz === "Europe/Paris") return "CET";
   return tz;
+}
+
+// ── proposed_archive_at (Round 4 propose-confirm) → Type H ──────────
+// 2026-05-24 — the detector stamps `proposed_archive_at` on individual
+// rows when the Tier-1 auto-archive gates pass. The queue collapses
+// all currently-proposed rows for the user into ONE Type H card so
+// the surface doesn't flood when the auto-archive default flips on
+// (a single newsletter sweep could otherwise produce 20+ cards).
+
+// Pulled at the top of buildQueueForUser. Returns the most-recent
+// 50 proposed rows so the body's top-3 sample skews to "things the
+// user has seen most recently in their inbox" — older items are
+// still counted toward totalCount but don't crowd the preview list.
+async function fetchProposedArchiveRows(userId: string): Promise<
+  Array<{
+    id: string;
+    senderEmail: string;
+    senderName: string | null;
+    subject: string | null;
+    proposedArchiveAt: Date;
+  }>
+> {
+  try {
+    const rows = await db
+      .select({
+        id: inboxItems.id,
+        senderEmail: inboxItems.senderEmail,
+        senderName: inboxItems.senderName,
+        subject: inboxItems.subject,
+        proposedArchiveAt: inboxItems.proposedArchiveAt,
+      })
+      .from(inboxItems)
+      .where(
+        and(
+          eq(inboxItems.userId, userId),
+          isNull(inboxItems.deletedAt),
+          isNotNull(inboxItems.proposedArchiveAt),
+        ),
+      )
+      .orderBy(desc(inboxItems.proposedArchiveAt))
+      .limit(50);
+    // Narrow proposedArchiveAt for the TS type-system — Drizzle's
+    // isNotNull doesn't propagate through to the projected column
+    // type, so we re-narrow here. The DB-side partial index makes
+    // the probe O(log N) over the proposed set, not the inbox.
+    return rows.flatMap((r) =>
+      r.proposedArchiveAt
+        ? [
+            {
+              id: r.id,
+              senderEmail: r.senderEmail,
+              senderName: r.senderName,
+              subject: r.subject,
+              proposedArchiveAt: r.proposedArchiveAt,
+            },
+          ]
+        : [],
+    );
+  } catch {
+    // Schema-drift defense — pre-migration deploys lacking the column
+    // degrade to empty instead of crashing Home.
+    return [];
+  }
+}
+
+// Build a single Type H card from the user's currently-proposed
+// auto-archive rows. Returns null when no rows are proposed — the
+// caller (buildQueueForUser) suppresses the card in that case.
+function buildTypeHForUser(
+  rows: Array<{
+    id: string;
+    senderEmail: string;
+    senderName: string | null;
+    subject: string | null;
+    proposedArchiveAt: Date;
+  }>,
+): QueueCardH | null {
+  if (rows.length === 0) return null;
+  // Top-3 sample for body preview. The full list is passed via items[]
+  // — the renderer slices for display. We include the trimmed shape
+  // up to N items (capped at the schema's 50 fetch) so per-item
+  // review can hand the full id list back to the confirm action.
+  const items: QueueCardHItem[] = rows.map((r) => ({
+    id: r.id,
+    senderLabel: r.senderName?.trim() || r.senderEmail,
+    subject: r.subject?.trim() || null,
+    proposedAt: r.proposedArchiveAt.toISOString(),
+  }));
+  // Soonest expiry across the batch — the renderer surfaces a pill
+  // only when this is within 1 day of the 7d auto-clear (per
+  // cardHShouldShowExpiry). We compute on the oldest proposedAt
+  // (max age) since that's the row closest to its 7d deadline.
+  const oldestProposedAt = rows.reduce(
+    (oldest, r) => (r.proposedArchiveAt < oldest ? r.proposedArchiveAt : oldest),
+    rows[0]!.proposedArchiveAt,
+  );
+  // The card's createdAt reflects the newest propose stamp so the
+  // queue ordering reads as "this card is fresh". The 7d expiry
+  // semantics live in the body fields independently.
+  const newestProposedAt = rows.reduce(
+    (newest, r) => (r.proposedArchiveAt > newest ? r.proposedArchiveAt : newest),
+    rows[0]!.proposedArchiveAt,
+  );
+  return {
+    id: "archive_proposals:batch",
+    archetype: "H",
+    // Title is rendered from i18n keys client-side; we still set a
+    // stable English default so any consumer that reads card.title
+    // (Recent Activity feed, logs) doesn't crash.
+    title: "Confirm auto-archive",
+    body: "",
+    confidence: "medium",
+    createdAt: newestProposedAt.toISOString(),
+    sources: [],
+    detailHref: "/app/inbox",
+    originHref: undefined,
+    // The proposal flag is reversible at no cost (no calendar / email
+    // state has been touched yet); we mark this true so the Type H
+    // renderer can opt into Undo if a future PR adds one.
+    reversible: true,
+    totalCount: rows.length,
+    items,
+    soonestExpiresAt: oldestProposedAt.toISOString(),
+  };
 }
 
 // ── Re-exports / accessors used by Recent Activity (Scope 5) ─────────

@@ -32,9 +32,21 @@ export type EmailAuditAction =
   // user-driven restore that feeds the learning signal back into
   // agent_rules. Recent activity + Inbox Hidden chip + digest section
   // all read these.
+  //
+  // Round 4 (2026-05-24) — auto-archive is now propose-confirm:
+  //   - 'auto_archive_proposed'         (detector flags an item)
+  //   - 'auto_archive'                  (user CONFIRMS — preserves the
+  //                                      existing audit shape so the
+  //                                      digest / Hidden chip / activity
+  //                                      readers keep working unchanged)
+  //   - 'auto_archive_dismissed_batch'  (user dismisses the proposal card)
+  //   - 'auto_archive_proposal_expired' (7d sweep clears untouched)
   | "auto_archive"
   | "auto_archive_failed"
   | "auto_archive_restored"
+  | "auto_archive_proposed"
+  | "auto_archive_dismissed_batch"
+  | "auto_archive_proposal_expired"
   // engineer-48 — second-pass reranker over fanout's cosine-recall
   // slate. Detail payload carries phase + before/after counts +
   // dropped ids + token cost so the audit log can prove the precision

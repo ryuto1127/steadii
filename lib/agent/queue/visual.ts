@@ -4,6 +4,11 @@
 
 import type { QueueArchetype, QueueCardG, QueueConfidence } from "./types";
 
+// Round 4 (2026-05-24) — Type H header copy + expiry hints. The card
+// surfaces a batch confirmation for propose-archive items; helpers
+// here pin the i18n keys + the soonest-expiry threshold so the
+// renderer stays declarative.
+
 // Confidence → left-border tailwind class. Mirrors the spec table at
 // `project_wave_2_home_design.md` § "Confidence indicator":
 //   - high   → vivid 4px primary border
@@ -71,7 +76,44 @@ export function archetypePillKey(archetype: QueueArchetype): string {
       return "archetype_f_pill";
     case "G":
       return "archetype_g_pill";
+    case "H":
+      return "archetype_h_pill";
   }
+}
+
+// ── Type H (propose-archive batch) helpers ───────────────────────────
+//
+// The renderer dispatches on these so the card stays declarative.
+// `cardHShouldShowExpiry` mirrors the Type G' threshold (≤ 1 day to
+// expiry triggers the "expires soon" pill); Type H's grace window is
+// longer than Type G's (proposals are auto-cleared after 7d here)
+// but we keep the visual trigger conservative — surfacing the pill
+// only when the soonest item is within 1 day matches the spec's
+// "optional: expires-in-Nd indicator if any item is within 1d of
+// its 7d sweep deadline".
+
+// Days until the soonest item in the batch expires (clamped to >= 0).
+// Returns null when the input is malformed so the caller can skip
+// rendering.
+export function cardHDaysUntilExpiry(
+  proposedAtIso: string,
+  nowMs: number = Date.now(),
+  staleAfterMs: number = 7 * 24 * 60 * 60 * 1000,
+): number | null {
+  const proposedMs = Date.parse(proposedAtIso);
+  if (!Number.isFinite(proposedMs)) return null;
+  const expiresMs = proposedMs + staleAfterMs;
+  const diffMs = expiresMs - nowMs;
+  if (diffMs <= 0) return 0;
+  return Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+}
+
+// Spec: surface the "expires soon" pill only when the soonest item is
+// within 1 day of its 7-day sweep deadline. Earlier than that the
+// card would just clutter.
+export function cardHShouldShowExpiry(daysUntilExpiry: number | null): boolean {
+  if (daysUntilExpiry === null) return false;
+  return daysUntilExpiry <= 1;
 }
 
 // ── Type G' (auto-cal propose-confirm) helpers ───────────────────────

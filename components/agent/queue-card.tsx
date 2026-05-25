@@ -33,6 +33,7 @@ import type {
   QueueCardE,
   QueueCardF,
   QueueCardG,
+  QueueCardH,
   QueueSourceChip,
 } from "@/lib/agent/queue/types";
 import {
@@ -42,6 +43,8 @@ import {
   cardGShouldShowExpiry,
   cardGShouldShowTimePickers,
   cardGValidateEdit,
+  cardHDaysUntilExpiry,
+  cardHShouldShowExpiry,
   confidenceBorderClass,
   isExternalOriginHref,
 } from "@/lib/agent/queue/visual";
@@ -177,6 +180,26 @@ type CardGProps = CommonProps & {
     updates: CardGEditPatch,
   ) => Promise<ActionResult> | ActionResult;
   onDismissProposal: () => Promise<ActionResult> | ActionResult;
+};
+
+// 2026-05-24 — Type H (auto-archive batch propose-confirm). Three
+// actions:
+//   onArchiveAll       → user clicked [全部アーカイブする]. Server
+//                        flips every currently-proposed item's status
+//                        to archived + auto_archived true.
+//   onArchiveSelected  → user opened per-item review, picked a
+//                        subset, then submitted [選択した N 件を
+//                        アーカイブ]. Server archives only those ids.
+//   onCancelAll        → user clicked [全部キャンセル]. Server clears
+//                        every proposed_archive_at flag — nothing
+//                        archived, items stay in inbox.
+type CardHProps = CommonProps & {
+  card: QueueCardH;
+  onArchiveAll: () => Promise<ActionResult> | ActionResult;
+  onArchiveSelected: (
+    inboxItemIds: string[],
+  ) => Promise<ActionResult> | ActionResult;
+  onCancelAll: () => Promise<ActionResult> | ActionResult;
 };
 
 // Source chip — one per origin record the agent referenced. Visual
@@ -1441,6 +1464,10 @@ export type QueueCardActions = {
   onAddToCalendar?: CardGProps["onAddToCalendar"];
   onEditProposal?: CardGProps["onEditProposal"];
   onDismissProposal?: CardGProps["onDismissProposal"];
+  // 2026-05-24 — Type H propose-archive batch actions.
+  onArchiveAll?: CardHProps["onArchiveAll"];
+  onArchiveSelected?: CardHProps["onArchiveSelected"];
+  onCancelAll?: CardHProps["onCancelAll"];
   onDismiss: CommonProps["onDismiss"];
   onSnooze: CommonProps["onSnooze"];
   onPermanentDismiss: CommonProps["onPermanentDismiss"];
@@ -1535,6 +1562,18 @@ export function QueueCardRenderer({
           onAddToCalendar={actions.onAddToCalendar ?? noopAsync}
           onEditProposal={actions.onEditProposal ?? noopAsyncEdit}
           onDismissProposal={actions.onDismissProposal ?? noopAsync}
+          onDismiss={actions.onDismiss}
+          onSnooze={actions.onSnooze}
+          onPermanentDismiss={actions.onPermanentDismiss}
+        />
+      );
+    case "H":
+      return (
+        <QueueCardHRender
+          card={card}
+          onArchiveAll={actions.onArchiveAll ?? noopAsync}
+          onArchiveSelected={actions.onArchiveSelected ?? noopAsyncSelected}
+          onCancelAll={actions.onCancelAll ?? noopAsync}
           onDismiss={actions.onDismiss}
           onSnooze={actions.onSnooze}
           onPermanentDismiss={actions.onPermanentDismiss}
@@ -1895,6 +1934,249 @@ function parseCardSlotForEditor(card: QueueCardG): {
   };
 }
 
+// ── Type H (auto-archive batch propose-confirm) ──────────────────────
+// 2026-05-24 — Round 4. The card collapses every currently-proposed
+// auto-archive into one batched confirmation. Three actions: archive
+// all, review individually (expandable inline list with per-item
+// checkboxes + [選択した N 件をアーカイブ]), or cancel all (clears
+// flags without archiving). Renderer-only; data shape + sort live in
+// `lib/agent/queue/build.ts`.
+
+const PREVIEW_LIMIT = 3;
+
+export function QueueCardHRender({
+  card,
+  onArchiveAll,
+  onArchiveSelected,
+  onCancelAll,
+  onSnooze,
+  onPermanentDismiss,
+}: CardHProps) {
+  const t = useTranslations("queue.card_h");
+  const locale = useLocaleHint();
+  const [pending, startTransition] = useTransition();
+  const [resolved, setResolved] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const { bindings, menu } = useQuickMenu({ onSnooze, onPermanentDismiss });
+
+  // Soonest-expiry indicator — re-eval each minute so the card flips
+  // its "expires soon" pill once the oldest item's 7d window enters
+  // the 1d threshold. The renderer pulls from the helper rather than
+  // re-deriving so the threshold rule stays in one place.
+  const [daysUntilExpiry, setDaysUntilExpiry] = useState(() =>
+    cardHDaysUntilExpiry(card.soonestExpiresAt),
+  );
+  useEffect(() => {
+    const tick = () => setDaysUntilExpiry(cardHDaysUntilExpiry(card.soonestExpiresAt));
+    tick();
+    const interval = setInterval(tick, 60_000);
+    return () => clearInterval(interval);
+  }, [card.soonestExpiresAt]);
+  const showExpiry = cardHShouldShowExpiry(daysUntilExpiry);
+
+  const archiveAll = () => {
+    if (pending || resolved) return;
+    startTransition(async () => {
+      await onArchiveAll();
+      setResolved(true);
+    });
+  };
+
+  const cancelAll = () => {
+    if (pending || resolved) return;
+    startTransition(async () => {
+      await onCancelAll();
+      setResolved(true);
+    });
+  };
+
+  const archiveSelected = () => {
+    if (pending || resolved || selected.size === 0) return;
+    const ids = Array.from(selected);
+    startTransition(async () => {
+      await onArchiveSelected(ids);
+      setResolved(true);
+    });
+  };
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const previewItems = reviewing ? card.items : card.items.slice(0, PREVIEW_LIMIT);
+  const overflow = Math.max(0, card.totalCount - PREVIEW_LIMIT);
+  // i18n: pluralized summary. We don't have full ICU plural support
+  // here so a manual branch on n===1 keeps the en/ja copy natural.
+  const summary =
+    card.totalCount === 1
+      ? t("summary_one")
+      : t("summary", { n: card.totalCount });
+
+  return (
+    <>
+      <CardShell
+        card={card}
+        size="md"
+        variant="default"
+        onContextMenu={bindings.onContextMenu}
+      >
+        <div
+          {...bindings}
+          aria-disabled={resolved}
+          className={cn(resolved && "opacity-60")}
+        >
+          <header className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-2">
+              <span
+                aria-hidden
+                className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[hsl(var(--surface))] text-[hsl(var(--muted-foreground))]"
+              >
+                <Archive size={14} strokeWidth={2} />
+              </span>
+              <h3 className="text-[14px] font-semibold leading-snug text-[hsl(var(--foreground))]">
+                {t("header")}
+              </h3>
+            </div>
+            <span
+              className="shrink-0 font-mono text-[10px] tabular-nums text-[hsl(var(--muted-foreground))]"
+              title={new Date(card.createdAt).toLocaleString()}
+            >
+              {formatRelative(card.createdAt, locale)}
+            </span>
+          </header>
+          <p className="mt-2 text-[13px] text-[hsl(var(--foreground))]">
+            {summary}
+          </p>
+          {showExpiry ? (
+            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-[hsl(var(--muted-foreground))]">
+              <Clock size={11} strokeWidth={2} />
+              <span>{t("expires_soon")}</span>
+            </div>
+          ) : null}
+          {reviewing ? (
+            <ul
+              className="mt-3 flex max-h-[280px] flex-col gap-1.5 overflow-y-auto rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-2"
+              data-testid="queue-card-h-review-list"
+            >
+              {previewItems.map((it) => (
+                <li key={it.id}>
+                  <label className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 transition-hover hover:bg-[hsl(var(--surface-raised))]">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(it.id)}
+                      onChange={() => toggle(it.id)}
+                      disabled={pending || resolved}
+                      className="mt-1 shrink-0"
+                      data-testid={`queue-card-h-checkbox-${it.id}`}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12px] font-medium text-[hsl(var(--foreground))]">
+                        {it.senderLabel}
+                      </span>
+                      <span className="block truncate text-[11px] text-[hsl(var(--muted-foreground))]">
+                        {it.subject ?? t("no_subject")}
+                      </span>
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <ul className="mt-3 flex flex-col gap-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2">
+              {previewItems.map((it) => (
+                <li
+                  key={it.id}
+                  className="flex gap-2 truncate text-[12px] leading-snug text-[hsl(var(--foreground))]"
+                >
+                  <span
+                    aria-hidden
+                    className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[hsl(var(--muted-foreground))]"
+                  />
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="font-medium">{it.senderLabel}</span>
+                    <span className="ml-2 text-[hsl(var(--muted-foreground))]">
+                      {it.subject ?? t("no_subject")}
+                    </span>
+                  </span>
+                </li>
+              ))}
+              {overflow > 0 ? (
+                <li className="pl-3 text-[11px] italic text-[hsl(var(--muted-foreground))]">
+                  {t("more_overflow", { n: overflow })}
+                </li>
+              ) : null}
+            </ul>
+          )}
+          {reviewing ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={archiveSelected}
+                disabled={pending || resolved || selected.size === 0}
+                data-testid="queue-card-h-archive-selected"
+                className="inline-flex h-9 items-center gap-1 rounded-full bg-[hsl(var(--foreground))] px-4 text-[13px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90 disabled:opacity-50"
+              >
+                {t("review_archive_selected", { n: selected.size })}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setReviewing(false);
+                  setSelected(new Set());
+                }}
+                disabled={pending || resolved}
+                data-testid="queue-card-h-review-close"
+                className="inline-flex h-9 items-center rounded-full px-3 text-[13px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+              >
+                {t("review_close")}
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={archiveAll}
+                disabled={pending || resolved}
+                data-testid="queue-card-h-archive-all"
+                className="inline-flex h-9 items-center gap-1 rounded-full bg-[hsl(var(--foreground))] px-4 text-[13px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90 disabled:opacity-50"
+              >
+                <Archive size={12} strokeWidth={2} />
+                <span>{t("archive_all")}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setReviewing(true)}
+                disabled={pending || resolved}
+                data-testid="queue-card-h-review-open"
+                className="inline-flex h-9 items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-[13px] font-medium text-[hsl(var(--foreground))] transition-default hover:bg-[hsl(var(--surface-raised))] disabled:opacity-50"
+              >
+                {t("review_individually")}
+              </button>
+              <button
+                type="button"
+                onClick={cancelAll}
+                disabled={pending || resolved}
+                data-testid="queue-card-h-cancel-all"
+                className="ml-auto inline-flex h-9 items-center rounded-full px-3 text-[13px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+              >
+                {t("cancel_all")}
+              </button>
+            </div>
+          )}
+          <CardFooter card={card} />
+        </div>
+      </CardShell>
+      {menu}
+    </>
+  );
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 function isUndoResult(value: unknown): value is { undoToken: string } {
   return (
@@ -1909,6 +2191,7 @@ const noopAsync = async () => {};
 const noopSubmit = async (_picked: string | null, _free: string) => {};
 const noopAsyncCorrect = async (_value: string) => {};
 const noopAsyncEdit = async (_updates: CardGEditPatch) => {};
+const noopAsyncSelected = async (_ids: string[]) => {};
 
 // next-intl's `useTranslations` doesn't expose the active locale; we
 // derive it from `<html lang="…">` so the relative-time rendering and
