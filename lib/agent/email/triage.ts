@@ -16,7 +16,7 @@ import type { ClassifyInput, TriageResult, UserContext } from "./types";
 import { logEmailAudit } from "./audit";
 import { embedAndStoreInboxItem } from "./embeddings";
 import { bindEmailToClass, persistBinding } from "./class-binding";
-import { maybeAutoArchive } from "./auto-archive";
+import { maybeProposeAutoArchive } from "./auto-archive";
 
 // Public API. `triageMessage` is pure-enough: it reads user context from
 // DB but does not write. `applyTriageResult` writes the inbox row and
@@ -173,11 +173,14 @@ export async function applyTriageResult(
       }
     }
 
-    // Wave 5 — silent auto-archive of Tier-1 high-confidence noise.
-    // Runs after class binding so admin retains the binding context
-    // even for hidden rows (search across hidden items still works).
-    // Failures are swallowed inside the helper.
-    await maybeAutoArchive(userId, created, result);
+    // Round 4 (2026-05-24) — propose-confirm auto-archive of Tier-1
+    // high-confidence noise. The detector no longer hides the row
+    // silently; it stamps proposed_archive_at and a Type-H queue
+    // card surfaces a batch confirmation. Runs after class binding
+    // so the binding context is preserved even on rows the user
+    // ultimately confirms for archive. Failures are swallowed
+    // inside the helper.
+    await maybeProposeAutoArchive(userId, created, result);
   } else {
     await logEmailAudit({
       userId,

@@ -364,6 +364,8 @@ type MessagesShape = {
     question_pill_title: string;
     important_pill: string;
     important_pill_title: string;
+    archive_proposed_pill: string;
+    archive_proposed_pill_title: string;
     no_subject: string;
     noticed: string;
     proposal_pill: string;
@@ -852,6 +854,21 @@ type MessagesShape = {
       editor_validation_past_date_warning: string;
       add_toast: string;
       dismiss_toast: string;
+    };
+    card_h: {
+      header: string;
+      summary: string;
+      summary_one: string;
+      more_overflow: string;
+      review_individually: string;
+      review_close: string;
+      review_archive_selected: string;
+      archive_all: string;
+      cancel_all: string;
+      expires_soon: string;
+      no_subject: string;
+      archive_toast: string;
+      cancel_toast: string;
     };
   };
   command_palette: {
@@ -2276,6 +2293,9 @@ export const en: MessagesShape = {
     tier_classifying: "Classifying",
     tier_ignore: "Ignore",
     new_sender_pill: "New sender",
+    archive_proposed_pill: "Archive proposed",
+    archive_proposed_pill_title:
+      "Steadii flagged this as low-risk. Confirm or cancel from the queue.",
     question_pill: "Question",
     question_pill_title: "Steadii needs you to clarify before drafting.",
     important_pill: "Important",
@@ -2794,6 +2814,21 @@ export const en: MessagesShape = {
       add_toast: "Added to your calendar.",
       dismiss_toast: "Proposal dismissed.",
     },
+    card_h: {
+      header: "Archive these low-risk emails?",
+      summary: "Steadii flagged {n} emails as low-risk.",
+      summary_one: "Steadii flagged 1 email as low-risk.",
+      more_overflow: "and {n} more.",
+      review_individually: "Review individually",
+      review_close: "Close",
+      review_archive_selected: "Archive selected ({n})",
+      archive_all: "Archive all",
+      cancel_all: "Cancel all",
+      expires_soon: "Some expire within 1 day.",
+      no_subject: "(no subject)",
+      archive_toast: "{n} archived.",
+      cancel_toast: "Proposals cleared.",
+    },
   },
   command_palette: {
     placeholder_default: "Tell Steadii…",
@@ -2836,7 +2871,7 @@ export const en: MessagesShape = {
     activity_action_label: {
       draft_sent: "Sent draft",
       draft_dismissed: "Skipped draft",
-      auto_archived: "Auto-archived",
+      auto_archived: "Archived",
       auto_replied: "Auto-replied",
       proposal_resolved: "Resolved",
       proposal_dismissed: "Dismissed",
@@ -2845,6 +2880,8 @@ export const en: MessagesShape = {
       auto_cal_added: "Added to calendar",
       auto_cal_dismissed: "Dismissed proposal",
       auto_cal_edited: "Edited proposal",
+      auto_archive_proposed: "Suggested archive",
+      auto_archive_dismissed_batch: "Kept in inbox",
       generic: "Action",
     },
     more_this_week: "+ {n} more this week",
@@ -3197,8 +3234,8 @@ export const en: MessagesShape = {
     inbox_auto_archive: {
       section_title: "Inbox",
       description:
-        "Steadii silently archives marketing, no-reply, and other clear-noise emails so they don't clutter your queue. You can review hidden items in the weekly digest or via the Hidden filter in Inbox.",
-      toggle_label: "Hide low-risk emails automatically",
+        "When on, Steadii flags marketing, no-reply, and other clear-noise emails and surfaces them in a queue card so you can confirm before they're archived. Items you don't act on are cleared from the queue after 7 days and stay in your inbox.",
+      toggle_label: "Suggest archiving low-risk emails",
       on: "On — turn off",
       off: "Off — turn on",
       safety_ramp_note:

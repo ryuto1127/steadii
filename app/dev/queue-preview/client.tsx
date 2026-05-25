@@ -23,6 +23,7 @@ const NOOP_EDIT_PROPOSAL = async (
     title?: string;
   },
 ) => {};
+const NOOP_ARCHIVE_CONFIRM = async (_ids?: string[]) => {};
 
 // Client-side mount for the verification harness. Reuses the real
 // QueueList wrapper so the i18n-aware section heading + show-more
@@ -78,6 +79,8 @@ export function QueuePreviewClient({
             addToCalendar: NOOP,
             editProposal: NOOP_EDIT_PROPOSAL,
             dismissProposal: NOOP,
+            archiveProposalConfirm: NOOP_ARCHIVE_CONFIRM,
+            archiveProposalDismiss: NOOP,
           }}
         />
       )}

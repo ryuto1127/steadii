@@ -30,6 +30,9 @@ const KIND_ICON: Record<
   auto_cal_added: Calendar,
   auto_cal_dismissed: X,
   auto_cal_edited: Pencil,
+  // Round 4 propose-confirm auto-archive lifecycle.
+  auto_archive_proposed: Archive,
+  auto_archive_dismissed_batch: X,
   generic: Activity,
 };
 

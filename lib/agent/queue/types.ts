@@ -20,7 +20,7 @@ import type {
   ProposalSourceRef,
 } from "@/lib/db/schema";
 
-export type QueueArchetype = "A" | "B" | "C" | "D" | "E" | "F" | "G";
+export type QueueArchetype = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H";
 
 // 3-tier confidence visual. Numeric % is intentionally NOT shown (see
 // memory `project_wave_2_home_design.md` "Confidence indicator"). The
@@ -259,6 +259,59 @@ export type QueueCardG = QueueCardBase & {
   inboxItemId: string;
 };
 
+// 2026-05-24 — Round 4. Type H surfaces the propose-confirm auto-
+// archive batch. The detector stamps proposed_archive_at on
+// individual inbox_items rows; the queue builder collapses every
+// currently-proposed row for a user into ONE Type H card per user
+// (not one per item). The card carries:
+//
+//   - the count of currently-proposed items (total)
+//   - a top-3 sample (sender + subject) for body preview
+//   - the inbox_item ids so per-item review can confirm a subset
+//   - the soonest expiry of any item in the batch, so the renderer
+//     can surface a "stale within Nd" notice when items are close
+//     to their 7-day auto-clear
+//
+// Three actions on the card map to server actions in queue-actions.ts:
+//
+//   [全部アーカイブする]  → archiveProposalConfirmAllAction(undefined)
+//                          archives every proposed item, idempotent.
+//   [選択して確認]        → opens an inline per-item list with
+//                          checkboxes; submit fires
+//                          archiveProposalConfirmAllAction({ ids })
+//                          for the picked subset only.
+//   [全部キャンセル]      → archiveProposalDismissAllAction() clears
+//                          every flag, nothing archived.
+//
+// Only one Type H card surfaces per user at a time — adding 3 more
+// proposed items just updates the count + top-3 list on the same card.
+export type QueueCardHItem = {
+  // inbox_items.id — used as the value for the per-item checkbox path.
+  id: string;
+  senderLabel: string;
+  // Trimmed/truncated subject for display. Null when the source row had
+  // no subject (renderer falls back to "(no subject)").
+  subject: string | null;
+  // ISO timestamp the proposal was stamped — drives the soonest-expiry
+  // pill on the card body.
+  proposedAt: string;
+};
+
+export type QueueCardH = QueueCardBase & {
+  archetype: "H";
+  // Total count of currently-proposed items for the user (≥ items.length
+  // when N > 3 since the body list is sampled).
+  totalCount: number;
+  // Top-N (≤ 3) for the body preview. Renderer joins as a vertical
+  // list; if totalCount > items.length the renderer appends a
+  // "and N more" line localized via queue.card_h.more_overflow.
+  items: QueueCardHItem[];
+  // ISO timestamp of the soonest 7d expiry across the batch. Used by
+  // the renderer to decide whether to show the "expires soon" pill;
+  // the threshold lives in `cardHShouldShowExpiry`.
+  soonestExpiresAt: string;
+};
+
 export type QueueCard =
   | QueueCardA
   | QueueCardB
@@ -266,7 +319,8 @@ export type QueueCard =
   | QueueCardD
   | QueueCardE
   | QueueCardF
-  | QueueCardG;
+  | QueueCardG
+  | QueueCardH;
 
 // Re-exported so callers (test fixtures, UI props) can import without
 // reaching into schema directly.

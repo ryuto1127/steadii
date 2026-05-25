@@ -9,6 +9,8 @@ import { buildQueueForUser } from "@/lib/agent/queue/build";
 import { getUserTimezone } from "@/lib/agent/preferences";
 import { FALLBACK_TZ } from "@/lib/calendar/tz-utils";
 import {
+  archiveProposalConfirmAllAction,
+  archiveProposalDismissAllAction,
   autoCalProposalAddAction,
   autoCalProposalDismissAction,
   autoCalProposalEditAction,
@@ -113,6 +115,14 @@ export default async function HomePage() {
                 await autoCalProposalEditAction(cardId, updates);
               },
               dismissProposal: autoCalProposalDismissAction,
+              archiveProposalConfirm: async (inboxItemIds) => {
+                await archiveProposalConfirmAllAction(
+                  inboxItemIds ? { inboxItemIds } : undefined,
+                );
+              },
+              archiveProposalDismiss: async () => {
+                await archiveProposalDismissAllAction();
+              },
             }}
           />
         ) : (

@@ -351,6 +351,13 @@
 			"when": 1779600000000,
 			"tag": "0049_auto_cal_propose_status",
 			"breakpoints": true
+		},
+		{
+			"idx": 50,
+			"version": "7",
+			"when": 1779700000000,
+			"tag": "0050_inbox_propose_archive",
+			"breakpoints": true
 		}
 	]
 }

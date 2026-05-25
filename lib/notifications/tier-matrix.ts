@@ -48,6 +48,14 @@ export const DEFAULT_NOTIFICATION_TIER_PREFS: NotificationTierPrefs = {
   // intrusive at α; post-α decision can revisit if false-positive rate
   // turns out higher than expected.
   G: "in_app",
+  // H (auto-archive batch propose-confirm) — in-app only. The 7d
+  // window tolerates "user-sees-it-on-next-Home-visit" latency, and
+  // the items themselves still appear in the inbox list (just with
+  // a "proposed for archive" pill) so the user's signal-to-noise
+  // doesn't degrade if they never open Home for a day. Push would
+  // double-notify when a single auto_low ingest is already a low-
+  // signal class of email.
+  H: "in_app",
 };
 
 // Read a user's effective preferences from the JSONB blob, filling in
@@ -62,7 +70,7 @@ export function readTierPrefs(
     isObject(raw.notificationTiers) ? raw.notificationTiers : null;
   if (!stored) return { ...DEFAULT_NOTIFICATION_TIER_PREFS };
   const out: NotificationTierPrefs = { ...DEFAULT_NOTIFICATION_TIER_PREFS };
-  for (const arch of ["A", "B", "C", "D", "E", "F"] as const) {
+  for (const arch of ["A", "B", "C", "D", "E", "F", "G", "H"] as const) {
     const v = stored[arch];
     if (v === "push" || v === "digest" || v === "in_app") {
       out[arch] = v;

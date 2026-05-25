@@ -5,6 +5,7 @@ import { dispatchMasterSweep, type SubSweeps } from "@/lib/cron/master-sweep";
 import { runPreBriefScan } from "@/lib/agent/pre-brief/scanner";
 import { runIngestSweep } from "@/lib/agent/email/ingest-sweep";
 import { runAutoCalProposalExpirySweep } from "@/lib/agent/proactive/auto-cal-proposal-expiry";
+import { expireStaleProposedArchives } from "@/lib/agent/email/auto-archive";
 import {
   defaultSentSinceProbe,
   runDraftSupersededSweep,
@@ -33,6 +34,7 @@ export const runtime = "nodejs";
 // MODULO DISPATCH (the pure logic lives in lib/cron/master-sweep.ts):
 //   - ALWAYS  (every 15 min)     → runPreBriefScan, runIngestSweep
 //   - WHEN minute % 30 === 0     → runAutoCalProposalExpirySweep,
+//                                  expireStaleProposedArchives (Round 4),
 //                                  runDraftSupersededSweep,
 //                                  runDispositionResurfaceSweep
 //   - WHEN minute === 0 (hourly) → runDigestSweep, runWeeklyDigestSweep
@@ -91,6 +93,8 @@ export async function POST(req: Request) {
           "ingest-sweep": () => runIngestSweep(),
           "auto-cal-proposal-expiry": () =>
             runAutoCalProposalExpirySweep({ nowMs }),
+          "proposed-archive-expiry": () =>
+            expireStaleProposedArchives({ nowMs }),
           "draft-superseded": async () => {
             const probe = await defaultSentSinceProbe();
             return runDraftSupersededSweep({ probe });

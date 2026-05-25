@@ -804,6 +804,25 @@ export const inboxItems = pgTable(
       withTimezone: true,
     }),
 
+    // 2026-05-24 — Round 4 propose-confirm. Stamped when the
+    // auto-archive detector (Wave 5 Tier-1) flags a row as eligible.
+    // Per `project_consent_first_principle.md`, the detector no longer
+    // flips status='archived' silently — instead it sets this column,
+    // a Type-H queue card surfaces a "do you want to archive these?"
+    // confirmation, and the user's explicit click flips status. NULL =
+    // not flagged. Once a user confirms or dismisses, this is cleared.
+    // The 7-day expiry sweep also clears stale proposals.
+    proposedArchiveAt: timestamp("proposed_archive_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    // 2026-05-24 — short reason string captured at propose time so
+    // an admin scanning audit_log can correlate a card's existence
+    // back to the L1 gate values that produced it. Shape is
+    // "Tier1 auto_low conf=0.97 learned_opt_out=false". Null when
+    // `proposedArchiveAt` is null.
+    proposedArchiveReason: text("proposed_archive_reason"),
+
     // engineer-33 — OTP / verification-code time-decay. Stamped by L1
     // when an OTP keyword matches; the urgency-decay sweep auto-archives
     // the row once now() passes this timestamp. Null for non-OTP rows.
@@ -883,6 +902,12 @@ export const inboxItems = pgTable(
     urgencyDecayIdx: index("inbox_urgency_decay_idx")
       .on(t.urgencyExpiresAt)
       .where(sql`urgency_expires_at IS NOT NULL AND auto_archived = false`),
+    // Round 4 (2026-05-24) — propose-confirm sweep + queue card builder
+    // both read on (user_id, proposed_archive_at). Partial index keeps
+    // it narrow to just rows currently flagged.
+    userProposedArchiveIdx: index("inbox_user_proposed_archive_idx")
+      .on(t.userId, t.proposedArchiveAt)
+      .where(sql`proposed_archive_at IS NOT NULL`),
   })
 );
 

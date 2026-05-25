@@ -151,6 +151,11 @@ export default async function InboxPage({
     riskTier: inboxItems.riskTier,
     firstTimeSender: inboxItems.firstTimeSender,
     autoArchived: inboxItems.autoArchived,
+    // 2026-05-24 — Round 4 propose-confirm. When set, the auto-archive
+    // detector flagged this row for archive review; the inbox list
+    // renders a "Archive proposed" pill so the user sees the agent's
+    // intent without the row being hidden.
+    proposedArchiveAt: inboxItems.proposedArchiveAt,
     // polish-7 — populated when the user opens the detail page.
     // Combined with `agentDraftStatus`/`action` to compute the
     // 3-state group key in compareInboxRows: pending → unread
@@ -498,6 +503,15 @@ export default async function InboxPage({
                     {item.firstTimeSender ? (
                       <span className="shrink-0 text-[11px] uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                         {t("new_sender_pill")}
+                      </span>
+                    ) : null}
+                    {item.proposedArchiveAt ? (
+                      <span
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-raised))] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]"
+                        title={t("archive_proposed_pill_title")}
+                      >
+                        <Archive size={10} strokeWidth={2} />
+                        {t("archive_proposed_pill")}
                       </span>
                     ) : null}
                     <span className="ml-auto shrink-0 text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]">

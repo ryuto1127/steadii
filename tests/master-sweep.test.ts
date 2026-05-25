@@ -37,6 +37,7 @@ const ALL_SUB_SWEEPS: SubSweepName[] = [
 const ALWAYS: SubSweepName[] = ["pre-brief", "ingest-sweep"];
 const THIRTY_MIN: SubSweepName[] = [
   "auto-cal-proposal-expiry",
+  "proposed-archive-expiry",
   "draft-superseded",
   "disposition-resurface",
 ];
@@ -51,6 +52,10 @@ function makeSubs(): SubSweeps {
     "auto-cal-proposal-expiry": vi
       .fn()
       .mockResolvedValue({ ok: true, kind: "auto-cal-proposal-expiry" }),
+    // Round 4 (2026-05-24) — clears stale proposed_archive_at flags.
+    "proposed-archive-expiry": vi
+      .fn()
+      .mockResolvedValue({ ok: true, kind: "proposed-archive-expiry" }),
     // legacy values omitted — the type was narrowed in PR Round-3.
     "draft-superseded": vi
       .fn()

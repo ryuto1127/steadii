@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
@@ -1098,4 +1098,200 @@ export async function queueConfirmAutoCalAction(
   rawCardId: string,
 ): Promise<void> {
   await autoCalProposalAddAction(rawCardId);
+}
+
+// ── 2026-05-24 — Round 4 propose-confirm auto-archive batch (Type H) ──
+//
+// The Type H queue card surfaces a batch confirmation for inbox rows
+// the auto-archive detector flagged (`proposed_archive_at` set). The
+// user has three paths:
+//
+//   confirmAll(undefined)       — archive every currently-proposed item
+//   confirmAll({ inboxItemIds }) — archive the user-selected subset
+//   dismissAll()                 — clear every proposal; nothing archived
+//
+// Both actions are scoped to userId and idempotent (already-archived
+// rows are skipped, not double-counted). Audit logs preserve the
+// existing 'auto_archive' shape on confirm so Wave 5 downstream
+// readers (digest section, Hidden chip, activity feed) keep working
+// unchanged; only the detector's `auto_archive_proposed` step is new.
+
+const inboxItemIdSchema = z.string().uuid();
+const archiveConfirmArgsSchema = z
+  .object({
+    inboxItemIds: z.array(inboxItemIdSchema).min(1).optional(),
+  })
+  .strict();
+
+export type ArchiveProposalConfirmArgs = z.infer<
+  typeof archiveConfirmArgsSchema
+>;
+
+// Confirm = the user clicked [全部アーカイブする] or finalized a per-item
+// review subset. For each picked row:
+//   - UPDATE inbox_items SET status='archived', auto_archived=true,
+//     proposed_archive_at=NULL, proposed_archive_reason=NULL
+//   - INSERT audit_log row action='auto_archive' (preserves the
+//     existing Wave 5 audit shape — digest, Hidden chip, activity
+//     feed all key on this action string).
+//
+// idempotent: rows whose status is already 'archived' OR whose
+// proposed_archive_at is already cleared are skipped silently. We
+// only audit the rows actually flipped this call.
+export async function archiveProposalConfirmAllAction(
+  rawArgs?: ArchiveProposalConfirmArgs,
+): Promise<{ archived: number }> {
+  const userId = await getUserId();
+  const args = rawArgs ? archiveConfirmArgsSchema.parse(rawArgs) : { inboxItemIds: undefined };
+
+  // Pull candidates server-side. We re-fetch (rather than trusting the
+  // client list) so two paths share guards:
+  //   1. ids are scoped to userId via the WHERE clause
+  //   2. we only touch rows actually flagged (proposed_archive_at set)
+  //      AND still in a non-archived status — the user could have
+  //      moved the email manually in Gmail between propose + confirm.
+  const baseWhere = and(
+    eq(inboxItems.userId, userId),
+    isNotNull(inboxItems.proposedArchiveAt),
+  );
+  const candidates = await db
+    .select({
+      id: inboxItems.id,
+      status: inboxItems.status,
+      autoArchived: inboxItems.autoArchived,
+      senderEmail: inboxItems.senderEmail,
+      senderDomain: inboxItems.senderDomain,
+      subject: inboxItems.subject,
+      proposedArchiveReason: inboxItems.proposedArchiveReason,
+    })
+    .from(inboxItems)
+    .where(
+      args.inboxItemIds
+        ? and(baseWhere, inArray(inboxItems.id, args.inboxItemIds))
+        : baseWhere,
+    );
+
+  if (candidates.length === 0) {
+    revalidatePath("/app");
+    revalidatePath("/app/inbox");
+    return { archived: 0 };
+  }
+
+  const now = new Date();
+  let archived = 0;
+  for (const row of candidates) {
+    // Skip already-archived rows (defensive — possible if the user
+    // double-clicked or another path flipped status concurrently).
+    if (row.status === "archived" && row.autoArchived) {
+      // Clear stale proposed_archive_at so the row drops out of the
+      // queue card on next refresh; no audit row needed.
+      await db
+        .update(inboxItems)
+        .set({
+          proposedArchiveAt: null,
+          proposedArchiveReason: null,
+          updatedAt: now,
+        })
+        .where(eq(inboxItems.id, row.id));
+      continue;
+    }
+    await db
+      .update(inboxItems)
+      .set({
+        status: "archived",
+        autoArchived: true,
+        proposedArchiveAt: null,
+        proposedArchiveReason: null,
+        updatedAt: now,
+      })
+      .where(eq(inboxItems.id, row.id));
+    archived++;
+    // Audit row mirrors the legacy Wave 5 'auto_archive' shape so
+    // existing readers don't need to fork. The `triggered_by` detail
+    // discriminates between detector-time archives (impossible
+    // post-Round-4) and user-confirm archives so a future audit query
+    // can split them.
+    try {
+      await logEmailAudit({
+        userId,
+        action: "auto_archive",
+        result: "success",
+        resourceId: row.id,
+        detail: {
+          triggeredBy: "user_confirm",
+          senderEmail: row.senderEmail,
+          senderDomain: row.senderDomain,
+          subject: row.subject,
+          proposedReason: row.proposedArchiveReason,
+        },
+      });
+    } catch {
+      // best-effort — the inbox flip already happened.
+    }
+  }
+
+  revalidatePath("/app");
+  revalidatePath("/app/inbox");
+  return { archived };
+}
+
+// Dismiss = user clicked [全部キャンセル] on the Type H card. Clears
+// every proposed_archive_at flag on the user's inbox (scoped to
+// userId). Nothing is archived; items stay visible. Single batched
+// audit row carries the count so admin can correlate without joining
+// per-item audits.
+export async function archiveProposalDismissAllAction(): Promise<{
+  cleared: number;
+}> {
+  const userId = await getUserId();
+  // Pull ids first so we can audit-attribute the batch. The partial
+  // index makes the SELECT a cheap probe over just the proposed set.
+  const candidates = await db
+    .select({ id: inboxItems.id })
+    .from(inboxItems)
+    .where(
+      and(
+        eq(inboxItems.userId, userId),
+        isNotNull(inboxItems.proposedArchiveAt),
+      ),
+    );
+  if (candidates.length === 0) {
+    revalidatePath("/app");
+    revalidatePath("/app/inbox");
+    return { cleared: 0 };
+  }
+  const now = new Date();
+  // Single UPDATE — proposed_archive_at IS NOT NULL on a per-user
+  // scope. We don't loop per-row here because there's no per-row
+  // audit row to emit (the batched dismiss carries one count).
+  await db
+    .update(inboxItems)
+    .set({
+      proposedArchiveAt: null,
+      proposedArchiveReason: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(inboxItems.userId, userId),
+        isNotNull(inboxItems.proposedArchiveAt),
+      ),
+    );
+  try {
+    await logEmailAudit({
+      userId,
+      action: "auto_archive_dismissed_batch",
+      result: "success",
+      resourceId: null,
+      detail: {
+        count: candidates.length,
+        inboxItemIds: candidates.map((r) => r.id),
+      },
+    });
+  } catch {
+    // best-effort
+  }
+  revalidatePath("/app");
+  revalidatePath("/app/inbox");
+  return { cleared: candidates.length };
 }

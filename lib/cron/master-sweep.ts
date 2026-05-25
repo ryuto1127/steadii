@@ -18,6 +18,7 @@ import * as Sentry from "@sentry/nextjs";
 // Schedule (the master cron fires every 15 min via QStash):
 //   - ALWAYS  (every 15 min)     → pre-brief, ingest-sweep
 //   - WHEN minute % 30 === 0     → auto-cal-proposal-expiry,
+//                                  proposed-archive-expiry,
 //                                  draft-superseded,
 //                                  disposition-resurface
 //   - WHEN minute === 0 (hourly) → digest, weekly-digest
@@ -30,12 +31,21 @@ import * as Sentry from "@sentry/nextjs";
 // grace promotion to perform. The `auto-cal-proposal-expiry`
 // sub-sweep replaces it: untouched 'proposed' rows past their
 // 7-day expiry get flipped to 'cancelled' (no calendar API call).
+//
+// 2026-05-24 — Round-4 propose-confirm auto-archive. The new
+// `proposed-archive-expiry` sub-sweep clears
+// inbox_items.proposed_archive_at on rows older than 7 days. Items
+// stay visible in the inbox; no archive happens. A single audit row
+// per user carries the count and ids of cleared rows.
 
 export type SubSweepName =
   | "pre-brief"
   | "ingest-sweep"
   // 2026-05-24 — Round-3 propose-confirm. Replaces "auto-cal-grace".
   | "auto-cal-proposal-expiry"
+  // 2026-05-24 — Round-4 propose-confirm auto-archive. Clears
+  // inbox_items.proposed_archive_at on rows past their 7d grace.
+  | "proposed-archive-expiry"
   | "draft-superseded"
   // PR 3 (2026-05-24) — re-surface Draft cards the user explicitly
   // スキップ'd more than 24 hours ago. Pure DB update, runs on the
@@ -84,11 +94,13 @@ export async function dispatchMasterSweep(args: {
 
   if (minute % 30 === 0) {
     await tryRun(summary, "auto-cal-proposal-expiry", subSweeps);
+    await tryRun(summary, "proposed-archive-expiry", subSweeps);
     await tryRun(summary, "draft-superseded", subSweeps);
     await tryRun(summary, "disposition-resurface", subSweeps);
   } else {
     summary.skipped.push(
       "auto-cal-proposal-expiry",
+      "proposed-archive-expiry",
       "draft-superseded",
       "disposition-resurface",
     );
