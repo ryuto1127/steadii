@@ -132,7 +132,10 @@ export type EditorSlotShape = {
 };
 
 // i18n key for the proposal header — split on `kind` so deadline
-// proposals say "this deadline" rather than "this event".
+// proposals say "this deadline" rather than "this event". The 'event'
+// kind reuses the mutual header ("Steadii proposes this event" /
+// 「この予定を提案しています」), which is already kind-agnostic for a
+// timed scheduled event.
 export function cardGProposalHeaderKey(
   kind: QueueCardG["kind"],
 ): "proposal_header_deadline" | "proposal_header_mutual" {
@@ -141,9 +144,10 @@ export function cardGProposalHeaderKey(
 
 // True when the card's `kind` warrants showing time pickers in the
 // inline editor. Deadline proposals are all-day and only need date +
-// title (no start time, no duration).
+// title (no start time, no duration). mutual_agreement AND event are
+// both TIMED, so they show the start-time + duration pickers.
 export function cardGShouldShowTimePickers(kind: QueueCardG["kind"]): boolean {
-  return kind === "mutual_agreement";
+  return kind === "mutual_agreement" || kind === "event";
 }
 
 // Days remaining until grace expiry, clamped to >= 0. Returns null

@@ -226,8 +226,10 @@ export type QueueCardG = QueueCardBase & {
   autoCreateId: string;
   // 2026-05-21 — Phase 5. 'mutual_agreement' = scheduling close
   // (timed event); 'deadline' = single-mention deadline (all-day).
-  // Drives the card title + icon variant.
-  kind: "mutual_agreement" | "deadline";
+  // 2026-05-27 — 'event' = one-sided scheduled-event confirmation
+  // (timed, like mutual_agreement). Drives the card title + icon
+  // variant + whether the editor shows time pickers.
+  kind: "mutual_agreement" | "deadline" | "event";
   // Calendar event(s) created — typically one per provider. Surfaced
   // so the card can link out to the actual event when there's only
   // one provider, or note "added to 2 calendars" for dual-write.
