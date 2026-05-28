@@ -45,6 +45,8 @@ import { calendarCreateEvent } from "@/lib/agent/tools/calendar";
 import {
   buildDeadlineDescription,
   buildDeadlineSummary,
+  buildEventDescription,
+  buildEventSummary,
   buildIsoStartEnd,
 } from "@/lib/agent/proactive/auto-cal-slot";
 import type { AutoCreatedEventRef } from "@/lib/db/schema";
@@ -882,6 +884,26 @@ export async function autoCalProposalAddAction(
       reasoning: `Confirmed by user from Steadii queue at ${new Date().toISOString()}.`,
       date: slot.date,
       timezone: slot.timezone,
+      topic,
+    });
+  } else if (row.kind === "event") {
+    // Scheduled event: TIMED (like mutual_agreement, NOT all-day). The
+    // detector stored the topic in the slot blob; a user title override
+    // (set via Edit) wins when present.
+    const topic =
+      (row.agreedSlot as { title?: string }).title?.trim() ||
+      (row.agreedSlot as { topic?: string }).topic?.trim() ||
+      "Event";
+    summary = buildEventSummary(topic);
+    const { startIso, endIso } = buildIsoStartEnd(slot);
+    start = startIso;
+    end = endIso;
+    description = buildEventDescription({
+      reasoning: `Confirmed by user from Steadii queue at ${new Date().toISOString()}.`,
+      date: slot.date,
+      startTime: slot.startTime,
+      timezone: slot.timezone,
+      durationMin: slot.durationMin,
       topic,
     });
   } else {

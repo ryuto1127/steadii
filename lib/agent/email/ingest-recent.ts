@@ -437,6 +437,35 @@ async function maybeAutoCreateCalendarEvent(args: {
       user: { id: userId },
     });
   }
+
+  // --------- (c) scheduled event (single-mail body scan) ---------
+  // 2026-05-27 — One-sided scheduled-event detector. Fires on inbound
+  // confirmations of things the student registered for / was booked
+  // into (webinars, appointments, orientations) — a structured signal
+  // + a TIMED date. Reuses the same sender-TZ inference + referenceYear
+  // as the deadline block. Independent of (a)/(b): all three can fire
+  // on the same inbox_item (idempotency keyed on `kind`). The event
+  // detector requires a start time, so it won't double-fire with the
+  // deadline detector (which is date-only / all-day).
+  const { evaluateAndAddEventIfDetected } = await import(
+    "@/lib/agent/proactive/auto-event-create"
+  );
+  try {
+    await evaluateAndAddEventIfDetected({
+      userId,
+      inboxItemId: row.id,
+      body: inputBody,
+      subject: inputSubject,
+      defaultTimezone: defaultDeadlineTz,
+      referenceYear,
+      receivedAtMs: row.receivedAt.getTime(),
+    });
+  } catch (err) {
+    Sentry.captureException(err, {
+      tags: { feature: "auto_cal", phase: "ingest_event" },
+      user: { id: userId },
+    });
+  }
 }
 
 async function loadUserTimezone(userId: string): Promise<string> {

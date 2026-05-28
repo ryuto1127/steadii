@@ -96,6 +96,32 @@ export function buildDeadlineSummary(topic: string): string {
   return `${topic} (締切)`;
 }
 
+// 2026-05-27 — scheduled-event (kind='event') title + description for
+// the Type G' Add path. Unlike deadline these are TIMED events, so the
+// description carries the start time + duration.
+export function buildEventSummary(topic: string): string {
+  return topic;
+}
+
+export function buildEventDescription(args: {
+  reasoning: string;
+  date: string;
+  startTime: string;
+  timezone: string;
+  durationMin: number;
+  topic: string;
+}): string {
+  return [
+    "Added to your calendar from a scheduled event detected in your email.",
+    "",
+    `When: ${args.date} ${args.startTime} ${args.timezone} (${args.durationMin} min).`,
+    `Topic: ${args.topic}`,
+    "",
+    "Detector reasoning:",
+    args.reasoning,
+  ].join("\n");
+}
+
 export function buildDeadlineDescription(args: {
   reasoning: string;
   date: string;

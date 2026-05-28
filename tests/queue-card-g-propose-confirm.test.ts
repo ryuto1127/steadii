@@ -119,6 +119,9 @@ describe("cardGProposalHeaderKey", () => {
       "proposal_header_mutual",
     );
   });
+  it("reuses the mutual header for event kind (timed scheduled event)", () => {
+    expect(cardGProposalHeaderKey("event")).toBe("proposal_header_mutual");
+  });
 });
 
 describe("cardGShouldShowTimePickers", () => {
@@ -127,6 +130,9 @@ describe("cardGShouldShowTimePickers", () => {
   });
   it("shows time pickers for mutual_agreement (timed) proposals", () => {
     expect(cardGShouldShowTimePickers("mutual_agreement")).toBe(true);
+  });
+  it("shows time pickers for event (timed) proposals", () => {
+    expect(cardGShouldShowTimePickers("event")).toBe(true);
   });
 });
 

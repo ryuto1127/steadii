@@ -3234,7 +3234,13 @@ export type AutoCreatedEventStatus =
   | "confirmed"
   | "cancelled";
 
-export type AutoCreatedEventKind = "mutual_agreement" | "deadline";
+// 2026-05-27 — 'event' added for the one-sided scheduled-event detector
+// (webinar / appointment / orientation confirmations). Like
+// mutual_agreement it's a TIMED event (real durationMin); unlike it,
+// the trigger is a single inbound mail with a structured signal. `kind`
+// is a plain text column (no pg enum / CHECK) so this needs no DB
+// migration — the partial unique index already keys on kind.
+export type AutoCreatedEventKind = "mutual_agreement" | "deadline" | "event";
 
 export type AutoCreatedEventRef = {
   provider: "google_calendar" | "microsoft_graph";

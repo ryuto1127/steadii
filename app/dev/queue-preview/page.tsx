@@ -267,6 +267,43 @@ const MOCK_CARDS: QueueCard[] = [
     ).toISOString(),
     inboxItemId: "inbox-demo-2",
   },
+  // 2026-05-27 — Scheduled-event detector (kind='event'). A one-sided
+  // inbound confirmation (webinar / appointment / orientation) →
+  // TIMED proposal card. Like mutual_agreement it shows a start time +
+  // duration; the title is the detected topic.
+  {
+    id: "autocal:00000000-0000-0000-0000-000000000008",
+    archetype: "G",
+    title: "Steadii proposes this event",
+    body: "",
+    confidence: "medium",
+    createdAt: FIXED_DATE(5),
+    reversible: true,
+    sources: [
+      {
+        kind: "email",
+        index: 0,
+        label: "元のメール",
+        href: "#",
+      },
+    ],
+    detailHref: undefined,
+    originHref: undefined,
+    autoCreateId: "00000000-0000-0000-0000-000000000008",
+    kind: "event",
+    eventRefs: [],
+    slotLabel: "10/8 (木) 16:00 ET",
+    editorSlot: {
+      date: "2026-10-08",
+      startTime: "16:00",
+      durationMin: 60,
+      title: "Intro to Systems webinar",
+    },
+    graceExpiresAt: new Date(
+      NOW.getTime() + 2 * 24 * 60 * 60 * 1000,
+    ).toISOString(),
+    inboxItemId: "inbox-demo-3",
+  },
 ];
 
 export default async function QueuePreview({

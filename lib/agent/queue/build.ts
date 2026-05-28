@@ -1263,6 +1263,8 @@ async function fetchPendingAutoCalRows(
 }
 
 function autoCalToTypeG(row: AutoCreatedCalendarEventRow): QueueCardG {
+  // deadline = all-day (date-only label); mutual_agreement + event are
+  // both TIMED (date + start time + TZ label).
   const isDeadline = row.kind === "deadline";
   const slotLabel = isDeadline
     ? formatDeadlineSlot(row.agreedSlot)
@@ -1272,7 +1274,7 @@ function autoCalToTypeG(row: AutoCreatedCalendarEventRow): QueueCardG {
   // The legacy `title` field on the card is retained for older renderers
   // (FYI feed, etc.) — we still set a plausible default so any caller
   // that reads card.title doesn't crash. The Type G renderer ignores
-  // it and uses the i18n key directly.
+  // it and uses the i18n key directly. 'event' shares the mutual title.
   const title = isDeadline
     ? "Steadii proposes this deadline"
     : "Steadii proposes this event";
@@ -1284,9 +1286,13 @@ function autoCalToTypeG(row: AutoCreatedCalendarEventRow): QueueCardG {
   const body = "";
   // Pull the proposal title out of the JSONB slot if the user has
   // edited it. The agreedSlot JSONB carries `title` alongside the
-  // structural fields when set; legacy rows don't have it.
+  // structural fields when set; legacy rows don't have it. For 'event'
+  // rows the detector seeds `topic` (the subject) — use it to pre-fill
+  // the editor title when no explicit user title override exists.
   const slotTitle =
-    (row.agreedSlot as { title?: string }).title?.trim() || null;
+    (row.agreedSlot as { title?: string }).title?.trim() ||
+    (row.agreedSlot as { topic?: string }).topic?.trim() ||
+    null;
   return {
     id: `autocal:${row.id}`,
     archetype: "G",
