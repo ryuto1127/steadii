@@ -19,6 +19,17 @@
 //
 // Pure module. No DB, no LLM, no I/O. Phase 2 (background create job)
 // wires this into the inbound-email pipeline.
+//
+// 2026-05-27 — slot date/time extraction is now delegated to the shared
+// datetime-extract helper so the detector understands English long-form
+// dates ("October 8, 2026") and 12-hour AM/PM times ("4:00 PM") in
+// addition to the legacy numeric/JA forms.
+
+import {
+  extractDateTimeMatches,
+  isoDateOf,
+  isoTimeOf,
+} from "./datetime-extract";
 
 export type EmailDirection = "outbound" | "inbound";
 
@@ -107,12 +118,11 @@ const RESCHEDULE_PHRASE_RE =
 const CANCEL_PHRASE_RE =
   /(キャンセル|cancel(ed|led)?|中止|取り消し|withdraw)/i;
 
-// Date + time extraction. JA + EN. Single anchor pattern returns the
-// match offset so we can scope acceptance-phrase proximity.
-//   JA: 5月22日 14:00 / 5/22 14:00 / 5/22(水) 14:00
-//   EN: May 22 14:00 / 5/22 2pm — only HH:MM for Phase 1.
-const SLOT_PATTERN_RE =
-  /(?:(\d{4})[年/-])?(\d{1,2})[月/-](\d{1,2})日?(?:\s*\([月火水木金土日]\))?\s*[にで]?\s*(\d{1,2}):(\d{2})/g;
+// Date + time extraction is delegated to the shared datetime-extract
+// helper (numeric/JA + English long-form, 24h + 12h AM/PM). It returns
+// positional matches with `hour`/`minute` populated when the mention
+// carried a clock time, so we can still scope acceptance-phrase
+// proximity against the source offsets.
 
 // Explicit TZ marker for the slot.
 const TZ_MARKER_PATTERNS: Array<{ re: RegExp; tz: string }> = [
@@ -143,55 +153,39 @@ export function extractSlotCommitment(
 ): SlotCommitment | null {
   if (!body) return null;
 
-  // Find all slot patterns. For each, check whether an acceptance
+  // Find all date+time slots. For each, check whether an acceptance
   // phrase appears within COMMITMENT_PROXIMITY characters AFTER it
   // (commitment style: "5/22 14:00 で お願いいたします"). The first
-  // match wins — the user typically commits to ONE slot per mail.
-  SLOT_PATTERN_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = SLOT_PATTERN_RE.exec(body)) !== null) {
-    const slotEnd = m.index + m[0].length;
+  // match wins — the user typically commits to ONE slot per mail. Only
+  // matches that carry a clock time qualify as a slot commitment; a
+  // bare date with no time is not a meeting slot.
+  const matches = extractDateTimeMatches(body, referenceYear);
+  for (const dm of matches) {
+    if (dm.hour === undefined || dm.minute === undefined) continue;
+
+    const slotEnd = dm.index + dm.length;
     const window = body.slice(slotEnd, slotEnd + COMMITMENT_PROXIMITY);
     if (!ACCEPTANCE_PHRASE_RE.test(window)) continue;
-
-    const year = m[1] ? parseInt(m[1], 10) : referenceYear;
-    const month = parseInt(m[2], 10);
-    const day = parseInt(m[3], 10);
-    const hour = parseInt(m[4], 10);
-    const minute = parseInt(m[5], 10);
-
-    if (
-      month < 1 ||
-      month > 12 ||
-      day < 1 ||
-      day > 31 ||
-      hour > 23 ||
-      minute > 59
-    ) {
-      continue;
-    }
 
     // Resolve TZ. Look for a TZ marker within ±60 chars of the slot;
     // fall back to defaultTimezone.
     const tzWindow = body.slice(
-      Math.max(0, m.index - 60),
+      Math.max(0, dm.index - 60),
       Math.min(body.length, slotEnd + 60)
     );
     const tz = resolveTimezone(tzWindow, defaultTimezone);
 
-    const durationMin = parseDuration(body) ?? 60;
+    // Prefer an explicit "30分間 / 1時間" duration stated in the body;
+    // else a same-mention AM/PM range ("4:00 PM - 5:00 PM"); else 60.
+    const durationMin = parseDuration(body) ?? dm.durationMin ?? 60;
 
     return {
-      date: `${year.toString().padStart(4, "0")}-${month
-        .toString()
-        .padStart(2, "0")}-${day.toString().padStart(2, "0")}`,
-      startTime: `${hour.toString().padStart(2, "0")}:${minute
-        .toString()
-        .padStart(2, "0")}`,
+      date: isoDateOf(dm),
+      startTime: isoTimeOf(dm.hour, dm.minute),
       timezone: tz,
       durationMin,
       hasAcceptancePhrase: true,
-      sourcePhrase: m[0],
+      sourcePhrase: dm.raw,
     };
   }
   return null;

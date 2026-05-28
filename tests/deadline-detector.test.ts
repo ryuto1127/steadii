@@ -68,6 +68,38 @@ describe("detectDeadlineMention — positive cases", () => {
     });
     expect(r.deadline?.topic).toBe("PSY100 essay draft 期限のご連絡");
   });
+
+  it("detects an English long-form deadline with AM/PM + TZ marker", () => {
+    const r = detectDeadlineMention({
+      body: "Please accept your spot by the deadline of October 14, 2026, 11:00 AM EST.",
+      subject: "Northgate College — residence offer",
+      defaultTimezone: "America/Vancouver",
+      referenceYear: 2026,
+    });
+    expect(r.confirmed).toBe(true);
+    expect(r.deadline?.date).toBe("2026-10-14");
+    expect(r.deadline?.timezone).toBe("America/New_York");
+  });
+
+  it("detects an abbreviated-month English deadline ('due by Oct 14')", () => {
+    const r = detectDeadlineMention({
+      body: "The submission deadline is Oct 14, 2026. Please submit on time.",
+      defaultTimezone: "America/Vancouver",
+      referenceYear: 2026,
+    });
+    expect(r.confirmed).toBe(true);
+    expect(r.deadline?.date).toBe("2026-10-14");
+  });
+
+  it("falls back to referenceYear for an English date with no year", () => {
+    const r = detectDeadlineMention({
+      body: "Reminder: the deadline is October 14. Don't miss it.",
+      defaultTimezone: "America/Vancouver",
+      referenceYear: 2026,
+    });
+    expect(r.confirmed).toBe(true);
+    expect(r.deadline?.date).toBe("2026-10-14");
+  });
 });
 
 describe("detectDeadlineMention — suppression cases", () => {
