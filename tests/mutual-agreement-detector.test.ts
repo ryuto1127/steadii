@@ -95,6 +95,30 @@ describe("extractSlotCommitment", () => {
     const r = extractSlotCommitment(body, "Asia/Tokyo", 2026);
     expect(r).toBeNull();
   });
+
+  it("extracts an English-dated slot with an AM/PM time", () => {
+    const body =
+      "Thanks for the options. October 8, 2026 at 4:00 PM works for me — looking forward.";
+    const r = extractSlotCommitment(body, "America/New_York", 2026);
+    expect(r?.date).toBe("2026-10-08");
+    expect(r?.startTime).toBe("16:00");
+    expect(r?.timezone).toBe("America/New_York");
+    expect(r?.hasAcceptancePhrase).toBe(true);
+  });
+
+  it("derives durationMin from an AM/PM range in the slot", () => {
+    const body =
+      "October 8, 2026 4:00 PM - 5:30 PM works for me. See you then.";
+    const r = extractSlotCommitment(body, "America/New_York", 2026);
+    expect(r?.startTime).toBe("16:00");
+    expect(r?.durationMin).toBe(90);
+  });
+
+  it("requires a time component — a bare English date is not a slot", () => {
+    const body = "October 8, 2026 works for me. Looking forward.";
+    const r = extractSlotCommitment(body, "America/New_York", 2026);
+    expect(r).toBeNull();
+  });
 });
 
 describe("detectInboundSignals", () => {
@@ -174,6 +198,39 @@ describe("detectMutualAgreement — confirmed path", () => {
     expect(r.slot?.startTime).toBe("14:00");
     expect(r.slot?.timezone).toBe("Asia/Tokyo");
     expect(r.confidence).toBeGreaterThanOrEqual(0.8);
+  });
+
+  it("confirms an English-dated thread with an AM/PM slot (24h conversion)", () => {
+    const thread: EmailSnapshot[] = [
+      {
+        direction: "inbound",
+        sentAt: "2026-10-01T08:00:00Z",
+        subject: "Advising appointment options",
+        body: "Would October 8 or October 9 work for a quick call?",
+      },
+      {
+        direction: "outbound",
+        sentAt: "2026-10-01T15:00:00Z",
+        subject: "Re: Advising appointment options",
+        body: "October 8, 2026 at 4:00 PM EST works for me. Thank you!",
+      },
+      {
+        direction: "inbound",
+        sentAt: "2026-10-02T01:00:00Z",
+        subject: "Re: Re: Advising appointment options",
+        body: "Confirmed, see you then. Looking forward to it.",
+      },
+    ];
+    const r = detectMutualAgreement({
+      thread,
+      userTimezone: "America/Vancouver",
+      defaultTimezone: "America/New_York",
+      referenceYear: 2026,
+    });
+    expect(r.confirmed).toBe(true);
+    expect(r.slot?.date).toBe("2026-10-08");
+    expect(r.slot?.startTime).toBe("16:00");
+    expect(r.slot?.timezone).toBe("America/New_York");
   });
 
   it("confirms when inbound sends logistics (URL) — strong signal", () => {

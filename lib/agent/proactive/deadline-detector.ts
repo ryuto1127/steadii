@@ -17,6 +17,13 @@
 //
 // Pure module: no DB, LLM, or I/O. Phase 5 evaluator wires this to
 // calendar_create_event in the same shape as Phase 2.
+//
+// 2026-05-27 — date extraction (numeric/JA + English long-form) is now
+// delegated to the shared datetime-extract helper so the detector
+// understands "October 14, 2026" / "Thursday, Oct 8" etc. in addition
+// to the legacy 6/2 / 6月2日 forms.
+
+import { extractDateTimeMatches, isoDateOf } from "./datetime-extract";
 
 export type DetectedDeadline = {
   // Wall-clock date in the deadline's anchor timezone.
@@ -60,16 +67,14 @@ const STRONG_DEADLINE_KEYWORD_RE =
 
 // Weaker "by date" forms — fire only when paired with the strong
 // keyword regex (treated as supporting evidence, not standalone).
+// Accepts numeric ("by 6/15"), full month ("by October") and
+// abbreviated month ("by Oct") forms.
 const WEAK_BY_DATE_RE =
-  /(までに(ご?提出|お送り|ご?対応|ご?連絡)|by\s+\d{1,2}\/\d{1,2}|by\s+(May|June|July|August|September|October|November|December|January|February|March|April))/i;
+  /(までに(ご?提出|お送り|ご?対応|ご?連絡)|by\s+\d{1,2}\/\d{1,2}|by\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?)/i;
 
 // Hedging phrases that downgrade a deadline to a preference.
 const HEDGE_PHRASE_RE =
   /(できれば|可能であれば|ご都合よろしければ|お手すきの際|お時間あれば|if possible|if you can|preferred by|ideally by|would be great)/i;
-
-// Date patterns — same shape as mutual-agreement-detector.
-const DATE_PATTERN_RE =
-  /(?:(\d{4})[年/-])?(\d{1,2})[月/-](\d{1,2})日?(?:\s*\([月火水木金土日]\))?/g;
 
 // Explicit TZ marker for the deadline. We only check the most common
 // case (deadline in Asia/Tokyo for JA emails); fall back to the
@@ -115,8 +120,9 @@ export function detectDeadlineMention(args: {
   const weakKeywordPositions = collectMatches(body, WEAK_BY_DATE_RE);
 
   // Iterate dates; for each, check proximity to deadline keyword
-  // AND check for hedge / quoted-history anti-signals.
-  DATE_PATTERN_RE.lastIndex = 0;
+  // AND check for hedge / quoted-history anti-signals. Dates come from
+  // the shared extractor (numeric/JA + English long-form).
+  const dateMatches = extractDateTimeMatches(body, referenceYear);
   let bestMatch: {
     date: string;
     timezone: string;
@@ -125,10 +131,9 @@ export function detectDeadlineMention(args: {
     distanceToKeyword: number;
   } | null = null;
 
-  let m: RegExpExecArray | null;
-  while ((m = DATE_PATTERN_RE.exec(body)) !== null) {
-    const dateStart = m.index;
-    const dateEnd = dateStart + m[0].length;
+  for (const dm of dateMatches) {
+    const dateStart = dm.index;
+    const dateEnd = dateStart + dm.length;
 
     // Compute nearest-keyword distance. PROXIMITY caps how far a
     // keyword can be from the date to "bind" — outside that, the
@@ -152,16 +157,9 @@ export function detectDeadlineMention(args: {
     const line = body.slice(lineStart, dateEnd);
     const inQuoted = /^\s*>/.test(line);
 
-    const year = m[1] ? parseInt(m[1], 10) : referenceYear;
-    const month = parseInt(m[2], 10);
-    const day = parseInt(m[3], 10);
-    if (month < 1 || month > 12 || day < 1 || day > 31) continue;
-
     const tz = resolveTimezone(window, defaultTimezone);
 
-    const isoDate = `${year.toString().padStart(4, "0")}-${month
-      .toString()
-      .padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+    const isoDate = isoDateOf(dm);
 
     const signals: DeadlineSignals = {
       hasDeadlineKeyword: hasKeyword,
@@ -184,7 +182,7 @@ export function detectDeadlineMention(args: {
         date: isoDate,
         timezone: tz,
         signals,
-        sourcePhrase: m[0],
+        sourcePhrase: dm.raw,
         distanceToKeyword: distance,
       };
     }
