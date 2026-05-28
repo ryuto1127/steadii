@@ -20,7 +20,10 @@
 //       avoid double cards on the same mail.
 //
 // Anti-signals suppress: quoted history (`>` line), past-dated events
-// (recap/receipt), obvious promo (unsubscribe + no structured block).
+// (recap/receipt), commerce-promo intent (a tight purchase/discount
+// lexicon — NOT mere bulk-send: legit bulk event confirmations carry
+// unsubscribe footers too, so we key on commerce intent, never on the
+// footer alone).
 //
 // Pure module: no DB, LLM, or I/O. The auto-event-create wrapper INSERTs
 // a `status='proposed'` row; the calendar API is only touched by the
@@ -57,8 +60,11 @@ export type EventSignals = {
   // Anti-signal: the event date is strictly before the email's
   // received date (a recap / receipt, not an upcoming event).
   isPastDated: boolean;
-  // Anti-signal: looks like a bulk promo (unsubscribe + no labeled
-  // block).
+  // Anti-signal: commerce-promo intent (a tight purchase/discount
+  // lexicon). Deliberately NOT keyed on the unsubscribe footer or the
+  // absence of a labeled block — legit bulk event confirmations carry
+  // both, so those would suppress the exact mails this detector exists
+  // to catch (PROMO_STRUCTURED_BLOCK_BYPASS).
   looksPromotional: boolean;
 };
 
@@ -74,17 +80,31 @@ export type EventDetectionResult = {
 
 // Registration / confirmation phrases. TIGHT on purpose (EN + JA) —
 // these mean "you are booked into a specific timed thing", not "we'd
-// love to see you sometime".
+// love to see you sometime". We deliberately do NOT include the bare
+// CTA "join the webinar/meeting/session": it's a generic marketing
+// invitation, not a booking confirmation. True webinar/meeting
+// confirmations are caught by the labeled Date:/Time: block path or by
+// a real registration phrase ("you've registered", "confirmation
+// details"); the bare CTA on its own is a promo false-positive
+// (PROMO_STRUCTURED_BLOCK_BYPASS).
 const CONFIRMATION_PHRASE_RE =
-  /(you(?:'ve| have) registered|you(?:'re| are) registered for|registration (?:is )?confirmed|confirmation details|your appointment|your booking|appointment confirmed|booking confirmed|is confirmed|join the (?:webinar|meeting|session)|予約確認|登録完了|受付完了|参加登録|ご予約(?:いただき|ありがとう|の確認)?)/i;
+  /(you(?:'ve| have) registered|you(?:'re| are) registered for|registration (?:is )?confirmed|confirmation details|your appointment|your booking|appointment confirmed|booking confirmed|is confirmed|予約確認|登録完了|受付完了|参加登録|ご予約(?:いただき|ありがとう|の確認)?)/i;
 
 // Labeled "Date:" line. Case-insensitive, line-anchored. JA 日付/日時 too.
 const DATE_LABEL_RE = /^[ \t>*]*(date|日付|日時)\s*[:：]/im;
 // Labeled "Time:" line. JA 時刻/時間.
 const TIME_LABEL_RE = /^[ \t>*]*(time|時刻|時間)\s*[:：]/im;
 
-// Promo anti-signal — an unsubscribe footer.
-const UNSUBSCRIBE_RE = /unsubscribe|配信停止|購読(?:解除|停止)|opt[\s-]?out/i;
+// Commerce-promo intent. TIGHT purchase/discount lexicon (EN + JA) —
+// the distinguishing signal of a marketing blast vs a legit bulk event
+// confirmation. We key suppression on THIS, never on the unsubscribe
+// footer (legit campus events bulletins carry footers too) nor on the
+// absence of a labeled block (sales livestreams carry Date:/Time:
+// blocks). "% off" / "N% off" anchors the discount shape; the rest are
+// high-intent buy verbs and scarcity phrases. \b on the short EN tokens
+// keeps "sale" from matching "wholesale"/"resale" inside prose.
+const COMMERCE_INTENT_RE =
+  /(\d+%\s*off|%\s*off|\bsale\b|shop\s*now|buy\s*now|order\s*now|add\s*to\s*cart|limited[\s-]time|\bdiscount\b|\bcoupon\b|promo\s*code|\bdeals?\b|セール|割引|今だけ|お買い得|購入はこちら|クーポン)/i;
 
 // Explicit TZ marker for the event. Mirrors the deadline detector's set
 // plus the "Eastern/Pacific Time" long forms that appear in EN
@@ -143,11 +163,15 @@ export function detectScheduledEvent(args: {
     );
   }
 
-  // Promo guard: unsubscribe footer AND no labeled block → bulk
-  // marketing, even if it contains an enticing "join the webinar".
-  const looksPromotional = UNSUBSCRIBE_RE.test(body) && !hasLabeledBlock;
+  // Promo guard: commerce/purchase intent → bulk marketing, suppress
+  // regardless of a labeled Date:/Time: block (a sales livestream
+  // carries one) or an unsubscribe footer. Keying on commerce intent —
+  // not bulk-send — is what lets a legit campus events bulletin (which
+  // also has an unsubscribe footer) still fire. See
+  // PROMO_STRUCTURED_BLOCK_BYPASS.
+  const looksPromotional = COMMERCE_INTENT_RE.test(body);
   if (looksPromotional) {
-    return notDetected("looks promotional (unsubscribe + no labeled block)", {
+    return notDetected("looks promotional (commerce/purchase intent)", {
       ...emptySignals,
       hasLabeledBlock,
       hasConfirmationPhrase,

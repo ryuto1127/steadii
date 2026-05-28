@@ -84,6 +84,37 @@ describe("detectScheduledEvent — positive cases", () => {
     expect(r.event?.startTime).toBe("16:00");
     expect(r.event?.timezone).toBe("Asia/Tokyo");
   });
+
+  // REGRESSION (PROMO_STRUCTURED_BLOCK_BYPASS): a legit bulk event
+  // confirmation that carries an unsubscribe footer must STILL fire. The
+  // distinguishing signal is commerce intent, not bulk-send — suppressing
+  // on the unsubscribe footer alone would kill the exact mails this
+  // feature exists to catch. No commerce lexicon here, so it fires.
+  it("STILL fires on a bulk event confirmation that has an unsubscribe footer", () => {
+    const body = [
+      "You're registered for the Intro to Systems webinar.",
+      "",
+      "Date: Thursday, October 8, 2026",
+      "Time: 4:00 PM - 5:00 PM Eastern Time",
+      "",
+      "We look forward to seeing you there.",
+      "Unsubscribe from event emails.",
+    ].join("\n");
+    const r = detectScheduledEvent({
+      body,
+      subject: "Campus Events — webinar registration confirmed",
+      defaultTimezone: "America/Vancouver",
+      referenceYear: 2026,
+      nowMs: RECEIVED_MS,
+    });
+    expect(r.confirmed).toBe(true);
+    expect(r.signals.looksPromotional).toBe(false);
+    expect(r.event?.date).toBe("2026-10-08");
+    expect(r.event?.startTime).toBe("16:00");
+    expect(r.event?.timezone).toBe("America/New_York");
+    expect(r.event?.durationMin).toBe(60);
+    expect(r.confidence).toBeGreaterThanOrEqual(0.8);
+  });
 });
 
 describe("detectScheduledEvent — suppression cases (precision)", () => {
@@ -116,6 +147,55 @@ describe("detectScheduledEvent — suppression cases (precision)", () => {
       nowMs: RECEIVED_MS,
     });
     expect(r.confirmed).toBe(false);
+  });
+
+  // Hole #1 (PROMO_STRUCTURED_BLOCK_BYPASS): a marketing email that
+  // carries a real labeled Date:/Time: block (a sales livestream / product
+  // launch) used to bypass the old guard, which was ANDed with
+  // !hasLabeledBlock. Commerce intent now suppresses regardless of the
+  // block.
+  it("does NOT fire on a promo that HAS a labeled Date/Time block + commerce lexicon", () => {
+    const body = [
+      "Mega Sale livestream — our biggest event of the year!",
+      "",
+      "Date: Thursday, October 8, 2026",
+      "Time: 9:00 AM - 10:00 AM Eastern Time",
+      "",
+      "50% off everything — shop now before it's gone.",
+      "Unsubscribe here.",
+    ].join("\n");
+    const r = detectScheduledEvent({
+      body,
+      subject: "Mega Sale livestream",
+      defaultTimezone: "America/New_York",
+      referenceYear: 2026,
+      nowMs: RECEIVED_MS,
+    });
+    expect(r.confirmed).toBe(false);
+    expect(r.signals.looksPromotional).toBe(true);
+    expect(r.reasoning).toMatch(/commerce\/purchase intent/);
+  });
+
+  // Hole #2 (PROMO_STRUCTURED_BLOCK_BYPASS): a promo with a bare "join the
+  // webinar" CTA — no registration context, no labeled block, no
+  // unsubscribe footer — used to fire at ~0.8 because the generic CTA was
+  // in CONFIRMATION_PHRASE_RE and the old promo guard needed an
+  // unsubscribe footer. The CTA is now dropped from the phrase set, so the
+  // mail carries no structured signal at all.
+  it("does NOT fire on a bare 'join the webinar' CTA promo (no registration context)", () => {
+    const body = [
+      "Big ideas await — join the webinar on October 8, 2026 at 9:00 AM Eastern Time!",
+      "Reserve your spot today.",
+    ].join("\n");
+    const r = detectScheduledEvent({
+      body,
+      subject: "You won't want to miss this webinar",
+      defaultTimezone: "America/New_York",
+      referenceYear: 2026,
+      nowMs: RECEIVED_MS,
+    });
+    expect(r.confirmed).toBe(false);
+    expect(r.reasoning).toMatch(/no structured signal/);
   });
 
   it("does NOT fire on a plain mail with neither labeled block nor confirmation phrase", () => {
