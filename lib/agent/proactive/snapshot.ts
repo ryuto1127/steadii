@@ -191,33 +191,11 @@ export async function buildUserSnapshot(
     }
   }
 
-  // engineer-49 — pull the monthly-review summary for the
-  // monthly_boundary_review rule. Read fails (e.g. table missing
-  // pre-migration) degrade to null so the rest of the snapshot loads.
-  let monthlyReview: UserSnapshot["monthlyReview"] = null;
-  try {
-    const { getMonthlySummaryCounts } = await import(
-      "@/lib/agent/learning/sender-confidence"
-    );
-    const summary = await getMonthlySummaryCounts(userId, now);
-    if (summary.hasAnyRow) {
-      const lastIso = userRow?.preferences?.lastMonthlyReviewAt;
-      const lastReviewAt = lastIso ? new Date(lastIso) : null;
-      monthlyReview = {
-        lastReviewAt:
-          lastReviewAt && !Number.isNaN(lastReviewAt.getTime())
-            ? lastReviewAt
-            : null,
-        approvedThisMonth: summary.approvedThisMonth,
-        dismissedThisMonth: summary.dismissedThisMonth,
-        rejectedThisMonth: summary.rejectedThisMonth,
-        autoSendCount: summary.autoSendCount,
-        alwaysReviewCount: summary.alwaysReviewCount,
-      };
-    }
-  } catch {
-    monthlyReview = null;
-  }
+  // The monthly_boundary_review rule was retired (the monthly self-report
+  // card no longer belongs in the judgment queue), so nothing consumes
+  // this field anymore. Keep it null to satisfy the snapshot shape without
+  // spending a DB read on getMonthlySummaryCounts every scan.
+  const monthlyReview: UserSnapshot["monthlyReview"] = null;
 
   // engineer-51 — entity signals for entity_fading +
   // entity_deadline_cluster rules. Wrapped in try/catch so the snapshot

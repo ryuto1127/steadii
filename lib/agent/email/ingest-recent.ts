@@ -325,7 +325,22 @@ const SELF_SENDER_DOMAINS = ["@mysteadii.com", "@mysteadii.xyz"] as const;
 export function isSteadiiSelfSender(senderEmail: string | null | undefined): boolean {
   if (!senderEmail) return false;
   const normalized = senderEmail.trim().toLowerCase();
-  return SELF_SENDER_DOMAINS.some((domain) => normalized.endsWith(domain));
+  // Accept the "Name <email>" display form: when the value carries a
+  // bracketed address, test what's inside the brackets. The bare-email
+  // path still falls through to the endsWith check below.
+  const bracketed = normalized.match(/<([^>]*)>/);
+  const candidate = bracketed ? bracketed[1].trim() : normalized;
+  return SELF_SENDER_DOMAINS.some((domain) => candidate.endsWith(domain));
+}
+
+// Name-based fallback for rows whose sender email is null/odd but whose
+// from-name clearly identifies Steadii's own agent. Our digest from-name
+// is "Steadii Agent" (see lib/integrations/resend/client.ts getFromAddress).
+export function isSteadiiSelfSenderName(
+  senderName: string | null | undefined
+): boolean {
+  if (!senderName) return false;
+  return senderName.trim().toLowerCase().startsWith("steadii agent");
 }
 
 function emptySummary(durationMs: number): IngestSummary {

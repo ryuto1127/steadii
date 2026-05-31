@@ -186,4 +186,47 @@ describe("isSteadiiSelfSender (unit)", () => {
     expect(isSteadiiSelfSender("something@mysteadii.xyz")).toBe(true);
     expect(isSteadiiSelfSender("  noreply@mysteadii.com  ")).toBe(true);
   });
+
+  it("matches the 'Name <email>' display form", async () => {
+    const { isSteadiiSelfSender } = await import("@/lib/agent/email/ingest-recent");
+    expect(isSteadiiSelfSender("Steadii Agent <agent@mysteadii.com>")).toBe(true);
+    // Bare-email path still works.
+    expect(isSteadiiSelfSender("agent@mysteadii.com")).toBe(true);
+    // A normal external address (even in display form) is not self.
+    expect(
+      isSteadiiSelfSender("Jordan Lee <jordan@external-domain.example>")
+    ).toBe(false);
+  });
+});
+
+describe("isSteadiiSelfSenderName (unit)", () => {
+  it("returns false for null / undefined / empty / whitespace", async () => {
+    const { isSteadiiSelfSenderName } = await import(
+      "@/lib/agent/email/ingest-recent"
+    );
+    expect(isSteadiiSelfSenderName(null)).toBe(false);
+    expect(isSteadiiSelfSenderName(undefined)).toBe(false);
+    expect(isSteadiiSelfSenderName("")).toBe(false);
+    expect(isSteadiiSelfSenderName("   ")).toBe(false);
+  });
+
+  it("matches the Steadii Agent digest from-name (any case, trailing form)", async () => {
+    const { isSteadiiSelfSenderName } = await import(
+      "@/lib/agent/email/ingest-recent"
+    );
+    expect(isSteadiiSelfSenderName("Steadii Agent")).toBe(true);
+    expect(isSteadiiSelfSenderName("steadii agent")).toBe(true);
+    expect(isSteadiiSelfSenderName("  Steadii Agent  ")).toBe(true);
+    expect(isSteadiiSelfSenderName("Steadii Agent <x>")).toBe(true);
+    expect(isSteadiiSelfSenderName("steadii agent — morning digest")).toBe(true);
+  });
+
+  it("returns false for a normal human name", async () => {
+    const { isSteadiiSelfSenderName } = await import(
+      "@/lib/agent/email/ingest-recent"
+    );
+    expect(isSteadiiSelfSenderName("Jordan Lee")).toBe(false);
+    // "Steadii" alone (without "agent") is not our digest from-name.
+    expect(isSteadiiSelfSenderName("Steadii")).toBe(false);
+  });
 });

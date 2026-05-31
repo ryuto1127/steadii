@@ -43,7 +43,10 @@ import {
   type QueueSourceChip,
 } from "./types";
 import { buildExternalThreadUrl } from "./external-url";
-import { isSteadiiSelfSender } from "@/lib/agent/email/ingest-recent";
+import {
+  isSteadiiSelfSender,
+  isSteadiiSelfSenderName,
+} from "@/lib/agent/email/ingest-recent";
 
 // ── Public API ───────────────────────────────────────────────────────
 
@@ -223,11 +226,28 @@ function proposalToTypeC_GroupSilent(
 
 // ── Proposal → Type A ────────────────────────────────────────────────
 
+// Issue types that never belong in the judgment queue:
+//  - auto_action_log: purely passive — logs that Steadii silently did X.
+//    Belongs in Recent activity, not the queue (per spec: D collapses
+//    into Recent activity).
+//  - admin_waitlist_pending: a different sidebar surface (admin role).
+//  - monthly_boundary_review: a passive Steadii-originated self-report
+//    card (the monthly summary) — not a judgment item.
+// Kept as a single source of truth so the DB WHERE clause and the pure
+// predicate below can't drift apart.
+const QUEUE_EXCLUDED_PROPOSAL_ISSUE_TYPES: readonly AgentProposalIssueType[] = [
+  "auto_action_log",
+  "admin_waitlist_pending",
+  "monthly_boundary_review",
+];
+
+export function isQueueExcludedProposalIssueType(
+  issueType: AgentProposalIssueType
+): boolean {
+  return QUEUE_EXCLUDED_PROPOSAL_ISSUE_TYPES.includes(issueType);
+}
+
 async function fetchPendingProposals(userId: string): Promise<AgentProposalRow[]> {
-  // The auto_action_log issueType is purely passive — it logs that
-  // Steadii silently did X. Those folks belong in Recent activity, not
-  // the queue (per spec: D collapses into Recent activity).
-  // admin_waitlist_pending is a different sidebar surface (admin role).
   let rows: AgentProposalRow[];
   try {
     rows = await db
@@ -237,8 +257,9 @@ async function fetchPendingProposals(userId: string): Promise<AgentProposalRow[]
         and(
           eq(agentProposals.userId, userId),
           eq(agentProposals.status, "pending"),
-          ne(agentProposals.issueType, "auto_action_log"),
-          ne(agentProposals.issueType, "admin_waitlist_pending")
+          ...QUEUE_EXCLUDED_PROPOSAL_ISSUE_TYPES.map((t) =>
+            ne(agentProposals.issueType, t)
+          )
         )
       )
       .orderBy(desc(agentProposals.createdAt))
@@ -422,6 +443,19 @@ type FetchDraftsOptions = {
 // the queue so the user can still act on it; afterwards it disappears.
 const TYPE_C_READ_GRACE_HOURS = 24;
 
+// True when a draft's underlying inbox row is Steadii's own outbound mail
+// — either by self-sender email (incl. the "Name <email>" display form) or
+// by the "Steadii Agent" digest from-name when senderEmail is null/odd.
+export function isSelfSenderDraftRow(row: {
+  senderEmail: string | null;
+  senderName: string | null;
+}): boolean {
+  return (
+    isSteadiiSelfSender(row.senderEmail) ||
+    isSteadiiSelfSenderName(row.senderName)
+  );
+}
+
 async function fetchPendingDrafts(
   userId: string,
   options: FetchDraftsOptions
@@ -467,10 +501,10 @@ async function fetchPendingDrafts(
   // "reply to Steadii's own digest" loop the user flagged 2026-05-25.
   // Belt-and-suspenders: the standalone backfill script clears the
   // underlying inbox_items; this filter ensures the queue stays clean
-  // even if a new outbound path slips past ingest.
-  const withoutSelfSender = rows.filter(
-    (r) => !isSteadiiSelfSender(r.senderEmail)
-  );
+  // even if a new outbound path slips past ingest. The name-based
+  // fallback catches rows where senderEmail is null/odd but the from-name
+  // ("Steadii Agent") clearly identifies our own digest.
+  const withoutSelfSender = rows.filter((r) => !isSelfSenderDraftRow(r));
   const filtered = options.hideRead
     ? withoutSelfSender.filter((r) => !shouldHideReadNotifyOnly(r))
     : withoutSelfSender;
