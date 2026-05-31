@@ -10,7 +10,6 @@ import { workloadOverCapacityRule } from "./workload-over-capacity";
 import { classroomDeadlineImminentRule } from "./classroom-deadline-imminent";
 import { calendarDoubleBookingRule } from "./calendar-double-booking";
 import { assignmentDeadlineReminderRule } from "./assignment-deadline-reminder";
-import { monthlyBoundaryReviewRule } from "./monthly-boundary-review";
 import { fadingEntityRule } from "./fading-entity";
 import { entityDeadlineClusterRule } from "./entity-deadline-cluster";
 
@@ -22,7 +21,6 @@ export const ALL_RULES: ProactiveRule[] = [
   classroomDeadlineImminentRule,
   calendarDoubleBookingRule,
   assignmentDeadlineReminderRule,
-  monthlyBoundaryReviewRule,
   fadingEntityRule,
   entityDeadlineClusterRule,
 ];
