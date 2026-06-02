@@ -25,7 +25,24 @@
 # Usage:
 #   bash scripts/check-no-pii.sh                # scans staged diff (pre-commit)
 #   bash scripts/check-no-pii.sh --all          # scans whole working tree
-#   bash scripts/check-no-pii.sh --range A..B   # scans a commit range
+#   bash scripts/check-no-pii.sh --range A..B   # scans a commit range's diff
+#                                                 AND each commit MESSAGE body
+#                                                 in that range
+#   bash scripts/check-no-pii.sh --text FILE    # scans an arbitrary text file
+#                                                 (e.g. PR title + body)
+#
+# Coverage by mode:
+#   staged  — staged file diff only. The commit message isn't written yet at
+#             pre-commit time, so message scanning is intentionally out of
+#             scope here; the CI `--range` path covers messages instead.
+#   --all   — tracked working-tree contents only (no messages — it's a
+#             working-tree scan, not a history scan).
+#   --range — file diff + every commit-message body in A..B. This is the path
+#             CI uses on PRs, so message leaks (the PR #329 incident shape)
+#             are caught before merge.
+#   --text  — any text blob. CI feeds the PR title + body through this so a
+#             leak pasted into the PR description is caught even when the file
+#             diff and commit messages are clean.
 #
 # Wire it into your local pre-commit hook (one-time setup):
 #   ln -sf ../../scripts/check-no-pii.sh .git/hooks/pre-commit
@@ -59,6 +76,9 @@ load_patterns() {
   grep -v '^\s*#' "$file" 2>/dev/null | grep -v '^\s*$' || true
 }
 
+# Initialize TMP early so the EXIT trap's reference can't trip `set -u`
+# (unbound variable) on the --text / --range paths before TMP is assigned.
+TMP=""
 PATTERNS_FILE="$(mktemp -t pii-patterns-XXXXXX)"
 trap 'rm -f "$PATTERNS_FILE" "$TMP" 2>/dev/null' EXIT
 
@@ -67,56 +87,107 @@ if [ -f "$LOCAL_FILE" ]; then
   load_patterns "$LOCAL_FILE" >> "$PATTERNS_FILE"
 fi
 
-# Self-exclusion: this script + AGENTS.md + the pattern files themselves
-# legitimately contain example pattern text (as rule docs / regex source).
-# Don't flag them.
+# Self-exclusion: this script + its self-check + AGENTS.md + the pattern
+# files themselves legitimately contain example pattern text (regex source,
+# rule docs, the SYNTHETIC leak token used by the self-check). Don't flag
+# them. NOTE: this pathspec exclusion applies to the diff / --all / range-diff
+# scans only — commit-message and --text scans read content directly, not via
+# git pathspec, so the synthetic token (which only lives in the test FILE)
+# can't sneak through a message or PR body.
 WHITELIST=(
   ':!scripts/check-no-pii.sh'
+  ':!scripts/test-check-no-pii.sh'
   ':!scripts/pii-patterns-universal.txt'
   ':!scripts/pii-patterns.local.txt'
   ':!AGENTS.md'
 )
 
-TMP="$(mktemp -t pii-scan-XXXXXX)"
-
-case "$MODE" in
-  staged)
-    git diff --cached --unified=0 -- "${WHITELIST[@]}" > "$TMP"
-    ;;
-  --all)
-    # Scan tracked working-tree contents
-    git grep -nIE '.' -- ':!*.lock' ':!*.svg' ':!*-lock.json' "${WHITELIST[@]}" > "$TMP" || true
-    ;;
-  --range)
-    RANGE="${2:?range required for --range mode (e.g. main..HEAD)}"
-    git diff "$RANGE" --unified=0 -- "${WHITELIST[@]}" > "$TMP"
-    ;;
-  *)
-    echo "Unknown mode: $MODE" >&2
-    echo "Usage: $0 [staged | --all | --range A..B]" >&2
-    exit 2
-    ;;
-esac
-
 # Allowlist: shapes that LOOK like leaks but are app-critical / by-design.
 # These are subtracted from hits.
 ALLOWLIST_REGEX='noreply@|no-reply@|notifications@|@example\.|@test\.|@your-domain\.example|@u-tokyo\.ac\.jp|@u\.sample-univ\.example\.edu|@uni\.edu|@school\.edu|@somecorp\.com|@stripe\.com|recruiter@acme|\b(me|you|user|users|friend|friends|foo|bar|baz|abc|xyz|someone|anyone|test|tester|hello|admin|sample|alex|tanaka|stu|prof|recruiter|stripe|noreply|no-reply|notifications)@|user:pass@|username:password@|user:password@|\$\{[^}]+\}:\$\{[^}]+\}@'
 
+# Running total of pattern hits across everything scanned this run. Each
+# scanned source (diff, a commit message, a text file) adds to it so a hit
+# anywhere fails the whole run.
 hits=0
-while IFS= read -r pat; do
-  [ -z "$pat" ] && continue
-  matched=$(grep -niE --color=never "$pat" "$TMP" 2>/dev/null | grep -viE "$ALLOWLIST_REGEX" || true)
-  if [ -n "$matched" ]; then
-    if [ "$hits" -eq 0 ]; then
-      echo "BLOCKED — PII / leak patterns detected in this diff:" >&2
+
+# scan_file <file> <source_label>
+# Scans <file> against every loaded pattern minus the allowlist, prints any
+# findings under the BLOCKED header (printed once, lazily, with wording that
+# names <source_label>), and increments the global `hits`. Single source of
+# truth for the scan logic so diff / message / text paths can't drift.
+scan_file() {
+  local file="$1" source_label="$2" pat matched
+  [ -f "$file" ] || return 0
+  while IFS= read -r pat; do
+    [ -z "$pat" ] && continue
+    matched=$(grep -niE --color=never "$pat" "$file" 2>/dev/null | grep -viE "$ALLOWLIST_REGEX" || true)
+    if [ -n "$matched" ]; then
+      if [ "$hits" -eq 0 ]; then
+        echo "BLOCKED — PII / leak patterns detected${BLOCKED_WHERE}:" >&2
+        echo "" >&2
+      fi
+      echo "  source: $source_label" >&2
+      echo "  pattern: $pat" >&2
+      echo "$matched" | head -3 | sed 's/^/    /' >&2
       echo "" >&2
+      hits=$((hits + 1))
     fi
-    echo "  pattern: $pat" >&2
-    echo "$matched" | head -3 | sed 's/^/    /' >&2
-    echo "" >&2
-    hits=$((hits + 1))
-  fi
-done < "$PATTERNS_FILE"
+  done < "$PATTERNS_FILE"
+}
+
+# BLOCKED_WHERE makes the report header source-aware instead of hardcoding
+# "in this diff" for every mode.
+BLOCKED_WHERE=" in this diff"
+
+case "$MODE" in
+  staged)
+    TMP="$(mktemp -t pii-scan-XXXXXX)"
+    git diff --cached --unified=0 -- "${WHITELIST[@]}" > "$TMP"
+    scan_file "$TMP" "staged diff"
+    ;;
+  --all)
+    TMP="$(mktemp -t pii-scan-XXXXXX)"
+    # Scan tracked working-tree contents
+    git grep -nIE '.' -- ':!*.lock' ':!*.svg' ':!*-lock.json' "${WHITELIST[@]}" > "$TMP" || true
+    BLOCKED_WHERE=" in the working tree"
+    scan_file "$TMP" "working tree"
+    ;;
+  --range)
+    RANGE="${2:?range required for --range mode (e.g. main..HEAD)}"
+    BLOCKED_WHERE=" in this range (diff + commit messages)"
+    # 1) The file diff for the range.
+    TMP="$(mktemp -t pii-scan-XXXXXX)"
+    git diff "$RANGE" --unified=0 -- "${WHITELIST[@]}" > "$TMP"
+    scan_file "$TMP" "diff ($RANGE)"
+    # 2) Each commit MESSAGE body in the range. The diff scan above never
+    #    sees these — the PR #329 incident leaked via the message + PR body
+    #    while the diff was clean.
+    MSG_TMP="$(mktemp -t pii-msg-XXXXXX)"
+    while IFS= read -r sha; do
+      [ -z "$sha" ] && continue
+      short="$(git rev-parse --short "$sha")"
+      subject="$(git log -1 --format=%s "$sha")"
+      git log -1 --format=%B "$sha" > "$MSG_TMP"
+      scan_file "$MSG_TMP" "commit $short (\"$subject\")"
+    done < <(git log --format=%H "$RANGE")
+    rm -f "$MSG_TMP" 2>/dev/null || true
+    ;;
+  --text)
+    TEXT_FILE="${2:?file required for --text mode (e.g. pr-meta.txt)}"
+    if [ ! -f "$TEXT_FILE" ]; then
+      echo "ERROR: --text file not found: $TEXT_FILE" >&2
+      exit 2
+    fi
+    BLOCKED_WHERE=" in the provided text (PR title/body)"
+    scan_file "$TEXT_FILE" "PR title/body"
+    ;;
+  *)
+    echo "Unknown mode: $MODE" >&2
+    echo "Usage: $0 [staged | --all | --range A..B | --text FILE]" >&2
+    exit 2
+    ;;
+esac
 
 if [ "$hits" -gt 0 ]; then
   cat >&2 <<'EOF'

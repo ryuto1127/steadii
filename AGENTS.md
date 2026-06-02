@@ -180,7 +180,7 @@ Authoritative numbers live in `project_decisions.md`. This section covers only i
 
 **Why**: a leak to a public-repo artifact is permanent and indexable. The dogfood sample is INPUT for a generalized fix, not the spec. Third-party leaks (people who never consented to appearing on this repo) are the highest-severity kind. See `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/feedback_no_user_case_leak.md` for the full rule + verified incidents (2026-05-15 — PR #265 / #266 / #267 + full git-history rewrite + author-identity scrub).
 
-**Pre-commit check**: before any `git add` of a content-bearing file, scan the diff for the patterns above. If a leak is suspected, scrub at the source, do NOT rely on a later cleanup pass.
+**Pre-commit check**: before any `git add` of a content-bearing file, scan the diff for the patterns above. If a leak is suspected, scrub at the source, do NOT rely on a later cleanup pass. The local `staged` hook scans the file diff only — the commit message isn't written yet at pre-commit time, so message bodies + the PR title/body are covered later by CI's `--range` and `--text` scans (see §7b Layer 1). Scrub the message + PR description as carefully as the diff.
 
 **Pattern storage — split by sensitivity** (the scanner itself must not be the leak):
 
@@ -193,7 +193,7 @@ Why split: committing a literal personal identity as a pattern in a public scrip
 
 Before any squash-merge to `main`, the assistant (or whoever is shipping) MUST do a two-layer review of the PR's diff vs `main`:
 
-**Layer 1 — Mechanical (CI-enforced).** `.github/workflows/pii-check.yml` runs `scripts/check-no-pii.sh --range main..HEAD` automatically. Catches known-leak patterns (see §7a). PR cannot merge if this fails.
+**Layer 1 — Mechanical (CI-enforced).** `.github/workflows/pii-check.yml` runs `scripts/check-no-pii.sh` automatically and — via the **same** universal + local patterns — now covers three surfaces, not just the diff: **(a)** the file diff (`--range BASE..HEAD`), **(b)** every **commit message body** in that range (the `--range` scan walks each commit's message too, naming any offending commit by short SHA + subject), and **(c)** the **PR title + body** (a `--text` step that runs only on `pull_request` events). This closes the PR #329 gap, where a real subject pasted into the commit message + PR body passed because only the file diff was scanned. The scanner's own behavior is regression-guarded by `scripts/test-check-no-pii.sh` (run in CI). Catches known-leak patterns (see §7a). PR cannot merge if any of these fails.
 
 **Layer 2 — Semantic (human / Claude judgment).** The mechanical script only catches shapes it already knows about. Before clicking merge, scan the diff yourself for shapes the script wouldn't catch:
 
