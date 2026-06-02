@@ -14,6 +14,7 @@ import {
   startInlineSendTimer,
   type InlineSendTimer,
 } from "@/lib/agent/queue/inline-send-timer";
+import { queueShowMoreState } from "@/lib/agent/queue/visual";
 import { QUEUE_VISIBLE_LIMIT, type QueueCard } from "@/lib/agent/queue/types";
 
 // Client wrapper around the queue. Handles:
@@ -61,6 +62,10 @@ type ServerActions = {
     cardId: string,
     disposition: "resolved" | "skipped" | "ignored"
   ) => Promise<void>;
+  // 確認済み — unified neutral "I already handled / saw this" across ALL
+  // card kinds. Maps to the 'resolved' disposition family server-side and
+  // never writes a negative learning signal (distinct from dismiss/却下).
+  markHandled: (cardId: string) => Promise<void>;
   // engineer-42 — Type F (interactive confirmations).
   confirm: (cardId: string) => Promise<void>;
   correct: (cardId: string, correctedValue: string) => Promise<void>;
@@ -107,6 +112,12 @@ export function QueueList({
   const tShared = useTranslations("queue.shared");
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
+  // Heading anchor — on collapse ("閉じる") we smooth-scroll the user back
+  // up to the queue heading so the list shrinking under them doesn't
+  // strand the viewport mid-page. Held as a ref to the <h2 id="queue
+  // -section">. SSR-guarded at call time (scrollIntoView is undefined on
+  // the server / before hydration).
+  const headingRef = useRef<HTMLHeadingElement>(null);
   // PR 2 — per-card pending send timers. The map is keyed by card id so
   // the user can fire 送信 across multiple Draft cards in parallel and
   // each card's 10s window is independent. Held in a ref because the
@@ -152,6 +163,37 @@ export function QueueList({
   }
 
   const refresh = () => router.refresh();
+
+  // Bottom show-more / show-less control. The label + count + scroll
+  // behavior come from the pure helper so the count math stays unit-
+  // testable. The control renders only when there's overflow beyond the
+  // visible cap.
+  const showMore = queueShowMoreState({
+    totalCount: cards.length,
+    visibleLimit: QUEUE_VISIBLE_LIMIT,
+    expanded,
+  });
+
+  const toggleExpanded = () => {
+    const willCollapse = expanded;
+    setExpanded((v) => !v);
+    // On collapse, jump the viewport back up to the heading. Deferred a
+    // tick so the list has shrunk before we scroll. Guarded for SSR /
+    // no-rAF environments (tests, older runtimes); the optional-chained
+    // ref + scrollIntoView existence check make it a no-op there.
+    if (
+      willCollapse &&
+      showMore.scrollToHeadingOnClick &&
+      typeof requestAnimationFrame === "function"
+    ) {
+      requestAnimationFrame(() => {
+        const heading = headingRef.current;
+        if (heading && typeof heading.scrollIntoView === "function") {
+          heading.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
+    }
+  };
 
   // PR 2 — kicks the client-side 10s timer for a Draft card's Send
   // click. Returns a Promise that resolves immediately so the card's
@@ -276,6 +318,7 @@ export function QueueList({
       <header className="flex items-end justify-between gap-3">
         <div>
           <h2
+            ref={headingRef}
             id="queue-section"
             className="font-display text-[20px] font-semibold tracking-[-0.01em] text-[hsl(var(--foreground))]"
           >
@@ -285,25 +328,6 @@ export function QueueList({
             {t("section_caption")}
           </p>
         </div>
-        {cards.length > QUEUE_VISIBLE_LIMIT ? (
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[12px] font-medium text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
-          >
-            {expanded ? (
-              <>
-                <span>{t("show_less")}</span>
-                <ChevronUp size={12} strokeWidth={1.75} />
-              </>
-            ) : (
-              <>
-                <span>{t("show_more")}</span>
-                <ChevronDown size={12} strokeWidth={1.75} />
-              </>
-            )}
-          </button>
-        ) : null}
       </header>
       <ul className="flex flex-col gap-2.5 sm:gap-3">
         {visible.map((card) => {
@@ -405,6 +429,21 @@ export function QueueList({
               card.archetype === "C"
                 ? async () => {
                     if (card.detailHref) router.push(card.detailHref);
+                  }
+                : undefined,
+            // 確認済み — neutral "handled / saw it" on the non-draft
+            // judgment + FYI cards (Type A decisions, Type C soft
+            // notices). Draft cards already carry the 対応済み disposition
+            // row, so we don't double-wire them here.
+            onMarkHandled:
+              card.archetype === "A" || card.archetype === "C"
+                ? async () => {
+                    try {
+                      await actions.markHandled(card.id);
+                    } catch (err) {
+                      toast.error(message(err, "Action failed"));
+                    }
+                    refresh();
                   }
                 : undefined,
             onSubmit:
@@ -547,6 +586,22 @@ export function QueueList({
           );
         })}
       </ul>
+      {showMore.shouldShowToggle ? (
+        <button
+          type="button"
+          onClick={toggleExpanded}
+          aria-expanded={expanded}
+          aria-controls="queue-section"
+          className="mt-1 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-2.5 text-[13px] font-medium text-[hsl(var(--muted-foreground))] transition-default hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))] focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary)/0.5)]"
+        >
+          <span>{t(showMore.labelKey, showMore.labelValues)}</span>
+          {expanded ? (
+            <ChevronUp size={14} strokeWidth={1.75} />
+          ) : (
+            <ChevronDown size={14} strokeWidth={1.75} />
+          )}
+        </button>
+      ) : null}
     </section>
   );
 }

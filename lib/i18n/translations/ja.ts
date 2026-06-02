@@ -1379,6 +1379,7 @@ export const ja: Messages = {
     section_heading: "Steadii キュー",
     section_caption: "あなたの判断が必要なもの。重要度順に並んでいます。",
     show_more: "もっと見る",
+    show_more_count: "もっと見る(あと{n}件)",
     show_less: "閉じる",
     empty_title: "キューは空です。",
     empty_body:

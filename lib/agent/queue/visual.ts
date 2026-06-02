@@ -4,6 +4,57 @@
 
 import type { QueueArchetype, QueueCardG, QueueConfidence } from "./types";
 
+// ── Bottom "show more / show less" toggle (queue-list) ────────────────
+//
+// The visible queue is capped at `visibleLimit` (QUEUE_VISIBLE_LIMIT).
+// When there are more cards than that, the list renders a full-width
+// control at its BOTTOM. This helper computes everything the control
+// needs so the render stays declarative and the count math is unit-
+// testable without mounting React:
+//
+//   - shouldShowToggle: only render the control when there's overflow.
+//   - hiddenCount: how many cards are hidden while collapsed (N for the
+//     "もっと見る(あと{n}件)" label). Always the overflow beyond the
+//     visible cap regardless of expanded state, so the count is stable.
+//   - labelKey / labelValues: which i18n key + interpolation the button
+//     should use. Collapsed → "show_more_count" with {n}; expanded →
+//     "show_less" (閉じる, no count).
+//   - scrollToHeadingOnClick: true only when collapsing (閉じる), so the
+//     caller can smooth-scroll back to the queue heading. Expanding
+//     reveals inline below the button and needs no scroll.
+export function queueShowMoreState(args: {
+  totalCount: number;
+  visibleLimit: number;
+  expanded: boolean;
+}): {
+  shouldShowToggle: boolean;
+  hiddenCount: number;
+  labelKey: "show_more_count" | "show_less";
+  labelValues: { n: number } | undefined;
+  scrollToHeadingOnClick: boolean;
+} {
+  const hiddenCount = Math.max(0, args.totalCount - args.visibleLimit);
+  const shouldShowToggle = hiddenCount > 0;
+  if (args.expanded) {
+    return {
+      shouldShowToggle,
+      hiddenCount,
+      labelKey: "show_less",
+      labelValues: undefined,
+      // Collapsing — scroll back up to the heading so the user isn't
+      // left stranded mid-page after the list shrinks.
+      scrollToHeadingOnClick: true,
+    };
+  }
+  return {
+    shouldShowToggle,
+    hiddenCount,
+    labelKey: "show_more_count",
+    labelValues: { n: hiddenCount },
+    scrollToHeadingOnClick: false,
+  };
+}
+
 // Round 4 (2026-05-24) — Type H header copy + expiry hints. The card
 // surfaces a batch confirmation for propose-archive items; helpers
 // here pin the i18n keys + the soonest-expiry threshold so the

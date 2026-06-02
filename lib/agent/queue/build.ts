@@ -432,16 +432,30 @@ export type DraftWithInbox = {
 };
 
 type FetchDraftsOptions = {
-  // engineer-43 — when true, notify_only rows whose inbox_items.gmail_read_at
-  // is set AND outside the 24h grace window are filtered out at the DB layer.
-  // draft_reply / ask_clarifying are unaffected — the read-state filter is
-  // specifically for the "FYI" Type C cards.
+  // engineer-43 — historical hide-read pref. Read-state filtering of
+  // notify_only FYI cards is now a hard baseline (see
+  // TYPE_C_READ_GRACE_HOURS below) and applies REGARDLESS of this pref:
+  // an already-read FYI ("返信不要") no longer owes the user a decision,
+  // so it always leaves the judgment queue. The flag is still threaded
+  // through so the pref load stays observable and a future "complete
+  // log" mode could re-enable soft retention without re-plumbing; today
+  // it does not gate FYI visibility.
   hideRead: boolean;
 };
 
-// 24h grace window: a row marked-as-read within the last 24h stays in
-// the queue so the user can still act on it; afterwards it disappears.
-const TYPE_C_READ_GRACE_HOURS = 24;
+// Read-state grace window for notify_only (FYI / "返信不要") cards. The
+// judgment queue must hold ONLY items that still need the user's
+// decision; once the user has READ the underlying Gmail message there is
+// no judgment owed, so the FYI card leaves the queue immediately — it
+// lives on in Recent Activity / 最近の動き. 0 = hide the moment
+// gmail_read_at is set. Kept as a named constant so a future "keep
+// just-read briefly" product call can tune it without touching the
+// filter logic.
+//
+// History: this was 24h, which left already-read FYIs (e.g. a read
+// promo) lingering at "1日前". Tightened to immediate per the
+// judgment-only inclusion rule.
+const TYPE_C_READ_GRACE_HOURS = 0;
 
 // True when a draft's underlying inbox row is Steadii's own outbound mail
 // — either by self-sender email (incl. the "Name <email>" display form) or
@@ -505,22 +519,29 @@ async function fetchPendingDrafts(
   // fallback catches rows where senderEmail is null/odd but the from-name
   // ("Steadii Agent") clearly identifies our own digest.
   const withoutSelfSender = rows.filter((r) => !isSelfSenderDraftRow(r));
-  const filtered = options.hideRead
-    ? withoutSelfSender.filter((r) => !shouldHideReadNotifyOnly(r))
-    : withoutSelfSender;
+  // Read-state filter is now an unconditional baseline for notify_only
+  // FYI cards (an already-read FYI owes no judgment) — it no longer
+  // depends on options.hideRead. `void`-ed so the pref load stays a
+  // documented input even though it doesn't gate this path today.
+  void options.hideRead;
+  const filtered = withoutSelfSender.filter(
+    (r) => !shouldHideReadNotifyOnly(r)
+  );
   return dedupePendingDraftsByThread(filtered);
 }
 
-// engineer-43 — Type C read-state filter. Only applies to notify_only:
-// other actions are user-driven (draft_reply needs the user, ask_clarifying
-// needs an answer) and a "read in Gmail" signal is not the same as "done".
+// Type C read-state filter. Only applies to notify_only: the other
+// actions are judgment-required (draft_reply needs a send decision,
+// ask_clarifying needs an answer) and a "read in Gmail" signal is NOT
+// the same as "handled" for those.
 //
-// Grace window — a card stays visible for `TYPE_C_READ_GRACE_HOURS`
-// after the user first marked the underlying message read. The comment
-// in the handoff phrased this as "keeps just-read still showing briefly
-// so the user can act on it"; we measure the grace from gmail_read_at,
-// not created_at, because the latter would hide a freshly-created card
-// the moment it was read instead of giving the brief tail.
+// Baseline (TYPE_C_READ_GRACE_HOURS = 0): a notify_only FYI card hides
+// the moment its underlying Gmail message is read — there's no judgment
+// left to owe, so it belongs in Recent Activity, not the judgment
+// queue. The grace is kept as a tunable constant; a non-zero value
+// restores the old "keep just-read briefly" tail, measured from
+// gmail_read_at (not created_at) so a freshly-created-then-read card
+// still gets the full tail rather than vanishing instantly.
 export function shouldHideReadNotifyOnly(
   row: {
     draft: { action: AgentDraft["action"] };
@@ -531,7 +552,10 @@ export function shouldHideReadNotifyOnly(
   if (row.draft.action !== "notify_only") return false;
   if (!row.gmailReadAt) return false;
   const ageMs = now.getTime() - row.gmailReadAt.getTime();
-  return ageMs > TYPE_C_READ_GRACE_HOURS * 60 * 60 * 1000;
+  // `>=` so that with a 0-hour grace a row read at exactly `now` still
+  // hides; with a non-zero grace the boundary behaves as a normal
+  // "older than N hours" cutoff.
+  return ageMs >= TYPE_C_READ_GRACE_HOURS * 60 * 60 * 1000;
 }
 
 async function loadHideReadFromQueuePref(userId: string): Promise<boolean> {

@@ -257,6 +257,92 @@ export async function queueSetDispositionAction(
   revalidatePath("/app");
 }
 
+// 確認済み — the unified neutral "I already handled / saw this" action,
+// available on EVERY card kind (not just Type B Draft). Critical
+// semantic contract:
+//
+//   確認済み (this action)  → NEUTRAL. Maps to the 'resolved' disposition
+//                             family. It must NOT feed any negative
+//                             learning signal — no recordSenderEvent,
+//                             no recordProactiveFeedback('dismissed'),
+//                             no recordSenderFeedback('dismissed'). The
+//                             card simply leaves the judgment queue and
+//                             (where applicable) reappears in Recent
+//                             Activity as a resolved row.
+//
+//   却下 / dismiss          → the EXISTING suppress signal. Draft
+//                             permanent-dismiss demotes the sender via
+//                             sender-confidence; proposal permanent-
+//                             dismiss writes recordProactiveFeedback
+//                             ('dismissed'). Those paths are unchanged.
+//
+// Routing per kind mirrors each surface's own "neutral done" semantics:
+//   draft        → disposition='resolved' (same write as the Type B
+//                  対応済み button; never touches sender-confidence)
+//   proposal     → status='resolved', resolved_action='acknowledged'
+//                  (drops from the pending-proposal query, surfaces in
+//                  fetchAutoActionLogs / Recent Activity). NO proactive
+//                  feedback bias write — acknowledging is not dismissing.
+//   pre_brief    → viewed_at + dismissed_at (identical to the existing
+//                  neutral "Mark reviewed" secondary action)
+//   office_hours → status='dismissed' (no email/calendar side-effect;
+//                  office-hours has no sender-confidence wiring)
+//   confirmation → status='dismissed', persona NOT written (the neutral
+//                  "saw it, no fact to pin" path)
+//   autocal      → status='cancelled' via the existing dismiss helper
+//                  (no calendar API call; proposals never created an
+//                  event, so this writes no external state)
+export async function queueMarkHandledAction(
+  rawCardId: string
+): Promise<void> {
+  const userId = await getUserId();
+  const { kind, id } = parseCardId(rawCardId);
+  const now = new Date();
+  if (kind === "draft") {
+    await db
+      .update(agentDrafts)
+      .set({ disposition: "resolved", skippedAt: null, updatedAt: now })
+      .where(and(eq(agentDrafts.id, id), eq(agentDrafts.userId, userId)));
+    await logEmailAudit({
+      userId,
+      action: "email_l2_completed",
+      result: "success",
+      resourceId: id,
+      detail: { subAction: "disposition_resolved" },
+    });
+  } else if (kind === "proposal" || kind === "group_detect") {
+    // Neutral acknowledge: resolve without picking an action option and
+    // WITHOUT recordProactiveFeedback — the user saw it and is done, not
+    // signalling "stop proposing this".
+    await db
+      .update(agentProposals)
+      .set({
+        status: "resolved",
+        resolvedAction: "acknowledged",
+        resolvedAt: now,
+        viewedAt: now,
+      })
+      .where(
+        and(eq(agentProposals.id, id), eq(agentProposals.userId, userId))
+      );
+  } else if (kind === "pre_brief") {
+    await db
+      .update(eventPreBriefs)
+      .set({ viewedAt: now, dismissedAt: now })
+      .where(
+        and(eq(eventPreBriefs.id, id), eq(eventPreBriefs.userId, userId))
+      );
+  } else if (kind === "office_hours") {
+    await dismissOfficeHoursRequest(userId, id);
+  } else if (kind === "confirmation") {
+    await dismissConfirmation(userId, id);
+  } else if (kind === "autocal") {
+    await autoCalProposalDismissAction(rawCardId);
+    return; // helper already revalidates
+  }
+  revalidatePath("/app");
+}
+
 // 2026-05-24 (PR 2) — inline Send for Type B draft cards on /app.
 //
 // Fires after the client-side 10s undo window elapses. The card id is

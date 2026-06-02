@@ -17,6 +17,7 @@ import {
   queueConfirmAction,
   queueCorrectAction,
   queueDismissAction,
+  queueMarkHandledAction,
   queuePermanentDismissAction,
   queueResolveProposalAction,
   queueSecondaryAction,
@@ -106,6 +107,7 @@ export default async function HomePage() {
               sendDraft: queueSendDraftAction,
               sendOfficeHours: queueSendOfficeHoursAction,
               setDisposition: queueSetDispositionAction,
+              markHandled: queueMarkHandledAction,
               confirm: queueConfirmAction,
               correct: queueCorrectAction,
               addToCalendar: async (cardId) => {
