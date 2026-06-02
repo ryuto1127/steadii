@@ -53,9 +53,16 @@ function buildRfc2822(input: GmailDraftInput): string {
   }
   lines.push("MIME-Version: 1.0");
   lines.push("Content-Type: text/plain; charset=UTF-8");
-  lines.push("Content-Transfer-Encoding: 7bit");
+  // 8bit is accurate for UTF-8 (multi-byte) bodies — JA replies are not
+  // 7bit-clean. Gmail handles the actual transport encoding on send; the
+  // header just has to describe the body honestly so strict MTAs don't
+  // mangle it (the old "7bit" was a MIME mis-declaration risking mojibake).
+  lines.push("Content-Transfer-Encoding: 8bit");
   lines.push("");
-  lines.push(input.body);
+  // Normalize the body's line endings to CRLF so multi-line JA bodies are
+  // RFC-compliant once joined below. Convert lone \n (not already part of
+  // a \r\n) into \r\n; existing \r\n pass through unchanged.
+  lines.push(input.body.replace(/\r\n|\n/g, "\r\n"));
   return lines.join("\r\n");
 }
 

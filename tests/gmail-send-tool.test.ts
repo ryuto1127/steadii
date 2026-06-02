@@ -73,6 +73,78 @@ describe("encodeGmailRaw", () => {
     expect(decoded).toContain("In-Reply-To: <abc@gmail.com>");
     expect(decoded).toContain("References: <abc@gmail.com>");
   });
+
+  // MIME correctness for multi-byte UTF-8 (Japanese) bodies. A multi-line
+  // JA body is now common after the register-conditioned 改行 prompt rule,
+  // so the wire format has to declare 8bit, use CRLF line endings, and
+  // round-trip the Japanese characters intact.
+  describe("UTF-8 Japanese multi-line body", () => {
+    // Greeting / blank line / two body lines / blank line / closing —
+    // the formal JA block shape. Placeholder name only.
+    const jaBody = [
+      "お世話になっております。田中太郎です。",
+      "",
+      "ご連絡いただいた件、確認いたしました。",
+      "ご提示の日程で問題ございません。",
+      "",
+      "引き続きどうぞよろしくお願いいたします。",
+    ].join("\n");
+
+    it("declares Content-Transfer-Encoding: 8bit (not 7bit)", () => {
+      const raw = encodeGmailRaw({
+        to: ["a@example.com"],
+        subject: "件名",
+        body: jaBody,
+      });
+      const decoded = Buffer.from(raw, "base64").toString("utf-8");
+      expect(decoded).toContain("Content-Transfer-Encoding: 8bit");
+      expect(decoded).not.toContain("Content-Transfer-Encoding: 7bit");
+    });
+
+    it("normalizes body line endings to CRLF (no lone \\n)", () => {
+      const raw = encodeGmailRaw({
+        to: ["a@example.com"],
+        subject: "件名",
+        body: jaBody,
+      });
+      const decoded = Buffer.from(raw, "base64").toString("utf-8");
+      // Isolate the body (after the blank line separating headers).
+      const body = decoded.split("\r\n\r\n").slice(1).join("\r\n\r\n");
+      expect(body.length).toBeGreaterThan(0);
+      // Every \n in the body must be immediately preceded by \r.
+      expect(/(?<!\r)\n/.test(body)).toBe(false);
+      // And the multi-line structure survived as CRLF.
+      expect(body).toContain(
+        "ご連絡いただいた件、確認いたしました。\r\nご提示の日程で問題ございません。"
+      );
+    });
+
+    it("does not double-convert a body that already uses CRLF", () => {
+      const crlfBody = "一行目\r\n二行目";
+      const raw = encodeGmailRaw({
+        to: ["a@example.com"],
+        subject: "件名",
+        body: crlfBody,
+      });
+      const decoded = Buffer.from(raw, "base64").toString("utf-8");
+      expect(decoded).toContain("一行目\r\n二行目");
+      expect(decoded).not.toContain("一行目\r\r\n二行目");
+    });
+
+    it("round-trips the Japanese characters intact through base64", () => {
+      const raw = encodeGmailRaw({
+        to: ["a@example.com"],
+        subject: "件名",
+        body: jaBody,
+      });
+      const decoded = Buffer.from(raw, "base64").toString("utf-8");
+      // Each line's Japanese content survived UTF-8 → base64 → UTF-8.
+      for (const line of jaBody.split("\n")) {
+        if (line.length === 0) continue;
+        expect(decoded).toContain(line);
+      }
+    });
+  });
 });
 
 describe("gmailSendTool.execute (mocked Gmail API)", () => {
