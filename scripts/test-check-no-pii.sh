@@ -115,6 +115,16 @@ printf 'leaked contact: %s\n' "$LEAK" >> "$TMP_REPO/notes.txt"
 run_tip
 report "$?" 0 "--range synthetic leak in file CONTENT still fails"
 
+# ---- Case 6 (regression): --range with NO second arg -> non-zero ---------
+# Guards against the fail-OPEN where the EXIT cleanup trap's trailing `rm`
+# (exit 0) masked the missing-arg guard's non-zero status.
+bash "$SCRIPT" --range >/dev/null 2>&1
+report "$?" 0 "--range with no second arg fails (does not exit 0)"
+
+# ---- Case 7 (regression): --text with NO second arg -> non-zero ----------
+bash "$SCRIPT" --text >/dev/null 2>&1
+report "$?" 0 "--text with no second arg fails (does not exit 0)"
+
 echo ""
 if [ "$failures" -gt 0 ]; then
   echo "SELF-CHECK FAILED: $failures case(s) did not behave as expected." >&2

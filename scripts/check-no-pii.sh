@@ -80,7 +80,10 @@ load_patterns() {
 # (unbound variable) on the --text / --range paths before TMP is assigned.
 TMP=""
 PATTERNS_FILE="$(mktemp -t pii-patterns-XXXXXX)"
-trap 'rm -f "$PATTERNS_FILE" "$TMP" 2>/dev/null' EXIT
+# Capture and re-raise the incoming exit status: the trailing `rm` (exit 0)
+# would otherwise mask the script's real status, turning a guard failure
+# (e.g. missing `--range` / `--text` arg) into a fail-OPEN exit 0.
+trap 'rc=$?; rm -f "$PATTERNS_FILE" "$TMP" 2>/dev/null; exit $rc' EXIT
 
 load_patterns "$UNIVERSAL_FILE" > "$PATTERNS_FILE"
 if [ -f "$LOCAL_FILE" ]; then
@@ -154,7 +157,11 @@ case "$MODE" in
     scan_file "$TMP" "working tree"
     ;;
   --range)
-    RANGE="${2:?range required for --range mode (e.g. main..HEAD)}"
+    if [ -z "${2:-}" ]; then
+      echo "ERROR: range required for --range mode (e.g. main..HEAD)" >&2
+      exit 2
+    fi
+    RANGE="$2"
     BLOCKED_WHERE=" in this range (diff + commit messages)"
     # 1) The file diff for the range.
     TMP="$(mktemp -t pii-scan-XXXXXX)"
@@ -174,7 +181,11 @@ case "$MODE" in
     rm -f "$MSG_TMP" 2>/dev/null || true
     ;;
   --text)
-    TEXT_FILE="${2:?file required for --text mode (e.g. pr-meta.txt)}"
+    if [ -z "${2:-}" ]; then
+      echo "ERROR: file required for --text mode (e.g. pr-meta.txt)" >&2
+      exit 2
+    fi
+    TEXT_FILE="$2"
     if [ ! -f "$TEXT_FILE" ]; then
       echo "ERROR: --text file not found: $TEXT_FILE" >&2
       exit 2
