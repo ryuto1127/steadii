@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/nextjs";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { embedText } from "./embeddings";
+import { isSteadiiSelfSender, isSteadiiSelfSenderName } from "./self-sender";
 
 // Hardcoded per memory: top-20 similar emails for deep-pass context.
 // Not a user-facing setting — exposed as a constant so callers reason about
@@ -72,6 +73,7 @@ export async function searchSimilarEmails(args: {
         snippet: string | null;
         received_at: Date;
         sender_email: string;
+        sender_name: string | null;
       }>(sql`
         SELECT
           ii.id AS inbox_item_id,
@@ -79,7 +81,8 @@ export async function searchSimilarEmails(args: {
           ii.subject AS subject,
           ii.snippet AS snippet,
           ii.received_at AS received_at,
-          ii.sender_email AS sender_email
+          ii.sender_email AS sender_email,
+          ii.sender_name AS sender_name
         FROM email_embeddings ee
         JOIN inbox_items ii ON ii.id = ee.inbox_item_id
         WHERE ee.user_id = ${args.userId}
@@ -97,10 +100,29 @@ export async function searchSimilarEmails(args: {
           snippet: string | null;
           received_at: Date | string;
           sender_email: string;
+          sender_name: string | null;
         }>;
       }).rows ?? [];
 
-      const results: SimilarEmail[] = raw.map((r) => ({
+      // Belt-and-suspenders self-sender drop, mirroring the TS filter in
+      // queue/build.ts. Legacy Steadii-digest rows ingested before the
+      // ingest-side self-filter (#327) still live in inbox_items + their
+      // embeddings, so a vector match can pull them into the retrieval
+      // slate and they then render as source-citation chips on UNRELATED
+      // cards (SELF_REFERENCE_RETRIEVAL_LOOP). Filtering here covers both
+      // grounding (fanout/l2) and chips (buildProvenance → queue chips)
+      // for all future drafts. We filter the raw row (TS) rather than a
+      // SQL WHERE so the query shape stays intact; under-delivering below
+      // topK in the rare slip is acceptable — correctness over completeness.
+      const filtered = raw.filter(
+        (r) =>
+          !(
+            isSteadiiSelfSender(r.sender_email) ||
+            isSteadiiSelfSenderName(r.sender_name)
+          )
+      );
+
+      const results: SimilarEmail[] = filtered.map((r) => ({
         inboxItemId: r.inbox_item_id,
         similarity: distanceToSimilarity(Number(r.distance)),
         subject: r.subject,
