@@ -80,6 +80,13 @@ type CommonProps = {
   // banner becomes interactive. Otherwise the card surfaces only a
   // toast-style passive label and silently completes.
   onUndo?: (token: string) => Promise<void> | void;
+  // 確認済み — NEUTRAL "I already handled / saw this". Distinct from
+  // onDismiss (the suppress/negative signal): mark-handled never demotes
+  // a sender or biases the proactive scanner; it just clears the card.
+  // Optional because draft-mode cards expose the same intent via their
+  // own 対応済み disposition button; non-draft judgment/FYI cards wire
+  // this instead.
+  onMarkHandled?: () => Promise<ActionResult> | ActionResult;
 };
 
 type CardAProps = CommonProps & {
@@ -575,10 +582,12 @@ export function QueueCardARender({
   onDismiss,
   onSnooze,
   onPermanentDismiss,
+  onMarkHandled,
   onUndo,
 }: CardAProps) {
   const t = useTranslations("queue.card_a");
   const tShared = useTranslations("queue.shared");
+  const tDispo = useTranslations("queue.card_b_disposition");
   const tNot = useTranslations("notifications");
   const locale = useLocaleHint();
   const [pending, startTransition] = useTransition();
@@ -596,6 +605,18 @@ export function QueueCardARender({
         setUndoToken(token);
       }
       setResolved(true);
+    });
+  };
+
+  const markHandled = () => {
+    if (!onMarkHandled || pending || resolved) return;
+    setResolved(true);
+    startTransition(async () => {
+      try {
+        await onMarkHandled();
+      } catch {
+        setResolved(false);
+      }
     });
   };
 
@@ -641,6 +662,16 @@ export function QueueCardARender({
                 {opt.label}
               </button>
             ))}
+            {onMarkHandled ? (
+              <button
+                type="button"
+                onClick={markHandled}
+                disabled={pending || resolved}
+                className="inline-flex h-9 items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-[13px] font-medium text-[hsl(var(--foreground))] transition-default hover:bg-[hsl(var(--surface-raised))] disabled:opacity-50"
+              >
+                {tDispo("resolved")}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => void onDismiss()}
@@ -996,11 +1027,13 @@ export function QueueCardBRender({
 export function QueueCardCRender({
   card,
   onTakeAction,
+  onMarkHandled,
   onDismiss,
   onSnooze,
   onPermanentDismiss,
 }: CardCProps) {
   const tShared = useTranslations("queue.shared");
+  const tDispo = useTranslations("queue.card_b_disposition");
   const locale = useLocaleHint();
   const [pending, startTransition] = useTransition();
   const [resolved, setResolved] = useState(false);
@@ -1013,6 +1046,24 @@ export function QueueCardCRender({
       setResolved(true);
     });
   };
+
+  const markHandled = () => {
+    if (!onMarkHandled || pending || resolved) return;
+    setResolved(true);
+    startTransition(async () => {
+      try {
+        await onMarkHandled();
+      } catch {
+        setResolved(false);
+      }
+    });
+  };
+
+  // When mark-handled is wired (FYI / "返信不要" notices), 確認済み is the
+  // PRIMARY affordance and 対応する drops to a de-emphasized secondary —
+  // a filled "Take action" CTA on a no-reply notice is contradictory.
+  // Without it (legacy callers), keep the original 対応する-primary layout.
+  const fyiPrimary = Boolean(onMarkHandled);
 
   return (
     <>
@@ -1034,19 +1085,43 @@ export function QueueCardCRender({
             </p>
           ) : null}
           <div className="mt-2.5 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={takeAction}
-              disabled={pending || resolved}
-              className="inline-flex h-8 items-center rounded-full bg-[hsl(var(--foreground))] px-3 text-[12px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90 disabled:opacity-50"
-            >
-              {card.primaryActionLabel}
-            </button>
+            {fyiPrimary ? (
+              <>
+                <button
+                  type="button"
+                  onClick={markHandled}
+                  disabled={pending || resolved}
+                  className="inline-flex h-8 items-center rounded-full bg-[hsl(var(--foreground))] px-3 text-[12px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90 disabled:opacity-50"
+                >
+                  {tDispo("resolved")}
+                </button>
+                <button
+                  type="button"
+                  onClick={takeAction}
+                  disabled={pending || resolved}
+                  className="inline-flex h-8 items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-[12px] font-medium text-[hsl(var(--foreground))] transition-default hover:bg-[hsl(var(--surface-raised))] disabled:opacity-50"
+                >
+                  {card.primaryActionLabel}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={takeAction}
+                disabled={pending || resolved}
+                className="inline-flex h-8 items-center rounded-full bg-[hsl(var(--foreground))] px-3 text-[12px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90 disabled:opacity-50"
+              >
+                {card.primaryActionLabel}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void onDismiss()}
               disabled={pending || resolved}
-              className="inline-flex h-8 items-center rounded-full px-2 text-[12px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+              className={cn(
+                "inline-flex h-8 items-center rounded-full px-2 text-[12px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]",
+                fyiPrimary && "ml-auto"
+              )}
             >
               {tShared("dismiss")}
             </button>
@@ -1464,6 +1539,9 @@ export type QueueCardActions = {
   onSnooze: CommonProps["onSnooze"];
   onPermanentDismiss: CommonProps["onPermanentDismiss"];
   onUndo?: CommonProps["onUndo"];
+  // 確認済み — neutral mark-handled, wired on non-draft judgment/FYI
+  // cards (Type A / Type C). Forwarded to those renderers below.
+  onMarkHandled?: CommonProps["onMarkHandled"];
   // PR 2 — Type B Draft only. When true, the parent's inline-send 10s
   // timer is running OR the post-timer server send is in flight; the
   // card dims and disables its buttons in lockstep.
@@ -1486,6 +1564,7 @@ export function QueueCardRenderer({
           onDismiss={actions.onDismiss}
           onSnooze={actions.onSnooze}
           onPermanentDismiss={actions.onPermanentDismiss}
+          onMarkHandled={actions.onMarkHandled}
           onUndo={actions.onUndo}
         />
       );
@@ -1509,6 +1588,7 @@ export function QueueCardRenderer({
         <QueueCardCRender
           card={card}
           onTakeAction={actions.onTakeAction ?? noopAsync}
+          onMarkHandled={actions.onMarkHandled}
           onDismiss={actions.onDismiss}
           onSnooze={actions.onSnooze}
           onPermanentDismiss={actions.onPermanentDismiss}

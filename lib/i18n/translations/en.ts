@@ -746,6 +746,7 @@ type MessagesShape = {
     section_heading: string;
     section_caption: string;
     show_more: string;
+    show_more_count: string;
     show_less: string;
     empty_title: string;
     empty_body: string;
@@ -2712,6 +2713,7 @@ export const en: MessagesShape = {
     section_heading: "Steadii queue",
     section_caption: "What needs you. Sorted by stakes — decisions first.",
     show_more: "Show more",
+    show_more_count: "Show more ({n} more)",
     show_less: "Show less",
     empty_title: "Queue is empty.",
     empty_body:
