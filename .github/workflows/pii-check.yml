@@ -4,6 +4,14 @@
 # If a known-leak pattern is detected, the check fails and the PR cannot
 # merge until the leak is scrubbed.
 #
+# Coverage (all via the SAME scripts/check-no-pii.sh patterns):
+#   - file diff (BASE..HEAD)         — the range-scan step.
+#   - commit message bodies in range — the SAME range-scan step (`--range`
+#                                      now scans messages too).
+#   - PR title + body                — the dedicated --text step below.
+# This closes the PR #329 gap, where a leak pasted into the commit message
+# + PR body passed because only the file diff was scanned.
+#
 # Pattern sources:
 #   scripts/pii-patterns-universal.txt  ← always loaded (committed, public)
 #   scripts/pii-patterns.local.txt      ← materialized at runtime from the
@@ -69,3 +77,26 @@ jobs:
           else
             bash scripts/check-no-pii.sh --all
           fi
+
+      # Scan the PR title + body. The file diff and commit messages can be
+      # clean while a leak hides in the PR description — that's the other half
+      # of the PR #329 incident. Runs only on pull_request events; on push to
+      # main there's no PR metadata, so the `if` skips it gracefully.
+      #
+      # Security: do NOT interpolate the title/body into the shell directly —
+      # an attacker-controlled PR body could inject commands. Pass via env and
+      # reference quoted ("$PR_TITLE" / "$PR_BODY").
+      - name: Scan PR title + body for leak patterns
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" > pr-meta.txt
+          bash scripts/check-no-pii.sh --text pr-meta.txt
+
+      # The guard's guard: prove the scanner itself still catches the
+      # commit-message and --text leak paths, using only synthetic samples.
+      - name: Self-check the PII scanner
+        run: bash scripts/test-check-no-pii.sh
