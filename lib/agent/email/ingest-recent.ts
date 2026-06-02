@@ -18,7 +18,19 @@ import { applyTriageResult, triageMessage } from "./triage";
 import { logEmailAudit } from "./audit";
 import { processL2 } from "./l2";
 import { resolveEntitiesInBackground } from "@/lib/agent/entity-graph/resolver";
+import { isSteadiiSelfSender } from "./self-sender";
 import type { ClassifyInput } from "./types";
+
+// Re-export the self-sender helpers from their leaf module so existing
+// importers (lib/agent/queue/build.ts, scripts/cleanup-self-sender-inbox.ts)
+// keep resolving them `from "@/lib/agent/email/ingest-recent"`. The actual
+// impl moved to ./self-sender to break the retrieval → ingest-recent → l2 →
+// retrieval import cycle.
+export {
+  SELF_SENDER_DOMAINS,
+  isSteadiiSelfSender,
+  isSteadiiSelfSenderName,
+} from "./self-sender";
 
 // Auto-cal modules are lazy-imported inside maybeAutoCreateCalendarEvent
 // so the existing ingest-recent-routing.test.ts (which mocks specific
@@ -315,32 +327,6 @@ function normalizeMessage(
     autoSubmittedHeader: getHeader(msg, "Auto-Submitted"),
     precedenceHeader: getHeader(msg, "Precedence"),
   };
-}
-
-// Steadii's own outbound senders. The .xyz suffix is the legacy domain
-// retained for backward compat with rows ingested before the .com cutover;
-// once a sweep confirms no live mail is sent from .xyz it can be dropped.
-const SELF_SENDER_DOMAINS = ["@mysteadii.com", "@mysteadii.xyz"] as const;
-
-export function isSteadiiSelfSender(senderEmail: string | null | undefined): boolean {
-  if (!senderEmail) return false;
-  const normalized = senderEmail.trim().toLowerCase();
-  // Accept the "Name <email>" display form: when the value carries a
-  // bracketed address, test what's inside the brackets. The bare-email
-  // path still falls through to the endsWith check below.
-  const bracketed = normalized.match(/<([^>]*)>/);
-  const candidate = bracketed ? bracketed[1].trim() : normalized;
-  return SELF_SENDER_DOMAINS.some((domain) => candidate.endsWith(domain));
-}
-
-// Name-based fallback for rows whose sender email is null/odd but whose
-// from-name clearly identifies Steadii's own agent. Our digest from-name
-// is "Steadii Agent" (see lib/integrations/resend/client.ts getFromAddress).
-export function isSteadiiSelfSenderName(
-  senderName: string | null | undefined
-): boolean {
-  if (!senderName) return false;
-  return senderName.trim().toLowerCase().startsWith("steadii agent");
 }
 
 function emptySummary(durationMs: number): IngestSummary {

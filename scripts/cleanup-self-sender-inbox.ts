@@ -3,7 +3,7 @@
  *
  * One-shot cleanup for inbox_items + agent_drafts rows that originated
  * from Steadii's own outbound mail (@mysteadii.com / @mysteadii.xyz).
- * The ingest-side gate at #308 skips these going forward, but pre-fix
+ * The ingest-side gate at #308/#327 skips these going forward, but pre-fix
  * legacy rows that already made it through keep surfacing as draft
  * cards on the queue (the "reply to Steadii's own digest" loop the
  * user flagged 2026-05-25). The queue-build defensive filter hides
@@ -14,6 +14,7 @@
  * Behavior per matched inbox_items row:
  *   - status            → 'archived'
  *   - auto_archived     → true
+ *   - deleted_at        → now  (NEW)
  *   - proposed_archive_* cleared
  * Per any pending agent_drafts row pointing at the matched inbox item:
  *   - status            → 'dismissed'
@@ -21,8 +22,26 @@
  * Single audit row per archived inbox item, action='auto_archive',
  * detail.triggeredBy='self_sender_cleanup_script'.
  *
+ * Why deleted_at (not just status='archived'): the vector-retrieval
+ * query (lib/agent/email/retrieval.ts) filters on `ii.deleted_at IS NULL`,
+ * NOT on status. So rows the prior script version merely archived stayed
+ * RETRIEVABLE and kept getting pulled into the grounding/citation layer
+ * as "similar past emails", rendering as source chips on unrelated cards
+ * (SELF_REFERENCE_RETRIEVAL_LOOP). Setting deleted_at removes them from
+ * retrieval at the source. The going-forward retrieval filter (#NNN) is
+ * belt-and-suspenders; this backfill clears the legacy corpus.
+ *
+ * Provenance scrub: any agent_drafts.retrieval_provenance already persisted
+ * with these self-sender ids in its `sources` keeps the stale chips on the
+ * existing card even after the inbox rows are soft-deleted (the card reads
+ * its frozen provenance JSONB, not live retrieval). So this script also
+ * rewrites those provenance blobs, dropping the self-sender email sources.
+ *
  * Connects via the same Neon REST API path as scripts/migrate-prod.ts
  * so we don't need full prod .env to run — only NEONCTL_API_KEY.
+ *
+ * Idempotent + dry-runnable. Re-runs are no-ops once rows carry deleted_at
+ * and provenance blobs are scrubbed.
  *
  * Usage:
  *
@@ -32,9 +51,10 @@
  */
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { and, eq, ilike, inArray, ne, or } from "drizzle-orm";
+import { and, eq, ilike, inArray, isNotNull, ne, or } from "drizzle-orm";
 import { agentDrafts, auditLog, inboxItems } from "@/lib/db/schema";
 import { isSteadiiSelfSender } from "@/lib/agent/email/ingest-recent";
+import { scrubSelfSenderEmailSourcesFromProvenance } from "@/lib/agent/email/self-sender";
 
 type Flags = {
   dry: boolean;
@@ -167,6 +187,7 @@ async function main() {
       userId: inboxItems.userId,
       status: inboxItems.status,
       autoArchived: inboxItems.autoArchived,
+      deletedAt: inboxItems.deletedAt,
       senderEmail: inboxItems.senderEmail,
       senderDomain: inboxItems.senderDomain,
       subject: inboxItems.subject,
@@ -218,6 +239,15 @@ async function main() {
     );
   }
 
+  // ── Provenance scrub set ────────────────────────────────────────────
+  // The self-sender inbox ids whose email-source citations must be
+  // stripped out of any persisted agent_drafts.retrieval_provenance.
+  // Scoped to the affected users (the byUser keys) so we don't scan
+  // every user's drafts.
+  const selfSenderIds = new Set(safe.map((r) => r.id));
+  const affectedUsers = [...byUser.keys()];
+  const now = new Date();
+
   if (flags.dry) {
     for (const row of safe.slice(0, 25)) {
       console.log(
@@ -227,6 +257,38 @@ async function main() {
     if (safe.length > 25) {
       console.log(`  ... and ${safe.length - 25} more`);
     }
+    // Provenance scrub dry-run — count drafts that would change + total
+    // self-sender email sources that would be removed.
+    if (affectedUsers.length > 0 && selfSenderIds.size > 0) {
+      const provRows = await db
+        .select({
+          id: agentDrafts.id,
+          userId: agentDrafts.userId,
+          retrievalProvenance: agentDrafts.retrievalProvenance,
+        })
+        .from(agentDrafts)
+        .where(
+          and(
+            inArray(agentDrafts.userId, affectedUsers),
+            isNotNull(agentDrafts.retrievalProvenance)
+          )
+        );
+      let draftsToChange = 0;
+      let sourcesToRemove = 0;
+      for (const d of provRows) {
+        const { removed } = scrubSelfSenderEmailSourcesFromProvenance(
+          d.retrievalProvenance ?? null,
+          selfSenderIds
+        );
+        if (removed > 0) {
+          draftsToChange++;
+          sourcesToRemove += removed;
+        }
+      }
+      console.log(
+        `[cleanup-self-sender] would scrub ${sourcesToRemove} self-sender email source(s) from ${draftsToChange} draft provenance blob(s)`
+      );
+    }
     console.log("[cleanup-self-sender] DRY RUN — no rows written");
     return;
   }
@@ -234,16 +296,21 @@ async function main() {
   let inboxArchived = 0;
   let inboxAlreadyClean = 0;
   let draftsDismissed = 0;
-  const now = new Date();
 
   for (const row of safe) {
-    const alreadyClean = row.status === "archived" && row.autoArchived;
+    // alreadyClean now ALSO requires deletedAt to be set — rows the prior
+    // script version archived (status='archived' + autoArchived) but left
+    // with deleted_at NULL must be re-processed so the deleted_at stamp
+    // lands and they drop out of the retrieval query.
+    const alreadyClean =
+      row.status === "archived" && row.autoArchived && row.deletedAt != null;
     if (!alreadyClean) {
       await db
         .update(inboxItems)
         .set({
           status: "archived",
           autoArchived: true,
+          deletedAt: now,
           proposedArchiveAt: null,
           proposedArchiveReason: null,
           updatedAt: now,
@@ -287,9 +354,46 @@ async function main() {
     draftsDismissed += updatedDrafts.length;
   }
 
+  // ── Provenance scrub (live) ─────────────────────────────────────────
+  // Strip self-sender email-source citations out of any persisted
+  // agent_drafts.retrieval_provenance for the affected users. The card
+  // renders its frozen provenance blob, so soft-deleting the inbox rows
+  // alone wouldn't clear stale chips already attached to OTHER cards.
+  // Idempotent: re-runs return removed:0 once blobs are scrubbed.
+  let provDraftsScrubbed = 0;
+  let provSourcesRemoved = 0;
+  if (affectedUsers.length > 0 && selfSenderIds.size > 0) {
+    const provRows = await db
+      .select({
+        id: agentDrafts.id,
+        retrievalProvenance: agentDrafts.retrievalProvenance,
+      })
+      .from(agentDrafts)
+      .where(
+        and(
+          inArray(agentDrafts.userId, affectedUsers),
+          isNotNull(agentDrafts.retrievalProvenance)
+        )
+      );
+    for (const d of provRows) {
+      const { provenance, removed } = scrubSelfSenderEmailSourcesFromProvenance(
+        d.retrievalProvenance ?? null,
+        selfSenderIds
+      );
+      if (removed > 0 && provenance) {
+        await db
+          .update(agentDrafts)
+          .set({ retrievalProvenance: provenance, updatedAt: now })
+          .where(eq(agentDrafts.id, d.id));
+        provDraftsScrubbed++;
+        provSourcesRemoved += removed;
+      }
+    }
+  }
+
   const durationMs = Date.now() - startedAt;
   console.log(
-    `[cleanup-self-sender] done in ${durationMs}ms — inbox archived: ${inboxArchived}, inbox already clean: ${inboxAlreadyClean}, drafts dismissed: ${draftsDismissed}`
+    `[cleanup-self-sender] done in ${durationMs}ms — inbox archived: ${inboxArchived}, inbox already clean: ${inboxAlreadyClean}, drafts dismissed: ${draftsDismissed}, provenance scrubbed: ${provDraftsScrubbed} draft(s) / ${provSourcesRemoved} source(s)`
   );
 }
 
