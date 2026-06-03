@@ -4,6 +4,7 @@ import { ArrowLeft, Mail, Pause } from "lucide-react";
 import { and, eq } from "drizzle-orm";
 import { getTranslations } from "next-intl/server";
 import { MarkReviewedOnMount } from "./_mark-reviewed-on-mount";
+import { resolveInboxDetailMode } from "./resolve-mode";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
 import { isNull, asc } from "drizzle-orm";
@@ -61,7 +62,7 @@ export default async function InboxItemPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id: draftId } = await params;
+  const { id: routeId } = await params;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const userId = session.user.id;
@@ -74,8 +75,70 @@ export default async function InboxItemPage({
     })
     .from(agentDrafts)
     .innerJoin(inboxItems, eq(agentDrafts.inboxItemId, inboxItems.id))
-    .where(and(eq(agentDrafts.id, draftId), eq(agentDrafts.userId, userId)))
+    .where(and(eq(agentDrafts.id, routeId), eq(agentDrafts.userId, userId)))
     .limit(1);
+
+  // The route param may be an inbox_item id rather than a draft id —
+  // several surfaces (the Type G auto-cal "元のメール" chip, the
+  // entity-graph lookups, the "how your agent thinks" provenance list)
+  // deep-link here with an inbox_items.id. When the draft lookup misses,
+  // fall back to resolving `routeId` as an inbox_item so a source-email
+  // view can render. We deliberately do NOT exclude soft-deleted rows
+  // here — the resolver distinguishes "gone" (calm unavailable state)
+  // from "never existed" (404).
+  let inboxOnly: typeof inboxItems.$inferSelect | undefined;
+  if (!row) {
+    [inboxOnly] = await db
+      .select()
+      .from(inboxItems)
+      .where(and(eq(inboxItems.id, routeId), eq(inboxItems.userId, userId)))
+      .limit(1);
+  }
+
+  const mode = resolveInboxDetailMode({
+    hasDraft: Boolean(row),
+    inboxItem: inboxOnly ? { deletedAt: inboxOnly.deletedAt } : null,
+  });
+
+  if (mode.kind === "not_found") notFound();
+
+  if (mode.kind === "unavailable") {
+    return (
+      <SourceEmailUnavailable
+        backLabel={t("back")}
+        message={t("source_unavailable")}
+      />
+    );
+  }
+
+  if (mode.kind === "email_only" && inboxOnly) {
+    const item = inboxOnly;
+    let segments: LinkifiedSegment[] = [];
+    try {
+      if (item.sourceType === "gmail") {
+        const msg = await getMessageFull(userId, item.externalId);
+        const extracted = extractEmailBody(msg);
+        segments = linkifySegments(extracted.text);
+      }
+    } catch {
+      // Live-fetch failed (scope / network) — EmailBody falls back to
+      // the stored snippet.
+    }
+    return (
+      <SourceEmailView
+        backLabel={t("back")}
+        noSubject={t("no_subject")}
+        subject={item.subject}
+        senderName={item.senderName}
+        senderEmail={item.senderEmail}
+        receivedAt={item.receivedAt}
+        segments={segments}
+        snippet={item.snippet}
+      />
+    );
+  }
+
+  // mode.kind === "draft" — `row` is defined below.
   if (!row) notFound();
 
   const [userRow] = await db
@@ -353,4 +416,94 @@ function formatReceivedAt(d: Date): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+// Email-only view rendered when `[id]` resolved as an inbox_item rather
+// than a draft (e.g. the Type G auto-cal source chip). It mirrors the
+// draft page's <header> block — sender / subject / body — but drops all
+// the draft-specific sections (risk badge, NextActionBanner, DraftActions,
+// DraftDetailsPanel) since there's no draft to act on here.
+function SourceEmailView({
+  backLabel,
+  noSubject,
+  subject,
+  senderName,
+  senderEmail,
+  receivedAt,
+  segments,
+  snippet,
+}: {
+  backLabel: string;
+  noSubject: string;
+  subject: string | null;
+  senderName: string | null;
+  senderEmail: string;
+  receivedAt: Date;
+  segments: LinkifiedSegment[];
+  snippet: string | null;
+}) {
+  return (
+    <div className="mx-auto flex max-w-3xl flex-col gap-4 py-2">
+      <div>
+        <Link
+          href="/app/inbox"
+          className="inline-flex h-8 items-center gap-1 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+        >
+          <ArrowLeft size={14} strokeWidth={1.75} />
+          {backLabel}
+        </Link>
+      </div>
+      <header className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3 sm:p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="ml-auto text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]">
+            {formatReceivedAt(receivedAt)}
+          </span>
+        </div>
+        <h1 className="mt-2 text-h2 text-[hsl(var(--foreground))] break-words">
+          {subject ?? noSubject}
+        </h1>
+        <div className="mt-1 flex items-start gap-2 text-small text-[hsl(var(--muted-foreground))]">
+          <Mail size={14} strokeWidth={1.75} className="mt-0.5 shrink-0" />
+          <span className="min-w-0 break-words">
+            <span className="text-[hsl(var(--foreground))]">
+              {senderName ?? senderEmail}
+            </span>{" "}
+            <span className="break-all">&lt;{senderEmail}&gt;</span>
+          </span>
+        </div>
+        <div className="mt-3">
+          <EmailBody segments={segments} fallbackSnippet={snippet} />
+        </div>
+      </header>
+    </div>
+  );
+}
+
+// Calm state when the source inbox_item still exists but was soft-deleted
+// (e.g. swept by the self-sender backfill). The chip stays live so we
+// render an explanatory panel instead of a hard 404.
+function SourceEmailUnavailable({
+  backLabel,
+  message,
+}: {
+  backLabel: string;
+  message: string;
+}) {
+  return (
+    <div className="mx-auto flex max-w-3xl flex-col gap-4 py-2">
+      <div>
+        <Link
+          href="/app/inbox"
+          className="inline-flex h-8 items-center gap-1 text-small text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+        >
+          <ArrowLeft size={14} strokeWidth={1.75} />
+          {backLabel}
+        </Link>
+      </div>
+      <div className="flex items-start gap-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4 text-small text-[hsl(var(--muted-foreground))]">
+        <Mail size={16} strokeWidth={1.75} className="mt-0.5 shrink-0" />
+        <span>{message}</span>
+      </div>
+    </div>
+  );
 }

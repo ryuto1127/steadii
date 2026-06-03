@@ -1320,7 +1320,12 @@ async function fetchPendingAutoCalRows(
   }
 }
 
-function autoCalToTypeG(row: AutoCreatedCalendarEventRow): QueueCardG {
+// Exported for unit coverage of the source-chip href contract. The
+// `inboxItemId` is non-null at the DB level (auto_created_calendar_events
+// .inbox_item_id is NOT NULL with an FK to inbox_items), so the chip
+// always points at a real inbox_items row; the route resolves that id via
+// its inbox_item fallback.
+export function autoCalToTypeG(row: AutoCreatedCalendarEventRow): QueueCardG {
   // deadline = all-day (date-only label); mutual_agreement + event are
   // both TIMED (date + start time + TZ label).
   const isDeadline = row.kind === "deadline";
