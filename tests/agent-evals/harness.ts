@@ -33,6 +33,7 @@ import {
 import { inferSenderTimezone } from "@/lib/agent/email/sender-timezone-heuristic";
 import { inferSenderWorkingHours } from "@/lib/agent/email/sender-norms";
 import { stripQuotedHistory } from "@/lib/agent/email/quoted-block-stripper";
+import { addCompletionUsage, type UsageTotals } from "./cost-guard";
 
 // ---------- Fixture types ----------
 
@@ -893,7 +894,7 @@ function isFunctionToolCall(
   return c.type === "function" && "function" in c;
 }
 
-function getModelForHarness(): string {
+export function getModelForHarness(): string {
   return (
     process.env.OPENAI_EVAL_MODEL?.trim() ||
     process.env.OPENAI_CHAT_MODEL?.trim() ||
@@ -915,7 +916,11 @@ function getOpenAIClient(): OpenAI {
 }
 
 export async function runScenario(
-  scenario: EvalScenario
+  scenario: EvalScenario,
+  // Optional shared accumulator — the CLI runner threads one instance through
+  // every scenario so it can report total tokens + USD and enforce the budget
+  // cap. Each `chat.completions.create` adds its `usage` block here.
+  usage?: UsageTotals
 ): Promise<EvalRunResult> {
   const start = Date.now();
   const client = getOpenAIClient();
@@ -945,6 +950,7 @@ export async function runScenario(
       tools: HARNESS_TOOL_DEFS,
       tool_choice: "auto",
     });
+    if (usage) addCompletionUsage(usage, resp.usage);
 
     const choice = resp.choices[0];
     const msg = choice?.message;
@@ -1048,6 +1054,7 @@ export async function runScenario(
           tools: HARNESS_TOOL_DEFS,
           tool_choice: "auto",
         });
+        if (usage) addCompletionUsage(usage, retry.usage);
         const retryMsg = retry.choices[0]?.message;
         const retryText = retryMsg?.content ?? "";
         const retryToolCalls = (retryMsg?.tool_calls ?? []).filter(
@@ -1108,6 +1115,7 @@ export async function runScenario(
             model,
             messages: conversation,
           });
+          if (usage) addCompletionUsage(usage, finalPass.usage);
           const finalPassText =
             finalPass.choices[0]?.message?.content ?? "";
           if (finalPassText.length > 0) {
@@ -1317,9 +1325,10 @@ function truncate(s: string, n: number): string {
 // ---------- Convenience: run + assert in one call ----------
 
 export async function evaluateScenario(
-  scenario: EvalScenario
+  scenario: EvalScenario,
+  usage?: UsageTotals
 ): Promise<EvalReport> {
-  const result = await runScenario(scenario);
+  const result = await runScenario(scenario, usage);
   const assertions = evaluateAssertions(result, scenario.expect);
   return {
     scenarioName: scenario.name,

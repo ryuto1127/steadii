@@ -11,6 +11,11 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],
+    // Global guard: any test that reaches the real OpenAI client without its
+    // own `vi.mock` throws loudly instead of calling the paid API. This makes
+    // silent test-side billing impossible. Per-file `vi.mock` of the same
+    // module still wins. See tests/setup/openai-guard.ts.
+    setupFiles: ["tests/setup/openai-guard.ts"],
   },
   resolve: {
     alias: {
