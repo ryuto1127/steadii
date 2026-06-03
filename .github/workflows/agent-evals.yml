@@ -47,6 +47,11 @@ jobs:
           # Mini-tier override so the suite stays cheap. Override in
           # repo secrets if a specific model rollout needs testing.
           OPENAI_EVAL_MODEL: ${{ vars.OPENAI_EVAL_MODEL || 'gpt-5.4-mini' }}
+          # Explicit opt-in: the harness refuses to touch the real paid API
+          # without this flag (added after the 2026-06-01 accidental-burn).
+          # CI is the legitimate caller — path-gated + key-scoped — and the
+          # per-run budget cap in run.ts still backstops a runaway loop.
+          ALLOW_REAL_LLM: "1"
         run: pnpm eval:agent
 
       - name: Upload eval report
