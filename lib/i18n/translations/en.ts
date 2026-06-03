@@ -1441,6 +1441,7 @@ type MessagesShape = {
     risk_low: string;
     risk_classifying: string;
     no_subject: string;
+    source_unavailable: string;
   };
   proposal_detail: {
     back: string;
@@ -3590,6 +3591,7 @@ export const en: MessagesShape = {
     risk_low: "Low",
     risk_classifying: "Classifying",
     no_subject: "(no subject)",
+    source_unavailable: "This source email is no longer available.",
   },
   proposal_detail: {
     back: "Back to inbox",

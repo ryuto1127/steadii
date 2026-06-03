@@ -1745,6 +1745,7 @@ export const ja: Messages = {
     risk_low: "低",
     risk_classifying: "分類中",
     no_subject: "（件名なし）",
+    source_unavailable: "この元メールは利用できません。",
   },
   proposal_detail: {
     back: "受信箱に戻る",
