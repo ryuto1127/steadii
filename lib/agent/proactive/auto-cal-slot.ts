@@ -6,9 +6,63 @@ import "server-only";
 // description builders are still needed by the queue Add action and
 // the queue card builder, just not by the detector path anymore.
 
-import type { AutoCreatedAgreedSlot } from "@/lib/db/schema";
+import type {
+  AutoCreatedAgreedSlot,
+  AutoCreatedCalendarEventRow,
+} from "@/lib/db/schema";
 import { convertTimezoneSync } from "@/lib/agent/tools/convert-timezone";
 import type { EmailSnapshot } from "./mutual-agreement-detector";
+
+// 2026-06-07 — Single source of truth for "is this auto-cal proposal past
+// its useful date". Used by BOTH the queue display filter
+// (fetchPendingAutoCalRows drops stale rows before rendering) AND the
+// expiry sweep (cancel date-stale rows immediately, rather than letting
+// them linger the full 7d grace). Pure: no DB / LLM / I/O.
+//
+// The auto-cal path previously had NO date comparison — a deadline due on
+// the 5th still surfaced on the 7th and lived until the 12d grace expiry.
+// The assignment-reminder path already drops past-due items (`deltaMs < 0`
+// in rules/assignment-deadline-reminder.ts); this brings the auto-cal
+// path to parity.
+export function isAutoCalProposalStale(
+  args: {
+    kind: AutoCreatedCalendarEventRow["kind"];
+    agreedSlot: AutoCreatedAgreedSlot;
+  },
+  nowMs: number,
+): boolean {
+  const { kind, agreedSlot } = args;
+
+  if (kind === "deadline") {
+    // All-day, date-only: stale once the deadline's calendar DAY (in its
+    // own timezone) has fully passed. A deadline due TODAY in its tz stays
+    // visible all day; due yesterday → stale. Compare YYYY-MM-DD strings
+    // lexicographically (en-CA ordering sorts correctly): the proposal is
+    // stale when its date is strictly before today's date in its tz.
+    const todayInTz = isoDateInTz(new Date(nowMs), agreedSlot.timezone);
+    return agreedSlot.date < todayInTz;
+  }
+
+  // Timed (event / mutual_agreement): stale when the event END instant is
+  // before now. In-progress events (start ≤ now < end) still surface.
+  const { endIso } = buildIsoStartEnd(agreedSlot);
+  return Date.parse(endIso) < nowMs;
+}
+
+// YYYY-MM-DD for `d` rendered in `tz`. en-CA gives the YYYY-MM-DD ordering
+// that sorts lexicographically. Mirrors the same helper in event-detector
+// (kept local here to keep this module's server-only deps self-contained).
+function isoDateInTz(d: Date, tz: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const map: Record<string, string> = {};
+  for (const p of parts) map[p.type] = p.value;
+  return `${map.year}-${map.month}-${map.day}`;
+}
 
 // Build RFC3339 start + end strings (with TZ offset) from the agreed
 // wall-clock slot. Both reuse convertTimezoneSync's wall-clock → ISO
