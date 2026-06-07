@@ -43,6 +43,7 @@ import {
   type QueueSourceChip,
 } from "./types";
 import { buildExternalThreadUrl } from "./external-url";
+import { isAutoCalProposalStale } from "@/lib/agent/proactive/auto-cal-slot";
 import {
   isSteadiiSelfSender,
   isSteadiiSelfSenderName,
@@ -1299,7 +1300,7 @@ async function fetchPendingAutoCalRows(
   userId: string,
 ): Promise<AutoCreatedCalendarEventRow[]> {
   try {
-    return await db
+    const rows = await db
       .select()
       .from(autoCreatedCalendarEvents)
       .where(
@@ -1313,6 +1314,20 @@ async function fetchPendingAutoCalRows(
       )
       .orderBy(desc(autoCreatedCalendarEvents.createdAt))
       .limit(QUEUE_FETCH_LIMIT);
+    // 2026-06-07 — drop date-stale proposals before they render. A
+    // deadline due in the past (or a timed event that already ended) no
+    // longer needs the user's decision; surfacing it is noise. Silent
+    // drop — no "expired" badge (product decision). The expiry sweep
+    // retires these rows out of band; this filter is the display-side
+    // guarantee so a row never lingers between sweep runs.
+    const nowMs = Date.now();
+    return rows.filter(
+      (r) =>
+        !isAutoCalProposalStale(
+          { kind: r.kind, agreedSlot: r.agreedSlot },
+          nowMs,
+        ),
+    );
   } catch {
     // Schema-drift defense — pre-migration deploys lacking the table
     // degrade to empty instead of crashing Home.

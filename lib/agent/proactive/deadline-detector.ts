@@ -91,6 +91,44 @@ const TZ_MARKER_PATTERNS: Array<{ re: RegExp; tz: string }> = [
 // of the date to bind to it.
 const PROXIMITY = 60;
 
+// 2026-06-07 — Commercial/marketing suppression. "Order by Friday to get
+// 20% off — free shipping" is a fake-urgency promo, not a personal
+// obligation, but it pairs a date with deadline-ish phrasing and would
+// otherwise create a deadline proposal. The bucket gate
+// (l2_pending | auto_high | auto_medium) does NOT catch a promo email that
+// Gmail fails to label as promotions — it lands in l2_pending and slips
+// through. The fix must live in content logic. See the
+// MARKETING_URGENCY_AS_OBLIGATION failure mode; sibling of the event
+// detector's PROMO_STRUCTURED_BLOCK_BYPASS (COMMERCE_INTENT_RE).
+//
+// Conservative — precision over recall: require BOTH a purchase imperative
+// AND a commercial marker. A purchase verb alone ("Order your official
+// transcript by March 1") is NOT suppressed; a commercial marker alone is
+// NOT suppressed. We deliberately EXCLUDE ambiguous verbs (`reserve`,
+// `register`, `申し込み`) — those routinely appear in legit deadlines
+// (course registration, RSVP).
+
+// (A) Purchase imperative — high-intent buy verbs only. \b on the short EN
+// tokens keeps "order"/"buy"/"sale" from matching inside unrelated words.
+const PURCHASE_IMPERATIVE_RE =
+  /(\border\b|\bbuy\b|\bshop\b|\bpurchase\b|\bcheckout\b|add\s*to\s*cart|place\s*your\s*order|ご?注文|ご?購入|お買い物|カート)/i;
+
+// (B) Commercial marker — discount / sale / scarcity lexicon. The "$NN
+// near a discount word" case is handled additively by PRICE_TOKEN_RE +
+// DISCOUNT_WORD_RE below.
+const COMMERCIAL_MARKER_RE =
+  /(\d+%\s*off|%\s*off|\bdiscount\b|\bsale\b|free\s*shipping|\bcoupon\b|\bpromo\b|\bdeals?\b|limited[\s-]time|today\s*only|guaranteed\s*delivery|割引|セール|クーポン|送料無料|限定|期間限定|本日限り|％オフ|オフ|お得)/i;
+
+// A "$NN" price token co-occurring with a discount word also counts as a
+// commercial marker. This branch is additive: it lets a weaker discount
+// signal (bare "off" / "save", which we deliberately keep OUT of the
+// standalone COMMERCIAL_MARKER_RE to avoid false positives) count when a
+// price token is also present. Checked across the whole subject+body (not
+// adjacency) so "save on your order, boxes from $19" fires.
+const PRICE_TOKEN_RE = /\$\s*\d/;
+const DISCOUNT_WORD_RE =
+  /(\d+%\s*off|%\s*off|\boff\b|\bsave\b|\bdiscount\b|\bsale\b|\bdeals?\b|\bcoupon\b|割引|セール|お得|オフ)/i;
+
 // ---------- main entry ----------
 
 export function detectDeadlineMention(args: {
@@ -111,6 +149,23 @@ export function detectDeadlineMention(args: {
       hasHedge: false,
       inQuotedHistory: false,
     });
+  }
+
+  // Commercial/marketing fake-urgency suppression (MARKETING_URGENCY_AS_-
+  // OBLIGATION). Short-circuit BEFORE the keyword scan: a promo's
+  // "order by Friday for 20% off" is not a personal deadline regardless of
+  // how strongly its date binds to a deadline-ish phrase. Auditable
+  // reasoning, NOT a silent confidence downgrade.
+  if (isCommercialDeadlineContext(body, subject)) {
+    return notDetected(
+      "commercial/marketing offer (purchase imperative + commercial marker) — not a personal deadline",
+      {
+        hasDeadlineKeyword: false,
+        hasStrongCommitment: false,
+        hasHedge: false,
+        inQuotedHistory: false,
+      },
+    );
   }
 
   // Pre-scan: collect keyword positions so each date can compute
@@ -267,6 +322,23 @@ function notDetected(reason: string, signals: DeadlineSignals): DeadlineDetectio
     reasoning: reason,
     signals,
   };
+}
+
+// True when the email reads as a commercial/marketing offer rather than a
+// personal obligation. Requires BOTH a purchase imperative AND a
+// commercial marker (precision over recall) — see the pattern constants.
+// Exported for focused unit coverage.
+export function isCommercialDeadlineContext(
+  body: string,
+  subject?: string,
+): boolean {
+  const haystack = `${subject ?? ""}\n${body}`;
+  const hasPurchaseImperative = PURCHASE_IMPERATIVE_RE.test(haystack);
+  if (!hasPurchaseImperative) return false;
+  const hasCommercialMarker =
+    COMMERCIAL_MARKER_RE.test(haystack) ||
+    (PRICE_TOKEN_RE.test(haystack) && DISCOUNT_WORD_RE.test(haystack));
+  return hasCommercialMarker;
 }
 
 function scoreSignals(s: DeadlineSignals, distance: number): number {

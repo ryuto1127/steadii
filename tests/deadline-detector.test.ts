@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { detectDeadlineMention } from "@/lib/agent/proactive/deadline-detector";
+import {
+  detectDeadlineMention,
+  isCommercialDeadlineContext,
+} from "@/lib/agent/proactive/deadline-detector";
 
 // 2026-05-21 — Phase 5 of α-auto-cal. The deadline detector must:
 //   - Detect strong-pattern deadlines (締切, deadline, due by, 期限)
@@ -173,5 +176,103 @@ describe("detectDeadlineMention — multi-date precedence", () => {
     });
     expect(r.confirmed).toBe(true);
     expect(r.deadline?.date).toBe("2026-05-30");
+  });
+});
+
+// 2026-06-07 — MARKETING_URGENCY_AS_OBLIGATION. A commercial fake-urgency
+// CTA pairs a date with deadline-ish phrasing but is not a personal
+// obligation. Require BOTH a purchase imperative AND a commercial marker
+// (precision over recall). All fixtures synthetic.
+describe("detectDeadlineMention — commercial/marketing suppression", () => {
+  it("suppresses an EN promo: purchase verb + % off + free shipping + $price", () => {
+    const r = detectDeadlineMention({
+      body: "Order by Friday to get 20% off — free shipping over $250. Don't miss this deal.",
+      subject: "Last chance: your cart is waiting",
+      defaultTimezone: "America/Vancouver",
+      referenceYear: 2026,
+    });
+    expect(r.confirmed).toBe(false);
+    expect(r.reasoning).toMatch(/commercial|marketing/i);
+  });
+
+  it("suppresses a JA promo: ご注文 + 20%オフ + 送料無料", () => {
+    const r = detectDeadlineMention({
+      body: "金曜までにご注文で20%オフ・送料無料。期限はお見逃しなく。",
+      subject: "本日限りのセール",
+      defaultTimezone: "Asia/Tokyo",
+      referenceYear: 2026,
+    });
+    expect(r.confirmed).toBe(false);
+    expect(r.reasoning).toMatch(/commercial|marketing/i);
+  });
+
+  it("does NOT suppress a real deadline with NO purchase verb ('submit your essay by Friday')", () => {
+    const r = detectDeadlineMention({
+      // Add a concrete date so the detector has something to bind to;
+      // the point is that no purchase imperative is present.
+      body: "Please submit your essay by 6/12. The submission deadline is firm.",
+      subject: "Essay submission",
+      defaultTimezone: "America/Vancouver",
+      referenceYear: 2026,
+    });
+    expect(r.confirmed).toBe(true);
+    expect(r.deadline?.date).toBe("2026-06-12");
+  });
+
+  it("does NOT suppress a purchase verb WITHOUT a commercial marker ('Order your official transcript by 3/1')", () => {
+    const r = detectDeadlineMention({
+      body: "Order your official transcript by 3/1. The deadline to request is firm.",
+      subject: "Transcript request deadline",
+      defaultTimezone: "America/New_York",
+      referenceYear: 2026,
+    });
+    expect(r.confirmed).toBe(true);
+    expect(r.deadline?.date).toBe("2026-03-01");
+  });
+});
+
+describe("isCommercialDeadlineContext — pure guard", () => {
+  it("true only when BOTH a purchase imperative and a commercial marker are present", () => {
+    expect(
+      isCommercialDeadlineContext("Order now and get 20% off today only."),
+    ).toBe(true);
+    // purchase verb, no commercial marker
+    expect(
+      isCommercialDeadlineContext("Order your transcript before the deadline."),
+    ).toBe(false);
+    // commercial marker, no purchase verb
+    expect(
+      isCommercialDeadlineContext("Everything is 20% off this week."),
+    ).toBe(false);
+  });
+
+  it("does NOT fire on ambiguous verbs (reserve / register / 申し込み)", () => {
+    expect(
+      isCommercialDeadlineContext("Register by Friday for the free workshop."),
+    ).toBe(false);
+    expect(
+      isCommercialDeadlineContext("金曜までにお申し込みください。割引あり。"),
+    ).toBe(false);
+  });
+
+  it("counts a $price co-occurring with a discount word as a commercial marker (additive branch)", () => {
+    // "off" alone is NOT a standalone commercial marker (kept out to avoid
+    // false positives), but "$19" + "off" together count via the
+    // price-near-discount branch, paired with the "buy" purchase verb.
+    expect(
+      isCommercialDeadlineContext("Buy now — $19 off your first box."),
+    ).toBe(true);
+    // Same $price with NO discount word is not enough on its own.
+    expect(isCommercialDeadlineContext("Buy a box for $19.")).toBe(false);
+    // "off" alone, no price, no other marker → not commercial.
+    expect(isCommercialDeadlineContext("Buy the deluxe model, hands off.")).toBe(
+      false,
+    );
+  });
+
+  it("reads the subject line too", () => {
+    expect(
+      isCommercialDeadlineContext("Order before midnight.", "Flash sale: 30% off"),
+    ).toBe(true);
   });
 });
