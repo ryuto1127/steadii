@@ -83,8 +83,24 @@ export function classifyEmail(
 
   // ---------------------------------------------------------------------
   // IGNORE bucket (checked first; short-circuits everything else).
-  // Confidence is 1.0 — these are deterministic Gmail-side signals.
+  // Confidence is 1.0 — these are deterministic signals.
   // ---------------------------------------------------------------------
+
+  // 今後この送信者を無視 — user's permanent per-sender ignore list. Checked
+  // FIRST so a blocked sender's mail can never become a queue card, draft,
+  // or fake-deadline/meeting proposal (the deadline / auto-cal detectors
+  // are already gated out of the 'ignore' bucket, and applyTriageResult
+  // routes 'ignore' rows straight to status='dismissed'). Email-exact
+  // match against the normalized lowercase set built in buildUserContext.
+  if (ctx.ignoredSenders.has(input.fromEmail.toLowerCase())) {
+    provenance.push({
+      ruleId: "USER_IGNORED_SENDER",
+      source: "global",
+      why: "Sender is on the user's permanent ignore list.",
+    });
+    return finish("ignore", 1.0);
+  }
+
   if (fromSelf(input, ctx)) {
     provenance.push({
       ruleId: "GLOBAL_IGNORE_FROM_SELF",

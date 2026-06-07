@@ -40,6 +40,7 @@ function makeCtx(overrides: Partial<UserContext> = {}): UserContext {
     learnedSenders: new Map(),
     seenDomains: new Set(["amd.com", "known.edu", "example.com"]),
     githubUsername: null,
+    ignoredSenders: new Set(),
     ...overrides,
   };
 }

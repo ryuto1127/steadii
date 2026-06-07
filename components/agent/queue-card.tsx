@@ -10,6 +10,7 @@ import {
 import {
   AlertTriangle,
   Archive,
+  BellOff,
   BookOpen,
   Calendar as CalendarIcon,
   Check,
@@ -87,6 +88,12 @@ type CommonProps = {
   // own 対応済み disposition button; non-draft judgment/FYI cards wire
   // this instead.
   onMarkHandled?: () => Promise<ActionResult> | ActionResult;
+  // 今後この送信者を無視 — permanently ignore the card's sender. Wired only
+  // on cards carrying `card.ignorableSender` (draft / soft-notice /
+  // clarify). When present, the quick menu renders an "Ignore this sender"
+  // item. Distinct from onPermanentDismiss (which suppresses just THIS
+  // trigger) — ignore-sender stops ALL future mail from the sender.
+  onIgnoreSender?: () => Promise<ActionResult> | ActionResult;
 };
 
 type CardAProps = CommonProps & {
@@ -292,6 +299,7 @@ function QuickMenu({
   onClose,
   onSnooze,
   onDismissPerm,
+  onIgnoreSender,
 }: {
   visible: boolean;
   x: number;
@@ -299,6 +307,9 @@ function QuickMenu({
   onClose: () => void;
   onSnooze: (hours: number) => void;
   onDismissPerm: () => void;
+  // 今後この送信者を無視 — only rendered when the card carries an
+  // ignorable sender; undefined hides the menu item entirely.
+  onIgnoreSender?: () => void;
 }) {
   const t = useTranslations("queue.menu");
   useEffect(() => {
@@ -321,7 +332,7 @@ function QuickMenu({
     <div
       role="menu"
       onClick={(e) => e.stopPropagation()}
-      className="fixed z-50 w-[180px] overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] py-1 shadow-[0_8px_30px_rgba(0,0,0,0.18)]"
+      className="fixed z-50 w-[200px] overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] py-1 shadow-[0_8px_30px_rgba(0,0,0,0.18)]"
       style={{ left: x, top: y }}
     >
       <MenuItem onClick={() => onSnooze(1)}>{t("snooze_1h")}</MenuItem>
@@ -331,6 +342,11 @@ function QuickMenu({
       <MenuItem onClick={onDismissPerm} variant="danger">
         {t("dismiss_permanent")}
       </MenuItem>
+      {onIgnoreSender ? (
+        <MenuItem onClick={onIgnoreSender} variant="danger" icon={<BellOff size={13} strokeWidth={1.75} />}>
+          {t("ignore_sender")}
+        </MenuItem>
+      ) : null}
     </div>
   );
 }
@@ -339,10 +355,12 @@ function MenuItem({
   children,
   onClick,
   variant,
+  icon,
 }: {
   children: ReactNode;
   onClick: () => void;
   variant?: "danger";
+  icon?: ReactNode;
 }) {
   return (
     <button
@@ -350,13 +368,14 @@ function MenuItem({
       role="menuitem"
       onClick={onClick}
       className={cn(
-        "block w-full px-3 py-1.5 text-left text-[13px] transition-hover hover:bg-[hsl(var(--surface-raised))]",
+        "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] transition-hover hover:bg-[hsl(var(--surface-raised))]",
         variant === "danger"
           ? "text-[hsl(var(--destructive))]"
           : "text-[hsl(var(--foreground))]"
       )}
     >
-      {children}
+      {icon ? <span aria-hidden className="shrink-0">{icon}</span> : null}
+      <span className="min-w-0 flex-1">{children}</span>
     </button>
   );
 }
@@ -522,9 +541,12 @@ function CardFooter({ card }: { card: QueueCard }) {
 function useQuickMenu({
   onSnooze,
   onPermanentDismiss,
+  onIgnoreSender,
 }: {
   onSnooze: (hours: number) => Promise<ActionResult> | ActionResult;
   onPermanentDismiss: () => Promise<ActionResult> | ActionResult;
+  // 今後この送信者を無視 — optional; when omitted the menu item is hidden.
+  onIgnoreSender?: () => Promise<ActionResult> | ActionResult;
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -570,6 +592,14 @@ function useQuickMenu({
           setMenu(null);
           void onPermanentDismiss();
         }}
+        onIgnoreSender={
+          onIgnoreSender
+            ? () => {
+                setMenu(null);
+                void onIgnoreSender();
+              }
+            : undefined
+        }
       />
     ),
   };
@@ -712,6 +742,7 @@ export function QueueCardBRender({
   onDismiss,
   onSnooze,
   onPermanentDismiss,
+  onIgnoreSender,
   onUndo,
   isSendingPending = false,
 }: CardBProps) {
@@ -723,7 +754,11 @@ export function QueueCardBRender({
   const [pending, startTransition] = useTransition();
   const [undoToken, setUndoToken] = useState<string | null>(null);
   const [resolved, setResolved] = useState(false);
-  const { bindings, menu } = useQuickMenu({ onSnooze, onPermanentDismiss });
+  const { bindings, menu } = useQuickMenu({
+    onSnooze,
+    onPermanentDismiss,
+    onIgnoreSender: card.ignorableSender ? onIgnoreSender : undefined,
+  });
   // PR 2 — effective dim/disabled state. When the parent's inline-send
   // timer is running for this card, the card dims like a resolved card
   // but the source of truth is the parent (so undo can flip it back).
@@ -1031,13 +1066,18 @@ export function QueueCardCRender({
   onDismiss,
   onSnooze,
   onPermanentDismiss,
+  onIgnoreSender,
 }: CardCProps) {
   const tShared = useTranslations("queue.shared");
   const tDispo = useTranslations("queue.card_b_disposition");
   const locale = useLocaleHint();
   const [pending, startTransition] = useTransition();
   const [resolved, setResolved] = useState(false);
-  const { bindings, menu } = useQuickMenu({ onSnooze, onPermanentDismiss });
+  const { bindings, menu } = useQuickMenu({
+    onSnooze,
+    onPermanentDismiss,
+    onIgnoreSender: card.ignorableSender ? onIgnoreSender : undefined,
+  });
 
   const takeAction = () => {
     if (pending || resolved) return;
@@ -1217,6 +1257,7 @@ export function QueueCardERender({
   onDismiss,
   onSnooze,
   onPermanentDismiss,
+  onIgnoreSender,
 }: CardEProps) {
   const t = useTranslations("queue.card_e");
   const tShared = useTranslations("queue.shared");
@@ -1225,7 +1266,11 @@ export function QueueCardERender({
   const [resolved, setResolved] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
   const [freeText, setFreeText] = useState("");
-  const { bindings, menu } = useQuickMenu({ onSnooze, onPermanentDismiss });
+  const { bindings, menu } = useQuickMenu({
+    onSnooze,
+    onPermanentDismiss,
+    onIgnoreSender: card.ignorableSender ? onIgnoreSender : undefined,
+  });
 
   const canSubmit = (picked !== null || freeText.trim().length > 0) && !resolved;
 
@@ -1538,6 +1583,9 @@ export type QueueCardActions = {
   onDismiss: CommonProps["onDismiss"];
   onSnooze: CommonProps["onSnooze"];
   onPermanentDismiss: CommonProps["onPermanentDismiss"];
+  // 今後この送信者を無視 — forwarded to Type B/C/E renderers, which gate
+  // the menu item on card.ignorableSender being present.
+  onIgnoreSender?: CommonProps["onIgnoreSender"];
   onUndo?: CommonProps["onUndo"];
   // 確認済み — neutral mark-handled, wired on non-draft judgment/FYI
   // cards (Type A / Type C). Forwarded to those renderers below.
@@ -1579,6 +1627,7 @@ export function QueueCardRenderer({
           onDismiss={actions.onDismiss}
           onSnooze={actions.onSnooze}
           onPermanentDismiss={actions.onPermanentDismiss}
+          onIgnoreSender={actions.onIgnoreSender}
           onUndo={actions.onUndo}
           isSendingPending={actions.isSendingPending}
         />
@@ -1592,6 +1641,7 @@ export function QueueCardRenderer({
           onDismiss={actions.onDismiss}
           onSnooze={actions.onSnooze}
           onPermanentDismiss={actions.onPermanentDismiss}
+          onIgnoreSender={actions.onIgnoreSender}
         />
       );
     case "D":
@@ -1613,6 +1663,7 @@ export function QueueCardRenderer({
           onDismiss={actions.onDismiss}
           onSnooze={actions.onSnooze}
           onPermanentDismiss={actions.onPermanentDismiss}
+          onIgnoreSender={actions.onIgnoreSender}
         />
       );
     case "F":

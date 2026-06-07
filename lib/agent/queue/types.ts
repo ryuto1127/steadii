@@ -85,6 +85,13 @@ type QueueCardBase = {
   // longer. The card uses this to decide whether to show the Undo banner
   // at all.
   reversible: boolean;
+  // 今後この送信者を無視 — the originating email sender, surfaced so the
+  // quick-menu can offer "Ignore this sender" and the 2nd-dismiss toast
+  // can name the sender. Present only on cards that originate from a real
+  // inbox sender (draft / soft-notice / clarify / auto-cal); omitted on
+  // synthesized cards (proposals, pre-briefs, batch-archive) that have no
+  // single sender to ignore.
+  ignorableSender?: { senderEmail: string; senderName: string | null };
 };
 
 export type QueueCardA = QueueCardBase & {

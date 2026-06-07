@@ -40,9 +40,21 @@ type ServerActions = {
   // card's context. Returns the new chat id so the client can push to
   // /app/chat/<id> after the server action resolves.
   startClarificationChat: (cardId: string) => Promise<{ chatId: string }>;
-  dismiss: (cardId: string) => Promise<void>;
+  // dismiss now returns an optional contextual offer to ignore the
+  // sender. Surfaces only for draft cards whose sender has been dismissed
+  // ≥ the threshold; the client renders a sonner toast with an "無視する"
+  // action calling ignoreSender when present.
+  dismiss: (
+    cardId: string
+  ) => Promise<{
+    offerIgnoreSender?: { senderEmail: string; senderName: string | null };
+  }>;
   snooze: (cardId: string, hours: number) => Promise<void>;
   permanentDismiss: (cardId: string) => Promise<void>;
+  // 今後この送信者を無視 — ignore a sender permanently (upsert + retroactive
+  // clear). Wired on Type B/C/E cards carrying an ignorable sender, both
+  // from the quick-menu item and the 2nd-dismiss offer toast.
+  ignoreSender: (senderEmail: string) => Promise<void>;
   // Wave 3.1 — Type B informational secondary action handler. The only
   // inline secondary today is "mark_reviewed" on a meeting pre-brief;
   // anything else uses href navigation and never lands here.
@@ -310,6 +322,36 @@ export function QueueList({
     inlineSendIntervals.current.set(cardId, intervalHandle);
   };
 
+  // 今後この送信者を無視 — the ≥2-dismiss contextual nudge. Renders a
+  // sonner toast naming the sender with an "無視する" action that calls
+  // ignoreSender + refreshes. Auto-dismisses after the default window if
+  // the user takes no action (don't pin a permanent prompt).
+  const offerIgnoreSenderToast = (sender: {
+    senderEmail: string;
+    senderName: string | null;
+  }) => {
+    const label = sender.senderName ?? sender.senderEmail;
+    toast(t("ignore_sender.offer_prompt", { sender: label }), {
+      duration: 10000,
+      action: {
+        label: t("ignore_sender.offer_action"),
+        onClick: () => {
+          void actions
+            .ignoreSender(sender.senderEmail)
+            .then(() => {
+              toast.success(
+                t("ignore_sender.confirmed", { sender: label })
+              );
+              refresh();
+            })
+            .catch((err) => {
+              toast.error(message(err, "Failed to ignore sender"));
+            });
+        },
+      },
+    });
+  };
+
   return (
     <section
       aria-labelledby="queue-section"
@@ -336,12 +378,38 @@ export function QueueList({
             isSendingPending,
             onDismiss: async () => {
               try {
-                await actions.dismiss(card.id);
+                const res = await actions.dismiss(card.id);
+                // 2nd-dismiss contextual nudge: when the server says this
+                // sender has crossed the threshold, surface a toast with
+                // an "無視する" action. Refresh first so the dismissed card
+                // drops, then show the offer over the fresh list.
+                refresh();
+                if (res?.offerIgnoreSender) {
+                  offerIgnoreSenderToast(res.offerIgnoreSender);
+                }
+                return;
               } catch (err) {
                 toast.error(message(err, tShared("dismiss")));
               }
               refresh();
             },
+            onIgnoreSender: card.ignorableSender
+              ? async () => {
+                  const sender = card.ignorableSender;
+                  if (!sender) return;
+                  try {
+                    await actions.ignoreSender(sender.senderEmail);
+                    toast.success(
+                      t("ignore_sender.confirmed", {
+                        sender: sender.senderName ?? sender.senderEmail,
+                      })
+                    );
+                  } catch (err) {
+                    toast.error(message(err, "Failed to ignore sender"));
+                  }
+                  refresh();
+                }
+              : undefined,
             onSnooze: async (hours) => {
               try {
                 await actions.snooze(card.id, hours);

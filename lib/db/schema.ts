@@ -979,6 +979,57 @@ export const agentRules = pgTable(
 export type AgentRule = typeof agentRules.$inferSelect;
 export type NewAgentRule = typeof agentRules.$inferInsert;
 
+// Where an ignore-list entry came from. `dismiss_followup` = the
+// ≥2-dismiss contextual nudge toast; `quick_menu` = the always-available
+// card overflow menu item; `manual` = added directly from the settings
+// list (reserved for a future "add by email" affordance). Stored for
+// audit + future "why is this sender hidden?" UX, never gates behavior.
+export type IgnoredSenderSource = "dismiss_followup" | "quick_menu" | "manual";
+
+// 今後この送信者を無視 — per-user permanent sender ignore list. A sender
+// on this list is triaged to bucket='ignore' at L1 (see lib/agent/email/
+// rules.ts USER_IGNORED_SENDER) so their mail never becomes a queue card,
+// draft, or fake-deadline proposal again.
+//
+// Scope is EMAIL-EXACT for the MVP — we deliberately do NOT block by
+// domain (over-blocking risk: one noisy newsletter shouldn't silence a
+// professor on the same university domain). `scope` is reserved so a
+// 'domain' variant can be added later without a migration to the value
+// shape; only 'email' is written today.
+export type IgnoredSenderScope = "email" | "domain";
+
+export const agentIgnoredSenders = pgTable(
+  "agent_ignored_senders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    // Normalized lowercase sender email (trim + toLowerCase at write
+    // time). The unique index keys on this so re-ignoring is idempotent.
+    senderEmail: text("sender_email").notNull(),
+
+    // MVP writes 'email' only. Reserved for a future domain scope.
+    scope: text("scope").$type<IgnoredSenderScope>().notNull().default("email"),
+
+    source: text("source").$type<IgnoredSenderSource>().notNull(),
+
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    userSenderUnique: uniqueIndex(
+      "agent_ignored_senders_user_sender_unique"
+    ).on(t.userId, t.senderEmail),
+    userIdx: index("agent_ignored_senders_user_idx").on(t.userId),
+  })
+);
+
+export type AgentIgnoredSender = typeof agentIgnoredSenders.$inferSelect;
+export type NewAgentIgnoredSender = typeof agentIgnoredSenders.$inferInsert;
+
 export type AgentDraftAction =
   | "draft_reply"
   | "archive"

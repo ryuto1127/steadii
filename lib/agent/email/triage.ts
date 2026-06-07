@@ -17,6 +17,7 @@ import { logEmailAudit } from "./audit";
 import { embedAndStoreInboxItem } from "./embeddings";
 import { bindEmailToClass, persistBinding } from "./class-binding";
 import { maybeProposeAutoArchive } from "./auto-archive";
+import { loadIgnoredSenderSet } from "./ignored-senders";
 
 // Public API. `triageMessage` is pure-enough: it reads user context from
 // DB but does not write. `applyTriageResult` writes the inbox row and
@@ -252,6 +253,10 @@ async function buildUserContext(
     priorDomainRows.map((r) => r.senderDomain.toLowerCase())
   );
 
+  // 今後この送信者を無視 — the user's permanent per-sender ignore list.
+  // Consumed by the USER_IGNORED_SENDER short-circuit at the top of L1.
+  const ignoredSenders = await loadIgnoredSenderSet(userId);
+
   return {
     userId,
     userEmail,
@@ -259,5 +264,6 @@ async function buildUserContext(
     learnedSenders,
     seenDomains,
     githubUsername,
+    ignoredSenders,
   };
 }
