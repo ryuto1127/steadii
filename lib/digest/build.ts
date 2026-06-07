@@ -6,6 +6,8 @@ import {
   agentProposals,
   inboxItems,
   users,
+  type AgentDraftAction,
+  type InboxRiskTier,
 } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { PENDING_ACTIONS } from "@/lib/agent/email/pending-queries";
@@ -65,6 +67,27 @@ export type DigestPayload = {
   hiddenSamples: DigestHiddenSample[];
 };
 
+// 2026-06-07 — digest-email noise floor. The EMAIL digest only carries
+// drafts created within this trailing window; stale pending items stop
+// re-appearing in the inbox indefinitely. Mirrors loadHiddenSummary's
+// 7-day window pattern, just a wider horizon (a 3-week-old draft can
+// still be worth a nudge; a 6-month-old one is noise). This gate is
+// EMAIL-only — the in-app queue (buildQueueForUser) is untouched.
+const DIGEST_RECENCY_DAYS = 30;
+
+// 2026-06-07 — importance floor for FYI items in the EMAIL digest.
+// notify_only drafts are informational ("no action needed"); a LOW-risk
+// FYI is exactly the noise users complained about. draft_reply /
+// ask_clarifying always pass (they need user action); notify_only passes
+// only at medium/high risk. Email-only — does NOT change the in-app queue.
+function passesDigestImportanceFloor(row: {
+  action: AgentDraftAction;
+  riskTier: InboxRiskTier;
+}): boolean {
+  if (row.action !== "notify_only") return true;
+  return row.riskTier === "high" || row.riskTier === "medium";
+}
+
 // Pick up pending drafts for the user. Ordered by risk (high first) then
 // most-recent. Caps at 10 items per digest so the email stays scannable;
 // the "N more" overflow is rendered as a plain line.
@@ -72,6 +95,10 @@ export async function loadPendingDigestItems(
   userId: string,
   limit: number = 10
 ): Promise<DigestItem[]> {
+  // Email-only recency gate — see DIGEST_RECENCY_DAYS.
+  const cutoff = new Date(
+    Date.now() - DIGEST_RECENCY_DAYS * 24 * 60 * 60 * 1000
+  );
   const rows = await db
     .select({
       agentDraftId: agentDrafts.id,
@@ -89,13 +116,21 @@ export async function loadPendingDigestItems(
       and(
         eq(agentDrafts.userId, userId),
         eq(agentDrafts.status, "pending"),
-        inArray(agentDrafts.action, [...PENDING_ACTIONS])
+        inArray(agentDrafts.action, [...PENDING_ACTIONS]),
+        gt(agentDrafts.createdAt, cutoff)
       )
     )
     .orderBy(desc(agentDrafts.createdAt))
     .limit(limit * 3);
 
-  const sorted = [...rows].sort((a, b) => {
+  // Importance floor — drop LOW-risk notify_only FYIs. Done post-fetch
+  // (the query already over-fetches limit*3) so the .slice cap below
+  // still lands the right count after filtering.
+  const eligible = rows.filter((r) =>
+    passesDigestImportanceFloor({ action: r.action, riskTier: r.riskTier })
+  );
+
+  const sorted = [...eligible].sort((a, b) => {
     const order = { high: 0, medium: 1, low: 2 } as const;
     const ar = order[a.riskTier] ?? 3;
     const br = order[b.riskTier] ?? 3;
