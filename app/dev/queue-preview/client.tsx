@@ -11,6 +11,16 @@ const NOOP = async () => {};
 const NOOP_RESOLVE = async () => ({});
 const NOOP_E = async () => {};
 const NOOP_SNOOZE = async () => {};
+// Dismiss stub that surfaces the ≥2-dismiss "ignore this sender?" offer
+// so the verification harness can capture the toast. Synthetic sender
+// only (matches the preview draft card's ignorableSender).
+const NOOP_DISMISS_WITH_OFFER = async () => ({
+  offerIgnoreSender: {
+    senderEmail: "prof@u.sample-univ.example.edu",
+    senderName: "Prof. Tanaka",
+  },
+});
+const NOOP_IGNORE_SENDER = async (_senderEmail: string) => {};
 const NOOP_SECONDARY = async (_id: string, _key: string) => {};
 void NOOP_SECONDARY;
 const NOOP_START_CLARIFICATION_CHAT = async () => ({ chatId: "preview-chat" });
@@ -67,9 +77,10 @@ export function QueuePreviewClient({
             resolveProposal: NOOP_RESOLVE,
             submitClarification: NOOP_E,
             startClarificationChat: NOOP_START_CLARIFICATION_CHAT,
-            dismiss: NOOP,
+            dismiss: NOOP_DISMISS_WITH_OFFER,
             snooze: NOOP_SNOOZE,
             permanentDismiss: NOOP,
+            ignoreSender: NOOP_IGNORE_SENDER,
             secondaryAction: NOOP,
             sendDraft: NOOP,
             sendOfficeHours: NOOP,

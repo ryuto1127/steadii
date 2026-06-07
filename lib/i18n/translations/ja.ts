@@ -1086,6 +1086,25 @@ export const ja: Messages = {
         "学習済みで自動送信されている送信先と、強制レビューになっている送信先。Steadii が越えた境界を調整したり、学習を一旦リセットできます。",
       open: "開く",
     },
+    ignored_senders: {
+      section_title: "無視中の送信者",
+      description:
+        "今後一切受け取らないと指定した送信者です。これらのメールは自動的に破棄され、キュー・下書き・リマインダーには表示されません。",
+      open: "開く",
+      page_title: "無視中の送信者",
+      page_description:
+        "これらの送信者のメールは自動的に破棄されます。解除するとキューに再び表示されるようになります。",
+      back: "設定",
+      empty: "まだ無視中の送信者はいません。",
+      column_sender: "送信者",
+      column_added: "追加日",
+      column_source: "追加元",
+      remove_button: "解除",
+      remove_pending: "解除中…",
+      source_dismiss_followup: "破棄時の確認",
+      source_quick_menu: "カードメニュー",
+      source_manual: "手動",
+    },
     agent_rules: {
       section_title: "エージェントのルール",
       description:
@@ -1426,6 +1445,12 @@ export const ja: Messages = {
       snooze_24h: "24 時間スヌーズ",
       snooze_1w: "1 週間スヌーズ",
       dismiss_permanent: "今後表示しない",
+      ignore_sender: "今後この送信者を無視",
+    },
+    ignore_sender: {
+      offer_prompt: "{sender} からのメールを今後無視しますか？",
+      offer_action: "無視する",
+      confirmed: "{sender} からのメールは今後表示されません。",
     },
     undo: {
       done_with_remaining: "完了。{n} 秒以内なら取り消し可。",

@@ -685,7 +685,19 @@ export function draftToTypeB(
         ? `To: ${draft.draftTo.join(", ")}`
         : undefined,
     inboundSnippet: truncateInboundSnippet(inbox.snippet),
+    ignorableSender: ignorableSenderFromInbox(inbox),
   };
+}
+
+// 今後この送信者を無視 — extract the ignorable-sender descriptor for a
+// card from its inbox row. Null senderEmail (malformed Gmail header)
+// returns undefined so the quick-menu / nudge simply don't offer.
+function ignorableSenderFromInbox(inbox: {
+  senderEmail: string | null;
+  senderName: string | null;
+}): { senderEmail: string; senderName: string | null } | undefined {
+  if (!inbox.senderEmail) return undefined;
+  return { senderEmail: inbox.senderEmail, senderName: inbox.senderName };
 }
 
 // 2026-05-22 — Inbound mail snippet shown on Type B Draft cards.
@@ -733,6 +745,7 @@ function draftToTypeC(
     originLabel: tShared("open"),
     reversible: false,
     primaryActionLabel: tShared("take_action"),
+    ignorableSender: ignorableSenderFromInbox(inbox),
   };
 }
 
@@ -762,6 +775,7 @@ function draftToTypeE(
     // would require a structured "questions" payload from the L2 deep
     // pass that doesn't exist yet — flag for Wave 3.
     choices: [],
+    ignorableSender: ignorableSenderFromInbox(inbox),
   };
 }
 

@@ -39,6 +39,7 @@ function makeCtx(overrides: Partial<UserContext> = {}): UserContext {
     // branch must short-circuit before that escalation fires.
     seenDomains: new Set(["known.edu", "example.com"]),
     githubUsername: null,
+    ignoredSenders: new Set(),
     ...overrides,
   };
 }

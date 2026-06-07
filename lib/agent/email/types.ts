@@ -48,6 +48,12 @@ export type UserContext = {
   // Whether we've ever triaged an email from this sender_domain before.
   // Set of already-known domains.
   seenDomains: Set<string>;
+  // 今後この送信者を無視 — the user's permanent sender ignore list, as a
+  // set of normalized lowercase emails. When `input.fromEmail` (lowered)
+  // is in this set, L1 short-circuits to bucket='ignore' before any
+  // promo/unsubscribe/keyword check, so the sender's mail never becomes a
+  // queue card, draft, or fake-deadline proposal. Email-exact scope only.
+  ignoredSenders: Set<string>;
   // Optional GitHub login. When set, GitHub notification emails that
   // mention `@${githubUsername}` in subject or body promote out of the
   // auto_low default into auto_high. Sourced from

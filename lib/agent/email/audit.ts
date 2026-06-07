@@ -67,7 +67,12 @@ export type EmailAuditAction =
   // auto-resolve. The detector still emits `draft_superseded_by_user_send`
   // when it fires; this row records the user clicking [元に戻す] on
   // the activity-feed notification. Detail carries the notification id.
-  | "draft_auto_resolve_undone";
+  | "draft_auto_resolve_undone"
+  // 今後この送信者を無視 — per-user sender ignore list lifecycle. `added` =
+  // user ignored a sender (detail carries the retroactive-clear counts +
+  // the affordance source); `removed` = user un-ignored from settings.
+  | "ignore_sender_added"
+  | "ignore_sender_removed";
 
 export async function logEmailAudit(params: {
   userId: string;

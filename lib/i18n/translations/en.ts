@@ -790,6 +790,12 @@ type MessagesShape = {
       snooze_24h: string;
       snooze_1w: string;
       dismiss_permanent: string;
+      ignore_sender: string;
+    };
+    ignore_sender: {
+      offer_prompt: string;
+      offer_action: string;
+      confirmed: string;
     };
     undo: {
       done_with_remaining: string;
@@ -1201,6 +1207,23 @@ type MessagesShape = {
       section_title: string;
       description: string;
       open: string;
+    };
+    ignored_senders: {
+      section_title: string;
+      description: string;
+      open: string;
+      page_title: string;
+      page_description: string;
+      back: string;
+      empty: string;
+      column_sender: string;
+      column_added: string;
+      column_source: string;
+      remove_button: string;
+      remove_pending: string;
+      source_dismiss_followup: string;
+      source_quick_menu: string;
+      source_manual: string;
     };
     agent_rules: {
       section_title: string;
@@ -2760,6 +2783,12 @@ export const en: MessagesShape = {
       snooze_24h: "Snooze 1 day",
       snooze_1w: "Snooze 1 week",
       dismiss_permanent: "Dismiss permanently",
+      ignore_sender: "Ignore this sender",
+    },
+    ignore_sender: {
+      offer_prompt: "Ignore future emails from {sender}?",
+      offer_action: "Ignore",
+      confirmed: "You won't hear from {sender} again.",
     },
     undo: {
       done_with_remaining: "Done. {n}s to undo.",
@@ -3237,6 +3266,25 @@ export const en: MessagesShape = {
       description:
         "Senders Steadii has learned to auto-send for, and senders it has flagged for forced review. Adjust which boundaries Steadii crossed and reset learned signals.",
       open: "Open",
+    },
+    ignored_senders: {
+      section_title: "Ignored senders",
+      description:
+        "Senders you've chosen to never hear from again. Their mail is dismissed automatically and never becomes a queue card, draft, or reminder.",
+      open: "Open",
+      page_title: "Ignored senders",
+      page_description:
+        "Mail from these senders is dismissed automatically. Remove a sender to start seeing their mail in the queue again.",
+      back: "Settings",
+      empty: "You haven't ignored any senders yet.",
+      column_sender: "Sender",
+      column_added: "Added",
+      column_source: "Added from",
+      remove_button: "Remove",
+      remove_pending: "Removing…",
+      source_dismiss_followup: "Dismiss prompt",
+      source_quick_menu: "Card menu",
+      source_manual: "Manual",
     },
     agent_rules: {
       section_title: "Agent Rules",

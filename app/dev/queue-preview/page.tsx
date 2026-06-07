@@ -63,7 +63,11 @@ const MOCK_CARDS: QueueCard[] = [
     inboundSnippet:
       "来週のオフィスアワーですが、水曜の 14:00 から 16:00 まで MP203 で実施します。事前に質問内容を共有してもらえると当日スムーズです。スロットは先着順なので、希望時間があれば早めに教えてください。",
     subjectLine: "Office hours availability — MAT223",
-    toLabel: "To: tanaka.pro@u-tokyo.ac.jp",
+    toLabel: "To: prof@u.sample-univ.example.edu",
+    ignorableSender: {
+      senderEmail: "prof@u.sample-univ.example.edu",
+      senderName: "Prof. Tanaka",
+    },
     sources: [
       { kind: "email", index: 1, label: "Tanaka original — Apr 28" },
       { kind: "syllabus", index: 1, label: "MAT223 syllabus ch.5" },

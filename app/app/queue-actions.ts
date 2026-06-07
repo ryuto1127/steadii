@@ -32,6 +32,14 @@ import {
   stampLastMonthlyReviewAt,
 } from "@/lib/agent/proactive/action-executor";
 import { logEmailAudit } from "@/lib/agent/email/audit";
+import {
+  addIgnoredSender,
+  clearSurfacedFromSender,
+  countDismissSignalsForSender,
+  isSenderIgnored,
+  removeIgnoredSender,
+} from "@/lib/agent/email/ignored-senders";
+import { shouldOfferIgnoreSender } from "@/lib/agent/email/ignore-offer";
 import { resolveGroupDetectClarification } from "@/lib/agent/groups/detect-actions";
 import {
   pickOfficeHoursSlot,
@@ -103,12 +111,26 @@ async function getUserId(): Promise<string> {
 // today so we mark resolved with a `resolved_action='snooze'` marker —
 // the dedup re-fire is gated on a 24h window per existing scanner
 // behaviour, so the row will re-surface naturally.
-export async function queueDismissAction(rawCardId: string): Promise<void> {
+// Wave-X — the contextual "ignore this sender?" nudge return shape. The
+// dismiss action surfaces it ONLY for draft cards whose sender has now
+// been dismissed ≥ IGNORE_OFFER_DISMISS_THRESHOLD times. The client
+// renders a sonner toast with an "無視する" action calling
+// ignoreSenderAction when this is present; otherwise the dismiss is silent.
+export type QueueDismissResult = {
+  offerIgnoreSender?: { senderEmail: string; senderName: string | null };
+};
+
+export async function queueDismissAction(
+  rawCardId: string
+): Promise<QueueDismissResult> {
   const userId = await getUserId();
   const { kind, id } = parseCardId(rawCardId);
   if (kind === "draft") {
     const until = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await snoozeAgentDraftAction(id, until.toISOString());
+    const offer = await maybeOfferIgnoreSender(userId, id);
+    revalidatePath("/app");
+    return offer ? { offerIgnoreSender: offer } : {};
   } else if (kind === "pre_brief") {
     await dismissPreBrief(userId, id);
   } else if (kind === "group_detect") {
@@ -125,7 +147,109 @@ export async function queueDismissAction(rawCardId: string): Promise<void> {
     await dismissProposalSnooze(userId, id);
   }
   revalidatePath("/app");
+  return {};
 }
+
+// Decide whether to surface the ignore-sender nudge after a draft-card
+// dismiss. Resolves the sender from the draft's inbox item, counts the
+// dismiss-signal history (snooze is the default dismiss — see
+// countDismissSignalsForSender for the counter-source rationale), and
+// gates via the pure shouldOfferIgnoreSender predicate. Best-effort: any
+// failure returns null so the nudge is simply skipped, never blocking the
+// dismiss the user already performed.
+async function maybeOfferIgnoreSender(
+  userId: string,
+  draftId: string
+): Promise<{ senderEmail: string; senderName: string | null } | null> {
+  try {
+    const [row] = await db
+      .select({
+        senderEmail: inboxItems.senderEmail,
+        senderName: inboxItems.senderName,
+      })
+      .from(agentDrafts)
+      .innerJoin(inboxItems, eq(agentDrafts.inboxItemId, inboxItems.id))
+      .where(and(eq(agentDrafts.id, draftId), eq(agentDrafts.userId, userId)))
+      .limit(1);
+    if (!row?.senderEmail) return null;
+
+    const [dismissCount, alreadyIgnored] = await Promise.all([
+      countDismissSignalsForSender({ userId, senderEmail: row.senderEmail }),
+      isSenderIgnored({ userId, senderEmail: row.senderEmail }),
+    ]);
+
+    const offer = shouldOfferIgnoreSender({
+      dismissCountIncludingThis: dismissCount,
+      alreadyIgnored,
+    });
+    if (!offer) return null;
+    return { senderEmail: row.senderEmail, senderName: row.senderName };
+  } catch {
+    return null;
+  }
+}
+
+// 今後この送信者を無視 — ignore a sender permanently. Idempotent upsert of
+// the (userId, senderEmail) row + immediate retroactive clear of that
+// sender's currently-surfaced items (open inbox rows → dismissed, pending
+// drafts → ignored disposition, proposed auto-cal rows → cancelled) so the
+// queue empties right away. Audit-logged. Scoped to userId throughout.
+export async function ignoreSenderAction(senderEmail: string): Promise<void> {
+  const userId = await getUserId();
+  const parsed = ignoreSenderSchema.parse({ senderEmail });
+
+  const created = await addIgnoredSender({
+    userId,
+    senderEmail: parsed.senderEmail,
+    source: "quick_menu",
+  });
+  const cleared = await clearSurfacedFromSender({
+    userId,
+    senderEmail: parsed.senderEmail,
+  });
+
+  await logEmailAudit({
+    userId,
+    action: "ignore_sender_added",
+    result: "success",
+    detail: {
+      senderEmail: parsed.senderEmail.toLowerCase(),
+      newRow: created,
+      ...cleared,
+    },
+  });
+
+  revalidatePath("/app");
+}
+
+// Inverse of ignoreSenderAction — delete the ignore row. Backs the
+// settings list "解除" (remove) button. Does NOT resurrect previously
+// cleared items (those stay dismissed/cancelled); it only stops FUTURE
+// mail from this sender being auto-dismissed.
+export async function unignoreSenderAction(
+  senderEmail: string
+): Promise<void> {
+  const userId = await getUserId();
+  const parsed = ignoreSenderSchema.parse({ senderEmail });
+  const removed = await removeIgnoredSender({
+    userId,
+    senderEmail: parsed.senderEmail,
+  });
+  if (removed) {
+    await logEmailAudit({
+      userId,
+      action: "ignore_sender_removed",
+      result: "success",
+      detail: { senderEmail: parsed.senderEmail.toLowerCase() },
+    });
+  }
+  revalidatePath("/app");
+  revalidatePath("/app/settings/ignored-senders");
+}
+
+const ignoreSenderSchema = z.object({
+  senderEmail: z.string().trim().email().min(3).max(254),
+});
 
 export async function queueSnoozeAction(
   rawCardId: string,

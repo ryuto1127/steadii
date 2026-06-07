@@ -106,6 +106,7 @@ export default async function SettingsPage() {
   const tFacts = await getTranslations("settings.user_facts");
   const tEntities = await getTranslations("settings.entities");
   const tTuning = await getTranslations("settings.agent_tuning");
+  const tIgnored = await getTranslations("settings.ignored_senders");
   const tRules = await getTranslations("settings.agent_rules");
   const tStaged = await getTranslations("settings.staged_autonomy");
   const tModes = await getTranslations("settings.agent_modes");
@@ -283,6 +284,19 @@ export default async function SettingsPage() {
           className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
         >
           {tTuning("open")}
+          <ExternalLink size={12} strokeWidth={1.5} />
+        </Link>
+      </Section>
+
+      <Section title={tIgnored("section_title")}>
+        <p className="mb-3 text-small text-[hsl(var(--muted-foreground))]">
+          {tIgnored("description")}
+        </p>
+        <Link
+          href="/app/settings/ignored-senders"
+          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-small font-medium transition-hover hover:bg-[hsl(var(--surface-raised))]"
+        >
+          {tIgnored("open")}
           <ExternalLink size={12} strokeWidth={1.5} />
         </Link>
       </Section>

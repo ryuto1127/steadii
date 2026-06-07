@@ -35,6 +35,7 @@ function makeCtx(overrides: Partial<UserContext> = {}): UserContext {
     // doesn't bias tests that aren't specifically about it.
     seenDomains: new Set(["known.edu", "example.com"]),
     githubUsername: null,
+    ignoredSenders: new Set(),
     ...overrides,
   };
 }
@@ -98,6 +99,73 @@ describe("classifyEmail — IGNORE bucket", () => {
     };
     const res = classifyEmail(input, makeCtx());
     expect(res.bucket).toBe("ignore");
+  });
+});
+
+describe("classifyEmail — USER_IGNORED_SENDER gate", () => {
+  // A message that would otherwise land in AUTO_HIGH (academic-integrity
+  // keyword + first-time domain) must be forced to 'ignore' when the
+  // sender is on the user's ignore list. This proves the gate runs FIRST,
+  // ahead of every keyword / promo / escalation check.
+  const loudInput: ClassifyInput = {
+    ...baseInput,
+    fromEmail: "noise@shop.example.com",
+    fromDomain: "shop.example.com",
+    subject: "Plagiarism review — action required",
+    snippet: "Regarding suspected plagiarism. Please confirm immediately.",
+    bodySnippet: "Regarding suspected plagiarism. Please confirm immediately.",
+  };
+
+  it("forces bucket='ignore' with USER_IGNORED_SENDER provenance", () => {
+    const res = classifyEmail(
+      loudInput,
+      makeCtx({ ignoredSenders: new Set(["noise@shop.example.com"]) })
+    );
+    expect(res.bucket).toBe("ignore");
+    expect(res.confidence).toBe(1.0);
+    expect(res.ruleProvenance.map((p) => p.ruleId)).toContain(
+      "USER_IGNORED_SENDER"
+    );
+  });
+
+  it("matches case-insensitively against the normalized set", () => {
+    const res = classifyEmail(
+      { ...loudInput, fromEmail: "Noise@Shop.Example.com" },
+      makeCtx({ ignoredSenders: new Set(["noise@shop.example.com"]) })
+    );
+    expect(res.bucket).toBe("ignore");
+    expect(res.ruleProvenance.map((p) => p.ruleId)).toContain(
+      "USER_IGNORED_SENDER"
+    );
+  });
+
+  it("leaves a non-ignored sender unaffected (no false positive)", () => {
+    const res = classifyEmail(
+      // Different sender than the one on the list — must NOT be gated.
+      { ...loudInput, fromEmail: "other@shop.example.com" },
+      makeCtx({ ignoredSenders: new Set(["noise@shop.example.com"]) })
+    );
+    expect(res.bucket).not.toBe("ignore");
+    expect(res.ruleProvenance.map((p) => p.ruleId)).not.toContain(
+      "USER_IGNORED_SENDER"
+    );
+  });
+
+  it("is email-exact: does NOT block a sibling on the same domain", () => {
+    // MVP scope is email-exact, never domain. A second sender on the same
+    // domain as an ignored one stays visible.
+    const res = classifyEmail(
+      { ...loudInput, fromEmail: "registrar@shop.example.com" },
+      makeCtx({ ignoredSenders: new Set(["noise@shop.example.com"]) })
+    );
+    expect(res.bucket).not.toBe("ignore");
+  });
+
+  it("an empty ignore set never gates anyone", () => {
+    const res = classifyEmail(loudInput, makeCtx({ ignoredSenders: new Set() }));
+    expect(res.ruleProvenance.map((p) => p.ruleId)).not.toContain(
+      "USER_IGNORED_SENDER"
+    );
   });
 });
 
