@@ -170,7 +170,12 @@ export default async function SingleChatPage({
   }
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col">
+    // min-h fills the island's visible area so a SHORT thread can push the
+    // sticky composer to the bottom (no mid-page gap) while a LONG thread
+    // still grows past it and page-scrolls (#294 behavior preserved). The
+    // 8rem subtracts the app-layout island chrome (md:py-8 top+bottom),
+    // matching the established basis in app/app/loading.tsx.
+    <div className="mx-auto flex min-h-[calc(100vh-8rem)] max-w-3xl flex-col">
       <ChatView
         chatId={chat.id}
         initialTitle={chat.title}
