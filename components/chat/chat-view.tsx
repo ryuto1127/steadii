@@ -681,9 +681,18 @@ export function ChatView({
       (one inside, one outside) competing. The `scrollIntoView` in the
       auto-scroll effect still works — it now scrolls the window
       instead of the inner container.
+
+      2026-06-07 — `flex-1` so this column fills the page wrapper's
+      min-h (calc(100vh-8rem)). The messages region below also takes
+      `flex-1` and absorbs the slack, so on a SHORT thread the sticky
+      composer is pushed to the bottom of the visible area instead of
+      sitting mid-page with a gap below. On a LONG thread the messages
+      region overflows the min-h, the column grows, and the composer
+      page-scrolls with `sticky bottom-0` exactly as before — no second
+      scrollbar (the island's own overflow-y-auto is the only scroller).
     */}
-    <div className="flex flex-col">
-      <div className="pt-4 pb-8">
+    <div className="flex flex-1 flex-col">
+      <div className="flex-1 pt-4 pb-8">
         <ul className="space-y-5">
           {messages.map((m, idx) => {
             const isLastAssistant =

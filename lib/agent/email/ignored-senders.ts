@@ -28,16 +28,27 @@ export function normalizeIgnoredSenderEmail(raw: string): string {
 export async function loadIgnoredSenderSet(
   userId: string
 ): Promise<Set<string>> {
-  const rows = await db
-    .select({ senderEmail: agentIgnoredSenders.senderEmail })
-    .from(agentIgnoredSenders)
-    .where(
-      and(
-        eq(agentIgnoredSenders.userId, userId),
-        eq(agentIgnoredSenders.scope, "email")
-      )
-    );
-  return new Set(rows.map((r) => r.senderEmail));
+  try {
+    const rows = await db
+      .select({ senderEmail: agentIgnoredSenders.senderEmail })
+      .from(agentIgnoredSenders)
+      .where(
+        and(
+          eq(agentIgnoredSenders.userId, userId),
+          eq(agentIgnoredSenders.scope, "email")
+        )
+      );
+    return new Set(rows.map((r) => r.senderEmail));
+  } catch {
+    // 2026-06-07 — schema-drift defense (SCHEMA_DRIFT_READ_ON_DEPLOY). This
+    // is a hot-path read on EVERY email triage (buildUserContext). Prod
+    // migrations are manual (feedback_prod_migration_manual), so in the
+    // deploy→migrate window agent_ignored_senders may not exist yet — an
+    // unguarded read throws "relation does not exist" and kills triage /
+    // email ingest. Degrade to "no one ignored" (empty Set) instead of
+    // crashing. Mirrors fetchPendingAutoCalRows in lib/agent/queue/build.ts.
+    return new Set();
+  }
 }
 
 // List for the settings reversibility surface. Sorted oldest-first so
@@ -121,17 +132,26 @@ export async function countDismissSignalsForSender(args: {
 }): Promise<number> {
   const senderEmail = normalizeIgnoredSenderEmail(args.senderEmail);
   if (!senderEmail) return 0;
-  const [row] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(inboxItems)
-    .where(
-      and(
-        eq(inboxItems.userId, args.userId),
-        eq(sql`lower(${inboxItems.senderEmail})`, senderEmail),
-        inArray(inboxItems.status, ["snoozed", "dismissed"])
-      )
-    );
-  return row?.count ?? 0;
+  try {
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(inboxItems)
+      .where(
+        and(
+          eq(inboxItems.userId, args.userId),
+          eq(sql`lower(${inboxItems.senderEmail})`, senderEmail),
+          inArray(inboxItems.status, ["snoozed", "dismissed"])
+        )
+      );
+    return row?.count ?? 0;
+  } catch {
+    // 2026-06-07 — schema-drift defense (SCHEMA_DRIFT_READ_ON_DEPLOY). Runs
+    // in the dismiss path (queueDismissAction). On any query failure return
+    // 0 so a missing table degrades to "no ignore-offer" rather than a
+    // thrown dismiss. Mirrors fetchPendingAutoCalRows in
+    // lib/agent/queue/build.ts.
+    return 0;
+  }
 }
 
 // Whether the sender is already on the user's ignore list. Used to
