@@ -106,12 +106,12 @@ describe("withHeartbeat wrapper", () => {
       "@/lib/observability/cron-heartbeat"
     );
     await expect(
-      withHeartbeat("send-queue", async () => {
+      withHeartbeat("master-sweep", async () => {
         throw new Error("bad");
       })
     ).rejects.toThrow("bad");
-    expect(store.get("send-queue")?.lastStatus).toBe("error");
-    expect(store.get("send-queue")?.lastError).toBe("bad");
+    expect(store.get("master-sweep")?.lastStatus).toBe("error");
+    expect(store.get("master-sweep")?.lastError).toBe("bad");
   });
 });
 
@@ -133,10 +133,10 @@ describe("readCronHealth", () => {
     const { recordHeartbeat, readCronHealth } = await import(
       "@/lib/observability/cron-heartbeat"
     );
-    await recordHeartbeat("digest", { durationMs: 100, status: "ok" });
+    await recordHeartbeat("master-sweep", { durationMs: 100, status: "ok" });
     const rows = await readCronHealth();
-    const digest = rows.find((r) => r.name === "digest");
-    expect(digest?.stale).toBe(false);
+    const masterSweep = rows.find((r) => r.name === "master-sweep");
+    expect(masterSweep?.stale).toBe(false);
   });
 
   it("marks ancient ticks as stale", async () => {
@@ -144,8 +144,8 @@ describe("readCronHealth", () => {
       "@/lib/observability/cron-heartbeat"
     );
     // Plant an ancient row directly so the helper's age math runs.
-    store.set("digest", {
-      name: "digest",
+    store.set("master-sweep", {
+      name: "master-sweep",
       lastTickAt: new Date(Date.now() - 8 * 60 * 60 * 1000),
       lastStatus: "ok",
       lastDurationMs: 100,
@@ -153,7 +153,84 @@ describe("readCronHealth", () => {
       updatedAt: new Date(),
     });
     const rows = await readCronHealth();
-    const digest = rows.find((r) => r.name === "digest");
-    expect(digest?.stale).toBe(true);
+    const masterSweep = rows.find((r) => r.name === "master-sweep");
+    expect(masterSweep?.stale).toBe(true);
+  });
+});
+
+describe("consolidated-cron expectations (PR #305 + send-queue removal)", () => {
+  it("does not expect independent heartbeats from consolidated/removed crons", async () => {
+    const { CRON_EXPECTED_INTERVAL_MS } = await import(
+      "@/lib/observability/cron-heartbeat"
+    );
+    // These no longer own a live QStash schedule, so a frozen heartbeat
+    // for them must NOT trip the health check.
+    for (const dead of [
+      "digest",
+      "weekly-digest",
+      "pre-brief",
+      "ingest-sweep",
+      "send-queue",
+    ]) {
+      expect(CRON_EXPECTED_INTERVAL_MS).not.toHaveProperty(dead);
+    }
+    // master-sweep is the liveness signal that replaces them.
+    expect(CRON_EXPECTED_INTERVAL_MS).toHaveProperty("master-sweep");
+  });
+
+  it("a frozen digest/send-queue heartbeat does not make health degraded", async () => {
+    const { recordHeartbeat, readCronHealth, CRON_EXPECTED_INTERVAL_MS } =
+      await import("@/lib/observability/cron-heartbeat");
+    // Every still-scheduled cron ticked just now → all fresh.
+    for (const name of Object.keys(CRON_EXPECTED_INTERVAL_MS)) {
+      await recordHeartbeat(name, { durationMs: 10, status: "ok" });
+    }
+    // Plant ancient rows for the consolidated/removed crons, exactly as
+    // production currently looks (frozen since the 2026-05 cutover).
+    for (const dead of ["digest", "send-queue", "pre-brief"]) {
+      store.set(dead, {
+        name: dead,
+        lastTickAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+        lastStatus: "ok",
+        lastDurationMs: 10,
+        lastError: null,
+        updatedAt: new Date(),
+      });
+    }
+    const rows = await readCronHealth();
+    // readCronHealth only reports the expected set, so the frozen dead
+    // rows are simply ignored — nothing stale, nothing failing.
+    const stale = rows.filter((r) => r.stale).map((r) => r.name);
+    const failing = rows
+      .filter((r) => r.lastStatus === "error")
+      .map((r) => r.name);
+    expect(stale).toEqual([]);
+    expect(failing).toEqual([]);
+    // Mirror the /api/health status computation.
+    const status =
+      stale.length === 0 && failing.length === 0 ? "ok" : "degraded";
+    expect(status).toBe("ok");
+  });
+
+  it("still trips degraded when master-sweep itself goes stale", async () => {
+    const { recordHeartbeat, readCronHealth, CRON_EXPECTED_INTERVAL_MS } =
+      await import("@/lib/observability/cron-heartbeat");
+    // Everything fresh except master-sweep, which stopped ticking — the
+    // real-outage signal we must NOT blunt.
+    for (const name of Object.keys(CRON_EXPECTED_INTERVAL_MS)) {
+      if (name === "master-sweep") continue;
+      await recordHeartbeat(name, { durationMs: 10, status: "ok" });
+    }
+    store.set("master-sweep", {
+      name: "master-sweep",
+      lastTickAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      lastStatus: "ok",
+      lastDurationMs: 10,
+      lastError: null,
+      updatedAt: new Date(),
+    });
+    const rows = await readCronHealth();
+    const stale = rows.filter((r) => r.stale).map((r) => r.name);
+    expect(stale).toContain("master-sweep");
   });
 });

@@ -410,6 +410,32 @@ Skip this whole block if `AUTH_MS_ID` is not set in env.
 - [ ] OpenAI dashboard usage cap: \$100/month for α
 - [ ] Sentry clean (no unresolved errors from smoke tests)
 
+### Cron health endpoint (`GET /api/health`)
+
+Unauthenticated liveness probe for external uptime monitors. Returns
+`status: "ok"` when every cron in `CRON_EXPECTED_INTERVAL_MS`
+(`lib/observability/cron-heartbeat.ts`) ticked within `interval × 2` and
+its last tick didn't error; otherwise `status: "degraded"` (still HTTP
+200, with `stale[]` / `failing[]` arrays) or HTTP 500 if the endpoint
+itself fails (likely DB down).
+
+- [ ] Point the external monitor / alert rule at `degraded` **and** non-200,
+      not just non-200 — a stale cron returns 200.
+- **Only crons with a live QStash schedule are expected to have fresh
+  heartbeats.** The high-frequency jobs `digest` / `weekly-digest` /
+  `pre-brief` / `ingest-sweep` were consolidated into `master-sweep`
+  (PR #305, 2026-05-22) and `send-queue` was removed (2026-05-04, §11),
+  so none of them are in the expected set. `master-sweep`'s own
+  heartbeat is the liveness signal for all consolidated sub-sweeps; a
+  sub-sweep that throws still surfaces in Sentry tagged
+  `feature=master_sweep, sub_sweep=<name>`. Listing the consolidated
+  jobs here would freeze their heartbeats and pin health to `degraded`
+  permanently — alert fatigue that masks a real cron outage.
+- **Rollback note:** if the master-sweep consolidation is ever reverted
+  (standalone schedules re-enabled in QStash), re-add `digest`,
+  `weekly-digest`, `pre-brief`, and `ingest-sweep` to
+  `CRON_EXPECTED_INTERVAL_MS` so they're monitored again.
+
 ---
 
 ## 10. Launch (JP α — invite-only, 10 students)
