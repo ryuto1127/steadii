@@ -52,6 +52,10 @@ const store = vi.hoisted(() => ({
   drafts: [] as DraftRow[],
   autoCal: [] as AutoCalRow[],
   seq: 0,
+  // When set, the next resolved query rejects — simulates a missing-table
+  // PG error in the deploy→migrate window (SCHEMA_DRIFT_READ_ON_DEPLOY) so
+  // we can assert the readers degrade to a safe empty default.
+  failNext: false,
 }));
 
 // The mock interprets the drizzle calls structurally: each helper in
@@ -184,6 +188,12 @@ vi.mock("@/lib/db/client", async () => {
     const isCount =
       cols && Object.keys(cols).length === 1 && "count" in cols;
     const resolve = () => {
+      if (store.failNext) {
+        store.failNext = false;
+        throw new Error(
+          'relation "agent_ignored_senders" does not exist'
+        );
+      }
       if (isCount) {
         // The count callers (countDismissSignalsForSender) filter inbox
         // by sender + status in {snoozed,dismissed}; the filter args are
@@ -200,10 +210,13 @@ vi.mock("@/lib/db/client", async () => {
       }
       return rows;
     };
-    const p = Promise.resolve(resolve());
+    // Build the promise via an async wrapper so a synchronous throw from
+    // resolve() (the failNext path) surfaces as a rejected promise rather
+    // than escaping the awaited thenable.
+    const p = (async () => resolve())();
     return {
-      limit: () => Promise.resolve(resolve()),
-      orderBy: () => Promise.resolve(resolve()),
+      limit: () => (async () => resolve())(),
+      orderBy: () => (async () => resolve())(),
       then: p.then.bind(p),
       catch: p.catch.bind(p),
       finally: p.finally.bind(p),
@@ -282,6 +295,7 @@ import {
   addIgnoredSender,
   clearSurfacedFromSender,
   countDismissSignalsForSender,
+  loadIgnoredSenderSet,
   removeIgnoredSender,
 } from "@/lib/agent/email/ignored-senders";
 
@@ -293,6 +307,7 @@ beforeEach(() => {
   store.drafts = [];
   store.autoCal = [];
   store.seq = 0;
+  store.failNext = false;
   pendingClearArgs = null;
   pendingCountArgs = null;
   pendingDeleteArgs = null;
@@ -439,6 +454,30 @@ describe("countDismissSignalsForSender", () => {
     const n = await countDismissSignalsForSender({
       userId: U,
       senderEmail: "fresh@example.com",
+    });
+    expect(n).toBe(0);
+  });
+});
+
+// SCHEMA_DRIFT_READ_ON_DEPLOY — prod migrations are manual, so Vercel can
+// deploy code that reads agent_ignored_senders before the table exists. The
+// two AUTO / hot-path readers MUST degrade to a safe empty default instead
+// of throwing "relation does not exist" (which would kill triage / the
+// dismiss path). These tests simulate that rejection via store.failNext.
+describe("schema-drift defense (SCHEMA_DRIFT_READ_ON_DEPLOY)", () => {
+  it("loadIgnoredSenderSet returns an empty Set when the query rejects", async () => {
+    store.failNext = true;
+    const set = await loadIgnoredSenderSet(U);
+    expect(set).toBeInstanceOf(Set);
+    expect(set.size).toBe(0);
+  });
+
+  it("countDismissSignalsForSender returns 0 when the query rejects", async () => {
+    store.failNext = true;
+    pendingCountArgs = { userId: U, senderEmail: "noise@shop.example.com" };
+    const n = await countDismissSignalsForSender({
+      userId: U,
+      senderEmail: "noise@shop.example.com",
     });
     expect(n).toBe(0);
   });
