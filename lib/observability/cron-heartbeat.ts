@@ -11,26 +11,39 @@ import { cronHeartbeats } from "@/lib/db/schema";
 // the table stays bounded — Sentry holds the per-tick exception trail
 // for failures; this is just liveness.
 
-// Expected interval per cron name in milliseconds. Adjusted from the
-// QStash schedule documented in DEPLOY.md. A cron is "stale" when
-// last_tick_at is older than `expected_ms × stale_multiplier`.
+// Expected interval per cron name in milliseconds. A cron is "stale"
+// when last_tick_at is older than `expected_ms × stale_multiplier`.
 //
-// Add new crons here when introducing them — the health endpoint
-// consults this map to compute staleness.
+// Only crons that own a LIVE QStash schedule belong here — each is
+// stamped by `withHeartbeat("<name>", …)` wrapping its route POST, so a
+// missing/old row means that schedule actually stopped firing.
+//
+// Deliberately NOT listed (would otherwise be permanent false
+// positives, masking a real outage via alert fatigue):
+//   • digest, weekly-digest, pre-brief, ingest-sweep — consolidated
+//     into `master-sweep` by PR #305 (2026-05-22). Their standalone
+//     routes are no longer scheduled in QStash (kept only as manual /
+//     rollback triggers), so their heartbeats would freeze even though
+//     the work still runs every tick. `master-sweep`'s heartbeat is the
+//     liveness signal for all consolidated sub-sweeps; a per-sub-sweep
+//     failure still surfaces via the Sentry capture tagged
+//     `feature=master_sweep, sub_sweep=<name>` in
+//     app/api/cron/master-sweep/route.ts.
+//   • send-queue — removed 2026-05-04 (post-α #6); approved sends now
+//     publish a per-draft QStash message instead. See DEPLOY.md §11.
+//
+// Add new crons here when introducing a new independent schedule. If the
+// master-sweep consolidation is ever rolled back (standalone schedules
+// re-enabled in QStash), re-add the four consolidated names above.
 export const CRON_EXPECTED_INTERVAL_MS: Record<string, number> = {
-  "digest": 60 * 60 * 1000, // hourly tick
-  "weekly-digest": 60 * 60 * 1000, // hourly tick; internal Sun 5pm gate
-  "pre-brief": 5 * 60 * 1000, // every 5 minutes
-  "ingest-sweep": 30 * 60 * 1000, // every 30 minutes (approx)
-  "send-queue": 60 * 1000, // every minute
   "scanner": 5 * 60 * 1000, // every 5 minutes
   "groups": 6 * 60 * 60 * 1000, // every 6 hours
   "ical-sync": 30 * 60 * 1000, // every 30 minutes
-  // 2026-05-22 — Consolidated master cron that fan-outs to pre-brief,
-  // ingest-sweep, auto-cal-grace, draft-superseded, digest, and
-  // weekly-digest via modulo math. Cuts Neon CU-hour burn ~3x by
-  // collapsing 4+ overlapping schedules into a single 15-min cadence.
-  // See app/api/cron/master-sweep/route.ts.
+  // Consolidated master cron — fans out to pre-brief / ingest-sweep
+  // (every tick), the 30-min expiry/resurface sweeps, and digest /
+  // weekly-digest (hourly) via modulo dispatch. Single 15-min cadence
+  // cuts Neon CU-hour burn ~3x. See app/api/cron/master-sweep/route.ts
+  // and lib/cron/master-sweep.ts.
   "master-sweep": 15 * 60 * 1000,
   // engineer-38 — writing-style learner. Daily 08:00 UTC.
   "style-learner": 24 * 60 * 60 * 1000,
