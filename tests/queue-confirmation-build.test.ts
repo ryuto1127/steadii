@@ -92,12 +92,12 @@ describe("confirmationToTypeF", () => {
       fakeRow({
         question: "Prof Tanaka is in JST?",
         inferredValue: "JST",
-        senderEmail: "tanaka@u-tokyo.ac.jp",
+        senderEmail: "tanaka@u.sample-univ.example.edu",
       })
     );
     expect(card.title).toBe("Prof Tanaka is in JST?");
     expect(card.body).toContain("JST");
-    expect(card.body).toContain("tanaka@u-tokyo.ac.jp");
+    expect(card.body).toContain("tanaka@u.sample-univ.example.edu");
   });
 
   it("exposes confirm / correct / dismiss options", () => {

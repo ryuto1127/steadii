@@ -16,6 +16,46 @@
 # email leak without naming a specific human.
 [a-zA-Z0-9._%+-]+@(gmail|googlemail|hotmail|outlook|live|msn|icloud|me|mac|yahoo|ymail|aol|protonmail|proton|tutanota|fastmail|posteo|zoho|gmx|t-online|laposte|orange|wanadoo|free|sfr|libero|seznam|mail\.ru|yandex|inbox|ya)\.(com|net|jp|co\.jp|fr|de|it|ru|nl|pl|ca|us|uk|com\.br|com\.au|co\.uk|io|me|cz|fi|se|no|dk|ch|at|be|es|pt|hu|gr|tr|kr|tw|hk|sg|in)
 
+# ---- Academic-institution email addresses (foreign academic TLDs) ----
+# Catches `someone@<real-university>` — an email address (note the REQUIRED
+# local-part + `@`) at a FOREIGN academic TLD: `.ac.<cc>` (JP/UK/NZ/KR/...) or
+# `.edu.<cc>` (AU/...). This is the `tanaka.pro@u-tokyo.ac.jp` leak shape from
+# dev preview seed data: a fake person dressed up at a REAL institution, which
+# the no-leak rule (feedback_no_user_case_leak.md / AGENTS.md §7a) forbids in
+# committed fixtures. Synthetic fixtures must instead use the example.edu /
+# *.sample-univ.example.edu convention (see app/dev/queue-preview/page.tsx).
+#
+# Why this is a SHAPE, not an identity: it says "an email at a foreign academic
+# domain that isn't one of our synthetic placeholders" — it names no real
+# person. The synthetic foreign-academic placeholders the suite uses
+# (example.ac.jp, u.ac.jp, x.ac.jp) are subtracted in check-no-pii.sh's
+# ALLOWLIST_REGEX.
+#
+# Requiring `@` is deliberate: the legit academic-domain REFERENCE LIST in
+# lib/billing/academic-email.ts stores BARE domains (`domain: "u-tokyo.ac.jp"`,
+# no `@`) and so is never matched — that file is app-critical data, not a
+# fixture. The recognizer's own test (tests/academic-email.test.ts) DOES use
+# real-institution emails as validator vectors and is pathspec-whitelisted in
+# check-no-pii.sh for that reason.
+#
+# SCOPE / LIMITATION (documented per the harden-the-scanner ask):
+#   1. Bare `.edu` (US) is deliberately NOT matched here. The suite uses `.edu`
+#      pervasively as synthetic fixtures (x.edu, uni.edu, known.edu, ...), and
+#      the rules engine has `.edu`-conditional behavior that *needs* `.edu`
+#      fixtures (tests/agent-email-rules.test.ts). A `.edu` pattern is therefore
+#      indistinguishable from legit synthetic usage — it stays Layer-2 semantic-
+#      review territory, not mechanical. Foreign academic TLDs are far rarer as
+#      casual placeholders, so they ARE mechanically enforceable here.
+#   2. The global ALLOWLIST_REGEX also whitelists generic local parts (`prof@`,
+#      `tanaka@`, `stu@`, ...) for ANY domain, so a leak whose local part is one
+#      of those placeholder words at a real foreign school (e.g.
+#      `prof@kyoto-u.ac.jp`) is still masked. The leak this was added for
+#      (`tanaka.pro@...`) is caught because `tanaka.pro` is not an allowlisted
+#      local part. Fully closing the gap would require enumerating real
+#      institutions (deferred — academic-email.ts already covers the JP/CA
+#      surface that matters here).
+[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(ac\.[a-z]{2,}|edu\.[a-z]{2,})\b
+
 # ---- API keys / cloud credentials ----
 # OpenAI keys come in `sk-XXX` and `sk-proj-XXX` shapes; both may contain
 # hyphens + underscores in the payload, so allow those in the body.

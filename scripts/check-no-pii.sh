@@ -103,11 +103,31 @@ WHITELIST=(
   ':!scripts/pii-patterns-universal.txt'
   ':!scripts/pii-patterns.local.txt'
   ':!AGENTS.md'
+  # The academic-email recognizer's own unit test legitimately enumerates
+  # real-institution emails (stanford.edu, u-tokyo.ac.jp, utoronto.ca, ...) as
+  # validator vectors — the same app-critical reference data as the bare-domain
+  # list in lib/billing/academic-email.ts. Exempt it from the academic-email
+  # shape pattern so it isn't a false positive. (diff / --all scans only — the
+  # message / --text paths don't read via pathspec, and these vectors never
+  # appear in commit messages or PR bodies.)
+  ':!tests/academic-email.test.ts'
 )
 
 # Allowlist: shapes that LOOK like leaks but are app-critical / by-design.
 # These are subtracted from hits.
-ALLOWLIST_REGEX='noreply@|no-reply@|notifications@|@example\.|@test\.|@your-domain\.example|@u-tokyo\.ac\.jp|@u\.sample-univ\.example\.edu|@uni\.edu|@school\.edu|@somecorp\.com|@stripe\.com|recruiter@acme|\b(me|you|user|users|friend|friends|foo|bar|baz|abc|xyz|someone|anyone|test|tester|hello|admin|sample|alex|tanaka|stu|prof|recruiter|stripe|noreply|no-reply|notifications)@|user:pass@|username:password@|user:password@|\$\{[^}]+\}:\$\{[^}]+\}@'
+# NOTE: the foreign-academic-email shape pattern (pii-patterns-universal.txt)
+# flags any `local@<domain>` at a `.ac.<cc>` / `.edu.<cc>` TLD. The synthetic
+# foreign-academic placeholders the test suite uses (u.ac.jp, x.ac.jp, and
+# anything @example.*) are subtracted here so legit fixtures don't trip it; real
+# institutions (e.g. u-tokyo.ac.jp) are NOT allowlisted — that's the leak shape
+# we now want to catch. `@u-tokyo.ac.jp` used to live in this list and is
+# exactly what suppressed the dev-preview leak; it has been removed. The
+# academic-email recognizer's own test (tests/academic-email.test.ts), which
+# legitimately uses real-institution emails as validator vectors, is pathspec-
+# whitelisted in WHITELIST above. (The pre-existing @uni.edu / @school.edu
+# entries are retained as harmless no-ops — bare `.edu` is intentionally not
+# scanned; see the SCOPE note in pii-patterns-universal.txt.)
+ALLOWLIST_REGEX='noreply@|no-reply@|notifications@|@example\.|@test\.|@your-domain\.example|@u\.sample-univ\.example\.edu|@uni\.edu|@school\.edu|@u\.ac\.jp|@x\.ac\.jp|@somecorp\.com|@stripe\.com|recruiter@acme|\b(me|you|user|users|friend|friends|foo|bar|baz|abc|xyz|someone|anyone|test|tester|hello|admin|sample|alex|tanaka|stu|prof|recruiter|stripe|noreply|no-reply|notifications)@|user:pass@|username:password@|user:password@|\$\{[^}]+\}:\$\{[^}]+\}@'
 
 # Running total of pattern hits across everything scanned this run. Each
 # scanned source (diff, a commit message, a text file) adds to it so a hit
@@ -139,6 +159,17 @@ scan_file() {
   done < "$PATTERNS_FILE"
 }
 
+# extract_added: read a unified diff on stdin, emit only ADDED line content
+# (strip the leading '+', skip the '+++' file header). A leak guard run over a
+# diff must check what's ENTERING history; removed ('-') lines are content being
+# deleted — e.g. THIS very change scrubbing a pre-existing leak — and must not
+# be flagged, or every leak-scrub PR would fail on its own deletion. Applies to
+# the `staged` and `--range` DIFF scans only; `--all` reads full working-tree
+# content and the message / --text scans read content directly, all unaffected.
+extract_added() {
+  awk '/^\+\+\+/ { next } /^\+/ { print substr($0, 2) }'
+}
+
 # BLOCKED_WHERE makes the report header source-aware instead of hardcoding
 # "in this diff" for every mode.
 BLOCKED_WHERE=" in this diff"
@@ -146,7 +177,7 @@ BLOCKED_WHERE=" in this diff"
 case "$MODE" in
   staged)
     TMP="$(mktemp -t pii-scan-XXXXXX)"
-    git diff --cached --unified=0 -- "${WHITELIST[@]}" > "$TMP"
+    git diff --cached --unified=0 -- "${WHITELIST[@]}" | extract_added > "$TMP"
     scan_file "$TMP" "staged diff"
     ;;
   --all)
@@ -163,9 +194,9 @@ case "$MODE" in
     fi
     RANGE="$2"
     BLOCKED_WHERE=" in this range (diff + commit messages)"
-    # 1) The file diff for the range.
+    # 1) The file diff for the range (ADDED lines only — see extract_added).
     TMP="$(mktemp -t pii-scan-XXXXXX)"
-    git diff "$RANGE" --unified=0 -- "${WHITELIST[@]}" > "$TMP"
+    git diff "$RANGE" --unified=0 -- "${WHITELIST[@]}" | extract_added > "$TMP"
     scan_file "$TMP" "diff ($RANGE)"
     # 2) Each commit MESSAGE body in the range. The diff scan above never
     #    sees these — the PR #329 incident leaked via the message + PR body

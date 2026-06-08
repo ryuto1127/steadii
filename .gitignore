@@ -14,4 +14,6 @@ tests/agent-evals/last-run.json
 .git.bak.*/
 .git.bak.*
 scripts/pii-patterns.local.txt
+# Local agent worktrees (each is its own embedded git repo — never commit).
+.claude/worktrees/
 

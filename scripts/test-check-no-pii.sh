@@ -17,6 +17,11 @@ set -uo pipefail
 # Synthetic leak token. Trips the universal `@gmail.com` shape pattern and is
 # NOT in the script's ALLOWLIST_REGEX. Do not substitute a "realistic" sample.
 LEAK="jordan.lee.demo@gmail.com"
+# Synthetic foreign-academic leak token. Trips the `.ac.<cc>` academic-email
+# shape pattern; the domain is made-up ("some university") and the local part is
+# not an allowlisted placeholder word, so it is NOT subtracted by ALLOWLIST_REGEX.
+# Guards the harden-the-scanner change that catches `tanaka.pro@u-tokyo.ac.jp`.
+ACADEMIC_LEAK="demo.person@some-univ.ac.jp"
 # Clean synthetic line. `alex@example.com` is allowlisted/by-design.
 CLEAN_LINE="Fix queue dedup; contact alex@example.com"
 
@@ -68,6 +73,13 @@ printf 'PR body line\n%s\n' "$LEAK" > "$TEXT_DIR/leak.txt"
 bash "$SCRIPT" --text "$TEXT_DIR/leak.txt" >/dev/null 2>&1
 report "$?" 0 "--text synthetic-leak input fails"
 
+# ---- Case 2b: --text foreign-academic LEAK -> non-zero -----------------
+# Regression guard for the academic-email shape pattern (the
+# tanaka.pro@u-tokyo.ac.jp dev-preview leak that previously slipped through).
+printf 'attendee: %s\n' "$ACADEMIC_LEAK" > "$TEXT_DIR/academic-leak.txt"
+bash "$SCRIPT" --text "$TEXT_DIR/academic-leak.txt" >/dev/null 2>&1
+report "$?" 0 "--text synthetic foreign-academic leak fails"
+
 # ---- Commit-message + diff cases in a throwaway repo --------------------
 TMP_REPO="$(mktemp -d -t pii-selfcheck-repo-XXXXXX)"
 cleanup_all() { rm -rf "$TEXT_DIR" "$TMP_REPO" 2>/dev/null || true; }
@@ -114,6 +126,18 @@ printf 'leaked contact: %s\n' "$LEAK" >> "$TMP_REPO/notes.txt"
 "${GIT[@]}" commit -q -m "chore: clean message but leak in file content"
 run_tip
 report "$?" 0 "--range synthetic leak in file CONTENT still fails"
+
+# ---- Case 5b (regression): SCRUBBING a committed leak passes -------------
+# A leak-scrub commit DELETES a line containing a leak (Case 5 just committed
+# one). The range/diff scan must look at ADDED content only, so the '-' removal
+# line is NOT flagged — otherwise every leak-scrub PR would fail on its own
+# deletion (the exact reason this very PII fix could not be committed).
+grep -vF "$LEAK" "$TMP_REPO/notes.txt" > "$TMP_REPO/notes.txt.tmp" \
+  && mv "$TMP_REPO/notes.txt.tmp" "$TMP_REPO/notes.txt"
+"${GIT[@]}" add -A
+"${GIT[@]}" commit -q -m "chore: scrub the leaked contact line"
+run_tip
+report "$?" 1 "--range scrubbing a committed leak passes (added-only diff)"
 
 # ---- Case 6 (regression): --range with NO second arg -> non-zero ---------
 # Guards against the fail-OPEN where the EXIT cleanup trap's trailing `rm`

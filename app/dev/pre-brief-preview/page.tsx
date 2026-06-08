@@ -45,7 +45,7 @@ const MOCK_BRIEF = {
 You and Prof. Tanaka had a 1:1 on Apr 14 where you committed to:
 - Submit PS5 by Apr 28 (extended to May 3 — done).
 - Meet again before midterm — *this is that meeting*.`,
-  attendeeEmails: ["tanaka.pro@u-tokyo.ac.jp"],
+  attendeeEmails: ["prof@u.sample-univ.example.edu"],
 };
 
 const MOCK_EVENT = {
