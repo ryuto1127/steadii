@@ -1,0 +1,33 @@
+-- One-time 30-day email backfill completion marker (PR feat/first-24h-value).
+--
+-- WHY a column on users rather than a new table:
+--   The marker is a single per-user "the 30-day backfill has run" boolean
+--   intent with a timestamp — exactly the shape of the sibling
+--   last_gmail_ingest_at / last_digest_sent_at columns that already live on
+--   users. A dedicated table would add a join to the enqueue gate for no
+--   benefit; the column keeps the idempotency check a single-row read.
+--
+-- Semantics:
+--   email_backfill_completed_at  timestamptz nullable
+--     NULL  → backfill never enqueued for this user.
+--     set   → the background backfill one-shot was enqueued (stamped
+--             optimistically before publish so two concurrent first-connect
+--             renders can't double-enqueue). The job is L1-triage +
+--             embeddings ONLY over the 24h..30d window; no L2 / drafts /
+--             queue cards / notifications / auto-cal — so a partial failure
+--             just yields a thinner pre-signup corpus, never a duplicate
+--             row (UNIQUE(user_id, source_type, external_id) on inbox_items)
+--             nor a metered-spend retry worth re-running.
+--
+-- Per failure-mode MIGRATION_JOURNAL_DRIFT (PR #314 / #316): the meta
+-- snapshot chain is not committed, so `drizzle-kit generate` re-emits the
+-- whole schema. This migration is hand-written with IF NOT EXISTS so it
+-- applies cleanly on a prod DB that already holds every prior column.
+-- Journal entry registered with when > idx 53's value. Per
+-- MIGRATION_BREAKPOINT_IN_COMMENT this block deliberately avoids the literal
+-- breakpoint marker that the neon-http splitter string-matches on.
+--
+-- Manual application post-merge per memory feedback_prod_migration_manual.md.
+
+ALTER TABLE "users"
+  ADD COLUMN IF NOT EXISTS "email_backfill_completed_at" timestamp with time zone;

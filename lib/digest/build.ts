@@ -11,6 +11,8 @@ import {
 } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { PENDING_ACTIONS } from "@/lib/agent/email/pending-queries";
+import { FALLBACK_TZ } from "@/lib/calendar/tz-utils";
+import { loadTodaySection } from "./today-section";
 
 // ---------------------------------------------------------------------------
 // Digest renderer. Pure enough to unit-test with a mocked db.
@@ -292,6 +294,10 @@ export function buildDigestText(args: {
   proposals?: DigestProposal[];
   hiddenCount7d?: number;
   hiddenSamples?: DigestHiddenSample[];
+  // Zero-LLM "Today" block (lib/digest/today-section.ts), pre-rendered.
+  // Prepended above proposals/drafts. Additive — undefined keeps the
+  // legacy layout untouched.
+  todaySectionText?: string;
 }): string {
   const locale = args.locale ?? "en";
   const lines: string[] = [];
@@ -301,6 +307,11 @@ export function buildDigestText(args: {
       : "Steadii Agent — morning digest"
   );
   lines.push("");
+
+  if (args.todaySectionText) {
+    lines.push(args.todaySectionText.trimEnd());
+    lines.push("");
+  }
 
   if (args.proposals && args.proposals.length > 0) {
     lines.push(locale === "ja" ? "Steadii が気付いた点:" : "Steadii noticed:");
@@ -360,6 +371,10 @@ export function buildDigestHtml(args: {
   proposals?: DigestProposal[];
   hiddenCount7d?: number;
   hiddenSamples?: DigestHiddenSample[];
+  // Pre-rendered zero-LLM "Today" block (one or more <tr> rows from
+  // lib/digest/today-section.ts). Inserted directly under the title,
+  // above proposals/drafts. Additive — undefined keeps the legacy layout.
+  todaySectionHtml?: string;
 }): string {
   const locale = args.locale ?? "en";
   const reviewLabel = locale === "ja" ? "ドラフトを確認 →" : "Review draft →";
@@ -439,6 +454,7 @@ export function buildDigestHtml(args: {
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 600; color: #1A1814; margin-top: 4px;">${escapeHtml(titleHeading)}</div>
               </td>
             </tr>
+            ${args.todaySectionHtml ?? ""}
             ${
               proposalRows.length > 0
                 ? `
@@ -519,6 +535,7 @@ export async function buildDigestPayload(
       email: users.email,
       digestEnabled: users.digestEnabled,
       preferences: users.preferences,
+      timezone: users.timezone,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -526,22 +543,34 @@ export async function buildDigestPayload(
   if (!user) return null;
   if (!user.digestEnabled) return null;
 
+  const e = env();
+  const appUrl = e.APP_URL;
+  const locale: DigestLocale =
+    user.preferences?.locale === "ja" ? "ja" : "en";
+
   const items = await loadPendingDigestItems(userId);
   const proposals = await loadPendingProposals(userId);
   // Wave 5 — auto-archive 7-day summary. We always run the loader (it's
   // a small partial-index probe) and let the renderer decide whether
   // to show the section based on count.
   const hidden = await loadHiddenSummary(userId);
-  // Send a digest if either bucket has signal — a clean inbox with
-  // unresolved proactive proposals is exactly when the digest matters.
-  // The hidden summary alone isn't enough signal to send; it lands as
-  // a section on top of pending work, not its own digest.
-  if (items.length === 0 && proposals.length === 0) return null;
 
-  const e = env();
-  const appUrl = e.APP_URL;
-  const locale: DigestLocale =
-    user.preferences?.locale === "ja" ? "ja" : "en";
+  // Zero-LLM "Today" section — today's calendar events + due/overdue
+  // tasks, computed in the user's tz (FALLBACK_TZ when unset). This is the
+  // morning-briefing centerpiece; its presence (hasContent) is itself a
+  // reason to send even when there are no drafts or proposals.
+  const tz = user.timezone || FALLBACK_TZ;
+  const today = await loadTodaySection({ userId, tz, locale });
+
+  // Send a digest if ANY surface has signal — pending drafts, unresolved
+  // proactive proposals, OR a non-empty today briefing (events / due
+  // tasks). A clean inbox with a packed calendar is exactly when the
+  // morning briefing matters. The hidden summary alone still isn't enough
+  // signal to send; it rides on top of real content, not its own digest.
+  if (items.length === 0 && proposals.length === 0 && !today.hasContent) {
+    return null;
+  }
+
   const subject = buildDigestSubject(items, locale);
   const text = buildDigestText({
     items,
@@ -550,6 +579,7 @@ export async function buildDigestPayload(
     proposals,
     hiddenCount7d: hidden.count,
     hiddenSamples: hidden.samples,
+    todaySectionText: today.text,
   });
   const html = buildDigestHtml({
     items,
@@ -558,6 +588,7 @@ export async function buildDigestPayload(
     proposals,
     hiddenCount7d: hidden.count,
     hiddenSamples: hidden.samples,
+    todaySectionHtml: today.html,
   });
   return {
     userEmail: user.email,

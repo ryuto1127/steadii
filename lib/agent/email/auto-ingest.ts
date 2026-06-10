@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/nextjs";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import { ingestLast24h } from "./ingest-recent";
+import { maybeTriggerEmailBackfill } from "./backfill";
 
 // 24h cool-off between automatic ingests. Prevents repeated page loads
 // from spamming Gmail with redundant fetches. Manual refresh via Settings
@@ -23,6 +24,22 @@ export async function maybeTriggerAutoIngest(args: {
   gmailConnected: boolean;
 }): Promise<void> {
   if (!args.gmailConnected) return;
+
+  // One-time 30-day backfill enqueue. Self-gated by the
+  // email_backfill_completed_at marker (fires at most once per user), so
+  // it's safe to invoke on every render and independent of the 24h ingest
+  // cooldown below — a returning user who already ingested but predates
+  // this feature still gets their pre-signup corpus filled in. Publishes a
+  // QStash one-shot; never runs inline.
+  void maybeTriggerEmailBackfill({
+    userId: args.userId,
+    gmailConnected: args.gmailConnected,
+  }).catch((err) => {
+    Sentry.captureException(err, {
+      tags: { feature: "email_backfill", op: "schedule_from_auto_ingest" },
+      user: { id: args.userId },
+    });
+  });
 
   try {
     const [row] = await db

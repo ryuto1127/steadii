@@ -19,21 +19,36 @@ export type GmailListHit = {
 // Thin wrapper around `users.messages.list` that handles pagination and
 // honors 429 Retry-After. We pull IDs only; bodies are fetched lazily via
 // `getMessage`.
+//
+// `beforeUnixSeconds` is optional and upper-bounds the window. The recurring
+// 24h sweep leaves it undefined (open-ended "everything since 24h ago"); the
+// one-time 30-day backfill (lib/agent/email/backfill.ts) passes it so its
+// window is strictly 24h..30d and never overlaps the sweep's last-24h slice
+// — keeping the two paths' inserts disjoint so a backfilled (L1+embed-only)
+// row can't shadow the sweep's full-treatment insert of the same message.
 export async function listRecentMessages(
   userId: string,
   sinceUnixSeconds: number,
-  hardLimit: number = LIST_HARD_LIMIT
+  hardLimit: number = LIST_HARD_LIMIT,
+  beforeUnixSeconds?: number
 ): Promise<GmailListHit[]> {
   return Sentry.startSpan(
     {
       name: "gmail.messages.list",
       op: "http.client",
-      attributes: { "steadii.user_id": userId, "gmail.since": sinceUnixSeconds },
+      attributes: {
+        "steadii.user_id": userId,
+        "gmail.since": sinceUnixSeconds,
+        ...(beforeUnixSeconds ? { "gmail.before": beforeUnixSeconds } : {}),
+      },
     },
     async () => {
       try {
         const gmail = await getGmailForUser(userId);
-        const q = `after:${sinceUnixSeconds}`;
+        const q =
+          beforeUnixSeconds !== undefined
+            ? `after:${sinceUnixSeconds} before:${beforeUnixSeconds}`
+            : `after:${sinceUnixSeconds}`;
         const out: GmailListHit[] = [];
         let pageToken: string | undefined = undefined;
 
