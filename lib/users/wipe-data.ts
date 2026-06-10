@@ -1,33 +1,21 @@
 import "server-only";
 import { db } from "@/lib/db/client";
 import {
-  agentDrafts,
-  agentEvents,
   agentProposals,
-  agentRules,
-  agentSenderFeedback,
   assignments,
   auditLog,
   blobAssets,
   chats,
   classes,
-  emailEmbeddings,
-  events,
   icalSubscriptions,
   inboxItems,
-  mistakeNoteChunks,
   mistakeNotes,
   notionConnections,
-  pendingToolCalls,
-  registeredResources,
-  sendQueue,
   syllabi,
-  syllabusChunks,
-  topupBalances,
-  usageEvents,
 } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { del } from "@vercel/blob";
+import { WIPE_PLAN, type WipeTarget } from "@/lib/users/wipe-plan";
 
 export type WipeCounts = {
   classes: number;
@@ -140,11 +128,43 @@ export async function getWipeCounts(userId: string): Promise<WipeCounts> {
   };
 }
 
-// Wipe-data scope is locked: classes, syllabi, mistakes, assignments,
-// chats, inbox, agent state, events, integrations, uploads. NOT touched:
-// users row, accounts (OAuth), sessions, subscriptions/invoices,
-// processed_stripe_events, waitlist_requests, audit_log, global agent
-// rules (which live in code, not the DB).
+// ─── Truth-in-deletion ───────────────────────────────────────────────
+//
+// The wipe used to delete a hand-maintained list of ~23 tables while the
+// schema defined 50+ — third-party PII (entities / entity_links holding
+// correspondent names, emails, descriptions and 1536-dim embeddings),
+// learned user facts, sender confidence, agent confirmations / personas,
+// pre-briefs, intent metadata, notifications, ignored senders, office-
+// hours requests, group projects and more all survived a "delete my data"
+// click. The in-product promise was false.
+//
+// Inverted design: lib/users/wipe-plan.ts keeps an explicit allowlist of
+// tables that must SURVIVE the wipe (the account itself + auth + the
+// billing/audit trail), and derives the delete set from the live drizzle
+// schema — every pgTable with a user_id column that isn't kept is a wipe
+// target, FK-ordered children-first. A regression test asserts every
+// user-scoped table is either kept or wiped, so coverage can't silently
+// drift again.
+
+/**
+ * Delete every row owned by `userId` from the wipe-set tables, in
+ * FK-safe (children-first) order. Returns per-table deleted-row counts
+ * for the audit detail.
+ */
+async function deleteWipeTargets(
+  userId: string
+): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {};
+  for (const target of WIPE_PLAN as readonly WipeTarget[]) {
+    const deleted = await db
+      .delete(target.table)
+      .where(eq(target.userIdColumn, userId))
+      .returning({ marker: sql<number>`1` });
+    counts[target.tableName] = deleted.length;
+  }
+  return counts;
+}
+
 export async function wipeAllUserData(userId: string): Promise<void> {
   // 1) Read blob URLs up front so we can delete the underlying Vercel
   //    Blob objects after the DB rows are gone. If we deleted DB first
@@ -154,60 +174,24 @@ export async function wipeAllUserData(userId: string): Promise<void> {
     .from(blobAssets)
     .where(eq(blobAssets.userId, userId));
 
-  // 2) DB deletes. Order is conservative — most child tables cascade from
-  //    their parent, but we delete leaf-ish rows first so we never have
-  //    to rely on cascade semantics across multiple hops.
-  await db.delete(sendQueue).where(eq(sendQueue.userId, userId));
-  await db
-    .delete(agentSenderFeedback)
-    .where(eq(agentSenderFeedback.userId, userId));
-  await db.delete(agentDrafts).where(eq(agentDrafts.userId, userId));
-  await db.delete(agentProposals).where(eq(agentProposals.userId, userId));
-  await db.delete(agentEvents).where(eq(agentEvents.userId, userId));
-  await db.delete(agentRules).where(eq(agentRules.userId, userId));
-  await db.delete(inboxItems).where(eq(inboxItems.userId, userId));
-  await db.delete(emailEmbeddings).where(eq(emailEmbeddings.userId, userId));
-  await db.delete(usageEvents).where(eq(usageEvents.userId, userId));
-  // chats cascades messages, message_attachments
-  await db.delete(chats).where(eq(chats.userId, userId));
-  // mistakeNotes cascades mistake_note_images
-  await db
-    .delete(mistakeNoteChunks)
-    .where(eq(mistakeNoteChunks.userId, userId));
-  await db.delete(syllabusChunks).where(eq(syllabusChunks.userId, userId));
-  await db.delete(mistakeNotes).where(eq(mistakeNotes.userId, userId));
-  await db.delete(syllabi).where(eq(syllabi.userId, userId));
-  await db.delete(assignments).where(eq(assignments.userId, userId));
-  await db.delete(classes).where(eq(classes.userId, userId));
-  await db.delete(events).where(eq(events.userId, userId));
-  await db
-    .delete(icalSubscriptions)
-    .where(eq(icalSubscriptions.userId, userId));
-  // registeredResources cascades from notionConnections; do explicit too
-  // in case there are orphans.
-  await db
-    .delete(registeredResources)
-    .where(eq(registeredResources.userId, userId));
-  await db
-    .delete(notionConnections)
-    .where(eq(notionConnections.userId, userId));
-  await db
-    .delete(pendingToolCalls)
-    .where(eq(pendingToolCalls.userId, userId));
-  await db.delete(topupBalances).where(eq(topupBalances.userId, userId));
-  // blobAssets last — set-null FKs from syllabi / mistake_note_images /
-  // message_attachments are already irrelevant since those rows are gone.
-  await db.delete(blobAssets).where(eq(blobAssets.userId, userId));
+  // 2) DB deletes. WIPE_PLAN is FK-ordered children-first (derived from
+  //    the schema's cascade edges), so every delete runs without tripping
+  //    a foreign-key constraint even though the users row is kept. Child
+  //    tables that cascade from a wiped parent (messages,
+  //    message_attachments, mistake_note_images, group_project_members /
+  //    _tasks, etc.) are removed by that cascade; the explicit parents in
+  //    the plan cover the rest.
+  const deletedCounts = await deleteWipeTargets(userId);
 
-  // 3) Audit. Important: audit_log itself is NOT wiped (it survives the
-  //    user's data reset because it's the trail of what happened).
+  // 3) Audit. audit_log is in KEEP_TABLES — it survives the wipe because
+  //    it's the trail of what happened, including this wipe itself.
   await db.insert(auditLog).values({
     userId,
     action: "user.wipe_data",
     resourceType: "user",
     resourceId: userId,
     result: "success",
-    detail: { blobCount: blobs.length },
+    detail: { blobCount: blobs.length, deleted: deletedCounts },
   });
 
   // 4) Best-effort blob cleanup. A failed blob-delete leaves orphans in
