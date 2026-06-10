@@ -43,29 +43,58 @@ export async function POST(request: NextRequest) {
   }
 
   // Idempotency: Stripe retries the same event on transient failures or
-  // signed-ack timeouts. Skip anything we've already processed to avoid
-  // double-INSERTing invoice rows or double-logging audit entries. We
-  // INSERT the event id FIRST — if a duplicate arrives concurrently, one
-  // of them gets the unique-key violation and short-circuits.
-  try {
-    await db.insert(processedStripeEvents).values({
-      eventId: event.id,
-      type: event.type,
-    });
-  } catch (err) {
-    if (isUniqueViolation(err)) {
-      // Already processed (or in-flight) — ack without re-running side effects.
+  // signed-ack timeouts. We must run the side effects EXACTLY ONCE, and
+  // crucially run them at least once even if the first attempt throws.
+  //
+  // The old flow INSERTed the id BEFORE routeEvent, so a throw left the
+  // row behind and the retry was acked as a duplicate — the side effect
+  // (top-up fulfillment, subscription upsert, founding-member grant)
+  // never ran. A paid top-up could silently vanish.
+  //
+  // New flow, gated by processed_stripe_events.status:
+  //   1. INSERT (id, status='processing') ON CONFLICT DO NOTHING.
+  //   2. If a row already existed, read its status:
+  //        - 'done'       → true duplicate, ack without re-running.
+  //        - 'processing' → a prior attempt threw (or is in flight); fall
+  //                         through and re-run. routeEvent is built to be
+  //                         re-run-safe (unique-violation-tolerant inserts,
+  //                         upsert-on-existing).
+  //   3. Run routeEvent. On success → UPDATE status='done'. On failure →
+  //      return 500 so Stripe retries; the row stays 'processing'.
+  const inserted = await db
+    .insert(processedStripeEvents)
+    .values({ eventId: event.id, type: event.type, status: "processing" })
+    .onConflictDoNothing()
+    .returning({ eventId: processedStripeEvents.eventId });
+
+  if (inserted.length === 0) {
+    // A row already existed — inspect its status to decide ack vs re-run.
+    const [existing] = await db
+      .select({ status: processedStripeEvents.status })
+      .from(processedStripeEvents)
+      .where(eq(processedStripeEvents.eventId, event.id))
+      .limit(1);
+    if (existing?.status === "done") {
       return NextResponse.json({ received: true, duplicate: true });
     }
-    throw err;
+    // status === 'processing' (or the row vanished in a race) → fall
+    // through and re-run the side effects.
   }
 
   try {
     await routeEvent(event);
   } catch (err) {
     console.error("stripe webhook handler failed", err);
+    // Leave the row 'processing' so the next retry re-runs instead of
+    // being dropped as a duplicate.
     return NextResponse.json({ error: "handler_failed" }, { status: 500 });
   }
+
+  // Side effects succeeded → mark terminal so future retries ack as dupes.
+  await db
+    .update(processedStripeEvents)
+    .set({ status: "done" })
+    .where(eq(processedStripeEvents.eventId, event.id));
 
   return NextResponse.json({ received: true });
 }

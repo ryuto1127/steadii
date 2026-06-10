@@ -372,6 +372,13 @@
 			"when": 1779900000000,
 			"tag": "0052_agent_ignored_senders",
 			"breakpoints": true
+		},
+		{
+			"idx": 53,
+			"version": "7",
+			"when": 1779986400000,
+			"tag": "0053_stripe_event_status",
+			"breakpoints": true
 		}
 	]
 }

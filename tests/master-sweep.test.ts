@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // The master-sweep dispatcher must:
-//   - At minute=0 (hourly): run ALL sub-sweeps (always + 30-min + hourly)
-//   - At minute=15: run only the always sub-sweeps (pre-brief, ingest)
-//   - At minute=30: run always + 30-min sub-sweeps, skip hourly
-//   - At minute=45: run only the always sub-sweeps
+//   - On EVERY tick: run the always sub-sweeps (pre-brief, ingest-sweep,
+//     digest, weekly-digest). Digest dispatch is no longer gated on the
+//     hour — the pickers own eligibility, so an off-the-hour tick must
+//     still dispatch (the missed-cohort fix).
+//   - At minute % 30 === 0: also run the 30-min sub-sweeps.
+//   - At other minutes: the 30-min sub-sweeps are skipped.
 //   - Isolate per-sub-sweep failures so one throwing doesn't poison
 //     the others — each failure lands in summary.errors[name]
 //
@@ -36,7 +38,14 @@ const ALL_SUB_SWEEPS: SubSweepName[] = [
   "weekly-digest",
 ];
 
-const ALWAYS: SubSweepName[] = ["pre-brief", "ingest-sweep"];
+// Digest dispatch is now part of the always-run set (the missed-cohort
+// fix moved it off the minute===0 gate). Order matches the dispatcher.
+const ALWAYS: SubSweepName[] = [
+  "pre-brief",
+  "ingest-sweep",
+  "digest",
+  "weekly-digest",
+];
 const THIRTY_MIN: SubSweepName[] = [
   "auto-cal-proposal-expiry",
   "proposed-archive-expiry",
@@ -45,7 +54,6 @@ const THIRTY_MIN: SubSweepName[] = [
   // 2026-05-24 — Round-5 notify-with-undo bookkeeping.
   "notification-expiry",
 ];
-const HOURLY: SubSweepName[] = ["digest", "weekly-digest"];
 
 function makeSubs(): SubSweeps {
   return {
@@ -96,48 +104,58 @@ beforeEach(() => {
 });
 
 describe("dispatchMasterSweep — modulo dispatch", () => {
-  it("at minute=0, runs ALL sub-sweeps (always + 30-min + hourly)", async () => {
+  it("at minute=0, runs ALL sub-sweeps (always + 30-min)", async () => {
     const subs = makeSubs();
     const r = await dispatchMasterSweep({ nowMs: atMinute(0), subSweeps: subs });
 
-    expect(r.ran).toEqual([
-      ...ALWAYS,
-      ...THIRTY_MIN,
-      ...HOURLY,
-    ]);
+    expect(r.ran).toEqual([...ALWAYS, ...THIRTY_MIN]);
     expect(r.skipped).toEqual([]);
-    expect(callsCalled(subs)).toEqual(ALL_SUB_SWEEPS);
+    expect(new Set(callsCalled(subs))).toEqual(new Set(ALL_SUB_SWEEPS));
     expect(r.errors).toEqual({});
   });
 
-  it("at minute=15, runs only the always sub-sweeps", async () => {
+  it("at minute=15, runs the always set incl. digest, skips the 30-min set", async () => {
     const subs = makeSubs();
     const r = await dispatchMasterSweep({ nowMs: atMinute(15), subSweeps: subs });
 
     expect(r.ran).toEqual(ALWAYS);
-    expect(r.skipped).toEqual([...THIRTY_MIN, ...HOURLY]);
-    expect(callsCalled(subs)).toEqual(ALWAYS);
+    expect(r.skipped).toEqual(THIRTY_MIN);
+    expect(new Set(callsCalled(subs))).toEqual(new Set(ALWAYS));
     expect(subs["auto-cal-proposal-expiry"]).not.toHaveBeenCalled();
-    expect(subs.digest).not.toHaveBeenCalled();
+    // Digest dispatch fires even off the hour — the missed-cohort fix.
+    expect(subs.digest).toHaveBeenCalledTimes(1);
+    expect(subs["weekly-digest"]).toHaveBeenCalledTimes(1);
   });
 
-  it("at minute=30, runs always + 30-min sub-sweeps but skips hourly", async () => {
+  it("at minute=30, runs always + 30-min sub-sweeps", async () => {
     const subs = makeSubs();
     const r = await dispatchMasterSweep({ nowMs: atMinute(30), subSweeps: subs });
 
     expect(r.ran).toEqual([...ALWAYS, ...THIRTY_MIN]);
-    expect(r.skipped).toEqual(HOURLY);
+    expect(r.skipped).toEqual([]);
     expect(subs["auto-cal-proposal-expiry"]).toHaveBeenCalledTimes(1);
-    expect(subs.digest).not.toHaveBeenCalled();
-    expect(subs["weekly-digest"]).not.toHaveBeenCalled();
+    expect(subs.digest).toHaveBeenCalledTimes(1);
+    expect(subs["weekly-digest"]).toHaveBeenCalledTimes(1);
   });
 
-  it("at minute=45, runs only the always sub-sweeps", async () => {
+  it("at minute=45, runs the always set, skips the 30-min set", async () => {
     const subs = makeSubs();
     const r = await dispatchMasterSweep({ nowMs: atMinute(45), subSweeps: subs });
 
     expect(r.ran).toEqual(ALWAYS);
-    expect(r.skipped).toEqual([...THIRTY_MIN, ...HOURLY]);
+    expect(r.skipped).toEqual(THIRTY_MIN);
+  });
+
+  it("dispatches the digest on an off-the-hour tick (missed-cohort fix)", async () => {
+    const subs = makeSubs();
+    // A delayed QStash delivery landing at :07 — the old minute===0 gate
+    // would have skipped the whole hour's digest, dropping the cohort whose
+    // local 07:00 fell in this hour. It must dispatch now.
+    const r = await dispatchMasterSweep({ nowMs: atMinute(7), subSweeps: subs });
+    expect(r.ran).toContain("digest");
+    expect(r.ran).toContain("weekly-digest");
+    expect(subs.digest).toHaveBeenCalledTimes(1);
+    expect(subs["weekly-digest"]).toHaveBeenCalledTimes(1);
   });
 
   it("reports the minute used for dispatch in the summary", async () => {
@@ -214,9 +232,10 @@ describe("dispatchMasterSweep — failure isolation", () => {
 
   it("sub-sweep failures at a skip-tick still don't run (skipped beats error)", async () => {
     const subs = makeSubs();
-    // At minute=15, the digest sub-sweep is skipped — so even if it
-    // WOULD throw, the dispatcher must never call it.
-    (subs.digest as ReturnType<typeof vi.fn>).mockRejectedValue(
+    // At minute=15, the 30-min sub-sweeps are skipped — so even if one
+    // WOULD throw, the dispatcher must never call it. (Digest is no longer
+    // in the skip set; it now runs every tick.)
+    (subs["draft-superseded"] as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("should never fire")
     );
 
@@ -225,7 +244,7 @@ describe("dispatchMasterSweep — failure isolation", () => {
       subSweeps: subs,
     });
 
-    expect(subs.digest).not.toHaveBeenCalled();
+    expect(subs["draft-superseded"]).not.toHaveBeenCalled();
     expect(r.errors).toEqual({});
   });
 });
@@ -275,8 +294,10 @@ describe("dispatchMasterSweep — result capture", () => {
 
     expect(r.results["pre-brief"]).toBeDefined();
     expect(r.results["ingest-sweep"]).toBeDefined();
-    expect(r.results.digest).toBeUndefined();
-    expect(r.results["weekly-digest"]).toBeUndefined();
+    // Digest now runs every tick, so it has a result even at minute=15.
+    expect(r.results.digest).toBeDefined();
+    expect(r.results["weekly-digest"]).toBeDefined();
+    // The 30-min sub-sweeps are the only ones skipped at minute=15.
     expect(r.results["auto-cal-proposal-expiry"]).toBeUndefined();
     expect(r.results["draft-superseded"]).toBeUndefined();
     expect(r.results["disposition-resurface"]).toBeUndefined();
