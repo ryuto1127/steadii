@@ -32,10 +32,16 @@ export async function FoundingCta() {
             {t("landing.founding.headline")}
           </h2>
           <p
-            className="mb-7 max-w-[520px] text-[17px]"
+            className="mb-3 max-w-[520px] text-[17px]"
             style={{ color: "rgba(255,255,255,0.78)" }}
           >
             {t("landing.founding.sub")}
+          </p>
+          <p
+            className="mb-7 max-w-[520px] text-[14px]"
+            style={{ color: "rgba(255,255,255,0.62)" }}
+          >
+            {t("landing.founding.price_line")}
           </p>
           <div className="flex flex-wrap items-center gap-2.5">
             <Link

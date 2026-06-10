@@ -20,7 +20,7 @@ It's the depth of student-context integration — Gmail + Calendar + Tasks + Mis
 
 ## What it does
 
-- **Inbox triage with drafts you confirm.** Steadii classifies every incoming email by risk tier (low / medium / high), drafts replies for the ones that need them, and surfaces the rest as "important — no reply needed" or quietly archives. Every send rides a 20-second undo and your explicit approval.
+- **Inbox triage with drafts you confirm.** Steadii classifies every incoming email by risk tier (low / medium / high), drafts replies for the ones that need them, and surfaces the rest as "important — no reply needed" or quietly archives. Every send rides a 10-second undo (configurable) and your explicit approval.
 - **Chat-based actions, no UI hunting.** Type "Meeting with Prof. Tanaka, Friday 2pm" and the calendar event appears. Type "I might not make it to class tomorrow" and Steadii drafts emails to today's professors and offers a calendar absence-mark. The chat input is the entire app.
 - **Proactive conflict detection.** When your calendar, syllabus, and recent mistakes don't agree (a trip overlapping a midterm, a deadline during travel, an exam under-prepared), Steadii notices first and surfaces a multi-action proposal — email the professor, reschedule, dismiss — before you would have noticed yourself.
 - **Glass-box reasoning.** Every decision is traceable. The reasoning panel under any draft or proposal shows what the agent read, what it weighed, and which sources it cited. Your verbatim notes, syllabi, and assignments are yours to read, search, and export — never locked in.
@@ -71,12 +71,12 @@ inbound event (Gmail / Calendar / Syllabus / Calendar conflict)
         ↓
    L2 LLM draft     →  reply body (if action = draft_reply)
         ↓
-   user confirms (20s undo)  →  Gmail / Calendar / Tasks API
+   user confirms (10s undo, configurable)  →  Gmail / Calendar / Tasks API
         ↓
    L3-lite feedback signal  →  per-user sender bias on next L2 classify
 ```
 
-The proactive scanner runs as a per-user debounced job (event-driven on writes, plus a daily cron) over the unified context: calendar events, syllabus schedule items, exam/lecture windows, assignments, recent mistake activity. Five hardcoded rules detect time conflicts, exam-during-travel, deadline-during-travel, exam-under-prepared, and workload-over-capacity. Detected issues route through an LLM proposal generator that emits a 2–4 button action menu drawn from a closed tool set.
+The proactive scanner runs as a per-user debounced job (event-driven on writes, plus a daily cron) over the unified context: calendar events, syllabus schedule items, exam/lecture windows, assignments, and the entity graph. A set of hardcoded rules detects time conflicts, exam conflicts, deadlines during travel, workload over capacity, imminent Classroom deadlines, calendar double-bookings, upcoming assignment deadlines, fading entities (people/threads going quiet), and clustered entity deadlines. Detected issues route through an LLM proposal generator that emits a 2–4 button action menu drawn from a closed tool set.
 
 ## Contributing
 

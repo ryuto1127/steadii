@@ -79,6 +79,7 @@ type MessagesShape = {
     founding: {
       headline: string;
       sub: string;
+      price_line: string;
       cta: string;
       cta_secondary: string;
     };
@@ -960,9 +961,6 @@ type MessagesShape = {
     finish_button: string;
     palette_hint: string;
     progress_label: string;
-    push_permission_prompt: string;
-    push_permission_yes: string;
-    push_permission_no: string;
   };
   pre_brief: {
     eyebrow: string;
@@ -1943,12 +1941,12 @@ export const en: MessagesShape = {
       item1_context: "your last 3 threads with Prof. Tanaka",
       item2_headline: "CS 348 Assignment 3 — due tomorrow 23:59",
       item2_action:
-        "You haven't opened it. Syllabus suggests ~4 hours. Blocked 19–23 for you.",
+        "You haven't opened it. Syllabus suggests ~4 hours. Tonight's the last clear evening before it's due.",
       item2_context: "your CS 348 syllabus, your calendar",
       item3_headline: "Group project standup, 3 PM",
       item3_action:
-        "Brief attached — where you left off Tuesday, what Mei still owes.",
-      item3_context: "your Notion, last meeting transcript",
+        "Pre-brief ready — where the project stood last time, what's still open.",
+      item3_context: "your Notion, your calendar",
       card_close: "This is how every morning starts.",
     },
     week: {
@@ -1965,14 +1963,14 @@ export const en: MessagesShape = {
       moment2_event:
         "CS 348 PS 3 due Friday — you haven't started.",
       moment2_action:
-        "Estimated 4 hours from the syllabus weighting. Blocked Wed 7–11 PM. Re-surfaced the prerequisite chapter you skimmed last week.",
-      moment2_context: "your syllabus, your study history",
+        "Estimated 4 hours from the syllabus weighting. Flagged Wednesday evening as your last clear window before it's due.",
+      moment2_context: "your syllabus, your calendar",
       moment3_time: "Wed · 2:58 PM",
       moment3_event: "Group standup in 2 minutes.",
       moment3_action:
-        "Brief in your hand: what you finished Monday, what Mei still owes, what the team decided last Thursday.",
+        "Pre-brief in your hand: where the project stood last time, what's still open, what's due next.",
       moment3_context:
-        "your Notion, meeting transcripts, the last 4 Slack threads",
+        "your Notion, your assignments, your calendar",
       moment4_time: "Thu · 11:23 PM",
       moment4_event: "You: 'I'm sick tomorrow.'",
       moment4_action:
@@ -2003,7 +2001,9 @@ export const en: MessagesShape = {
     },
     founding: {
       headline: "Founding seats — first 100.",
-      sub: "Lock your price forever.",
+      sub: "The first 100 paid members lock their price for good.",
+      price_line:
+        "Pro $20/mo. Student $40 every 4 months (≈$10/mo) with .edu verification.",
       cta: "Request access",
       cta_secondary: "Have an invite code?",
     },
@@ -2210,7 +2210,7 @@ export const en: MessagesShape = {
         "One consent grants Calendar + Gmail so Steadii can schedule, triage, and draft.",
       why_title: "What does this grant?",
       why_calendar_gmail:
-        "Read + write access to your Calendar and read/modify/send on Gmail. The agent triages incoming mail and prepares drafts for your review — nothing sends without your confirmation and a 20-second undo window. You can revoke access anytime from your Google account.",
+        "Read + write access to your Calendar and read/modify/send on Gmail. The agent triages incoming mail and prepares drafts for your review — nothing sends without your confirmation and an undo window (default 10 seconds, configurable). You can revoke access anytime from your Google account.",
       why_notion:
         "Notion is optional and lives in Settings → Connections — connect it to import your existing classes, notes, syllabi, and assignments into Steadii.",
       button: "Grant Google access",
@@ -2986,17 +2986,13 @@ export const en: MessagesShape = {
   onboarding_wait: {
     title: "Steadii is on it.",
     body_p1:
-      "Steadii will read the last 7 days of email and prepare your first draft.",
+      "Steadii will read the last 24 hours of email and prepare your first draft.",
     body_p2:
-      "Usually within 24h, your first proposal lands on Home. We'll push you a notification.",
+      "Usually within 24h, your first proposal lands on Home.",
     body_p3: "Anything you want handled in the meantime, just ask:",
     finish_button: "Take me to Home",
     palette_hint: "or paste a syllabus, command, or question…",
     progress_label: "Step 3 of 3",
-    push_permission_prompt:
-      "Allow Steadii to send a push when your first proposal is ready?",
-    push_permission_yes: "Yes, notify me",
-    push_permission_no: "Skip notifications",
   },
   pre_brief: {
     eyebrow: "Meeting pre-brief",
