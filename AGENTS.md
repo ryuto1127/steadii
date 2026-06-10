@@ -272,6 +272,8 @@ For each memory entry the work has obsoleted, advanced, or contradicted, list:
 
 If no memory entries are affected, write `**Memory entries to update**: none`.
 
+The report must also include a **"Candidate learnings"** section (or `**Candidate learnings**: none`) — engineering facts discovered during the work that future sessions should not re-derive, each marked `verified` (with the evidence) or `hypothesis`. See §15 for where they land and the epistemic rule.
+
 Why: memory captures intent at decision time; engineer ships async; without this contract the loop never closes and the next sparring session opens stale memory and re-litigates settled decisions. The engineer side does not edit memory directly (role split — see `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/feedback_role_split.md`); it only flags the delta. The sparring side applies the changes after merge.
 
 Memory locations are listed at the top of this file (`project_*.md`, `feedback_*.md`, etc.). When in doubt about which entry is affected, list the file and let sparring narrow it.
@@ -301,6 +303,7 @@ The agent definition files are the source of truth for tool scopes, MUST-rules e
 When a task affects something visible in the browser (UI change, layout, animation, color, copy), you take the verification screenshot via the Claude_Preview MCP — do **not** ask Ryuto to capture it.
 
 - Use `preview_resize` to set a real desktop viewport (default: **1440 × 900**, or 1920 × 1080 if a wider canvas is needed) before screenshotting. The default Claude Desktop preview window is split-narrow and produces broken-looking captures otherwise.
+- Capture **both locales (EN + JA)** when the change touches user-facing copy or layout — JA line lengths break layouts that look fine in EN. (This requirement previously lived only in handoff boilerplate.)
 - Use `preview_screenshot` for the verification image. Pair with `preview_console_logs` / `preview_network` for runtime sanity.
 - For interactive flows, drive `preview_click` / `preview_fill` / `preview_eval` to reach the state you need before capturing.
 - Auth-gated paths: use `preview_eval` to set the session cookie, or sign in via `preview_fill` against the dev login form. **Cookie name is `authjs.session-token` (Auth.js v5)** — NOT `next-auth.session-token` (the older NextAuth v4 name). On HTTPS the prefix becomes `__Secure-authjs.session-token`. Verify by inspecting `document.cookie` after a real sign-in if uncertain.
@@ -308,3 +311,27 @@ When a task affects something visible in the browser (UI change, layout, animati
 Why: Ryuto runs split sessions in Claude Desktop — his own view is super-narrow and ill-suited for verification. Manual screenshots are friction he should never have to spend time on. The default loop is **engineer makes the change → engineer captures the screenshot → engineer attaches it in the report or PR comment**.
 
 This applies equally to sparring when sparring is doing inline visual fixes.
+
+---
+
+## 15. Engineering knowledge base — `docs/knowledge/`
+
+Cross-session memory for **engineering facts**: codebase traps, observed
+external-service behavior, failed approaches. Protocol, entry format, and rot
+signs live in [`docs/knowledge/README.md`](docs/knowledge/README.md) — read it
+once before your first write.
+
+The two rules every agent must know without reading the README:
+
+1. **Epistemic split is file-level.** [`docs/knowledge/LEARNINGS.md`](docs/knowledge/LEARNINGS.md)
+   holds verified facts (evidence + date mandatory). [`docs/knowledge/HYPOTHESES.md`](docs/knowledge/HYPOTHESES.md)
+   holds unverified beliefs. Never write an unverified claim into LEARNINGS.md;
+   never rely on HYPOTHESES.md without verifying (then promote it).
+2. **Read before investigating.** Both files are kept small. Consult them
+   before any non-trivial investigation; cite the kebab-ids you used in the PR
+   body so we can tell the system is alive.
+
+Ownership boundary (extends the "memory wins" header rule): engineering facts
+are canonical in `docs/knowledge/`; product / pricing / process decisions and
+anything incident-identity-adjacent stay canonical in the private memory dir.
+Link, don't duplicate. This directory is public — §7a applies in full.
