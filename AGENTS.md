@@ -314,24 +314,30 @@ This applies equally to sparring when sparring is doing inline visual fixes.
 
 ---
 
-## 15. Engineering knowledge base — `docs/knowledge/`
+## 15. Engineering knowledge base — private, read it before investigating
 
 Cross-session memory for **engineering facts**: codebase traps, observed
-external-service behavior, failed approaches. Protocol, entry format, and rot
-signs live in [`docs/knowledge/README.md`](docs/knowledge/README.md) — read it
-once before your first write.
+external-service behavior, failed approaches. It lives PRIVATELY in the memory
+dir (moved out of the repo deliberately — entries may contain incident detail
+and pre-fix security notes that must never be public; the README mentions its
+existence):
 
-The two rules every agent must know without reading the README:
+- `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/knowledge_learnings.md` — verified facts (evidence + date mandatory; protocol + rot signs in its header)
+- `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/knowledge_hypotheses.md` — unverified beliefs, quarantined
 
-1. **Epistemic split is file-level.** [`docs/knowledge/LEARNINGS.md`](docs/knowledge/LEARNINGS.md)
-   holds verified facts (evidence + date mandatory). [`docs/knowledge/HYPOTHESES.md`](docs/knowledge/HYPOTHESES.md)
-   holds unverified beliefs. Never write an unverified claim into LEARNINGS.md;
-   never rely on HYPOTHESES.md without verifying (then promote it).
-2. **Read before investigating.** Both files are kept small. Consult them
-   before any non-trivial investigation; cite the kebab-ids you used in the PR
-   body so we can tell the system is alive.
+The three rules every agent must know:
+
+1. **Epistemic split is file-level.** Never report an unverified claim as a
+   `verified` learning; never rely on a hypothesis without verifying it first
+   (then it gets promoted with the evidence).
+2. **Read before investigating.** Both files are kept small — read them before
+   any non-trivial investigation; cite the kebab-ids you used in the PR body
+   so we can tell the system is alive.
+3. **Write path mirrors §12.** Engineer/evaluator do NOT edit these files —
+   they report **Candidate learnings** (each marked `verified`-with-evidence
+   or `hypothesis`); sparring applies them post-merge, demoting anything
+   evidence-less.
 
 Ownership boundary (extends the "memory wins" header rule): engineering facts
-are canonical in `docs/knowledge/`; product / pricing / process decisions and
-anything incident-identity-adjacent stay canonical in the private memory dir.
-Link, don't duplicate. This directory is public — §7a applies in full.
+are canonical in the knowledge files; product / pricing / process decisions
+stay in the other memory files. Link, don't duplicate.
