@@ -18,6 +18,11 @@ import { withHeartbeat } from "@/lib/observability/cron-heartbeat";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+// Mirror /api/chat: the consolidated sweep fans out across all users
+// (ingest + pre-brief + digest dispatch + the 30-min sweeps), which can
+// exceed the default serverless function timeout under load. 300s is the
+// Vercel max for the Pro plan's Node functions.
+export const maxDuration = 300;
 
 // 2026-05-22 — Master cron sweep. Consolidates the high-frequency
 // QStash crons into a single schedule (`*/15 * * * *`) to cut Neon CU-
@@ -33,12 +38,18 @@ export const runtime = "nodejs";
 // healthy idle time.
 //
 // MODULO DISPATCH (the pure logic lives in lib/cron/master-sweep.ts):
-//   - ALWAYS  (every 15 min)     → runPreBriefScan, runIngestSweep
+//   - ALWAYS  (every 15 min)     → runPreBriefScan, runIngestSweep,
+//                                  runDigestSweep, runWeeklyDigestSweep
 //   - WHEN minute % 30 === 0     → runAutoCalProposalExpirySweep,
 //                                  expireStaleProposedArchives (Round 4),
 //                                  runDraftSupersededSweep,
 //                                  runDispositionResurfaceSweep
-//   - WHEN minute === 0 (hourly) → runDigestSweep, runWeeklyDigestSweep
+//
+// 2026-06-09 — digest dispatch moved out of the minute===0 gate onto the
+// every-tick path. The pickers own eligibility (local-hour match + send-
+// gap floor), so an off-the-hour tick still serves that hour's cohort and
+// a same-day double-send is impossible. Fixes a missed-cohort drop when a
+// QStash tick didn't land exactly on :00.
 //
 // 2026-05-24 — Round-3 propose-confirm. The legacy
 // runAutoCalGraceSweep that promoted provisional → confirmed and

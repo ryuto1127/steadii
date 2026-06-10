@@ -507,20 +507,40 @@ Upstash QStash instead. Free tier (500 req/day) covers α at ~300 req/day.
 
 ### Schedules to create
 
-In the QStash console → **Schedules** → **Create**:
+The live schedule set below is GENERATED from `lib/cron/manifest.ts` — the
+in-repo single source of truth (PR consolidating the previously-disagreeing
+cron-heartbeat map, this section, and the route comments). Do not hand-edit
+the generated block; edit the manifest and run `pnpm cron:gen-docs`. Verify
+the console matches with `pnpm cron:audit`.
 
-| Endpoint | Schedule | Method | Notes |
-|---|---|---|---|
-| `https://mysteadii.com/api/cron/digest` | `0 * * * *` | POST | Hourly. Daily morning digest (7am local). The picker (`lib/digest/picker.ts`) only returns users whose current local hour matches `users.digest_hour_local`; most ticks return 0 users and short-circuit before any LLM/Resend call. Hourly cadence is **required** to cover all IANA timezones — switching to twice-a-day (e.g. `0 7,19 * * *`) would silently drop users in non-UTC offsets. NA + JP α covers 16 distinct UTC offsets between 7am-local-cross slots. engineer-59 audit (2026-05-13) confirmed digest cron contributes 0% of LLM spend — do not retarget this for cost. |
-| `https://mysteadii.com/api/cron/weekly-digest` | `0 * * * *` | POST | Hourly. Weekly Sunday retrospective (5pm local Sunday). Same hourly QStash cadence as daily; the Sunday-17:00-local cross + 6-day dedupe is enforced inside `lib/digest/weekly-picker.ts`. Verification span: `cron.weekly-digest.tick`. Same per-user-local-time semantic as `digest` — keep hourly until the picker is refactored to support multi-TZ batching. |
-| `https://mysteadii.com/api/cron/ingest-sweep` | `*/5 * * * *` | POST | Every 5 minutes. Fans out `ingestLast24h` across all gmail-scoped users, bypassing the page-render auto-ingest 24h cooldown. Without this, new emails only surface when the user manually refreshes Settings. Tightened from `*/15` to `*/5` 2026-05-04 for snappier "secretary" feel — α budget allows it (well within QStash free tier). |
-| `https://mysteadii.com/api/cron/ical-sync` | `0 */6 * * *` | POST | Every 6 hours per Phase 7 W-Integrations Q3. Walks active `ical_subscriptions`, conditional GETs each (If-None-Match: ETag), upserts events into the shared `events` mirror. After 3 consecutive failures the row auto-deactivates so we stop hammering a broken URL. |
-| `https://mysteadii.com/api/cron/pre-brief` | `*/5 * * * *` | POST | Every 5 minutes. Scans events starting in 13-18 min for users with `pre_brief_enabled=true`, generates briefings into `event_pre_briefs`. The look-ahead window offset prevents consecutive ticks from double-briefing; the `(user_id, event_id)` unique index is the safety net. Verification span: `cron.pre_brief.tick`. |
-| `https://mysteadii.com/api/cron/groups` | `30 7 * * *` | POST | Daily at 07:30 UTC, just after the morning digest. Two passes: (a) auto-detection of new group projects from email threads + calendar events (rule-based, no LLM), (b) silence detection across active group projects (pure SQL). Verification span: `cron.groups.daily`. |
-| `https://mysteadii.com/api/cron/scanner` | `0 6 * * *` | POST | Daily at 06:00 UTC, before the morning digests so newly-surfaced proactive proposals can land in the 7am-local digest. Catches deadline drift cases (e.g., an exam now < 7 days away) where data didn't change but the warning window did. Bypasses the per-user 5-minute scanner debounce. Verification span: `cron.scanner.daily`. |
-| `https://mysteadii.com/api/cron/entity-backfill` | `0 3 * * *` | POST | Daily at 03:00 UTC (engineer-51). Drains source rows that existed before the resolver shipped: 50 rows / tick, 10 / user, in priority order inbox_item → agent_draft → assignment → chat_message. Eventually idles to ~zero work once the backlog is gone (resolver fires inline on every new row going forward). Verification span: `cron.entity_backfill.tick`. |
+<!-- CRON_MANIFEST:BEGIN -->
 
-Body: leave empty. The signing key in headers handles auth.
+<!-- GENERATED from lib/cron/manifest.ts by scripts/gen-deploy-cron-section.ts.
+     Do NOT hand-edit this block — edit the manifest and run `pnpm cron:gen-docs`. -->
+
+In the QStash console → **Schedules** → **Create** (one per row):
+
+| Endpoint | Schedule | Method | Heartbeat | Notes |
+|---|---|---|---|---|
+| `https://mysteadii.com/api/cron/master-sweep` | `*/15 * * * *` | POST | `master-sweep` | Consolidated master cron (PR #305). Fans out pre-brief + ingest-sweep every tick, the 30-min expiry/resurface sweeps at minute%30==0, and daily/weekly digest dispatch. Its heartbeat is the liveness signal for all consolidated sub-sweeps. |
+| `https://mysteadii.com/api/cron/entity-backfill` | `0 3 * * *` | POST | `entity-backfill` | Daily 03:00 UTC. Drains pre-resolver source rows through the entity resolver (50/tick, 10/user) until the backlog idles to zero. |
+| `https://mysteadii.com/api/cron/gmail-watch-refresh` | `0 4 * * *` | POST | `gmail-watch-refresh` | Daily 04:00 UTC. Refreshes Gmail Push watches before their 7-day TTL lapses; a missed run silently degrades the Type-C read filter. |
+| `https://mysteadii.com/api/cron/scanner` | `0 6 * * *` | POST | `scanner` | Daily 06:00 UTC, before the morning digests. Catches deadline-drift proactive proposals (data unchanged but the warning window moved). |
+| `https://mysteadii.com/api/cron/groups` | `30 7 * * *` | POST | `groups` | Daily 07:30 UTC, just after the digest. Auto-detects new group projects from email/calendar and runs silence detection across active ones. |
+| `https://mysteadii.com/api/cron/ical-sync` | `0 */6 * * *` | POST | `ical-sync` | Every 6 hours (Phase 7 W-Integrations Q3). Conditional-GETs active ical_subscriptions and upserts into the shared events mirror; auto-deactivates a URL after 3 consecutive failures. |
+| `https://mysteadii.com/api/cron/style-learner` | `0 8 * * *` | POST | `style-learner` | Daily 08:00 UTC. Learns per-user writing style from (original, edited) draft feedback pairs (≥5 pairs). |
+| `https://mysteadii.com/api/cron/user-fact-review` | `0 8 * * *` | POST | `user-fact-review` | Daily 08:00 UTC. Review sweep for aging user_facts (confidence decay / stale-fact retirement). |
+| `https://mysteadii.com/api/cron/monthly-digest` | `0 9 * * *` | POST | `monthly-digest` | Daily 09:00 UTC. Per-user gate fires only on the first Sunday of the covered month in the user's local timezone; synthesizes the prior calendar month. |
+| `https://mysteadii.com/api/cron/persona-learner` | `0 9 * * *` | POST | `persona-learner` | Daily 09:00 UTC. Learns contact personas from recent correspondence (7-day window; re-running on the same data is a near no-op). |
+
+Body: leave empty — the signing key in headers handles auth. The
+consolidated `master-sweep` schedule replaces the standalone pre-brief /
+ingest-sweep / draft-superseded / digest / weekly-digest schedules
+(PR #305): those routes still exist as manual/rollback triggers but must
+NOT have their own QStash schedule. Run `pnpm cron:audit` to diff the
+live console against this manifest.
+
+<!-- CRON_MANIFEST:END -->
 
 > **Removed 2026-05-04 (post-α #6):** the `/api/cron/send-queue` schedule
 > is gone. Approved sends now publish a single QStash message per draft
@@ -535,9 +555,17 @@ Body: leave empty. The signing key in headers handles auth.
 
 ### Verifying
 
-- After the schedules above are created, wait one tick and check Sentry
-  for `cron.digest.tick` / `cron.weekly_digest.tick` /
-  `cron.ingest_sweep.tick` / `cron.ical_sync.tick` spans with `op=cron`.
+- Run `pnpm cron:audit` (needs `QSTASH_TOKEN`) to diff the live console
+  against `lib/cron/manifest.ts` — surfaces missing / extra / cadence-
+  mismatched schedules read-only.
+- After the schedules are created, wait one tick and check Sentry for the
+  `op=cron` spans: `cron.master_sweep.tick` (the consolidated sweep —
+  digest / weekly-digest / pre-brief / ingest-sweep now run inside it),
+  plus `cron.ical_sync.tick`, `cron.scanner.daily`, `cron.groups.daily`,
+  and the daily learner spans.
+- `/api/health` monitors exactly the manifest set (its expected-interval
+  map is generated from the manifest). A stale `master-sweep` heartbeat is
+  the liveness signal for every consolidated sub-sweep.
 - Per-draft send delivery surfaces as `app.send.execute` HTTP server
   spans (200 = delivered + sent; 401 = signature mismatch; 5xx → QStash
   retries up to 3×).

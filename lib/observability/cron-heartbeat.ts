@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db/client";
 import { cronHeartbeats } from "@/lib/db/schema";
+import { CRON_MANIFEST } from "@/lib/cron/manifest";
 
 // Wave 5 — cron heartbeat infrastructure for pre-public observability.
 // Each scheduled handler upserts a single row keyed by cron name on
@@ -14,48 +15,24 @@ import { cronHeartbeats } from "@/lib/db/schema";
 // Expected interval per cron name in milliseconds. A cron is "stale"
 // when last_tick_at is older than `expected_ms × stale_multiplier`.
 //
-// Only crons that own a LIVE QStash schedule belong here — each is
-// stamped by `withHeartbeat("<name>", …)` wrapping its route POST, so a
-// missing/old row means that schedule actually stopped firing.
+// GENERATED from lib/cron/manifest.ts — the single source of truth for
+// which crons own a LIVE QStash schedule and at what cadence. /api/health
+// therefore monitors exactly the manifest set. Do NOT hand-maintain a
+// second map here: add/retire a schedule by editing the manifest, and
+// this map + DEPLOY.md §11 follow.
 //
-// Deliberately NOT listed (would otherwise be permanent false
-// positives, masking a real outage via alert fatigue):
-//   • digest, weekly-digest, pre-brief, ingest-sweep — consolidated
-//     into `master-sweep` by PR #305 (2026-05-22). Their standalone
-//     routes are no longer scheduled in QStash (kept only as manual /
-//     rollback triggers), so their heartbeats would freeze even though
-//     the work still runs every tick. `master-sweep`'s heartbeat is the
-//     liveness signal for all consolidated sub-sweeps; a per-sub-sweep
-//     failure still surfaces via the Sentry capture tagged
-//     `feature=master_sweep, sub_sweep=<name>` in
-//     app/api/cron/master-sweep/route.ts.
-//   • send-queue — removed 2026-05-04 (post-α #6); approved sends now
-//     publish a per-draft QStash message instead. See DEPLOY.md §11.
-//
-// Add new crons here when introducing a new independent schedule. If the
-// master-sweep consolidation is ever rolled back (standalone schedules
-// re-enabled in QStash), re-add the four consolidated names above.
-export const CRON_EXPECTED_INTERVAL_MS: Record<string, number> = {
-  "scanner": 5 * 60 * 1000, // every 5 minutes
-  "groups": 6 * 60 * 60 * 1000, // every 6 hours
-  "ical-sync": 30 * 60 * 1000, // every 30 minutes
-  // Consolidated master cron — fans out to pre-brief / ingest-sweep
-  // (every tick), the 30-min expiry/resurface sweeps, and digest /
-  // weekly-digest (hourly) via modulo dispatch. Single 15-min cadence
-  // cuts Neon CU-hour burn ~3x. See app/api/cron/master-sweep/route.ts
-  // and lib/cron/master-sweep.ts.
-  "master-sweep": 15 * 60 * 1000,
-  // engineer-38 — writing-style learner. Daily 08:00 UTC.
-  "style-learner": 24 * 60 * 60 * 1000,
-  // engineer-43 — Gmail Push watch refresh. Daily 04:00 UTC; Gmail
-  // watches lapse after 7 days so a missed run silently degrades the
-  // Type C read-filter to "everything shows".
-  "gmail-watch-refresh": 24 * 60 * 60 * 1000,
-  // engineer-51 — entity-graph backfill. Daily 03:00 UTC; chews
-  // through unlinked legacy rows (50 per tick) so the entity graph
-  // catches up on data from before the resolver shipped.
-  "entity-backfill": 24 * 60 * 60 * 1000,
-};
+// Crons consolidated into master-sweep by PR #305 (pre-brief,
+// ingest-sweep, draft-superseded, digest, weekly-digest, the 30-min
+// expiry sweeps) and the removed send-queue are deliberately absent from
+// the manifest — they no longer tick independently, so master-sweep's
+// heartbeat is their liveness signal and a sub-sweep failure surfaces via
+// the Sentry capture tagged `feature=master_sweep, sub_sweep=<name>`.
+// Listing them would re-introduce the permanent-degraded false positive
+// PR #341 fixed.
+export const CRON_EXPECTED_INTERVAL_MS: Record<string, number> =
+  Object.fromEntries(
+    CRON_MANIFEST.map((c) => [c.name, c.expectedIntervalMs])
+  );
 
 const STALE_MULTIPLIER = 2;
 

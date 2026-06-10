@@ -12,6 +12,8 @@
     "test:watch": "vitest",
     "eval:agent": "NODE_OPTIONS='--max-old-space-size=8192' tsx tests/agent-evals/run.ts",
     "i18n:audit": "tsx scripts/i18n-audit.ts",
+    "cron:audit": "tsx --require ./scripts/_register.cjs scripts/cron-audit.ts",
+    "cron:gen-docs": "tsx --require ./scripts/_register.cjs scripts/gen-deploy-cron-section.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx lib/db/migrate.ts",
     "db:push": "drizzle-kit push",

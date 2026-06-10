@@ -16,12 +16,24 @@ import * as Sentry from "@sentry/nextjs";
 // wakes into a single 15-min cadence cuts CU-hour burn ~3x.
 //
 // Schedule (the master cron fires every 15 min via QStash):
-//   - ALWAYS  (every 15 min)     → pre-brief, ingest-sweep
+//   - ALWAYS  (every 15 min)     → pre-brief, ingest-sweep,
+//                                  digest, weekly-digest
 //   - WHEN minute % 30 === 0     → auto-cal-proposal-expiry,
 //                                  proposed-archive-expiry,
 //                                  draft-superseded,
 //                                  disposition-resurface
-//   - WHEN minute === 0 (hourly) → digest, weekly-digest
+//
+// 2026-06-09 — digest dispatch resilience. digest + weekly-digest used to
+// be gated on minute===0 (hourly). A QStash tick that landed off the hour
+// (e.g. :07 after a delayed delivery) skipped the digest sub-sweep for
+// that hour entirely, silently dropping the timezone cohort whose local
+// 07:00 fell in that hour for the whole day. The pickers already enforce
+// the real "send once per local morning" semantics — they match on the
+// user's local digest HOUR and gate on last_digest_sent_at (20h floor) /
+// last_weekly_digest_sent_at (6d floor) — so running them on EVERY tick is
+// safe: the right cohort is selected by local-hour match and a double-send
+// on the same local date is impossible (the gap floor blocks it). A :07
+// tick still sends; running 4x/hour sends at most once.
 //
 // 2026-05-24 — Round-3 propose-confirm flow. The legacy
 // `auto-cal-grace` sub-sweep promoted provisional → confirmed and
@@ -101,6 +113,15 @@ export async function dispatchMasterSweep(args: {
   await tryRun(summary, "pre-brief", subSweeps);
   await tryRun(summary, "ingest-sweep", subSweeps);
 
+  // Digest dispatch runs on EVERY tick (not gated on minute===0). The
+  // pickers own the real eligibility window (local-hour match + send-gap
+  // floor), so a tick landing off the hour still serves that hour's
+  // cohort, and the gap floor makes a same-local-date double-send
+  // impossible. See the header comment for the missed-cohort bug this
+  // fixes.
+  await tryRun(summary, "digest", subSweeps);
+  await tryRun(summary, "weekly-digest", subSweeps);
+
   if (minute % 30 === 0) {
     await tryRun(summary, "auto-cal-proposal-expiry", subSweeps);
     await tryRun(summary, "proposed-archive-expiry", subSweeps);
@@ -115,13 +136,6 @@ export async function dispatchMasterSweep(args: {
       "disposition-resurface",
       "notification-expiry",
     );
-  }
-
-  if (minute === 0) {
-    await tryRun(summary, "digest", subSweeps);
-    await tryRun(summary, "weekly-digest", subSweeps);
-  } else {
-    summary.skipped.push("digest", "weekly-digest");
   }
 
   return summary;

@@ -542,6 +542,18 @@ export type Invoice = typeof invoices.$inferSelect;
 export const processedStripeEvents = pgTable("processed_stripe_events", {
   eventId: text("event_id").primaryKey(),
   type: text("type").notNull(),
+  // Idempotency state. We INSERT (id, 'processing') ON CONFLICT DO NOTHING
+  // BEFORE running side effects, then UPDATE to 'done' only after they
+  // succeed. A row stuck in 'processing' means the handler threw — the
+  // webhook returns 500 and Stripe retries, which finds the 'processing'
+  // row and re-runs (instead of acking it as a duplicate and dropping the
+  // top-up / subscription / founding-member side effect forever).
+  // Existing rows backfill to 'done' (they were already fully processed
+  // under the old INSERT-first flow).
+  status: text("status")
+    .$type<"processing" | "done">()
+    .notNull()
+    .default("done"),
   processedAt: timestamp("processed_at", { mode: "date" }).notNull().defaultNow(),
 });
 

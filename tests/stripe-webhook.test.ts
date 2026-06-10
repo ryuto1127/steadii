@@ -10,9 +10,14 @@ import type Stripe from "stripe";
 
 const hoist = vi.hoisted(() => {
   const calls: Array<{ table: string; op: string; values?: unknown }> = [];
-  const processedEventIds = new Set<string>();
+  // processed_stripe_events ledger: eventId → status ('processing'|'done').
+  const processedEvents = new Map<string, "processing" | "done">();
   const subscriptionsByStripeId = new Map<string, Record<string, unknown>>();
   const userIdByCustomer = new Map<string, string>();
+  // Test-controlled failure injection. When set, the next routeEvent side
+  // effect (topup insert) throws once, then clears — modelling a handler
+  // that fails on first delivery and succeeds on retry.
+  const failNextSideEffect = { value: false };
 
   const selectChain = (result: unknown[]) => ({
     from: (t: { __name: string }) => ({
@@ -28,25 +33,57 @@ const hoist = vi.hoisted(() => {
 
   const db = {
     insert: (t: { __name: string }) => ({
-      values: async (values: Record<string, unknown>) => {
+      values: (values: Record<string, unknown>) => {
         calls.push({ table: t.__name, op: "insert", values });
+
+        // processed_stripe_events: INSERT ... ON CONFLICT DO NOTHING
+        // ... RETURNING. returning() yields [row] on a fresh insert, [] on
+        // conflict.
         if (t.__name === "processed_stripe_events") {
           const id = values.eventId as string;
-          if (processedEventIds.has(id)) {
-            const err = new Error("unique_violation") as Error & {
-              code?: string;
-            };
-            err.code = "23505";
-            throw err;
+          const isNew = !processedEvents.has(id);
+          if (isNew) {
+            processedEvents.set(
+              id,
+              (values.status as "processing" | "done") ?? "processing"
+            );
           }
-          processedEventIds.add(id);
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => (isNew ? [{ eventId: id }] : []),
+            }),
+          };
         }
+
+        // topup_balances is the side effect we fail on demand to model a
+        // first-delivery throw. Real route catches unique-violations here,
+        // so we throw a NON-unique error to force the 500 path.
+        if (t.__name === "topup_balances" && failNextSideEffect.value) {
+          failNextSideEffect.value = false;
+          return {
+            then: (_r: unknown, reject: (e: unknown) => unknown) =>
+              reject(new Error("transient topup insert failure")),
+          };
+        }
+
+        // All other inserts: a plain awaited insert.
+        return {
+          then: (resolve: (v: unknown) => unknown) => resolve(undefined),
+        };
       },
     }),
     update: (t: { __name: string }) => ({
       set: (values: Record<string, unknown>) => ({
         where: async () => {
           calls.push({ table: t.__name, op: "update", values });
+          if (
+            t.__name === "processed_stripe_events" &&
+            values.status === "done"
+          ) {
+            for (const [id, st] of processedEvents) {
+              if (st === "processing") processedEvents.set(id, "done");
+            }
+          }
         },
       }),
     }),
@@ -54,9 +91,12 @@ const hoist = vi.hoisted(() => {
       from: (t: { __name: string }) => ({
         where: () => ({
           limit: () => {
+            if (t.__name === "processed_stripe_events") {
+              // Tests exercise one event id at a time; return its status.
+              const first = [...processedEvents.values()][0];
+              return first ? [{ status: first }] : [];
+            }
             if (t.__name === "subscriptions") {
-              // Look up by stripe sub id or customer id — both calls use
-              // this shape. Return empty for new sub; caller handles either.
               return [];
             }
             return [];
@@ -68,7 +108,8 @@ const hoist = vi.hoisted(() => {
 
   return {
     calls,
-    processedEventIds,
+    processedEvents,
+    failNextSideEffect,
     subscriptionsByStripeId,
     userIdByCustomer,
     db,
@@ -88,7 +129,11 @@ vi.mock("@/lib/db/schema", () => ({
   auditLog: { __name: "audit_log" },
   users: { __name: "users", id: "id", dataRetentionExpiresAt: "dataRetentionExpiresAt" },
   invoices: { __name: "invoices" },
-  processedStripeEvents: { __name: "processed_stripe_events" },
+  processedStripeEvents: {
+    __name: "processed_stripe_events",
+    eventId: "eventId",
+    status: "status",
+  },
   topupBalances: { __name: "topup_balances" },
 }));
 vi.mock("drizzle-orm", () => ({
@@ -97,9 +142,10 @@ vi.mock("drizzle-orm", () => ({
 vi.mock("@/lib/billing/stripe", () => ({
   stripe: () => ({
     webhooks: {
-      constructEvent: () => {
-        throw new Error("signature verification should not run in tests");
-      },
+      // The POST idempotency tests need a parsed event from the raw body.
+      // Signature verification itself is Stripe SDK's job (and covered by
+      // their tests) — here we just round-trip the JSON the test posts.
+      constructEvent: (rawBody: string) => JSON.parse(rawBody),
     },
     customers: {
       retrieve: async () => ({
@@ -125,7 +171,8 @@ import { routeEvent, POST } from "@/app/api/stripe/webhook/route";
 
 beforeEach(() => {
   hoist.calls.length = 0;
-  hoist.processedEventIds.clear();
+  hoist.processedEvents.clear();
+  hoist.failNextSideEffect.value = false;
   hoist.subscriptionsByStripeId.clear();
   hoist.userIdByCustomer.clear();
 });
@@ -345,35 +392,119 @@ describe("stripe webhook routeEvent", () => {
   });
 });
 
-describe("stripe webhook POST idempotency", () => {
-  it("short-circuits a replayed event without running side effects", async () => {
-    const event = makeSubEvent("customer.subscription.created");
-    // First delivery: go through the full POST path. We can't verify the
-    // signature here, so we hit routeEvent directly to seed the processed
-    // ledger, then simulate a retry via POST. Instead, exercise the
-    // idempotency check by manually seeding the processed set.
-    hoist.processedEventIds.add(event.id);
+// ─── POST idempotency (processing/done state machine) ────────────────
+//
+// The old flow INSERTed the id BEFORE routeEvent, so a handler throw left
+// the row behind and the retry was acked as a duplicate — the side effect
+// never ran. The new flow gates on a status column: 'processing' on first
+// insert, 'done' only after side effects succeed; a retry that finds
+// 'processing' re-runs. These tests drive the full POST path (constructEvent
+// is stubbed to parse the posted JSON; signature verification is Stripe's
+// own concern).
 
-    // Now fabricate the POST call by directly invoking the idempotency
-    // insert that POST does before routing. The mock throws on duplicate,
-    // matching the Postgres unique-violation the real code catches.
-    let caught: unknown = null;
-    try {
-      await hoist.db.insert({ __name: "processed_stripe_events" }).values({
-        eventId: event.id,
-        type: event.type,
-      });
-    } catch (e) {
-      caught = e;
-    }
-    expect(caught).toBeTruthy();
-    expect((caught as { code?: string }).code).toBe("23505");
+function makePostRequest(event: Stripe.Event): Request {
+  const body = JSON.stringify(event);
+  return new Request("https://mysteadii.com/api/stripe/webhook", {
+    method: "POST",
+    headers: { "stripe-signature": "t=1,v1=test" },
+    body,
+  });
+}
+
+function topupEvent(id: string): Stripe.Event {
+  return {
+    id,
+    type: "checkout.session.completed",
+    data: {
+      object: {
+        id: "cs_topup",
+        mode: "payment",
+        invoice: "in_topup",
+        metadata: { steadii_user_id: "user_123", steadii_action: "topup_500" },
+      },
+    },
+  } as unknown as Stripe.Event;
+}
+
+describe("stripe webhook POST idempotency", () => {
+  it("first delivery: inserts 'processing', runs side effects, marks 'done'", async () => {
+    const event = topupEvent("evt_first");
+    const res = await POST(makePostRequest(event) as never);
+    const json = (await res.json()) as { received?: boolean; duplicate?: boolean };
+
+    expect(json.received).toBe(true);
+    expect(json.duplicate).toBeUndefined();
+
+    // Side effect ran exactly once.
+    const topups = hoist.calls.filter(
+      (c) => c.table === "topup_balances" && c.op === "insert"
+    );
+    expect(topups).toHaveLength(1);
+
+    // Ledger row inserted as 'processing' then updated to 'done'.
+    const insert = hoist.calls.find(
+      (c) => c.table === "processed_stripe_events" && c.op === "insert"
+    );
+    expect((insert?.values as { status?: string }).status).toBe("processing");
+    const update = hoist.calls.find(
+      (c) => c.table === "processed_stripe_events" && c.op === "update"
+    );
+    expect((update?.values as { status?: string }).status).toBe("done");
+    expect(hoist.processedEvents.get("evt_first")).toBe("done");
   });
 
-  // Note: full POST() happy-path testing requires Stripe signature
-  // verification, which we deliberately don't mock. The pieces covered:
-  // - routeEvent per event type (tests above)
-  // - idempotency ledger insert + unique-violation detection (this test)
-  // - signature verification is Stripe SDK's job, covered by their own tests.
-  void POST;
+  it("handler fails then retry fulfills exactly once", async () => {
+    const event = topupEvent("evt_retry");
+
+    // First delivery — the topup insert throws once → 500, row left
+    // 'processing', NO status='done' update.
+    hoist.failNextSideEffect.value = true;
+    const failRes = await POST(makePostRequest(event) as never);
+    expect(failRes.status).toBe(500);
+    expect(hoist.processedEvents.get("evt_retry")).toBe("processing");
+    const doneUpdatesAfterFail = hoist.calls.filter(
+      (c) =>
+        c.table === "processed_stripe_events" &&
+        c.op === "update" &&
+        (c.values as { status?: string }).status === "done"
+    );
+    expect(doneUpdatesAfterFail).toHaveLength(0);
+
+    // Retry — same event id, now the 'processing' row makes POST re-run
+    // (instead of acking as duplicate). Side effect succeeds this time.
+    hoist.calls.length = 0;
+    const retryRes = await POST(makePostRequest(event) as never);
+    const retryJson = (await retryRes.json()) as { received?: boolean };
+    expect(retryJson.received).toBe(true);
+
+    const topupsOnRetry = hoist.calls.filter(
+      (c) => c.table === "topup_balances" && c.op === "insert"
+    );
+    expect(topupsOnRetry).toHaveLength(1); // fulfilled, exactly once total
+    expect(hoist.processedEvents.get("evt_retry")).toBe("done");
+  });
+
+  it("duplicate after done: acked without re-running side effects", async () => {
+    const event = topupEvent("evt_dupe");
+
+    // First delivery completes → 'done'.
+    await POST(makePostRequest(event) as never);
+    expect(hoist.processedEvents.get("evt_dupe")).toBe("done");
+
+    // Duplicate delivery of the same event id.
+    hoist.calls.length = 0;
+    const dupRes = await POST(makePostRequest(event) as never);
+    const dupJson = (await dupRes.json()) as {
+      received?: boolean;
+      duplicate?: boolean;
+    };
+    expect(dupJson.received).toBe(true);
+    expect(dupJson.duplicate).toBe(true);
+
+    // No side effects re-ran.
+    const topupsOnDup = hoist.calls.filter(
+      (c) => c.table === "topup_balances" && c.op === "insert"
+    );
+    expect(topupsOnDup).toHaveLength(0);
+  });
 });
