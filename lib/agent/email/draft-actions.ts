@@ -20,6 +20,7 @@ import { recordSenderFeedback } from "./feedback";
 import { recordSenderEvent } from "@/lib/agent/learning/sender-confidence";
 import { createClass } from "@/lib/classes/save";
 import { fetchRecentThreadMessages } from "./thread";
+import { fetchFullBodyForInbox } from "./full-body";
 import {
   checkDraftBeforeSend,
   PRE_SEND_CHECK_ERROR_NAME,
@@ -155,10 +156,25 @@ async function runPreSendCheckForDraft(args: {
     return [] as Awaited<ReturnType<typeof fetchRecentThreadMessages>>;
   });
 
+  // Ground against the FULL inbound body (same source + cap the L2 draft
+  // was generated from), not the ~120-char snippet. A snippet-grounded
+  // check can't see the dates/names the draft legitimately referenced, so
+  // it false-flags supported claims. Graceful fallback to snippet when the
+  // fetch fails; we tell the checker which one it got so the model can be
+  // appropriately conservative on a truncated/snippet context.
+  const fullBody = await fetchFullBodyForInbox({
+    userId: args.userId,
+    inboxItemId: inbox.id,
+    sourceType: inbox.sourceType,
+    externalId: inbox.externalId,
+  });
+  const bodyForGrounding = fullBody ?? inbox.snippet ?? "";
+  const bodyLabel = fullBody ? "Body" : "Body (snippet only)";
+
   const contextParts: string[] = [];
   contextParts.push(`From: ${inbox.senderEmail}`);
   contextParts.push(`Subject: ${inbox.subject ?? "(none)"}`);
-  contextParts.push(`Body: ${inbox.snippet ?? ""}`);
+  contextParts.push(`${bodyLabel}: ${bodyForGrounding}`);
   if (threadMessages.length > 0) {
     contextParts.push("");
     contextParts.push("Earlier in thread:");

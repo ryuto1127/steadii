@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { getLocale, getTranslations } from "next-intl/server";
 import { auth } from "@/lib/auth/config";
+import { db } from "@/lib/db/client";
+import { users } from "@/lib/db/schema";
 import { CommandPalette } from "@/components/chat/command-palette";
 import { QueueList } from "@/components/agent/queue-list";
 import { QueueEmptyState } from "@/components/agent/queue-empty-state";
@@ -22,7 +25,9 @@ import {
   queuePermanentDismissAction,
   queueResolveProposalAction,
   queueSecondaryAction,
+  queueCancelSendDraftAction,
   queueSendDraftAction,
+  queueSendDraftAnywayAction,
   queueSendOfficeHoursAction,
   queueSetDispositionAction,
   queueSnoozeAction,
@@ -47,11 +52,20 @@ export default async function HomePage() {
   const locale = await getLocale();
 
   // One round-trip burst — every panel that needs DB reads is parallel.
-  const [queueCards, tzPref] = await Promise.all([
+  const [queueCards, tzPref, userRow] = await Promise.all([
     buildQueueForUser(userId, locale),
     getUserTimezone(userId),
+    db
+      .select({ undoWindowSeconds: users.undoWindowSeconds })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1),
   ]);
   const tz = tzPref ?? FALLBACK_TZ;
+  // Per-user undo window — the server enqueues the send with this delay,
+  // and the queue card drives its countdown from the same value so the
+  // visible timer matches when the message actually leaves.
+  const undoWindowSeconds = userRow[0]?.undoWindowSeconds ?? 10;
 
   const firstName =
     session.user.name?.trim().split(/\s+/)[0] ||
@@ -97,6 +111,7 @@ export default async function HomePage() {
         {queueCards.length > 0 ? (
           <QueueList
             cards={queueCards}
+            undoWindowSeconds={undoWindowSeconds}
             actions={{
               resolveProposal: queueResolveProposalAction,
               submitClarification: queueSubmitClarificationAction,
@@ -107,6 +122,8 @@ export default async function HomePage() {
               ignoreSender: ignoreSenderAction,
               secondaryAction: queueSecondaryAction,
               sendDraft: queueSendDraftAction,
+              sendDraftAnyway: queueSendDraftAnywayAction,
+              cancelSendDraft: queueCancelSendDraftAction,
               sendOfficeHours: queueSendOfficeHoursAction,
               setDisposition: queueSetDispositionAction,
               markHandled: queueMarkHandledAction,

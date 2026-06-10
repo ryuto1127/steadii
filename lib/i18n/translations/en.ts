@@ -756,6 +756,14 @@ type MessagesShape = {
     toast_sending_countdown: string;
     toast_undo: string;
     toast_send_cancelled: string;
+    toast_send_failed: string;
+    pre_send_warning: {
+      title: string;
+      body: string;
+      review: string;
+      send_anyway: string;
+      cancel: string;
+    };
     archetype_a_pill: string;
     archetype_b_pill: string;
     archetype_c_pill: string;
@@ -2748,6 +2756,14 @@ export const en: MessagesShape = {
     toast_sending_countdown: "Sending in {seconds}s…",
     toast_undo: "Undo",
     toast_send_cancelled: "Send cancelled",
+    toast_send_failed: "Couldn't send. Try again.",
+    pre_send_warning: {
+      title: "Double-check before sending",
+      body: "Steadii flagged something in this draft that the original email doesn't back up.",
+      review: "Review",
+      send_anyway: "Send anyway",
+      cancel: "Cancel",
+    },
     archetype_a_pill: "Decide",
     archetype_b_pill: "Draft ready",
     archetype_c_pill: "Notice",

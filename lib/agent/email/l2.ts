@@ -41,8 +41,6 @@ import { fanoutForInbox, type FanoutResult } from "./fanout";
 import { loadRecentFeedbackSummary } from "./feedback";
 import { getUserLocale, getUserTimezone } from "@/lib/agent/preferences";
 import { inferSenderTzFromDomain } from "./sender-timezone-heuristic";
-import { getMessageFull } from "@/lib/integrations/google/gmail-fetch";
-import { extractEmailBody } from "./body-extract";
 import {
   fetchUpcomingEvents,
   type DraftCalendarEvent,
@@ -50,6 +48,8 @@ import {
 import { enqueueSendForDraft } from "./send-enqueue";
 import { getPromotionState } from "@/lib/agent/learning/sender-confidence";
 import { resolveEntitiesInBackground } from "@/lib/agent/entity-graph/resolver";
+import { fetchFullBodyForInbox, FULL_BODY_CHAR_CAP } from "./full-body";
+import { checkDraftBeforeSend } from "./pre-send-check";
 
 // Hand-tuned K for the shallower medium-risk draft retrieval. Smaller than
 // DEEP_PASS_TOP_K because medium items don't get the deep reasoning pass,
@@ -62,9 +62,8 @@ const MEDIUM_DRAFT_TOP_K = 5;
 // emails (interview scheduling, official notices) have their substance
 // past the snippet boundary so Steadii literally couldn't see the
 // candidate dates / form fields / etc. Fetch the full body once at L2
-// entry, cap at this size to keep token cost predictable, pass through
-// to both phases.
-const FULL_BODY_CHAR_CAP = 8000;
+// entry, cap at FULL_BODY_CHAR_CAP (shared with the pre-send checker so
+// both ground against the same slice), pass through to both phases.
 
 // A concise summary returned to the ingest caller — useful in logs + tests.
 export type L2Outcome = {
@@ -161,28 +160,15 @@ async function runPipeline(
   // the snippet-only path that was leaving structured emails (interview
   // scheduling, official notices) effectively unread to L2 / draft.
   // Fail-soft: a Gmail outage falls back to the snippet so the
-  // pipeline degrades to the prior behavior instead of failing.
-  let fullBodyText: string | null = null;
-  if (item.sourceType === "gmail") {
-    try {
-      const message = await getMessageFull(item.userId, item.externalId);
-      const extracted = extractEmailBody(message);
-      const raw = (extracted.text ?? "").trim();
-      if (raw.length > 0) {
-        fullBodyText =
-          raw.length > FULL_BODY_CHAR_CAP
-            ? raw.slice(0, FULL_BODY_CHAR_CAP)
-            : raw;
-      }
-    } catch (err) {
-      Sentry.captureException(err, {
-        level: "warning",
-        tags: { feature: "email_l2", step: "fetch_full_body" },
-        user: { id: item.userId },
-        extra: { inboxItemId: item.id },
-      });
-    }
-  }
+  // pipeline degrades to the prior behavior instead of failing. The
+  // shared helper also backs the pre-send checker so both ground against
+  // the same body slice.
+  const fullBodyText = await fetchFullBodyForInbox({
+    userId: item.userId,
+    inboxItemId: item.id,
+    sourceType: item.sourceType,
+    externalId: item.externalId,
+  });
   const bodyForPipeline = fullBodyText ?? item.snippet;
 
   // ---- Step 1: risk pass (Mini, always runs — unless forceTier) ----
@@ -732,19 +718,74 @@ async function runPipeline(
   const autoSendEligible =
     promotionState !== "always_review" &&
     (baseEligible || promotedEligible);
-  if (autoSendEligible) {
+  if (autoSendEligible && persisted && draft) {
+    // This is the ONLY send path with zero human review, so it MUST fact-
+    // check before sending and FAIL CLOSED: any reason the check can't
+    // affirmatively pass (ok=false, or the checker throws / times out)
+    // leaves the draft as a normal pending review-queue entry instead of
+    // auto-sending an unverified reply. The attended paths (inbox detail
+    // + queue Send) degrade open because a human is in the loop; here
+    // there is none. The degrade reason is recorded in the activity log
+    // (glass-box) so the user can see why an eligible draft wasn't
+    // auto-sent.
+    const groundingContext = buildAutoSendGroundingContext({
+      senderEmail: item.senderEmail,
+      subject: item.subject,
+      body: bodyForPipeline ?? "",
+      bodyIsFull: fullBodyText !== null,
+      threadMessages,
+    });
+    let autoSendBlockReason: string | null = null;
     try {
-      await enqueueSendForDraft({
+      const checkResult = await checkDraftBeforeSend({
         userId: item.userId,
-        draftId: persisted.id,
-        isAutomatic: true,
+        draftSubject: draft.subject ?? "",
+        draftBody: draft.body ?? "",
+        threadContext: groundingContext,
       });
+      if (!checkResult.ok) {
+        autoSendBlockReason = "pre_send_check_failed";
+      }
     } catch (err) {
+      // Defensive: checkDraftBeforeSend self-degrades to ok=true on its
+      // own LLM errors, but if it throws for any other reason we treat
+      // that as a non-pass and fail closed rather than auto-send blind.
+      autoSendBlockReason = "pre_send_check_error";
       Sentry.captureException(err, {
-        tags: { feature: "email_l2", step: "auto_send" },
+        level: "warning",
+        tags: { feature: "email_l2", step: "auto_send_pre_check" },
         user: { id: item.userId },
         extra: { draftId: persisted.id },
       });
+    }
+
+    if (autoSendBlockReason) {
+      // Leave the draft pending (it's already persisted with status
+      // 'pending') and record why we held it back.
+      await logEmailAudit({
+        userId: item.userId,
+        action: "email_l2_completed",
+        result: "success",
+        resourceId: persisted.id,
+        detail: {
+          subAction: "auto_send_blocked",
+          reason: autoSendBlockReason,
+        },
+      });
+    } else {
+      try {
+        await enqueueSendForDraft({
+          userId: item.userId,
+          draftId: persisted.id,
+          isAutomatic: true,
+        });
+      } catch (err) {
+        Sentry.captureException(err, {
+          tags: { feature: "email_l2", step: "auto_send" },
+          user: { id: item.userId },
+          extra: { draftId: persisted.id },
+        });
+      }
     }
   }
 
@@ -840,6 +881,33 @@ async function persistPaused(args: {
     pausedAtStep: args.step,
     riskTier: args.riskTier,
   };
+}
+
+// Assemble the grounding context for the auto-send pre-send check. Mirrors
+// the shape runPreSendCheckForDraft (draft-actions.ts) builds for the
+// attended path so the checker sees the same From/Subject/Body + thread
+// predecessors layout. The inbound body is the full body L2 already
+// fetched (labeled "snippet only" when the fetch fell back) so the checker
+// grounds against exactly what the draft was generated from.
+function buildAutoSendGroundingContext(args: {
+  senderEmail: string;
+  subject: string | null;
+  body: string;
+  bodyIsFull: boolean;
+  threadMessages: Array<{ sender: string; snippet: string }>;
+}): string {
+  const parts: string[] = [];
+  parts.push(`From: ${args.senderEmail}`);
+  parts.push(`Subject: ${args.subject ?? "(none)"}`);
+  parts.push(`${args.bodyIsFull ? "Body" : "Body (snippet only)"}: ${args.body}`);
+  if (args.threadMessages.length > 0) {
+    parts.push("");
+    parts.push("Earlier in thread:");
+    for (const m of args.threadMessages) {
+      parts.push(`- ${m.sender}: ${m.snippet}`);
+    }
+  }
+  return parts.join("\n");
 }
 
 // Build a RiskPassResult for the AUTO_HIGH-forced path without calling the
