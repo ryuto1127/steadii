@@ -2202,7 +2202,7 @@ export const en: MessagesShape = {
         "One consent grants Calendar + Gmail so Steadii can schedule, triage, and draft.",
       why_title: "What does this grant?",
       why_calendar_gmail:
-        "Read + write access to your Calendar and read/modify/send on Gmail. The agent triages incoming mail and prepares drafts for your review — nothing sends without your confirmation and a 20-second undo window. You can revoke access anytime from your Google account.",
+        "Read + write access to your Calendar and read/modify/send on Gmail. The agent triages incoming mail and prepares drafts for your review — nothing sends without your confirmation and an undo window (default 10 seconds, configurable). You can revoke access anytime from your Google account.",
       why_notion:
         "Notion is optional and lives in Settings → Connections — connect it to import your existing classes, notes, syllabi, and assignments into Steadii.",
       button: "Grant Google access",
