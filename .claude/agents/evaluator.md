@@ -43,11 +43,11 @@ Sparring will give you:
 5. **Regression sweep**
    - Did the change touch files the spec didn't mention? If yes, why? Could it break adjacent features?
    - Check `feedback_agent_failure_modes` — does the diff exhibit any of the named patterns (PLACEHOLDER_LEAK, METADATA_CONFUSED_FOR_CONTENT, etc.)?
-   - Read `docs/knowledge/LEARNINGS.md` (small file) and check the diff against documented traps relevant to the touched subsystems — a known trap re-introduced is a FAIL finding citing the kebab-id.
+   - Read `~/.claude/projects/-Users-ryuto-Documents-steadii/memory/knowledge_learnings.md` (small file, PRIVATE — never quote its incident specifics into the public PR) and check the diff against documented traps relevant to the touched subsystems — a known trap re-introduced is a FAIL finding citing the kebab-id.
 
-6. **Knowledge-base epistemics** (if the PR touches `docs/knowledge/` or claims learnings)
-   - Every entry added to `LEARNINGS.md` must have its evidence IN this PR (or cite a verifiable artifact: PR #, CI run, reproduced command). Unverified claims in LEARNINGS.md = FAIL finding; they belong in `HYPOTHESES.md`.
-   - A promotion (HYPOTHESES → LEARNINGS) must include the verification, not just the move.
+6. **Candidate-learnings epistemics** (on the engineer's report)
+   - Any candidate learning marked `verified` must have its evidence in the PR or a citable artifact (PR #, CI run, reproduced command). Evidence-less `verified` claims = finding; they are hypotheses.
+   - The knowledge files are private and sparring-maintained: a PR that adds knowledge docs INTO the public repo is itself a finding.
 
 7. **Migration safety** (if `lib/db/migrations/` touched)
    - Read the migration: is it forward-compatible? Backfill safe under concurrent writes?

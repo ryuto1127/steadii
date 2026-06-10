@@ -82,6 +82,8 @@ The proactive scanner runs as a per-user debounced job (event-driven on writes, 
 
 Steadii is in α and not currently accepting external contributions. The repository is public to make the product transparent — both for users (you can read what your agent does) and for the academic-software community.
 
+One internal artifact is deliberately not public: the engineering knowledge base — a running log of verified learnings and open hypotheses about this codebase and its third-party services, kept strictly separated by verification status. It stays private because entries can include incident detail and pre-fix security notes; rules that harden into stable conventions surface in [AGENTS.md](./AGENTS.md).
+
 If you find a security issue, please report it privately to [hello@mysteadii.com](mailto:hello@mysteadii.com) instead of opening a public issue.
 
 ## Contact
