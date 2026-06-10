@@ -2986,7 +2986,7 @@ export const en: MessagesShape = {
   onboarding_wait: {
     title: "Steadii is on it.",
     body_p1:
-      "Steadii will read the last 24 hours of email and prepare your first draft.",
+      "Steadii will read your last 30 days of email and prepare your first draft.",
     body_p2:
       "Usually within 24h, your first proposal lands on Home.",
     body_p3: "Anything you want handled in the meantime, just ask:",

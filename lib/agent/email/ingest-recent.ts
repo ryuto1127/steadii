@@ -46,24 +46,67 @@ export type IngestSummary = {
   durationMs: number;
 };
 
+// Window/mode options for the shared ingest core. The recurring sweep and
+// the post-onboarding redirect path use the defaults (last 24h, full
+// treatment). The one-time 30-day backfill (lib/agent/email/backfill.ts)
+// passes its own window + `backfillMode: true`.
+export type IngestOptions = {
+  // Inclusive lower bound, unix seconds. Defaults to 24h ago.
+  sinceUnix?: number;
+  // Exclusive upper bound, unix seconds. Undefined = open-ended (sweep).
+  // The backfill sets this to 24h ago so its window is strictly 24h..30d
+  // and never overlaps the sweep's last-24h slice.
+  beforeUnix?: number;
+  // Label recorded in the audit trail (e.g. "last_24h" / "backfill_30d").
+  windowLabel?: string;
+  // CRITICAL cost/noise gate. When true: each message gets L1 triage
+  // labeling + an embedding ONLY. No L2 classify/deep pass, no draft
+  // generation, no queue cards, no auto-archive proposal, no entity
+  // resolution, no auto-cal detection, no notifications. Enforced
+  // structurally here AND threaded into applyTriageResult — not timing
+  // luck. `email_embed` is the only metered task type a backfill may incur.
+  backfillMode?: boolean;
+};
+
 // Pulls the last 24h of Gmail for the user, runs each message through
 // L1 triage, and writes the inbox rows. Idempotent: safe to re-run
 // because inbox_items has UNIQUE (user_id, source_type, external_id).
 // Errors from Gmail (not-connected, revoked scope) are swallowed and
 // logged, because this runs on the post-onboarding redirect path and
 // must never block the user from reaching /app.
+//
+// Thin wrapper preserving the historical name + call surface (the cron
+// sweep and auto-ingest both call ingestLast24h(userId)). All real work
+// lives in ingestSince so the backfill can reuse it with a different
+// window + the backfillMode gate.
 export async function ingestLast24h(
   userId: string
 ): Promise<IngestSummary> {
+  return ingestSince(userId, {
+    sinceUnix: Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000),
+    windowLabel: "last_24h",
+  });
+}
+
+// Shared ingest core. See IngestOptions for the window + backfillMode gate.
+export async function ingestSince(
+  userId: string,
+  options: IngestOptions = {}
+): Promise<IngestSummary> {
+  const backfillMode = options.backfillMode ?? false;
+  const sinceUnix =
+    options.sinceUnix ??
+    Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
+  const beforeUnix = options.beforeUnix;
+  const windowLabel = options.windowLabel ?? "last_24h";
+
   const startedAt = Date.now();
   await logEmailAudit({
     userId,
     action: "email_ingest_started",
     result: "success",
-    detail: { window: "last_24h" },
+    detail: { window: windowLabel, backfillMode },
   });
-
-  const sinceUnix = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
 
   let providerAccountId: string | null = null;
   try {
@@ -83,7 +126,12 @@ export async function ingestLast24h(
 
   let hits: Awaited<ReturnType<typeof listRecentMessages>> = [];
   try {
-    hits = await listRecentMessages(userId, sinceUnix);
+    hits = await listRecentMessages(
+      userId,
+      sinceUnix,
+      undefined,
+      beforeUnix
+    );
   } catch (err) {
     if (err instanceof GmailNotConnectedError) {
       await logEmailAudit({
@@ -144,10 +192,20 @@ export async function ingestLast24h(
         userId,
         providerAccountId,
         input,
-        result
+        result,
+        { backfillMode }
       );
       if (row) {
         created++;
+        // 30-day backfill cost/noise gate: pre-signup mail gets L1 +
+        // embedding ONLY (both already done inside applyTriageResult).
+        // Everything below — entity resolution (LLM tool_call), L2
+        // classify/draft, and auto-cal detection — is skipped
+        // structurally. `email_embed` is the only metered task type a
+        // backfilled item may incur.
+        if (backfillMode) {
+          continue;
+        }
         // engineer-51 — kick off entity-graph resolution alongside the
         // L2 pipeline. Fire-and-forget so a slow LLM extract doesn't
         // hold up the ingest loop. The combined subject + body is the
@@ -260,6 +318,8 @@ export async function ingestLast24h(
     action: "email_ingest_completed",
     result: "success",
     detail: {
+      window: windowLabel,
+      backfillMode,
       scanned: hits.length,
       created,
       skipped,
@@ -270,7 +330,7 @@ export async function ingestLast24h(
 
   if (durationMs > 10_000) {
     console.warn(
-      `[email-ingest] ingestLast24h for ${userId} took ${durationMs}ms (scanned=${hits.length})`
+      `[email-ingest] ingestSince(${windowLabel}) for ${userId} took ${durationMs}ms (scanned=${hits.length})`
     );
   }
 

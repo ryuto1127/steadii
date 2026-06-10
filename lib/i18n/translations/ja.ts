@@ -1642,7 +1642,7 @@ export const ja: Messages = {
   onboarding_wait: {
     title: "Steadii が動いています。",
     body_p1:
-      "Steadii が直近 24 時間のメールを読んで、最初の draft を準備します。",
+      "Steadii が直近 30 日間のメールを読んで、最初の draft を準備します。",
     body_p2:
       "通常 24 時間後にホームに最初の提案が表示されます。",
     body_p3: "その間、何か頼みごとがあればここから:",

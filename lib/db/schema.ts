@@ -160,6 +160,19 @@ export const users = pgTable("users", {
     mode: "date",
     withTimezone: true,
   }),
+  // One-time 30-day email backfill completion marker. Set when the
+  // background backfill job (lib/agent/email/backfill.ts) finishes its
+  // single pass over the 24h..30d window at first Gmail connect. Null =
+  // never run; non-null = done, so the enqueue path never re-fires it.
+  // Stamped optimistically BEFORE the job is enqueued (mirrors
+  // lastGmailIngestAt) so two concurrent connect renders can't double-
+  // enqueue. The backfill is L1-triage + embeddings ONLY — no L2 /
+  // drafts / queue cards — so a partial failure just means a thinner
+  // pre-signup corpus, never a duplicate or a charge spike worth retrying.
+  emailBackfillCompletedAt: timestamp("email_backfill_completed_at", {
+    mode: "date",
+    withTimezone: true,
+  }),
   lastDigestSentAt: timestamp("last_digest_sent_at", {
     mode: "date",
     withTimezone: true,

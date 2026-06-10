@@ -32,11 +32,22 @@ export async function triageMessage(
   return classifyEmail(input, ctx);
 }
 
+// `backfillMode` (one-time 30-day backfill, lib/agent/email/backfill.ts):
+// L1-triage labeling + embeddings ONLY. We still insert the inbox row and
+// embed it (the lone allowed metered op — it grows the retrieval corpus +
+// thread context with pre-signup mail), but we skip the downstream
+// enrichment that turns a row into actionable surface: class binding (a
+// non-metered index probe, but pure noise on archived pre-signup rows) and
+// auto-archive proposal stamping (a queue card). The caller (ingestSince in
+// backfill mode) additionally skips entity resolution, L2, and auto-cal.
+// This is a structural gate, not timing luck — see the spec's cost/noise
+// guarantee.
 export async function applyTriageResult(
   userId: string,
   sourceAccountId: string,
   input: ClassifyInput,
-  result: TriageResult
+  result: TriageResult,
+  opts: { backfillMode?: boolean } = {}
 ): Promise<InboxItem | null> {
   const row: NewInboxItem = {
     userId,
@@ -143,34 +154,40 @@ export async function applyTriageResult(
       // Phase 7 W1 — class binding cache. Run once at ingest so the L2
       // fanout retriever only does an index probe. Fail-soft: on error,
       // leave the row unbound and the fanout falls back to vector-only.
-      try {
-        const binding = await bindEmailToClass({
-          userId,
-          subject: input.subject,
-          bodySnippet: input.bodySnippet ?? input.snippet,
-          senderEmail: input.fromEmail,
-          senderName: input.fromName,
-          senderRole: result.senderRole as SenderRole | null,
-          queryEmbedding: embedding,
-        });
-        await persistBinding(created.id, binding);
-        await logEmailAudit({
-          userId,
-          action: "email_class_bound",
-          result: "success",
-          resourceId: created.id,
-          detail: {
-            classId: binding.classId,
-            method: binding.method,
-            confidence: binding.confidence,
-            alternates: binding.alternates.length,
-          },
-        });
-      } catch (err) {
-        Sentry.captureException(err, {
-          tags: { feature: "email_class_binding", phase: "on_ingest" },
-          user: { id: userId },
-        });
+      //
+      // Skipped on the 30-day backfill: a class binding on an archived
+      // pre-signup row earns nothing (no L2 fanout will ever read it) and
+      // the spec pins backfill to "L1 + embeddings ONLY".
+      if (!opts.backfillMode) {
+        try {
+          const binding = await bindEmailToClass({
+            userId,
+            subject: input.subject,
+            bodySnippet: input.bodySnippet ?? input.snippet,
+            senderEmail: input.fromEmail,
+            senderName: input.fromName,
+            senderRole: result.senderRole as SenderRole | null,
+            queryEmbedding: embedding,
+          });
+          await persistBinding(created.id, binding);
+          await logEmailAudit({
+            userId,
+            action: "email_class_bound",
+            result: "success",
+            resourceId: created.id,
+            detail: {
+              classId: binding.classId,
+              method: binding.method,
+              confidence: binding.confidence,
+              alternates: binding.alternates.length,
+            },
+          });
+        } catch (err) {
+          Sentry.captureException(err, {
+            tags: { feature: "email_class_binding", phase: "on_ingest" },
+            user: { id: userId },
+          });
+        }
       }
     }
 
@@ -181,7 +198,13 @@ export async function applyTriageResult(
     // so the binding context is preserved even on rows the user
     // ultimately confirms for archive. Failures are swallowed
     // inside the helper.
-    await maybeProposeAutoArchive(userId, created, result);
+    //
+    // Skipped on the 30-day backfill: stamping proposed_archive_at
+    // surfaces a queue card, which the spec's cost/noise guarantee
+    // forbids for pre-signup mail.
+    if (!opts.backfillMode) {
+      await maybeProposeAutoArchive(userId, created, result);
+    }
   } else {
     await logEmailAudit({
       userId,
