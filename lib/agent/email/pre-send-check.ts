@@ -13,10 +13,15 @@ import type { PreSendWarning } from "@/lib/db/schema";
 // tool-call equivalent). Bounded at 4K chars of context + 200 output
 // tokens.
 //
-// Critical constraint (handoff): MUST degrade to ok=true on any LLM
-// error. We'd rather miss a hallucination than block a legitimate send.
-// All catch branches return { ok: true, warnings: [] } so the caller
-// (approveAgentDraftAction) proceeds normally.
+// Critical constraint (handoff), refined 2026-06-09: failure handling
+// depends on whether a human is in the loop. ATTENDED callers (inbox
+// detail, queue Send — failMode "open", the default) degrade to ok=true
+// on any LLM error: we'd rather miss a hallucination than block a
+// legitimate send the user is watching. The UNATTENDED auto-send path
+// (failMode "closed") must NOT inherit that: with no human review, a
+// checker outage returning ok=true would auto-send an unverified reply,
+// so internal failures surface as ok=false + degraded=true and the
+// caller holds the draft for review instead.
 
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_OUTPUT_TOKENS = 220;
@@ -38,11 +43,23 @@ export type PreSendCheckInput = {
 export type PreSendCheckResult = {
   ok: boolean;
   warnings: PreSendWarning[];
+  // True when ok=false reflects a checker-internal failure (LLM error,
+  // unparseable response) rather than an actual not-grounded verdict.
+  // Only emitted under failMode "closed"; attended callers never see it.
+  degraded?: boolean;
 };
 
+// "open"  — internal checker failures return ok=true (a human reviews the
+//           draft anyway; never block their send on our outage).
+// "closed" — internal failures return ok=false + degraded=true (no human
+//           in the loop; the caller must hold the draft).
+export type PreSendFailMode = "open" | "closed";
+
 export async function checkDraftBeforeSend(
-  input: PreSendCheckInput
+  input: PreSendCheckInput,
+  opts: { failMode?: PreSendFailMode } = {}
 ): Promise<PreSendCheckResult> {
+  const failMode = opts.failMode ?? "open";
   return Sentry.startSpan(
     {
       name: "email.pre_send_check",
@@ -105,16 +122,23 @@ export async function checkDraftBeforeSend(
             })?.prompt_tokens_details?.cached_tokens ?? 0,
         });
 
-        return parsePreSendCheck(resp.choices[0]?.message?.content ?? "{}");
+        return parsePreSendCheck(
+          resp.choices[0]?.message?.content ?? "{}",
+          failMode
+        );
       } catch (err) {
-        // Critical-constraint contract: an LLM-side failure must not
-        // block legitimate sends. Log at warning so we can spot
+        // Attended contract: an LLM-side failure must not block sends a
+        // human is reviewing. Unattended (failMode "closed"): the same
+        // failure must hold the draft. Log at warning so we can spot
         // pathological outage rates without paging.
         Sentry.captureException(err, {
           level: "warning",
           tags: { feature: "pre_send_check", op: "openai_call" },
           user: { id: input.userId },
         });
+        if (failMode === "closed") {
+          return { ok: false, warnings: [], degraded: true };
+        }
         return { ok: true, warnings: [] };
       }
     }
@@ -158,11 +182,17 @@ function buildUserMessage(input: PreSendCheckInput): string {
   ].join("\n");
 }
 
-export function parsePreSendCheck(raw: string): PreSendCheckResult {
+export function parsePreSendCheck(
+  raw: string,
+  failMode: PreSendFailMode = "open"
+): PreSendCheckResult {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
+    if (failMode === "closed") {
+      return { ok: false, warnings: [], degraded: true };
+    }
     return { ok: true, warnings: [] };
   }
   const o = (parsed ?? {}) as { ok?: unknown; warnings?: unknown };
@@ -181,9 +211,14 @@ export function parsePreSendCheck(raw: string): PreSendCheckResult {
         .slice(0, MAX_WARNINGS)
     : [];
   // Defensive: if the model said ok=false but emitted no warnings, treat
-  // it as ok=true. We can't show a modal with no content; an empty-warning
-  // modal is worse UX than a missed flag.
+  // it as ok=true for ATTENDED callers — we can't show a modal with no
+  // content; an empty-warning modal is worse UX than a missed flag. For
+  // the unattended path there is no modal: the model's not-ok verdict
+  // stands and the draft is held.
   if (!ok && warnings.length === 0) {
+    if (failMode === "closed") {
+      return { ok: false, warnings: [] };
+    }
     return { ok: true, warnings: [] };
   }
   return { ok: warnings.length === 0, warnings };

@@ -737,19 +737,30 @@ async function runPipeline(
     });
     let autoSendBlockReason: string | null = null;
     try {
-      const checkResult = await checkDraftBeforeSend({
-        userId: item.userId,
-        draftSubject: draft.subject ?? "",
-        draftBody: draft.body ?? "",
-        threadContext: groundingContext,
-      });
+      // failMode "closed": the checker's internal LLM failures come back
+      // as ok=false + degraded=true instead of being swallowed to ok=true
+      // (the attended-path contract). Without this, an OpenAI outage
+      // would auto-send unverified replies — the exact case this gate
+      // exists for.
+      const checkResult = await checkDraftBeforeSend(
+        {
+          userId: item.userId,
+          draftSubject: draft.subject ?? "",
+          draftBody: draft.body ?? "",
+          threadContext: groundingContext,
+        },
+        { failMode: "closed" }
+      );
       if (!checkResult.ok) {
-        autoSendBlockReason = "pre_send_check_failed";
+        autoSendBlockReason = checkResult.degraded
+          ? "pre_send_check_unavailable"
+          : "pre_send_check_failed";
       }
     } catch (err) {
-      // Defensive: checkDraftBeforeSend self-degrades to ok=true on its
-      // own LLM errors, but if it throws for any other reason we treat
-      // that as a non-pass and fail closed rather than auto-send blind.
+      // Defensive belt-and-braces: failMode "closed" already converts
+      // checker-internal failures into ok=false, but if the call still
+      // throws for any other reason we fail closed rather than auto-send
+      // blind.
       autoSendBlockReason = "pre_send_check_error";
       Sentry.captureException(err, {
         level: "warning",
