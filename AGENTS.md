@@ -294,6 +294,17 @@ As of 2026-05-24 the Steadii dev loop runs in a single Claude Code session: **sp
 
 **Recommended harness config:** engineer = fast mode + max thinking budget. Evaluator = fast mode + medium budget. Both `model: opus`.
 
+**Model tiering (cost policy, locked 2026-06-10):**
+
+| Role | Model | Rule |
+|---|---|---|
+| Sparring (main session) | strongest available | Design, handoffs, audit, review, memory/knowledge curation. Does NOT implement by default — the scarce resource is its context window, not just tokens. |
+| engineer | `opus` (default) | Sparring MAY downgrade a dispatch to `sonnet` via the Agent-tool model override for mechanical, fully-specified work: copy passes, doc regeneration, config changes, precisely-specced small fixes, test backfills. Feature PRs touching the email pipeline / agent core / anything with a migration stay `opus`. |
+| evaluator | `opus`, **never lower** | Verification is the safety net; when engineers get cheaper the evaluator must not. Evidence: the evaluator caught a fail-open auto-send bug (PR #343, knowledge entry `fail-open-helpers-need-failmode`) that both the spec author and the opus engineer missed. |
+| Workflow scouts | `sonnet` ok | Read-only mapping/sweep/scouting agents may run cheaper models; adversarial verification and judging stay on strong models. |
+
+**Sparring implements inline ONLY when** (a) it's a surgical fix on an evaluator finding (small → inline per `feedback_post_engineer_fix_routing`), or (b) the code is inseparable from the design and writing the spec would cost more than the implementation (rare). "Hard" alone is not a trigger — hard-but-specifiable goes to engineer. Sparring-authored diffs still get evaluator review; author bias doesn't exempt the curator.
+
 The agent definition files are the source of truth for tool scopes, MUST-rules each subagent enforces, and stop-conditions — read them before tweaking the loop.
 
 ---
