@@ -1,6 +1,6 @@
 # Dogfood — resources + result tracking
 
-Companion to the Section A-N handbook. Open this in a tab while running dogfood; fill in the table as you go.
+Open this in a tab while running dogfood; fill in the result-tracking table as you go.
 
 ---
 
@@ -26,7 +26,7 @@ Use ✓ / ✗ / ⚠ (blocker) / — (skipped). Add 1-line note for any non-✓ r
 | A.1 https://mysteadii.com → 200 | ✓ | curl confirms HTTP/2 200 |
 | A.2 https://mysteadii.xyz → 308 → .com | ✓ | 308 → location: https://mysteadii.com/ |
 | A.3 https://www.mysteadii.com → 308 → apex | ✓ | 308 → location: https://mysteadii.com/ |
-| A.4 Sign-in → /app, sidebar 6 items | — | needs Ryuto (Google OAuth not testable from engineer; localhost /app correctly redirects to /login?from=%2Fapp) |
+| A.4 Sign-in → /app, sidebar 6 primary items (Home/Inbox/Calendar/Tasks/Classes/Activity) + Chats below separator + Settings via account footer | — | needs Ryuto (Google OAuth not testable from engineer; localhost /app correctly redirects to /login?from=%2Fapp) |
 
 ### Section B — Onboarding (5 min, SKIP if admin already onboarded)
 | step | status | notes |
@@ -161,7 +161,7 @@ Verifies the post-Wave-2 Home is rendering correctly: 5 queue archetypes (A-E), 
 | W2.8 Type E (Clarifying) shows ❓ icon + radio choices + free-text fallback | | |
 | W2.9 Command palette: docked at top of /app; placeholder rotates examples; Cmd+K focuses input | | |
 | W2.10 Command palette: focused state shows Recent + Examples sections | | |
-| W2.11 Sidebar order matches Wave 2 spec: Home → Inbox → Calendar → Tasks → Classes (5 primary). 履歴 is demoted to inline RECENT CHATS list. Settings is via account footer pill | | |
+| W2.11 Sidebar order: Home → Inbox → Calendar → Tasks → Classes → Activity (6 primary). 履歴 (Chats) is below the separator. Settings is via account footer pill | | |
 | W2.12 Briefing 3-column row (Calendar / Tasks / Deadlines) renders with localized labels in EN + JA | | |
 | W2.13 Empty state: when queue=0, "queue is empty" CTA appears + focuses palette | | |
 | W2.14 Recent activity footer renders below queue with Type D-style chips | | |

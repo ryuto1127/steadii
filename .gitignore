@@ -16,4 +16,6 @@ tests/agent-evals/last-run.json
 scripts/pii-patterns.local.txt
 # Local agent worktrees (each is its own embedded git repo — never commit).
 .claude/worktrees/
+# Dev harness rewrites this locally on every run — never commit.
+.claude/launch.json
 
