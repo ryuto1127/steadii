@@ -150,6 +150,86 @@ describe("checkDraftBeforeSend", () => {
     expect(out.warnings).toEqual([]);
   });
 
+  // failMode "closed" — the unattended auto-send contract. The checker's
+  // internal failures must NOT be swallowed to ok=true when no human
+  // reviews the draft (evaluator catch on PR #343: an OpenAI outage would
+  // have auto-sent unverified replies).
+  it("failMode closed: an OpenAI failure returns ok=false + degraded (drives the REAL swallow path)", async () => {
+    throwOnCreate = true;
+    const { checkDraftBeforeSend } = await import(
+      "@/lib/agent/email/pre-send-check"
+    );
+    const out = await checkDraftBeforeSend(
+      {
+        userId: "u1",
+        draftSubject: "Re: anything",
+        draftBody: "Thanks!",
+        threadContext: "Hello",
+      },
+      { failMode: "closed" }
+    );
+    expect(out.ok).toBe(false);
+    expect(out.degraded).toBe(true);
+    expect(out.warnings).toEqual([]);
+  });
+
+  it("failMode closed: unparseable model output returns ok=false + degraded", async () => {
+    stubbed = {
+      choices: [{ message: { content: "not json" } }],
+      usage: { prompt_tokens: 500, completion_tokens: 30 },
+    };
+    const { checkDraftBeforeSend } = await import(
+      "@/lib/agent/email/pre-send-check"
+    );
+    const out = await checkDraftBeforeSend(
+      {
+        userId: "u1",
+        draftSubject: "Re: hi",
+        draftBody: "hello",
+        threadContext: "",
+      },
+      { failMode: "closed" }
+    );
+    expect(out.ok).toBe(false);
+    expect(out.degraded).toBe(true);
+  });
+
+  it("failMode closed: ok=false + empty warnings is NOT rewritten to ok=true (no modal to protect)", async () => {
+    stubbed = fakeResponse({ ok: false, warnings: [] });
+    const { checkDraftBeforeSend } = await import(
+      "@/lib/agent/email/pre-send-check"
+    );
+    const out = await checkDraftBeforeSend(
+      {
+        userId: "u1",
+        draftSubject: "Re: hi",
+        draftBody: "hello",
+        threadContext: "",
+      },
+      { failMode: "closed" }
+    );
+    expect(out.ok).toBe(false);
+    expect(out.warnings).toEqual([]);
+  });
+
+  it("failMode closed: a clean pass still returns ok=true (outages hold drafts, healthy checks don't)", async () => {
+    stubbed = fakeResponse({ ok: true, warnings: [] });
+    const { checkDraftBeforeSend } = await import(
+      "@/lib/agent/email/pre-send-check"
+    );
+    const out = await checkDraftBeforeSend(
+      {
+        userId: "u1",
+        draftSubject: "Re: hi",
+        draftBody: "Thanks, see you then.",
+        threadContext: "See you Tuesday at 3pm.",
+      },
+      { failMode: "closed" }
+    );
+    expect(out.ok).toBe(true);
+    expect(out.degraded).toBeUndefined();
+  });
+
   it("trims warnings exceeding 5 to keep the modal compact", async () => {
     const many = Array.from({ length: 10 }, (_, i) => ({
       phrase: `phrase ${i}`,

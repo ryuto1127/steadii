@@ -22,6 +22,7 @@ import {
 } from "@/lib/db/schema";
 import {
   approveAgentDraftAction,
+  cancelPendingSendAction,
   dismissAgentDraftAction,
   snoozeAgentDraftAction,
 } from "@/lib/agent/email/draft-actions";
@@ -467,26 +468,67 @@ export async function queueMarkHandledAction(
   revalidatePath("/app");
 }
 
-// 2026-05-24 (PR 2) — inline Send for Type B draft cards on /app.
+// 2026-06-09 — inline Send for Type B draft cards on /app.
 //
-// Fires after the client-side 10s undo window elapses. The card id is
-// `draft:<uuid>`; we extract the underlying agent_drafts row and delegate
-// to the shared approveAgentDraftAction. That helper does its own
-// server-side QStash undo (defense-in-depth on top of the client wait)
-// + the pre-send fact-checker.
+// The card id is `draft:<uuid>`; we extract the underlying agent_drafts
+// row and delegate to the shared approveAgentDraftAction — the SAME path
+// the inbox-detail Send uses. That helper:
+//   - runs the pre-send fact-checker (no longer skipped — see below)
+//   - enqueues the send server-side via QStash with the per-user undo
+//     window, so the undo survives navigation AND tab close. The earlier
+//     client-side timer dropped consented sends on any unmount
+//     (ACTION_COMMITMENT_VIOLATION); the server-side window fixes that.
 //
-// Pre-send check policy: skipped here. The queue card is the fast lane
-// — when the fact-checker flags a draft the user clicks 確認 to open the
-// detail page where the warning modal is wired. Surfacing a modal from
-// a sonner toast would clash with the card's fire-and-forget feel.
-// Power users who never deviate from the queue still get safety from
-// the client undo + the server undo.
-export async function queueSendDraftAction(rawCardId: string): Promise<void> {
+// Returns { sendAt, undoWindowSeconds } so the client drives the
+// countdown toast from the server's authoritative sendAt rather than a
+// client-only timer. On pre-send check failure approveAgentDraftAction
+// throws a name-keyed PreSendCheckFailedError; we let it propagate so the
+// client can surface the card-level warning (Review / Send anyway) that
+// mirrors the inbox-detail modal. The silent skipPreSendCheck default was
+// the bug — only an explicit user "Send anyway" choice may bypass it.
+export async function queueSendDraftAction(rawCardId: string): Promise<{
+  sendAt: Date;
+  undoWindowSeconds: number;
+}> {
   const { kind, id } = parseCardId(rawCardId);
   if (kind !== "draft") {
     throw new Error("Card is not a draft");
   }
-  await approveAgentDraftAction(id, { skipPreSendCheck: true });
+  const result = await approveAgentDraftAction(id);
+  revalidatePath("/app");
+  return result;
+}
+
+// Explicit "Send anyway" path for the card-level warning surfaced when
+// the pre-send fact-checker flagged the draft. The user has seen the
+// flagged phrases and chosen to send regardless — skipPreSendCheck here
+// is an explicit, user-initiated choice (distinct from the old silent
+// default). Same server-side undo window as the checked path.
+export async function queueSendDraftAnywayAction(rawCardId: string): Promise<{
+  sendAt: Date;
+  undoWindowSeconds: number;
+}> {
+  const { kind, id } = parseCardId(rawCardId);
+  if (kind !== "draft") {
+    throw new Error("Card is not a draft");
+  }
+  const result = await approveAgentDraftAction(id, { skipPreSendCheck: true });
+  revalidatePath("/app");
+  return result;
+}
+
+// Undo the queued send for a Type B draft card. Mirrors the inbox-detail
+// Undo: delegates to the shared cancelPendingSendAction which drops the
+// QStash message, deletes the Gmail draft, and flips the draft back to
+// pending. The card id is `draft:<uuid>`.
+export async function queueCancelSendDraftAction(
+  rawCardId: string
+): Promise<void> {
+  const { kind, id } = parseCardId(rawCardId);
+  if (kind !== "draft") {
+    throw new Error("Card is not a draft");
+  }
+  await cancelPendingSendAction(id);
   revalidatePath("/app");
 }
 

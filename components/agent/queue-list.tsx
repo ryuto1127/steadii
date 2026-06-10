@@ -1,21 +1,58 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import {
   QueueCardRenderer,
   type QueueCardActions,
 } from "@/components/agent/queue-card";
-import {
-  SEND_UNDO_WINDOW_MS,
-  startInlineSendTimer,
-  type InlineSendTimer,
-} from "@/lib/agent/queue/inline-send-timer";
 import { queueShowMoreState } from "@/lib/agent/queue/visual";
 import { QUEUE_VISIBLE_LIMIT, type QueueCard } from "@/lib/agent/queue/types";
+import type { PreSendWarning } from "@/lib/db/schema";
+
+// 2026-06-09 — the queue Draft "Send" no longer runs a client-side timer.
+// Send fires the server action immediately, which enqueues the send via
+// QStash with the per-user undo window. Because the wait lives on the
+// server, the undo survives in-app navigation AND tab close — the old
+// client timer cancelled every pending send on unmount, silently dropping
+// a consented send while the toast read as success (ACTION_COMMITMENT_
+// VIOLATION). The countdown toast below is purely cosmetic now: it shows
+// remaining seconds but no longer GATES the send.
+
+const PRE_SEND_CHECK_ERROR_NAME = "PreSendCheckFailedError";
+
+// Server-action errors don't preserve `instanceof` across the boundary;
+// the typed PreSendCheckFailedError arrives as a regular Error whose
+// message is a JSON envelope keyed by `name`. Pluck the warnings out so
+// the card-level warning panel (Review / Send anyway) can render them —
+// same parse the inbox-detail DraftActions uses.
+function tryParsePreSendError(err: unknown): PreSendWarning[] | null {
+  if (!(err instanceof Error)) return null;
+  if (err.name !== PRE_SEND_CHECK_ERROR_NAME) return null;
+  try {
+    const parsed = JSON.parse(err.message) as {
+      name?: string;
+      warnings?: unknown;
+    };
+    if (parsed?.name !== PRE_SEND_CHECK_ERROR_NAME) return null;
+    if (!Array.isArray(parsed.warnings)) return null;
+    return parsed.warnings
+      .filter(
+        (w): w is { phrase: unknown; why: unknown } =>
+          !!w && typeof w === "object"
+      )
+      .map((w) => ({
+        phrase: typeof w.phrase === "string" ? w.phrase : "",
+        why: typeof w.why === "string" ? w.why : "",
+      }))
+      .filter((w) => w.phrase.length > 0 && w.why.length > 0);
+  } catch {
+    return null;
+  }
+}
 
 // Client wrapper around the queue. Handles:
 //   - the show-more / show-less toggle
@@ -63,10 +100,24 @@ type ServerActions = {
   // provisional calendar event). For non-office-hours B cards the page
   // routes the user to the existing detail page.
   sendOfficeHours: (cardId: string) => Promise<void>;
-  // 2026-05-24 (PR 2) — fires after the client-side 10s undo window
-  // elapses for a Type B Draft card. Wraps approveAgentDraftAction with
-  // skipPreSendCheck=true; see queue-actions.ts:queueSendDraftAction.
-  sendDraft: (cardId: string) => Promise<void>;
+  // 2026-06-09 — Send a Type B Draft card. Enqueues the send server-side
+  // (QStash + per-user undo window) via approveAgentDraftAction WITH the
+  // pre-send fact-check, returning the authoritative sendAt the toast
+  // counts down from. Throws PreSendCheckFailedError when the check
+  // flags the draft — the client then surfaces the Review / Send-anyway
+  // warning panel.
+  sendDraft: (
+    cardId: string
+  ) => Promise<{ sendAt: Date; undoWindowSeconds: number }>;
+  // Explicit "Send anyway" — user saw the flagged phrases and chose to
+  // send. Skips the pre-send check (an explicit user choice, never the
+  // silent default). Same server-side undo window.
+  sendDraftAnyway: (
+    cardId: string
+  ) => Promise<{ sendAt: Date; undoWindowSeconds: number }>;
+  // Undo a queued send within the window — drops the QStash message,
+  // deletes the Gmail draft, flips the draft back to pending.
+  cancelSendDraft: (cardId: string) => Promise<void>;
   // 2026-05-24 (PR 3) — sets disposition on a Type B Draft card.
   // 'resolved' / 'skipped' / 'ignored'; 'ignored' is gated behind a
   // confirm dialog on the UI side.
@@ -116,9 +167,13 @@ type ServerActions = {
 export function QueueList({
   cards,
   actions,
+  undoWindowSeconds,
 }: {
   cards: QueueCard[];
   actions: ServerActions;
+  // Per-user undo window (users.undo_window_seconds). The server enqueues
+  // the send with this delay; the countdown toast mirrors it.
+  undoWindowSeconds: number;
 }) {
   const t = useTranslations("queue");
   const tShared = useTranslations("queue.shared");
@@ -130,38 +185,46 @@ export function QueueList({
   // -section">. SSR-guarded at call time (scrollIntoView is undefined on
   // the server / before hydration).
   const headingRef = useRef<HTMLHeadingElement>(null);
-  // PR 2 — per-card pending send timers. The map is keyed by card id so
-  // the user can fire 送信 across multiple Draft cards in parallel and
-  // each card's 10s window is independent. Held in a ref because the
-  // timer machine is identity-stable and we never want a render to
-  // re-create one.
-  const inlineSendTimers = useRef<Map<string, InlineSendTimer>>(new Map());
-  // Per-card countdown intervals that drive the toast text update each
-  // second. Keyed by card id so the user can fire 送信 across multiple
-  // Draft cards in parallel without one card's countdown clobbering
-  // another's. Cleared on undo, on elapse, and on unmount.
-  const inlineSendIntervals = useRef<Map<string, ReturnType<typeof setInterval>>>(
-    new Map()
-  );
-  // PR 2 — set of card ids currently mid-undo-window. Lifted into state
-  // so the card can dim itself when sending is pending and un-dim on
-  // undo without waiting for router.refresh (which only fires after the
-  // 10s timer elapses and the server actually accepts the send).
+  // Set of card ids whose send is in-flight or inside the server undo
+  // window. Drives the card's dim state. Distinct from the old client
+  // timer: the SEND already happened server-side by the time the card is
+  // in this set, so unmounting can't drop it.
   const [sendingCardIds, setSendingCardIds] = useState<Set<string>>(() => new Set());
+  // Per-card pre-send warnings. When the fact-checker flags a draft the
+  // server action throws; we park the warnings here and render the
+  // Review / Send-anyway panel above the card (mirrors the inbox-detail
+  // modal semantics).
+  const [preSendWarnings, setPreSendWarnings] = useState<
+    Map<string, PreSendWarning[]>
+  >(() => new Map());
 
-  // On unmount (route navigation, hot reload), cancel every pending send
-  // timer. Without this a stale timer would fire against the unmounted
-  // tree and attempt a router.refresh on a route that no longer exists.
-  useEffect(() => {
-    const timers = inlineSendTimers.current;
-    const intervals = inlineSendIntervals.current;
-    return () => {
-      for (const timer of timers.values()) timer.cancel();
-      timers.clear();
-      for (const handle of intervals.values()) clearInterval(handle);
-      intervals.clear();
-    };
-  }, []);
+  const addSendingCard = (cardId: string) =>
+    setSendingCardIds((prev) => {
+      if (prev.has(cardId)) return prev;
+      const next = new Set(prev);
+      next.add(cardId);
+      return next;
+    });
+  const removeSendingCard = (cardId: string) =>
+    setSendingCardIds((prev) => {
+      if (!prev.has(cardId)) return prev;
+      const next = new Set(prev);
+      next.delete(cardId);
+      return next;
+    });
+  const setWarningsForCard = (cardId: string, warnings: PreSendWarning[]) =>
+    setPreSendWarnings((prev) => {
+      const next = new Map(prev);
+      next.set(cardId, warnings);
+      return next;
+    });
+  const clearWarningsForCard = (cardId: string) =>
+    setPreSendWarnings((prev) => {
+      if (!prev.has(cardId)) return prev;
+      const next = new Map(prev);
+      next.delete(cardId);
+      return next;
+    });
 
   const visible = useMemo(() => {
     if (expanded) return cards;
@@ -207,119 +270,97 @@ export function QueueList({
     }
   };
 
-  // PR 2 — kicks the client-side 10s timer for a Draft card's Send
-  // click. Returns a Promise that resolves immediately so the card's
-  // useTransition flow lands in the dimmed/resolved state right away;
-  // the actual server send fires (or doesn't) when the timer elapses.
-  const beginInlineSend = (cardId: string) => {
-    // If a second click lands while the first timer is still pending,
-    // treat it as "yes, definitely send" — cancel the still-pending
-    // timer (idempotent) and start fresh. This matches the visible
-    // behavior of clicking Send again: the toast resets to 10s.
-    const existing = inlineSendTimers.current.get(cardId);
-    if (existing) existing.cancel();
-
-    const toastId = `queue-send:${cardId}`;
-    setSendingCardIds((prev) => {
-      const next = new Set(prev);
-      next.add(cardId);
-      return next;
-    });
-
-    const clearCountdown = () => {
-      const handle = inlineSendIntervals.current.get(cardId);
-      if (handle !== undefined) {
-        clearInterval(handle);
-        inlineSendIntervals.current.delete(cardId);
-      }
-    };
-
-    const cancelTimer = () => {
-      const timer = inlineSendTimers.current.get(cardId);
-      const cancelled = timer ? timer.cancel() : false;
-      inlineSendTimers.current.delete(cardId);
-      clearCountdown();
-      setSendingCardIds((prev) => {
-        if (!prev.has(cardId)) return prev;
-        const next = new Set(prev);
-        next.delete(cardId);
-        return next;
+  // Fire the server-side send for a Draft card. The server enqueues via
+  // QStash with the per-user undo window and returns the authoritative
+  // sendAt. We dim the card, show a countdown toast whose Undo calls the
+  // server cancel, and refresh once the window passes so the (now-sent)
+  // card drops out. Because the wait lives server-side, navigating away
+  // or closing the tab does NOT drop the send.
+  //
+  // `sendFn` is either the checked send or the explicit "Send anyway"
+  // bypass. On a pre-send check failure the checked path throws
+  // PreSendCheckFailedError; we park the warnings and render the panel
+  // instead of sending.
+  const runServerSend = (
+    cardId: string,
+    sendFn: (
+      id: string
+    ) => Promise<{ sendAt: Date; undoWindowSeconds: number }>
+  ) => {
+    clearWarningsForCard(cardId);
+    addSendingCard(cardId);
+    void sendFn(cardId)
+      .then(({ sendAt, undoWindowSeconds: ws }) => {
+        showSendUndoToast(cardId, sendAt, ws);
+      })
+      .catch((err) => {
+        removeSendingCard(cardId);
+        const warnings = tryParsePreSendError(err);
+        if (warnings && warnings.length > 0) {
+          // Don't send — surface the card-level Review / Send-anyway
+          // warning. The send is NOT in flight (the server threw before
+          // enqueuing), so the card is fully restored.
+          setWarningsForCard(cardId, warnings);
+          return;
+        }
+        toast.error(message(err, t("toast_send_failed")));
+        refresh();
       });
-      toast.dismiss(toastId);
-      return cancelled;
-    };
+  };
 
-    const timer = startInlineSendTimer({
-      cardId,
-      onElapse: () => {
-        // Timer fired without an undo — kick the actual server send.
-        // Keep the card dim (isSendingPending stays true) for the
-        // duration of the API call so the user sees a continuous
-        // "sending" state through to refresh. On success the
-        // approveAgentDraftAction flips agent_drafts.status to
-        // sent_pending, so the next router.refresh drops the card from
-        // the queue and our flag never matters again. On failure we
-        // clear the flag and restore the card.
-        inlineSendTimers.current.delete(cardId);
-        clearCountdown();
-        toast.dismiss(toastId);
-        void actions
-          .sendDraft(cardId)
-          .then(() => {
-            // Refresh first; the card disappears via fresh DB read.
-            // Clearing the sending-id set after refresh keeps the dim
-            // state coherent during the brief render gap.
-            refresh();
-            setSendingCardIds((prev) => {
-              if (!prev.has(cardId)) return prev;
-              const next = new Set(prev);
-              next.delete(cardId);
-              return next;
-            });
-          })
-          .catch((err) => {
-            setSendingCardIds((prev) => {
-              if (!prev.has(cardId)) return prev;
-              const next = new Set(prev);
-              next.delete(cardId);
-              return next;
-            });
-            toast.error(message(err, "Send failed"));
-            refresh();
-          });
-      },
-    });
-    inlineSendTimers.current.set(cardId, timer);
+  // Cosmetic countdown toast for an already-enqueued send. The send is
+  // committed server-side; this toast only shows the remaining window and
+  // an Undo that calls the server cancel. When the window passes we
+  // refresh so the sent card drops from the queue.
+  const showSendUndoToast = (
+    cardId: string,
+    sendAt: Date,
+    ws: number
+  ) => {
+    const toastId = `queue-send:${cardId}`;
+    const sendAtMs = new Date(sendAt).getTime();
+    const remainingSeconds = () =>
+      Math.max(0, Math.ceil((sendAtMs - Date.now()) / 1000));
 
-    // Live countdown: re-render the toast each second with the remaining
-    // whole seconds. Sonner re-uses an existing toast when the same id
-    // is passed, so the update lands in place without a flicker. The
-    // toast's own `duration` still drives the auto-dismiss at 10s in
-    // case the interval misses a beat (tab throttled, etc.).
-    let remainingSeconds = Math.ceil(SEND_UNDO_WINDOW_MS / 1000);
     const renderToast = () => {
-      toast(t("toast_sending_countdown", { seconds: remainingSeconds }), {
+      toast(t("toast_sending_countdown", { seconds: remainingSeconds() }), {
         id: toastId,
-        duration: SEND_UNDO_WINDOW_MS,
+        duration: Math.max(1, ws) * 1000,
         action: {
           label: t("toast_undo"),
           onClick: () => {
-            cancelTimer();
-            toast.success(t("toast_send_cancelled"));
+            window.clearInterval(intervalHandle);
+            void actions
+              .cancelSendDraft(cardId)
+              .then(() => {
+                toast.success(t("toast_send_cancelled"));
+              })
+              .catch((err) => {
+                toast.error(message(err, t("toast_send_failed")));
+              })
+              .finally(() => {
+                removeSendingCard(cardId);
+                toast.dismiss(toastId);
+                refresh();
+              });
           },
         },
       });
     };
+
     renderToast();
-    const intervalHandle = setInterval(() => {
-      remainingSeconds -= 1;
-      if (remainingSeconds <= 0) {
-        clearCountdown();
+    const intervalHandle = window.setInterval(() => {
+      if (remainingSeconds() <= 0) {
+        window.clearInterval(intervalHandle);
+        toast.dismiss(toastId);
+        removeSendingCard(cardId);
+        // The server already promoted the send when the window elapsed;
+        // refresh drops the card via a fresh DB read.
+        refresh();
         return;
       }
       renderToast();
     }, 1000);
-    inlineSendIntervals.current.set(cardId, intervalHandle);
   };
 
   // 今後この送信者を無視 — the ≥2-dismiss contextual nudge. Renders a
@@ -376,6 +417,7 @@ export function QueueList({
           const isSendingPending = sendingCardIds.has(card.id);
           const cardActions: QueueCardActions = {
             isSendingPending,
+            undoWindowSeconds,
             onDismiss: async () => {
               try {
                 const res = await actions.dismiss(card.id);
@@ -452,21 +494,21 @@ export function QueueList({
                 ? async () => {
                     // Office hours Type B drafts run their own send
                     // pipeline (Gmail draft + send + provisional
-                    // calendar event). Other Type B drafts run the
-                    // PR 2 inline send: a 10s client-side undo
-                    // window via sonner toast, then the actual
-                    // server send fires.
+                    // calendar event). Other Type B drafts go through the
+                    // shared server-side send: approveAgentDraftAction
+                    // enqueues with the per-user undo window AND runs the
+                    // pre-send fact-check.
                     if (card.id.startsWith("office_hours:")) {
                       try {
                         await actions.sendOfficeHours(card.id);
                         toast.success(t("toast_sent"));
                       } catch (err) {
-                        toast.error(message(err, "Send failed"));
+                        toast.error(message(err, t("toast_send_failed")));
                       }
                       refresh();
                       return;
                     }
-                    beginInlineSend(card.id);
+                    runServerSend(card.id, actions.sendDraft);
                   }
                 : undefined,
             onSecondaryAction:
@@ -647,8 +689,23 @@ export function QueueList({
                   }
                 : undefined,
           };
+          const cardWarnings = preSendWarnings.get(card.id) ?? null;
           return (
             <li key={card.id} className="steadii-card-enter">
+              {cardWarnings && cardWarnings.length > 0 ? (
+                <PreSendWarningPanel
+                  warnings={cardWarnings}
+                  onReview={
+                    card.detailHref
+                      ? () => router.push(card.detailHref!)
+                      : undefined
+                  }
+                  onSendAnyway={() =>
+                    runServerSend(card.id, actions.sendDraftAnyway)
+                  }
+                  onCancel={() => clearWarningsForCard(card.id)}
+                />
+              ) : null}
               <QueueCardRenderer card={card} actions={cardActions} />
             </li>
           );
@@ -677,4 +734,87 @@ export function QueueList({
 function message(err: unknown, fallback: string): string {
   if (err instanceof Error && err.message) return err.message;
   return fallback;
+}
+
+// Card-level pre-send warning panel. Mirrors the inbox-detail
+// PreSendWarningModal semantics (Review / Send anyway) but rendered inline
+// above the card instead of as a fullscreen modal — the queue is a list,
+// not a focused detail view. "Review" jumps to the inbox detail (where the
+// user can edit the draft); "Send anyway" is an explicit user bypass of
+// the fact-check; "Cancel" dismisses the panel and leaves the draft
+// untouched.
+function PreSendWarningPanel({
+  warnings,
+  onReview,
+  onSendAnyway,
+  onCancel,
+}: {
+  warnings: PreSendWarning[];
+  onReview?: () => void;
+  onSendAnyway: () => void;
+  onCancel: () => void;
+}) {
+  const t = useTranslations("queue.pre_send_warning");
+  return (
+    <div
+      role="alert"
+      className="mb-1.5 rounded-xl border border-[hsl(38_92%_40%/0.35)] bg-[hsl(38_92%_50%/0.06)] p-3"
+    >
+      <div className="flex items-start gap-2">
+        <AlertTriangle
+          size={16}
+          strokeWidth={1.75}
+          className="mt-0.5 shrink-0 text-[hsl(38_92%_40%)]"
+        />
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold text-[hsl(var(--foreground))]">
+            {t("title")}
+          </p>
+          <p className="mt-0.5 text-[12px] text-[hsl(var(--muted-foreground))]">
+            {t("body")}
+          </p>
+        </div>
+      </div>
+      <ul className="mt-2 flex flex-col gap-1.5">
+        {warnings.map((w, i) => (
+          <li
+            key={i}
+            className="rounded-md border border-[hsl(38_92%_40%/0.3)] bg-[hsl(var(--surface))] px-2.5 py-1.5 text-[12px]"
+          >
+            <div className="font-medium text-[hsl(var(--foreground))]">
+              &ldquo;{w.phrase}&rdquo;
+            </div>
+            <div className="mt-0.5 text-[11px] text-[hsl(var(--muted-foreground))]">
+              {w.why}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        {onReview ? (
+          <button
+            type="button"
+            onClick={onReview}
+            className="inline-flex h-8 items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-[12px] font-medium text-[hsl(var(--foreground))] transition-default hover:bg-[hsl(var(--surface-raised))]"
+          >
+            {t("review")}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={onSendAnyway}
+          className="inline-flex h-8 items-center rounded-full bg-[hsl(var(--foreground))] px-3 text-[12px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90"
+        >
+          {t("send_anyway")}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="inline-flex h-8 items-center rounded-full px-2.5 text-[12px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+        >
+          {t("cancel")}
+        </button>
+      </div>
+    </div>
+  );
 }

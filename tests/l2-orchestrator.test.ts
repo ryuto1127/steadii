@@ -169,6 +169,38 @@ vi.mock("@/lib/agent/email/send-enqueue", () => ({
   enqueueSendForDraft: (args: EnqueueArgs) => enqueueSendMock(args),
 }));
 
+// 2026-06-09 — the auto-send branch now runs the pre-send fact-checker
+// BEFORE enqueuing (the only zero-human-review send path must fact-check
+// and fail closed). Mock it so the orchestrator test never reaches the
+// real OpenAI client. Default: ok=true so the existing auto-send-fires
+// tests keep passing; individual fail-closed tests override per-call.
+const preSendCheckMock = vi.fn<
+  (
+    input: unknown,
+    opts?: { failMode?: "open" | "closed" }
+  ) => Promise<{
+    ok: boolean;
+    warnings: Array<{ phrase: string; why: string }>;
+    degraded?: boolean;
+  }>
+>(async () => ({ ok: true, warnings: [] }));
+vi.mock("@/lib/agent/email/pre-send-check", () => ({
+  checkDraftBeforeSend: (
+    input: unknown,
+    opts?: { failMode?: "open" | "closed" }
+  ) => preSendCheckMock(input, opts),
+  PRE_SEND_CHECK_ERROR_NAME: "PreSendCheckFailedError",
+}));
+
+// Full-body fetch is shared between L2 and the pre-send checker. The
+// inbox fixtures aren't gmail-sourced, so the real helper returns null
+// anyway, but mocking it keeps the orchestrator test from touching the
+// Gmail client.
+vi.mock("@/lib/agent/email/full-body", () => ({
+  fetchFullBodyForInbox: async () => null,
+  FULL_BODY_CHAR_CAP: 8000,
+}));
+
 vi.mock("@/lib/agent/models", () => ({
   selectModel: (t: string) =>
     t === "email_classify_deep" || t === "email_draft"
@@ -216,6 +248,8 @@ beforeEach(() => {
     sendAt: new Date(),
     undoWindowSeconds: 20,
   });
+  preSendCheckMock.mockReset();
+  preSendCheckMock.mockResolvedValue({ ok: true, warnings: [] });
 });
 
 describe("processL2 orchestrator", () => {
@@ -627,8 +661,113 @@ describe("processL2 orchestrator", () => {
     const { processL2 } = await import("@/lib/agent/email/l2");
     await processL2("ibx");
 
+    // Auto-send runs the pre-send fact-check FIRST (only zero-review path),
+    // then enqueues when it passes. It must request failMode "closed" so
+    // checker-internal LLM failures are NOT swallowed to ok=true (the
+    // attended-path contract) — see the pre-send-check unit tests for the
+    // real swallow path driven via a rejected OpenAI client.
+    expect(preSendCheckMock).toHaveBeenCalledTimes(1);
+    expect(preSendCheckMock.mock.calls[0]?.[1]).toEqual({
+      failMode: "closed",
+    });
     expect(enqueueSendMock).toHaveBeenCalledTimes(1);
     expect(enqueueSendMock.mock.calls[0]?.[0]?.isAutomatic).toBe(true);
+  });
+
+  it("auto-send FAILS CLOSED when the checker reports its own outage (ok=false + degraded → not sent)", async () => {
+    addInbox({ autonomySendEnabled: true });
+    riskMock.mockResolvedValue({
+      riskTier: "medium",
+      confidence: 0.7,
+      reasoning: "med",
+      usageId: "risk-uid",
+    });
+    draftMock.mockResolvedValue({
+      kind: "draft" as const,
+      subject: "Re: s",
+      body: "Yes that works",
+      to: ["prof@y.edu"],
+      cc: [],
+      inReplyTo: null,
+      reasoning: "test",
+      usageId: "draft-uid",
+    });
+    // This is what the REAL checker returns under failMode "closed" when
+    // its OpenAI call fails (it never throws for LLM errors — it returns
+    // degraded). The unattended path must hold the draft.
+    preSendCheckMock.mockResolvedValue({
+      ok: false,
+      warnings: [],
+      degraded: true,
+    });
+
+    const { processL2 } = await import("@/lib/agent/email/l2");
+    await processL2("ibx");
+
+    expect(preSendCheckMock).toHaveBeenCalledTimes(1);
+    expect(enqueueSendMock).not.toHaveBeenCalled();
+  });
+
+  it("auto-send FAILS CLOSED when the pre-send check returns ok=false (draft left pending, not sent)", async () => {
+    addInbox({ autonomySendEnabled: true });
+    riskMock.mockResolvedValue({
+      riskTier: "medium",
+      confidence: 0.7,
+      reasoning: "med",
+      usageId: "risk-uid",
+    });
+    draftMock.mockResolvedValue({
+      kind: "draft" as const,
+      subject: "Re: s",
+      body: "See you Friday at 2pm",
+      to: ["prof@y.edu"],
+      cc: [],
+      inReplyTo: null,
+      reasoning: "test",
+      usageId: "draft-uid",
+    });
+    // Fact-checker flags the draft → unattended path must NOT send.
+    preSendCheckMock.mockResolvedValue({
+      ok: false,
+      warnings: [{ phrase: "Friday at 2pm", why: "Not in the thread." }],
+    });
+
+    const { processL2 } = await import("@/lib/agent/email/l2");
+    await processL2("ibx");
+
+    expect(preSendCheckMock).toHaveBeenCalledTimes(1);
+    expect(enqueueSendMock).not.toHaveBeenCalled();
+  });
+
+  it("auto-send FAILS CLOSED when the pre-send check THROWS (error/timeout → not sent)", async () => {
+    addInbox({ autonomySendEnabled: true });
+    riskMock.mockResolvedValue({
+      riskTier: "medium",
+      confidence: 0.7,
+      reasoning: "med",
+      usageId: "risk-uid",
+    });
+    draftMock.mockResolvedValue({
+      kind: "draft" as const,
+      subject: "Re: s",
+      body: "Yes that works",
+      to: ["prof@y.edu"],
+      cc: [],
+      inReplyTo: null,
+      reasoning: "test",
+      usageId: "draft-uid",
+    });
+    // Under failMode "closed" the checker converts its own LLM errors to
+    // ok=false + degraded (covered above), but if the call still throws
+    // for any other reason the unattended path treats that as a non-pass
+    // and holds the send.
+    preSendCheckMock.mockRejectedValue(new Error("checker timeout"));
+
+    const { processL2 } = await import("@/lib/agent/email/l2");
+    await processL2("ibx");
+
+    expect(preSendCheckMock).toHaveBeenCalledTimes(1);
+    expect(enqueueSendMock).not.toHaveBeenCalled();
   });
 
   it("medium + draft_reply + autonomySendEnabled=false → enqueueSendForDraft NOT called", async () => {

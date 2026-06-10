@@ -11,6 +11,12 @@ const NOOP = async () => {};
 const NOOP_RESOLVE = async () => ({});
 const NOOP_E = async () => {};
 const NOOP_SNOOZE = async () => {};
+// Send stub returns a sendAt 10s out so the preview's countdown toast
+// renders without touching DB / QStash.
+const NOOP_SEND = async () => ({
+  sendAt: new Date(Date.now() + 10_000),
+  undoWindowSeconds: 10,
+});
 // Dismiss stub that surfaces the ≥2-dismiss "ignore this sender?" offer
 // so the verification harness can capture the toast. Synthetic sender
 // only (matches the preview draft card's ignorableSender).
@@ -73,6 +79,7 @@ export function QueuePreviewClient({
       ) : (
         <QueueList
           cards={cards}
+          undoWindowSeconds={10}
           actions={{
             resolveProposal: NOOP_RESOLVE,
             submitClarification: NOOP_E,
@@ -82,7 +89,9 @@ export function QueuePreviewClient({
             permanentDismiss: NOOP,
             ignoreSender: NOOP_IGNORE_SENDER,
             secondaryAction: NOOP,
-            sendDraft: NOOP,
+            sendDraft: NOOP_SEND,
+            sendDraftAnyway: NOOP_SEND,
+            cancelSendDraft: NOOP,
             sendOfficeHours: NOOP,
             setDisposition: NOOP,
             markHandled: NOOP,

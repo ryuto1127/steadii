@@ -68,6 +68,11 @@ type ActionResult = { undoToken?: string } | void;
 
 type CommonProps = {
   card: QueueCard;
+  // Per-user undo window (users.undo_window_seconds) for the Undo banner
+  // countdown. Optional with a 10s fallback so call sites that don't have
+  // the user value (dev preview, tests) still render. Replaces the old
+  // hardcoded 10 so a user who changed the window sees the right count.
+  undoWindowSeconds?: number;
   // Default Dismiss = 24h snooze per spec. Long-press / quick menu offers
   // permanent dismiss separately.
   onDismiss: () => Promise<ActionResult> | ActionResult;
@@ -614,6 +619,7 @@ export function QueueCardARender({
   onPermanentDismiss,
   onMarkHandled,
   onUndo,
+  undoWindowSeconds,
 }: CardAProps) {
   const t = useTranslations("queue.card_a");
   const tShared = useTranslations("queue.shared");
@@ -623,7 +629,7 @@ export function QueueCardARender({
   const [pending, startTransition] = useTransition();
   const [undoToken, setUndoToken] = useState<string | null>(null);
   const [resolved, setResolved] = useState(false);
-  const undoWindow = 10;
+  const undoWindow = undoWindowSeconds ?? 10;
   const { bindings, menu } = useQuickMenu({ onSnooze, onPermanentDismiss });
 
   const pick = (key: string) => {
@@ -745,6 +751,7 @@ export function QueueCardBRender({
   onIgnoreSender,
   onUndo,
   isSendingPending = false,
+  undoWindowSeconds,
 }: CardBProps) {
   const t = useTranslations("queue.card_b");
   const tDispo = useTranslations("queue.card_b_disposition");
@@ -1042,7 +1049,7 @@ export function QueueCardBRender({
         </div>
         <UndoBanner
           visible={undoToken !== null}
-          windowSeconds={10}
+          windowSeconds={undoWindowSeconds ?? 10}
           onUndo={() => {
             const token = undoToken;
             if (!token) return;
@@ -1590,10 +1597,13 @@ export type QueueCardActions = {
   // 確認済み — neutral mark-handled, wired on non-draft judgment/FYI
   // cards (Type A / Type C). Forwarded to those renderers below.
   onMarkHandled?: CommonProps["onMarkHandled"];
-  // PR 2 — Type B Draft only. When true, the parent's inline-send 10s
-  // timer is running OR the post-timer server send is in flight; the
-  // card dims and disables its buttons in lockstep.
+  // 2026-06-09 — Type B Draft only. True while the server-side send is
+  // in flight or inside the undo window; the card dims + disables its
+  // buttons. The send is already committed server-side, so unmounting
+  // can't drop it.
   isSendingPending?: boolean;
+  // Per-user undo window for the Undo banner countdown (Type A + B).
+  undoWindowSeconds?: number;
 };
 
 export function QueueCardRenderer({
@@ -1614,6 +1624,7 @@ export function QueueCardRenderer({
           onPermanentDismiss={actions.onPermanentDismiss}
           onMarkHandled={actions.onMarkHandled}
           onUndo={actions.onUndo}
+          undoWindowSeconds={actions.undoWindowSeconds}
         />
       );
     case "B":
@@ -1630,6 +1641,7 @@ export function QueueCardRenderer({
           onIgnoreSender={actions.onIgnoreSender}
           onUndo={actions.onUndo}
           isSendingPending={actions.isSendingPending}
+          undoWindowSeconds={actions.undoWindowSeconds}
         />
       );
     case "C":

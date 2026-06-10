@@ -1,20 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// PR 2 — queueSendDraftAction is a thin server-action wrapper around
-// approveAgentDraftAction. The interesting branches are:
-//   1. card id parses as `draft:<uuid>` → forwards to the inner action
-//      with skipPreSendCheck=true
-//   2. any other prefix throws "Card is not a draft" before any DB work
+// 2026-06-09 — queueSendDraftAction is a thin server-action wrapper around
+// approveAgentDraftAction. The send contract changed: it now runs the
+// pre-send fact-check (NO skipPreSendCheck) and returns the server's
+// { sendAt, undoWindowSeconds } so the client drives its countdown from
+// the authoritative server value. Branches under test:
+//   1. card id parses as `draft:<uuid>` → forwards to approveAgentDraftAction
+//      with NO options (check runs) and returns its result
+//   2. queueSendDraftAnywayAction → the explicit "Send anyway" bypass
+//      passes skipPreSendCheck=true (a user choice, never the silent default)
+//   3. queueCancelSendDraftAction → delegates to cancelPendingSendAction
+//   4. any non-draft prefix throws "Card is not a draft" before any DB work
+//   5. a thrown PreSendCheckFailedError propagates to the caller (the
+//      client surfaces the Review / Send-anyway panel)
 //
-// PR 3 — queueSetDispositionAction is the corresponding wrapper for
-// the new 3-way disposition buttons. Same routing check + a Zod-
-// validated disposition input.
+// queueSetDispositionAction is the wrapper for the 3-way disposition
+// buttons — same routing check + a Zod-validated disposition input.
 //
-// We mock out the heavy dependencies (auth, db, approveAgentDraftAction)
-// so the test stays a pure routing check.
+// We mock out the heavy dependencies (auth, db, draft-actions) so the
+// test stays a pure routing check.
 
 const mocks = vi.hoisted(() => ({
   approveAgentDraftAction: vi.fn(),
+  cancelPendingSendAction: vi.fn(),
   revalidatePath: vi.fn(),
   capturedDispositionSet: null as Record<string, unknown> | null,
   logEmailAudit: vi.fn(),
@@ -22,6 +30,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/agent/email/draft-actions", () => ({
   approveAgentDraftAction: mocks.approveAgentDraftAction,
+  cancelPendingSendAction: mocks.cancelPendingSendAction,
   dismissAgentDraftAction: vi.fn(),
   snoozeAgentDraftAction: vi.fn(),
 }));
@@ -106,6 +115,8 @@ describe("queueSendDraftAction", () => {
       sendAt: new Date(),
       undoWindowSeconds: 10,
     });
+    mocks.cancelPendingSendAction.mockReset();
+    mocks.cancelPendingSendAction.mockResolvedValue(undefined);
     mocks.revalidatePath.mockReset();
   });
 
@@ -113,16 +124,21 @@ describe("queueSendDraftAction", () => {
     vi.resetModules();
   });
 
-  it("forwards a draft:<uuid> card id to approveAgentDraftAction with skipPreSendCheck=true", async () => {
+  it("forwards a draft:<uuid> card id to approveAgentDraftAction WITHOUT skipPreSendCheck (the check runs)", async () => {
     const { queueSendDraftAction } = await import("@/app/app/queue-actions");
     const cardId = "draft:00000000-0000-0000-0000-000000000001";
-    await queueSendDraftAction(cardId);
+    const result = await queueSendDraftAction(cardId);
 
     expect(mocks.approveAgentDraftAction).toHaveBeenCalledTimes(1);
+    // Called with just the id — no options object means the pre-send
+    // fact-check runs (skipPreSendCheck defaults to false).
     expect(mocks.approveAgentDraftAction).toHaveBeenCalledWith(
-      "00000000-0000-0000-0000-000000000001",
-      { skipPreSendCheck: true }
+      "00000000-0000-0000-0000-000000000001"
     );
+    // The action returns the server's authoritative sendAt result so the
+    // client can drive the countdown toast from it.
+    expect(result).toHaveProperty("sendAt");
+    expect(result).toHaveProperty("undoWindowSeconds", 10);
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/app");
   });
 
@@ -142,12 +158,94 @@ describe("queueSendDraftAction", () => {
     expect(mocks.approveAgentDraftAction).not.toHaveBeenCalled();
   });
 
-  it("propagates errors from the inner approve action (e.g. pre-send fact-checker on subsequent paths)", async () => {
-    mocks.approveAgentDraftAction.mockRejectedValueOnce(new Error("Draft not found"));
+  it("propagates a PreSendCheckFailedError so the client can surface the warning panel", async () => {
+    const err = new Error(
+      JSON.stringify({
+        name: "PreSendCheckFailedError",
+        warnings: [{ phrase: "Friday at 2pm", why: "Not in the thread." }],
+      })
+    );
+    err.name = "PreSendCheckFailedError";
+    mocks.approveAgentDraftAction.mockRejectedValueOnce(err);
     const { queueSendDraftAction } = await import("@/app/app/queue-actions");
     await expect(
       queueSendDraftAction("draft:00000000-0000-0000-0000-000000000004")
-    ).rejects.toThrow("Draft not found");
+    ).rejects.toThrow("PreSendCheckFailedError");
+  });
+});
+
+describe("queueSendDraftAnywayAction", () => {
+  beforeEach(() => {
+    mocks.approveAgentDraftAction.mockReset();
+    mocks.approveAgentDraftAction.mockResolvedValue({
+      sendAt: new Date(),
+      undoWindowSeconds: 10,
+    });
+    mocks.revalidatePath.mockReset();
+  });
+
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it("passes skipPreSendCheck=true — an explicit user 'Send anyway' choice", async () => {
+    const { queueSendDraftAnywayAction } = await import(
+      "@/app/app/queue-actions"
+    );
+    const result = await queueSendDraftAnywayAction(
+      "draft:00000000-0000-0000-0000-000000000005"
+    );
+    expect(mocks.approveAgentDraftAction).toHaveBeenCalledWith(
+      "00000000-0000-0000-0000-000000000005",
+      { skipPreSendCheck: true }
+    );
+    expect(result).toHaveProperty("undoWindowSeconds", 10);
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/app");
+  });
+
+  it("throws when the card id prefix is not 'draft'", async () => {
+    const { queueSendDraftAnywayAction } = await import(
+      "@/app/app/queue-actions"
+    );
+    await expect(
+      queueSendDraftAnywayAction("proposal:00000000-0000-0000-0000-000000000006")
+    ).rejects.toThrow("Card is not a draft");
+    expect(mocks.approveAgentDraftAction).not.toHaveBeenCalled();
+  });
+});
+
+describe("queueCancelSendDraftAction", () => {
+  beforeEach(() => {
+    mocks.cancelPendingSendAction.mockReset();
+    mocks.cancelPendingSendAction.mockResolvedValue(undefined);
+    mocks.revalidatePath.mockReset();
+  });
+
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it("delegates to cancelPendingSendAction with the underlying draft id", async () => {
+    const { queueCancelSendDraftAction } = await import(
+      "@/app/app/queue-actions"
+    );
+    await queueCancelSendDraftAction(
+      "draft:00000000-0000-0000-0000-000000000007"
+    );
+    expect(mocks.cancelPendingSendAction).toHaveBeenCalledWith(
+      "00000000-0000-0000-0000-000000000007"
+    );
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/app");
+  });
+
+  it("throws when the card id prefix is not 'draft'", async () => {
+    const { queueCancelSendDraftAction } = await import(
+      "@/app/app/queue-actions"
+    );
+    await expect(
+      queueCancelSendDraftAction("proposal:00000000-0000-0000-0000-000000000008")
+    ).rejects.toThrow("Card is not a draft");
+    expect(mocks.cancelPendingSendAction).not.toHaveBeenCalled();
   });
 });
 
