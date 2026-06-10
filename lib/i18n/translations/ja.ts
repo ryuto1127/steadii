@@ -70,12 +70,12 @@ export const ja: Messages = {
       item1_context: "田中教授との過去3スレッド",
       item2_headline: "CS 348 課題3 — 明日23:59 締切",
       item2_action:
-        "まだ未着手です。シラバス上は約4時間、今夜19-23時を確保しました。",
+        "まだ未着手です。シラバス上は約4時間。締切前に空いている夜は今夜が最後です。",
       item2_context: "CS 348 シラバス、カレンダー",
       item3_headline: "15時 グループプロジェクト定例",
       item3_action:
-        "ブリーフ準備済み — 火曜の進捗、Mei さんのタスク残り。",
-      item3_context: "Notion、前回議事録",
+        "事前ブリーフ準備済み — 前回までの進捗と、まだ残っている論点。",
+      item3_context: "Notion、カレンダー",
       card_close: "毎朝、ここから始まります。",
     },
     week: {
@@ -91,13 +91,13 @@ export const ja: Messages = {
       moment2_time: "火 6:14",
       moment2_event: "CS 348 PS3 金曜締切 — まだ未着手",
       moment2_action:
-        "シラバスの配点から4時間と見積もり、水曜19-23時を確保。先週流し読みした前提章も再掲しました。",
-      moment2_context: "シラバス、学習履歴",
+        "シラバスの配点から4時間と見積もり。締切前に空いている最後の時間帯として水曜の夜を提示しました。",
+      moment2_context: "シラバス、カレンダー",
       moment3_time: "水 14:58",
       moment3_event: "15時のグループ定例まであと2分",
       moment3_action:
-        "ブリーフ準備完了 — 月曜の進捗、Mei さんの残タスク、先週木曜の合意事項。",
-      moment3_context: "Notion、議事録、過去4 Slack スレッド",
+        "事前ブリーフ準備完了 — 前回までの進捗、まだ残っている論点、次の締切。",
+      moment3_context: "Notion、課題、カレンダー",
       moment4_time: "木 23:23",
       moment4_event: "あなた:「明日休みます」",
       moment4_action:
@@ -128,7 +128,9 @@ export const ja: Messages = {
     },
     founding: {
       headline: "創立メンバーは先着 100 名。",
-      sub: "サインアップ時の料金が永続固定。",
+      sub: "先着 100 名の有料メンバーは、その料金が永続固定になります。",
+      price_line:
+        "Pro は月 ¥3,000。Student は 4ヶ月ごと ¥6,000（実質 ¥1,500/月）、.ac.jp 等の認証が必要。",
       cta: "アクセスをリクエスト",
       cta_secondary: "招待コードを使う",
     },
@@ -1632,17 +1634,13 @@ export const ja: Messages = {
   onboarding_wait: {
     title: "Steadii が動いています。",
     body_p1:
-      "Steadii が直近 7 日のメールを読んで、最初の draft を準備します。",
+      "Steadii が直近 24 時間のメールを読んで、最初の draft を準備します。",
     body_p2:
-      "通常 24 時間後にホームに最初の提案が表示されます。push 通知でお知らせします。",
+      "通常 24 時間後にホームに最初の提案が表示されます。",
     body_p3: "その間、何か頼みごとがあればここから:",
     finish_button: "ホームへ",
     palette_hint: "シラバス・コマンド・質問など、何でも入力できます…",
     progress_label: "ステップ 3 / 3",
-    push_permission_prompt:
-      "最初の提案ができたときに push 通知でお知らせしてもよいですか？",
-    push_permission_yes: "通知を受け取る",
-    push_permission_no: "通知を受け取らない",
   },
   pre_brief: {
     eyebrow: "ミーティング pre-brief",

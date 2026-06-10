@@ -12,7 +12,6 @@ import { INTEGRATION_SOURCES } from "@/lib/integrations/suggestions/sources";
 import { recordSuggestionImpression } from "@/lib/integrations/suggestions/impressions";
 import { skipIntegrationsStepAction } from "./actions";
 import { OnboardingWaitStep } from "@/components/onboarding/wait-step";
-import { isWebPushEnabled } from "@/lib/notifications/web-push";
 
 // Symmetric with /app/layout — both endpoints branch on
 // getOnboardingStatus and redirect at each other. Static optimization
@@ -138,7 +137,7 @@ export default async function OnboardingPage() {
             </form>
           </StepPane>
         ) : onStep3 ? (
-          <OnboardingWaitStep pushSupported={isWebPushEnabled()} />
+          <OnboardingWaitStep />
         ) : null}
       </section>
     </main>

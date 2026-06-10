@@ -145,9 +145,7 @@ export async function skipIntegrationsStepAction() {
 // preferences blob is JSONB so we merge rather than overwrite to keep
 // the other prefs (theme, locale, voice trigger, agent confirmation
 // mode) intact.
-export async function dismissOnboardingWaitAction(args?: {
-  pushPermissionGranted?: boolean;
-}) {
+export async function dismissOnboardingWaitAction() {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthenticated");
   const userId = session.user.id;
@@ -157,11 +155,11 @@ export async function dismissOnboardingWaitAction(args?: {
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
+  // 2026-06-09 — dropped onboardingPushPermissionGranted: web push was a
+  // no-op stub and the permission flag was never read by anything.
   const merged = {
     ...((row?.preferences ?? {}) as Record<string, unknown>),
     onboardingWaitDismissedAt: new Date().toISOString(),
-    onboardingPushPermissionGranted:
-      args?.pushPermissionGranted === true ? true : false,
   };
   await db
     .update(users)
