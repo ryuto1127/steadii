@@ -108,10 +108,13 @@ export const CRON_MANIFEST: ReadonlyArray<CronManifestEntry> = [
   {
     name: "user-fact-review",
     route: "/api/cron/user-fact-review",
-    cron: "0 8 * * *",
+    // 0 11, not 0 8: the live console schedule has run at 11:00 UTC since
+    // its engineer-48 deployment (PR #218). The manifest describes what IS
+    // scheduled; pnpm cron:audit 2026-06-10 caught this entry as the drift.
+    cron: "0 11 * * *",
     expectedIntervalMs: DAY_MS,
     description:
-      "Daily 08:00 UTC. Review sweep for aging user_facts (confidence decay / stale-fact retirement).",
+      "Daily 11:00 UTC. Review sweep for aging user_facts (confidence decay / stale-fact retirement).",
   },
   {
     name: "monthly-digest",
