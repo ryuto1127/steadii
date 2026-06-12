@@ -529,7 +529,7 @@ In the QStash console → **Schedules** → **Create** (one per row):
 | `https://mysteadii.com/api/cron/groups` | `30 7 * * *` | POST | `groups` | Daily 07:30 UTC, just after the digest. Auto-detects new group projects from email/calendar and runs silence detection across active ones. |
 | `https://mysteadii.com/api/cron/ical-sync` | `0 */6 * * *` | POST | `ical-sync` | Every 6 hours (Phase 7 W-Integrations Q3). Conditional-GETs active ical_subscriptions and upserts into the shared events mirror; auto-deactivates a URL after 3 consecutive failures. |
 | `https://mysteadii.com/api/cron/style-learner` | `0 8 * * *` | POST | `style-learner` | Daily 08:00 UTC. Learns per-user writing style from (original, edited) draft feedback pairs (≥5 pairs). |
-| `https://mysteadii.com/api/cron/user-fact-review` | `0 8 * * *` | POST | `user-fact-review` | Daily 08:00 UTC. Review sweep for aging user_facts (confidence decay / stale-fact retirement). |
+| `https://mysteadii.com/api/cron/user-fact-review` | `0 11 * * *` | POST | `user-fact-review` | Daily 11:00 UTC. Review sweep for aging user_facts (confidence decay / stale-fact retirement). |
 | `https://mysteadii.com/api/cron/monthly-digest` | `0 9 * * *` | POST | `monthly-digest` | Daily 09:00 UTC. Per-user gate fires only on the first Sunday of the covered month in the user's local timezone; synthesizes the prior calendar month. |
 | `https://mysteadii.com/api/cron/persona-learner` | `0 9 * * *` | POST | `persona-learner` | Daily 09:00 UTC. Learns contact personas from recent correspondence (7-day window; re-running on the same data is a near no-op). |
 
