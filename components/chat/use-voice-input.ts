@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { consumeVoiceStream } from "@/lib/voice/consume-voice-stream";
 
 export type VoiceState = "idle" | "listening" | "processing";
 // 2026-05-05 — meta_right = Right ⌘ on Mac (JIS keyboard friendly:
@@ -262,88 +263,33 @@ export function useVoiceInput(args: {
       }
 
       // SSE: the route streams `delta` events, then optionally `shortened`,
-      // then a final `done` event. We buffer deltas internally and emit the
-      // cleaned text once at the end (matching the non-streaming UX) so the
-      // chooser flow + voiceFlashKey animation still work cleanly.
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      let cleaned = "";
-      let cleanedFinal: string | null = null;
-      let transcriptFallback = "";
-      let shortened: string | null = null;
-      let cleanupSkipped = false;
-      let streamErrored = false;
+      // then a final `done` event. The shared consumer buffers deltas and
+      // resolves the cleaned text once at the end (matching the non-streaming
+      // UX) so the chooser flow + voiceFlashKey animation still work cleanly.
+      const result = await consumeVoiceStream(resp.body);
 
-      // Deferred callback fired once the chooser overlay has been resolved,
-      // OR immediately if no chooser is needed. Centralizing here prevents
-      // double-firing onResult when the stream parser sees both a `delta`
-      // accumulator and the final `done` cleaned text.
-      const finalize = () => {
-        const text = (cleanedFinal ?? cleaned ?? transcriptFallback).trim();
-        if (!text) {
-          setState("idle");
-          return;
-        }
-        if (cleanupSkipped) onError("cleanup_failed");
-        if (shortened && shortened !== text) {
-          offerPendingChoice({ cleaned: text, shortened });
-          registerSuccessfulUse();
-          setState("idle");
-          return;
-        }
-        onResult(text);
-        registerSuccessfulUse();
-        setState("idle");
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const parts = buf.split("\n\n");
-        buf = parts.pop() ?? "";
-        for (const part of parts) {
-          const line = part.trim();
-          if (!line.startsWith("data:")) continue;
-          try {
-            const payload = JSON.parse(line.slice(5).trim()) as {
-              type: string;
-              delta?: string;
-              cleaned?: string;
-              transcript?: string;
-              shortened?: string;
-              cleanupSkipped?: boolean;
-              code?: string;
-              message?: string;
-            };
-            if (payload.type === "delta" && typeof payload.delta === "string") {
-              cleaned += payload.delta;
-            } else if (
-              payload.type === "shortened" &&
-              typeof payload.shortened === "string"
-            ) {
-              shortened = payload.shortened;
-            } else if (payload.type === "done") {
-              cleanedFinal =
-                payload.cleaned ?? cleaned ?? payload.transcript ?? "";
-              transcriptFallback = payload.transcript ?? "";
-              cleanupSkipped = !!payload.cleanupSkipped;
-            } else if (payload.type === "error") {
-              streamErrored = true;
-            }
-          } catch {
-            // ignore malformed event
-          }
-        }
-      }
-
-      if (streamErrored) {
+      if (result.errored) {
         onError("transcribe_failed");
         setState("idle");
         return;
       }
-      finalize();
+
+      const text = result.transcript;
+      if (!text) {
+        // Empty transcript (silence / didn't speak) — silent abort.
+        setState("idle");
+        return;
+      }
+      if (result.cleanupSkipped) onError("cleanup_failed");
+      if (result.shortened) {
+        offerPendingChoice({ cleaned: text, shortened: result.shortened });
+        registerSuccessfulUse();
+        setState("idle");
+        return;
+      }
+      onResult(text);
+      registerSuccessfulUse();
+      setState("idle");
     } catch (err) {
       onError("transcribe_failed", err instanceof Error ? err.message : "");
       setState("idle");
