@@ -255,6 +255,45 @@ describe("mergeTodayTasks", () => {
     ]);
   });
 
+  it("restored home briefing window: keeps a Steadii deadline + day-7 external, drops day-8", () => {
+    // Guards the exact window the restored fetchTodayTasks passes
+    // (today, addDaysToDateStr(today, 7)). The home briefing must surface
+    // an academic deadline plus external tasks through the 7th day and
+    // drop anything past it — a future window-narrowing refactor that
+    // regresses the briefing fails here.
+    const out = mergeTodayTasks(
+      [
+        {
+          id: "a-1",
+          title: "Steadii deadline within week",
+          classTitle: "Class A",
+          due: "2026-05-11",
+        },
+      ],
+      [
+        {
+          due: "2026-05-12", // exactly the week-end upper bound → kept
+          title: "External on day 7",
+          taskId: "g-edge",
+          taskListId: "list-G",
+        },
+        {
+          due: "2026-05-13", // one day past → dropped
+          title: "External on day 8",
+          taskId: "g-out",
+          taskListId: "list-G",
+        },
+      ],
+      [],
+      "2026-05-05",
+      "2026-05-12",
+    );
+    expect(out.map((r) => r.title)).toEqual([
+      "Steadii deadline within week",
+      "External on day 7",
+    ]);
+  });
+
   it("regression: Ryuto's overdue iPhone task on 2026-05-05 home (PR #157)", () => {
     const out = mergeTodayTasks(
       [],
