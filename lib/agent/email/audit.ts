@@ -72,7 +72,19 @@ export type EmailAuditAction =
   // user ignored a sender (detail carries the retroactive-clear counts +
   // the affordance source); `removed` = user un-ignored from settings.
   | "ignore_sender_added"
-  | "ignore_sender_removed";
+  | "ignore_sender_removed"
+  // Two-button card model (確認済み / 不要). Row/card-level clears from the
+  // inbox list and the queue judgment cards:
+  //   - 'email_item_dismissed'         → 確認済み (neutral "Reviewed"). NO
+  //                                       learning signal — just a status
+  //                                       clear. Detail carries the source.
+  //   - 'email_item_marked_not_needed' → 不要 (soft-negative). Status clear
+  //                                       PLUS a record-only feedback signal
+  //                                       (no sender-confidence demotion / no
+  //                                       suppression threshold). Detail
+  //                                       carries the source.
+  | "email_item_dismissed"
+  | "email_item_marked_not_needed";
 
 export async function logEmailAudit(params: {
   userId: string;

@@ -129,6 +129,10 @@ type ServerActions = {
   // card kinds. Maps to the 'resolved' disposition family server-side and
   // never writes a negative learning signal (distinct from dismiss/却下).
   markHandled: (cardId: string) => Promise<void>;
+  // 不要 — the soft-negative sibling of markHandled on the two-button card
+  // model. Resolves the card AND records a RECORD-ONLY soft-negative signal
+  // (no sender-confidence demotion / no suppression threshold).
+  markNotNeeded: (cardId: string) => Promise<void>;
   // engineer-42 — Type F (interactive confirmations).
   confirm: (cardId: string) => Promise<void>;
   correct: (cardId: string, correctedValue: string) => Promise<void>;
@@ -535,10 +539,28 @@ export function QueueList({
                     refresh();
                   }
                 : undefined,
-            onTakeAction:
+            // Type C two-button model: the card body navigates to the
+            // item's detail route (the old 対応する destination). No
+            // server action — pure client navigation.
+            onOpen:
+              card.archetype === "C"
+                ? () => {
+                    if (card.detailHref) router.push(card.detailHref);
+                  }
+                : undefined,
+            // 不要 — record-only soft-negative on Type C soft notices.
+            // Resolves the card AND logs a feedback signal without
+            // activating any sender-confidence demotion / suppression
+            // threshold (see queueMarkNotNeededAction).
+            onMarkNotNeeded:
               card.archetype === "C"
                 ? async () => {
-                    if (card.detailHref) router.push(card.detailHref);
+                    try {
+                      await actions.markNotNeeded(card.id);
+                    } catch (err) {
+                      toast.error(message(err, "Action failed"));
+                    }
+                    refresh();
                   }
                 : undefined,
             // 確認済み — neutral "handled / saw it" on the non-draft

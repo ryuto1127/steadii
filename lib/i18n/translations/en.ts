@@ -380,6 +380,10 @@ type MessagesShape = {
     filter_action: string;
     filter_hidden: string;
     restore_button: string;
+    row_confirmed: string;
+    row_confirmed_aria: string;
+    row_not_needed: string;
+    row_not_needed_aria: string;
     hidden_empty_title: string;
     hidden_empty_description: string;
   };
@@ -786,6 +790,10 @@ type MessagesShape = {
     };
     shared: {
       dismiss: string;
+      confirmed: string;
+      confirmed_aria: string;
+      not_needed: string;
+      not_needed_aria: string;
       verify_recommended: string;
       take_action: string;
       open: string;
@@ -2356,6 +2364,10 @@ export const en: MessagesShape = {
     filter_action: "Action needed ({n})",
     filter_hidden: "Hidden ({n})",
     restore_button: "Restore — keep these in inbox",
+    row_confirmed: "Reviewed",
+    row_confirmed_aria: "Mark this item reviewed",
+    row_not_needed: "Dismiss",
+    row_not_needed_aria: "Mark this item as not needed",
     hidden_empty_title: "Nothing hidden yet.",
     hidden_empty_description:
       "When Steadii archives a low-risk email, it'll appear here so you can review or restore it.",
@@ -2785,6 +2797,10 @@ export const en: MessagesShape = {
     },
     shared: {
       dismiss: "Dismiss",
+      confirmed: "Reviewed",
+      confirmed_aria: "Mark reviewed",
+      not_needed: "Dismiss",
+      not_needed_aria: "Mark as not needed",
       verify_recommended: "Verify before acting.",
       take_action: "Take action",
       open: "Open",
