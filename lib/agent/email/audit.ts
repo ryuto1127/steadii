@@ -10,6 +10,11 @@ export type EmailAuditAction =
   | "email_ingest_failed"
   | "email_item_created"
   | "email_item_skipped"
+  // 見送る — user clears an inbox row directly from the list (Action / All
+  // views) without opening the detail. NEUTRAL: flips status='dismissed'
+  // only; never touches sender-confidence or the per-sender ignore list
+  // (learning stays behind the explicit 今後は通知しない path).
+  | "email_item_dismissed"
   | "email_rule_applied"
   // W2 additions — surface embed + L2 failures for observability.
   | "email_embed_failed"

@@ -4,6 +4,7 @@ import {
   Star,
   Archive,
   RotateCcw,
+  Check,
 } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -24,7 +25,7 @@ import {
   attentionDraftClause,
 } from "@/lib/agent/email/pending-queries";
 import { SteadiiNoticedToggle } from "./_components/steadii-noticed-toggle";
-import { restoreAutoArchivedAction } from "./actions";
+import { restoreAutoArchivedAction, dismissInboxItemAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -566,6 +567,25 @@ export default async function InboxPage({
                   >
                     <RotateCcw size={11} strokeWidth={1.75} />
                     {t("restore_button")}
+                  </button>
+                </form>
+              ) : null}
+              {/* Row-level 見送る — NEUTRAL clear straight from the list
+                  (Action / All views only; Hidden gets Restore instead).
+                  Flips status='dismissed'; no learning signal. */}
+              {!showingHidden ? (
+                <form
+                  action={dismissInboxItemAction}
+                  className="border-t border-[hsl(var(--border)/0.5)] bg-[hsl(var(--surface))] px-3 py-1.5 sm:px-4"
+                >
+                  <input type="hidden" name="id" value={item.id} />
+                  <button
+                    type="submit"
+                    aria-label={t("dismiss_row_aria")}
+                    className="inline-flex h-7 items-center gap-1 rounded-md text-[12px] font-medium text-[hsl(var(--muted-foreground))] transition-hover hover:opacity-80"
+                  >
+                    <Check size={11} strokeWidth={1.75} />
+                    {t("dismiss_row")}
                   </button>
                 </form>
               ) : null}

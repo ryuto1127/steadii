@@ -380,6 +380,8 @@ type MessagesShape = {
     filter_action: string;
     filter_hidden: string;
     restore_button: string;
+    dismiss_row: string;
+    dismiss_row_aria: string;
     hidden_empty_title: string;
     hidden_empty_description: string;
   };
@@ -2356,6 +2358,8 @@ export const en: MessagesShape = {
     filter_action: "Action needed ({n})",
     filter_hidden: "Hidden ({n})",
     restore_button: "Restore — keep these in inbox",
+    dismiss_row: "Skip",
+    dismiss_row_aria: "Skip this email",
     hidden_empty_title: "Nothing hidden yet.",
     hidden_empty_description:
       "When Steadii archives a low-risk email, it'll appear here so you can review or restore it.",
@@ -2518,7 +2522,7 @@ export const en: MessagesShape = {
       cancel: "Cancel",
       send: "Send",
       edit: "Edit",
-      dismiss: "Dismiss",
+      dismiss: "Skip",
       sent_dispatching: "Sent — dispatches in {n}s.",
       undo: "Undo",
       sent_automatically: "Sent automatically",
@@ -2784,7 +2788,7 @@ export const en: MessagesShape = {
       fallback: "Steadii noticed",
     },
     shared: {
-      dismiss: "Dismiss",
+      dismiss: "Skip",
       verify_recommended: "Verify before acting.",
       take_action: "Take action",
       open: "Open",
@@ -2817,7 +2821,7 @@ export const en: MessagesShape = {
       review: "Review",
       send: "Send",
       skip: "Skip",
-      dismiss: "Dismiss",
+      dismiss: "Skip",
       inbound_label: "Original email",
       draft_label: "Steadii's draft reply",
     },
@@ -2844,7 +2848,7 @@ export const en: MessagesShape = {
       submit_toast: "Sent to Steadii",
       talk_in_chat: "Talk to Steadii",
       ask_later: "Ask later",
-      reject: "Reject",
+      reject: "Skip",
       response_pending: "Awaiting response",
     },
     card_f: {
