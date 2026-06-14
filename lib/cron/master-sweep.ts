@@ -72,6 +72,16 @@ export type SubSweepName =
   // 2026-05-24 — Round-5 notify-with-undo. Clears
   // agent_notifications.undoable_until on rows past their 24h window.
   | "notification-expiry"
+  // 2026-06-13 — Wave A noise reduction. Flips 'pending' agent_proposals
+  // whose expires_at (stamped now+7d at insert) has elapsed → 'expired'.
+  // Single bounded UPDATE, no Gmail/LLM. Activates a column nothing read
+  // before, so the first run drops a backlog of long-expired proposals.
+  | "proposal-expiry"
+  // 2026-06-13 — Wave A noise reduction. Ages out stale pending
+  // agent_drafts SILENTLY (disposition='resolved' + audit row): FYI /
+  // notify_only after 48h, decision-required after 5 days. The Gmail
+  // message is untouched.
+  | "draft-ttl"
   | "digest"
   | "weekly-digest";
 
@@ -128,6 +138,12 @@ export async function dispatchMasterSweep(args: {
     await tryRun(summary, "draft-superseded", subSweeps);
     await tryRun(summary, "disposition-resurface", subSweeps);
     await tryRun(summary, "notification-expiry", subSweeps);
+    // 2026-06-13 — Wave A noise reduction. Both are single bounded
+    // partial-index UPDATEs (no Gmail/LLM), so adding them to the 30-min
+    // block doesn't reopen the Neon idle-billing issue the master-sweep
+    // consolidation solved.
+    await tryRun(summary, "proposal-expiry", subSweeps);
+    await tryRun(summary, "draft-ttl", subSweeps);
   } else {
     summary.skipped.push(
       "auto-cal-proposal-expiry",
@@ -135,6 +151,8 @@ export async function dispatchMasterSweep(args: {
       "draft-superseded",
       "disposition-resurface",
       "notification-expiry",
+      "proposal-expiry",
+      "draft-ttl",
     );
   }
 

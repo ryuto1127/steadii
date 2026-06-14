@@ -43,6 +43,7 @@ import {
   type QueueSourceChip,
 } from "./types";
 import { buildExternalThreadUrl } from "./external-url";
+import { passesImportanceFloor } from "./importance-floor";
 import { isAutoCalProposalStale } from "@/lib/agent/proactive/auto-cal-slot";
 import {
   isSteadiiSelfSender,
@@ -520,12 +521,25 @@ async function fetchPendingDrafts(
   // fallback catches rows where senderEmail is null/odd but the from-name
   // ("Steadii Agent") clearly identifies our own digest.
   const withoutSelfSender = rows.filter((r) => !isSelfSenderDraftRow(r));
+  // 2026-06-13 — UNIFIED importance floor. The SAME predicate the email
+  // digest uses now gates the in-app queue: a notify_only draft surfaces
+  // as a queue card ONLY at high/medium riskTier. A LOW-risk notify_only
+  // FYI does NOT enter the queue (pure read-path filter — the row is not
+  // mutated; it still exists for the digest's hidden-count / audit log).
+  // Shared via @/lib/agent/queue/importance-floor so the queue and digest
+  // floors can't drift.
+  const aboveFloor = withoutSelfSender.filter((r) =>
+    passesImportanceFloor({
+      action: r.draft.action,
+      riskTier: r.draft.riskTier,
+    })
+  );
   // Read-state filter is now an unconditional baseline for notify_only
   // FYI cards (an already-read FYI owes no judgment) — it no longer
   // depends on options.hideRead. `void`-ed so the pref load stays a
   // documented input even though it doesn't gate this path today.
   void options.hideRead;
-  const filtered = withoutSelfSender.filter(
+  const filtered = aboveFloor.filter(
     (r) => !shouldHideReadNotifyOnly(r)
   );
   return dedupePendingDraftsByThread(filtered);
