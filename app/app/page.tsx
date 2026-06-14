@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { and, asc, eq, isNull, lte, ne } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lte, ne } from "drizzle-orm";
 import { getLocale, getTranslations } from "next-intl/server";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db/client";
@@ -15,6 +15,8 @@ import { TodayBriefing } from "@/components/agent/today-briefing";
 import { RecentActivity } from "@/components/agent/recent-activity";
 import { buildQueueForUser } from "@/lib/agent/queue/build";
 import {
+  BRIEFING_FORWARD_DAYS,
+  BRIEFING_FORWARD_HOURS,
   getDueSoonAssignments,
   getTodaysEvents,
   todayDateInTz,
@@ -67,21 +69,29 @@ export default async function HomePage() {
   const t = await getTranslations("home");
   const locale = await getLocale();
 
+  // Resolve the user's tz up front so the FORWARD-ONLY briefing loaders
+  // (deadlines window) can anchor their lower/upper bounds in the user's
+  // local day. Cheap single-column read; the heavy panels still run as a
+  // parallel burst below.
+  const tz = (await getUserTimezone(userId)) ?? FALLBACK_TZ;
+
   // One round-trip burst — every panel that needs DB reads is parallel.
-  const [queueCards, events, dueSoon, todayTasks, tzPref, userRow] =
+  // 2026-06-13 — the briefing is FORWARD-LOOKING: no past items, window =
+  // today + the next 3 days (BRIEFING_FORWARD_*). Events are narrowed to
+  // today (tomorrow's first item is acceptable TZ-boundary slack);
+  // deadlines use the shared 72h forward horizon.
+  const [queueCards, events, dueSoon, todayTasks, userRow] =
     await Promise.all([
       buildQueueForUser(userId, locale),
-      getTodaysEvents(userId),
-      getDueSoonAssignments(userId, 168),
+      getTodaysEvents(userId, { daysAhead: 1 }),
+      getDueSoonAssignments(userId, BRIEFING_FORWARD_HOURS, tz),
       fetchTodayTasks(userId),
-      getUserTimezone(userId),
       db
         .select({ undoWindowSeconds: users.undoWindowSeconds })
         .from(users)
         .where(eq(users.id, userId))
         .limit(1),
     ]);
-  const tz = tzPref ?? FALLBACK_TZ;
   // Per-user undo window — the server enqueues the send with this delay,
   // and the queue card drives its countdown from the same value so the
   // visible timer matches when the message actually leaves.
@@ -233,10 +243,14 @@ export type TodayTask =
 async function fetchTodayTasks(userId: string): Promise<TodayTask[]> {
   const tz = (await getUserTimezone(userId)) ?? FALLBACK_TZ;
   const today = todayDateInTz(tz);
-  // Engineer-37: widen the upper bound from +1d to +7d so a real
-  // week-ahead horizon surfaces. The merge helper still keeps overdue
-  // external rows, so the visible window is "overdue → 7 days out".
-  const end = localMidnightAsUtc(addDaysToDateStr(today, 7), tz);
+  // 2026-06-13 — FORWARD-ONLY briefing. Lower bound = LOCAL midnight today,
+  // upper bound = today + BRIEFING_FORWARD_DAYS. Nothing past-due appears;
+  // the window matches the deadline/digest loaders via the shared constant.
+  const start = localMidnightAsUtc(today, tz);
+  const end = localMidnightAsUtc(
+    addDaysToDateStr(today, BRIEFING_FORWARD_DAYS),
+    tz
+  );
 
   const [steadiiRows, googleTasks, msTasks] = await Promise.all([
     db
@@ -253,27 +267,27 @@ async function fetchTodayTasks(userId: string): Promise<TodayTask[]> {
           eq(assignmentsTable.userId, userId),
           isNull(assignmentsTable.deletedAt),
           ne(assignmentsTable.status, "done"),
-          // Drop the lower bound — show every still-pending assignment
-          // whose due date has either arrived or already passed, not
-          // just today's. Overdue items deserve top-of-mind treatment.
+          // 2026-06-13 — symmetric forward-only lower bound. Replaces the
+          // old "drop the lower bound / show overdue" behavior: a past-due
+          // assignment no longer surfaces in the forward briefing.
+          gte(assignmentsTable.dueAt, start),
           lte(assignmentsTable.dueAt, end)
         )
       )
       .orderBy(asc(assignmentsTable.dueAt))
       .limit(25),
     // External fetchers soft-fail when the integration isn't connected;
-    // .catch keeps a single broken provider from blanking today's
-    // briefing for the user. `daysBack: 30` opens the API filter so
-    // overdue tasks (still-pending past-due items) are returned, then
-    // mergeTodayTasks's `task.due <= weekEnd` filter narrows to
-    // overdue → 7 days out. Without daysBack, the API's dueMin sits
-    // at today UTC and overdue items never make it to the client.
-    fetchUpcomingTasks(userId, { days: 7, daysBack: 30, max: 50 }).catch(
+    // .catch keeps a single broken provider from blanking the briefing.
+    // The window is forward-only now (today → today + BRIEFING_FORWARD_DAYS),
+    // so we no longer open `daysBack` to pull overdue rows — mergeTodayTasks's
+    // [today, weekEnd] band drops anything past-due that slips through.
+    fetchUpcomingTasks(userId, { days: BRIEFING_FORWARD_DAYS, max: 50 }).catch(
       () => []
     ),
-    fetchMsUpcomingTasks(userId, { days: 7, daysBack: 30, max: 50 }).catch(
-      () => []
-    ),
+    fetchMsUpcomingTasks(userId, {
+      days: BRIEFING_FORWARD_DAYS,
+      max: 50,
+    }).catch(() => []),
   ]);
 
   return mergeTodayTasks(
@@ -286,15 +300,20 @@ async function fetchTodayTasks(userId: string): Promise<TodayTask[]> {
     googleTasks,
     msTasks,
     today,
-    addDaysToDateStr(today, 7)
+    addDaysToDateStr(today, BRIEFING_FORWARD_DAYS)
   );
 }
 
 // Pure helper — extracted so the merge logic can be unit-tested
-// without mocking three sources of side-effects. Filters external
-// tasks to "overdue → next 7 days" so the home briefing surfaces
-// every task in the user's week-ahead horizon plus anything still
-// pending and past due.
+// without mocking three sources of side-effects.
+//
+// 2026-06-13 — FORWARD-ONLY briefing. External tasks are filtered to the
+// closed band [todayStr, weekEndStr]: a SYMMETRIC lower bound (>= today)
+// drops anything past-due, and the upper bound caps the forward horizon.
+// Steadii rows with a concrete due date get the same lower-bound guard
+// (defense-in-depth — the query already forward-bounds them, but a
+// date-only row must never slip a past-due item into the briefing). Rows
+// with a null due date (Steadii assignments without a deadline) are kept.
 export function mergeTodayTasks(
   steadii: Array<{
     id: string;
@@ -318,21 +337,26 @@ export function mergeTodayTasks(
   weekEndStr?: string,
   limit: number = 25
 ): TodayTask[] {
-  // Default to today if no upper bound supplied — preserves prior
-  // "today + overdue" semantics for callers that haven't migrated.
+  // Default the upper bound to today if none supplied. The lower bound is
+  // always today (forward-only) so no caller can re-introduce past-due rows.
   const upper = weekEndStr ?? todayStr;
+  const inForwardBand = (due: string): boolean =>
+    due >= todayStr && due <= upper;
   const out: TodayTask[] = [
-    ...steadii.map(
-      (r): TodayTask => ({
-        kind: "steadii",
-        id: r.id,
-        title: r.title,
-        classTitle: r.classTitle,
-        due: r.due,
-      })
-    ),
+    ...steadii
+      // null due = no deadline, always keep; concrete due must be forward.
+      .filter((r) => r.due === null || inForwardBand(r.due))
+      .map(
+        (r): TodayTask => ({
+          kind: "steadii",
+          id: r.id,
+          title: r.title,
+          classTitle: r.classTitle,
+          due: r.due,
+        })
+      ),
     ...google
-      .filter((t) => t.due <= upper)
+      .filter((t) => inForwardBand(t.due))
       .map(
         (t): TodayTask => ({
           kind: "google",
@@ -343,7 +367,7 @@ export function mergeTodayTasks(
         })
       ),
     ...ms
-      .filter((t) => t.due <= upper)
+      .filter((t) => inForwardBand(t.due))
       .map(
         (t): TodayTask => ({
           kind: "microsoft",

@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
-// Pure-function unit tests for the merge logic that powers
-// /app (home) today-briefing tasks pane. Engineer-37 widened the
-// shape: rows now carry a `kind` discriminator ("steadii" | "google" |
-// "microsoft") so the home one-click checkbox can route the right
-// server action, and the window expanded from "today + overdue" to
-// "overdue → next 7 days".
+// Pure-function unit tests for the merge logic that powers the /app (home)
+// today-briefing tasks pane.
+//
+// 2026-06-13 — the briefing is now FORWARD-ONLY: window = today + the next
+// 3 days (BRIEFING_FORWARD_DAYS), with a SYMMETRIC lower bound so NO
+// past-due item appears. mergeTodayTasks filters external tasks to the
+// closed band [todayStr, weekEndStr]; Steadii rows with a concrete due
+// date get the same lower-bound guard, while null-due Steadii rows (no
+// deadline) are always kept.
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth/config", () => ({ auth: vi.fn() }));
@@ -18,6 +21,8 @@ vi.mock("@/lib/integrations/microsoft/tasks", () => ({
 }));
 vi.mock("@/lib/agent/queue/build", () => ({ buildQueueForUser: vi.fn() }));
 vi.mock("@/lib/dashboard/today", () => ({
+  BRIEFING_FORWARD_DAYS: 3,
+  BRIEFING_FORWARD_HOURS: 72,
   getDueSoonAssignments: vi.fn(),
   getTodaysEvents: vi.fn(),
   todayDateInTz: () => "2026-05-05",
@@ -33,72 +38,89 @@ vi.mock("@/lib/calendar/tz-utils", () => ({
 
 import { mergeTodayTasks } from "@/app/app/page";
 
-describe("mergeTodayTasks", () => {
-  it("returns Steadii rows + overdue + within-week external", () => {
+// today = 2026-05-05, forward window end = 2026-05-08 (today + 3 days).
+const TODAY = "2026-05-05";
+const WINDOW_END = "2026-05-08";
+
+describe("mergeTodayTasks — forward-only window", () => {
+  it("keeps Steadii rows + forward external; DROPS past-due external", () => {
     const out = mergeTodayTasks(
-      [
-        { id: "a-1", title: "ECON essay", classTitle: "ECON 200", due: "2026-05-05" },
-      ],
+      [{ id: "a-1", title: "Essay draft", classTitle: "Class A", due: TODAY }],
       [
         {
-          due: "2026-05-08",
-          title: "Future Google task — within week",
+          due: "2026-05-07",
+          title: "Forward Google task",
           taskId: "g-1",
           taskListId: "list-G",
         },
       ],
       [
         {
-          due: "2026-05-04",
-          title: "Yesterday's MS task (overdue)",
+          due: "2026-05-04", // yesterday → past-due, must be dropped
+          title: "Past-due MS task",
           taskId: "m-1",
           taskListId: "list-M",
         },
       ],
-      "2026-05-05",
-      "2026-05-12",
+      TODAY,
+      WINDOW_END,
     );
     expect(out.map((r) => r.title)).toEqual([
-      "ECON essay",
-      "Future Google task — within week",
-      "Yesterday's MS task (overdue)",
+      "Essay draft",
+      "Forward Google task",
     ]);
   });
 
-  it("excludes external tasks past the week-end upper bound", () => {
+  it("excludes external tasks past the window-end upper bound", () => {
     const out = mergeTodayTasks(
       [],
       [
         {
-          due: "2026-05-13",
+          due: "2026-05-09", // one day past the +3d window → dropped
           title: "Out of window",
           taskId: "g-1",
           taskListId: "list-G",
         },
       ],
       [],
-      "2026-05-05",
-      "2026-05-12",
+      TODAY,
+      WINDOW_END,
     );
     expect(out).toHaveLength(0);
   });
 
-  it("preserves kind=steadii for Steadii rows", () => {
+  it("drops a past-due Steadii row but keeps a null-due (no deadline) row", () => {
     const out = mergeTodayTasks(
       [
-        { id: "a-1", title: "Lab report", classTitle: "BIOL 110", due: "2026-05-05" },
+        { id: "a-past", title: "Past-due assignment", classTitle: null, due: "2026-05-01" },
+        { id: "a-none", title: "No-deadline assignment", classTitle: null, due: null },
+        { id: "a-fwd", title: "Forward assignment", classTitle: null, due: "2026-05-06" },
       ],
       [],
       [],
-      "2026-05-05",
-      "2026-05-12",
+      TODAY,
+      WINDOW_END,
+    );
+    expect(out.map((r) => r.title)).toEqual([
+      "No-deadline assignment",
+      "Forward assignment",
+    ]);
+  });
+
+  it("preserves kind=steadii for Steadii rows", () => {
+    const out = mergeTodayTasks(
+      [{ id: "a-1", title: "Lab report", classTitle: "Class B", due: TODAY }],
+      [],
+      [],
+      TODAY,
+      WINDOW_END,
     );
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({
       kind: "steadii",
       id: "a-1",
       title: "Lab report",
-      classTitle: "BIOL 110",
+      classTitle: "Class B",
     });
   });
 
@@ -107,23 +129,23 @@ describe("mergeTodayTasks", () => {
       [],
       [
         {
-          due: "2026-05-05",
-          title: "iPhone を Apple に送り返す",
+          due: TODAY,
+          title: "Return a parcel",
           taskId: "google-task-id-123",
           taskListId: "@default",
         },
       ],
       [],
-      "2026-05-05",
-      "2026-05-12",
+      TODAY,
+      WINDOW_END,
     );
     expect(out).toHaveLength(1);
     expect(out[0]).toEqual({
       kind: "google",
       taskId: "google-task-id-123",
       taskListId: "@default",
-      title: "iPhone を Apple に送り返す",
-      due: "2026-05-05",
+      title: "Return a parcel",
+      due: TODAY,
     });
   });
 
@@ -133,46 +155,32 @@ describe("mergeTodayTasks", () => {
       [],
       [
         {
-          due: "2026-05-05",
-          title: "Pick up dry cleaning",
+          due: TODAY,
+          title: "Run an errand",
           taskId: "ms-task-id-456",
           taskListId: "ms-default-list",
         },
       ],
-      "2026-05-05",
-      "2026-05-12",
+      TODAY,
+      WINDOW_END,
     );
     expect(out).toHaveLength(1);
     expect(out[0]).toEqual({
       kind: "microsoft",
       taskId: "ms-task-id-456",
       taskListId: "ms-default-list",
-      title: "Pick up dry cleaning",
-      due: "2026-05-05",
+      title: "Run an errand",
+      due: TODAY,
     });
   });
 
   it("orders Steadii rows before external tasks (academic priority)", () => {
     const out = mergeTodayTasks(
-      [{ id: "a-1", title: "Lab report", classTitle: "BIOL 110", due: "2026-05-05" }],
-      [
-        {
-          due: "2026-05-05",
-          title: "Google task today",
-          taskId: "g-1",
-          taskListId: "list-G",
-        },
-      ],
-      [
-        {
-          due: "2026-05-05",
-          title: "MS task today",
-          taskId: "m-1",
-          taskListId: "list-M",
-        },
-      ],
-      "2026-05-05",
-      "2026-05-12",
+      [{ id: "a-1", title: "Lab report", classTitle: "Class B", due: TODAY }],
+      [{ due: TODAY, title: "Google task today", taskId: "g-1", taskListId: "list-G" }],
+      [{ due: TODAY, title: "MS task today", taskId: "m-1", taskListId: "list-M" }],
+      TODAY,
+      WINDOW_END,
     );
     expect(out.map((r) => r.title)).toEqual([
       "Lab report",
@@ -186,131 +194,59 @@ describe("mergeTodayTasks", () => {
       id: `a-${i}`,
       title: `Steadii task ${i}`,
       classTitle: null,
-      due: "2026-05-05",
+      due: TODAY,
     }));
     const google = [
-      {
-        due: "2026-05-05",
-        title: "Google overflow",
-        taskId: "g-1",
-        taskListId: "list-G",
-      },
+      { due: TODAY, title: "Google overflow", taskId: "g-1", taskListId: "list-G" },
     ];
-    const out = mergeTodayTasks(
-      steadii,
-      google,
-      [],
-      "2026-05-05",
-      "2026-05-12",
-      25,
-    );
+    const out = mergeTodayTasks(steadii, google, [], TODAY, WINDOW_END, 25);
     expect(out).toHaveLength(25);
     expect(out[24].title).toBe("Steadii task 24"); // external dropped
   });
 
-  it("filters external tasks to overdue + within week (not future-of-week)", () => {
-    const out = mergeTodayTasks(
-      [],
-      [
-        {
-          due: "2026-05-05",
-          title: "Today",
-          taskId: "g-today",
-          taskListId: "list-G",
-        },
-        {
-          due: "2026-05-08",
-          title: "Mid week",
-          taskId: "g-mid",
-          taskListId: "list-G",
-        },
-        {
-          due: "2026-05-04",
-          title: "Yesterday — overdue",
-          taskId: "g-yest",
-          taskListId: "list-G",
-        },
-        {
-          due: "2026-04-30",
-          title: "Last week — still pending",
-          taskId: "g-old",
-          taskListId: "list-G",
-        },
-        {
-          due: "2026-05-15",
-          title: "Two weeks out — drops",
-          taskId: "g-far",
-          taskListId: "list-G",
-        },
-      ],
-      [],
-      "2026-05-05",
-      "2026-05-12",
-    );
-    expect(out.map((r) => r.title)).toEqual([
-      "Today",
-      "Mid week",
-      "Yesterday — overdue",
-      "Last week — still pending",
-    ]);
-  });
-
-  it("restored home briefing window: keeps a Steadii deadline + day-7 external, drops day-8", () => {
-    // Guards the exact window the restored fetchTodayTasks passes
-    // (today, addDaysToDateStr(today, 7)). The home briefing must surface
-    // an academic deadline plus external tasks through the 7th day and
-    // drop anything past it — a future window-narrowing refactor that
-    // regresses the briefing fails here.
+  it("window boundary: keeps day-3 external (upper bound inclusive), drops day-4", () => {
     const out = mergeTodayTasks(
       [
         {
           id: "a-1",
-          title: "Steadii deadline within week",
+          title: "Steadii deadline within window",
           classTitle: "Class A",
-          due: "2026-05-11",
+          due: "2026-05-07",
         },
       ],
       [
         {
-          due: "2026-05-12", // exactly the week-end upper bound → kept
-          title: "External on day 7",
+          due: WINDOW_END, // exactly the upper bound → kept
+          title: "External on day 3",
           taskId: "g-edge",
           taskListId: "list-G",
         },
         {
-          due: "2026-05-13", // one day past → dropped
-          title: "External on day 8",
+          due: "2026-05-09", // one day past → dropped
+          title: "External on day 4",
           taskId: "g-out",
           taskListId: "list-G",
         },
       ],
       [],
-      "2026-05-05",
-      "2026-05-12",
+      TODAY,
+      WINDOW_END,
     );
     expect(out.map((r) => r.title)).toEqual([
-      "Steadii deadline within week",
-      "External on day 7",
+      "Steadii deadline within window",
+      "External on day 3",
     ]);
   });
 
-  it("regression: Ryuto's overdue iPhone task on 2026-05-05 home (PR #157)", () => {
+  it("window boundary: keeps a task due exactly today (lower bound inclusive)", () => {
     const out = mergeTodayTasks(
       [],
-      [
-        {
-          due: "2026-05-04",
-          title: "iPhone を Apple に送り返す",
-          taskId: "g-iphone",
-          taskListId: "@default",
-        },
-      ],
+      [{ due: TODAY, title: "Due today", taskId: "g-today", taskListId: "list-G" }],
       [],
-      "2026-05-05",
-      "2026-05-12",
+      TODAY,
+      WINDOW_END,
     );
     expect(out).toHaveLength(1);
-    expect(out[0].title).toBe("iPhone を Apple に送り返す");
-    expect(out[0].kind).toBe("google");
+    expect(out[0].title).toBe("Due today");
   });
 });

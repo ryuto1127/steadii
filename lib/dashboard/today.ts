@@ -17,6 +17,22 @@ import {
   localMidnightAsUtc,
 } from "@/lib/calendar/tz-utils";
 
+// 2026-06-13 — FORWARD-ONLY briefing window. Both the in-app TodayBriefing
+// AND the email digest's "Today" section are forward-looking: NO past
+// items. The window is "today + the next 3 days" anchored at the user's
+// LOCAL midnight today (the lower bound) so nothing past-due leaks in.
+// ONE shared constant so the in-app loaders (page.tsx) and the digest
+// loaders (today-section.ts) can't drift on the horizon
+// (knowledge-learnings#mirror-lists-always-drift).
+//
+// There is deliberately NO "critical overdue exception" here — that would
+// depend on importance classification owned elsewhere. Strictly
+// forward-only for now.
+export const BRIEFING_FORWARD_DAYS = 3;
+// 72h = today + 3 days, expressed in hours for the assignment loaders that
+// take an hour horizon. Kept in lockstep with BRIEFING_FORWARD_DAYS.
+export const BRIEFING_FORWARD_HOURS = BRIEFING_FORWARD_DAYS * 24;
+
 // Returns "YYYY-MM-DD" for the calendar day the user is currently in,
 // evaluated against their persisted IANA timezone. Crucial on Vercel
 // (server TZ = UTC) — without this, Vancouver evenings quietly render
@@ -92,10 +108,23 @@ export async function getTodaysEvents(
 
 export async function getDueSoonAssignments(
   userId: string,
-  horizonHours = 72
+  horizonHours = BRIEFING_FORWARD_HOURS,
+  tz: string = FALLBACK_TZ,
+  now: Date = new Date()
 ): Promise<DueSoonAssignment[]> {
-  const now = new Date();
-  const horizon = new Date(now.getTime() + horizonHours * 60 * 60 * 1000);
+  // 2026-06-13 — FORWARD-ONLY window. The lower bound is the user's LOCAL
+  // midnight TODAY (not `now`), so an assignment due earlier today still
+  // shows while anything past-due (due before today) is dropped — symmetric
+  // with the Steadii-task loader's local-date lower bound. The upper bound
+  // is local midnight `horizonHours` out. Both anchored in the user's tz so
+  // the window matches the digest's day (WRONG_TZ_DIRECTION guard).
+  const today = todayDateInTz(tz, now);
+  const lowerBound = localMidnightAsUtc(today, tz);
+  const horizonDays = Math.round(horizonHours / 24);
+  const horizon = localMidnightAsUtc(
+    addDaysToDateStr(today, horizonDays),
+    tz
+  );
 
   const rows = await db
     .select({
@@ -113,7 +142,7 @@ export async function getDueSoonAssignments(
         eq(assignmentsTable.userId, userId),
         isNull(assignmentsTable.deletedAt),
         ne(assignmentsTable.status, "done"),
-        gte(assignmentsTable.dueAt, now),
+        gte(assignmentsTable.dueAt, lowerBound),
         lte(assignmentsTable.dueAt, horizon)
       )
     )
@@ -133,11 +162,11 @@ export async function getDueSoonAssignments(
 // Digest "Today" section loaders — zero-LLM, TZ-correct.
 //
 // These power the deterministic "Today" block in the daily email digest
-// (lib/digest/today-section.ts). They differ from the home-dashboard
-// loaders above on window semantics:
+// (lib/digest/today-section.ts). Window semantics:
 //   - getDigestTodayEvents: STRICTLY today (local midnight → next local
-//     midnight), not the home briefing's rolling 7-day horizon.
-//   - getDigestDueOrOverdue: due today OR overdue, not the 72h look-ahead.
+//     midnight).
+//   - getDigestDueOrOverdue: FORWARD-ONLY, today + BRIEFING_FORWARD_DAYS
+//     (the same shared window as the in-app briefing) — no past-due leak.
 //
 // "Today" is computed against the USER's timezone, never UTC — a Vancouver
 // event at 23:30 last night must not show up as today's (WRONG_TZ_DIRECTION
@@ -203,16 +232,29 @@ export async function getDigestTodayEvents(
   }
 }
 
-// Assignments due today (in the user's tz) or already overdue, not done.
-// The upper bound is the next local midnight so an item due at 23:30 tonight
-// still counts as "today"; the `overdue` flag marks anything past `now`.
+// 2026-06-13 — FORWARD-ONLY. The digest "Today" assignment loader now uses
+// the SAME forward window as the in-app briefing (BRIEFING_FORWARD_DAYS):
+// lower bound = the user's LOCAL midnight today, upper bound = local
+// midnight `BRIEFING_FORWARD_DAYS` out. Past-due items no longer leak into
+// the email digest (the briefing is forward-looking; the original Gmail
+// message remains in the inbox as the backstop). There is NO critical-
+// overdue exception — strictly forward-only.
+//
+// The function name + the `overdue` field are kept for call-site / shape
+// stability, but `overdue` is now always false (the lower bound excludes
+// anything past-due). Renaming would ripple through the digest renderer
+// for no behavioral gain.
 export async function getDigestDueOrOverdue(
   userId: string,
   tz: string,
   now: Date = new Date()
 ): Promise<DigestDueAssignment[]> {
   const today = todayDateInTz(tz, now);
-  const endOfToday = localMidnightAsUtc(addDaysToDateStr(today, 1), tz);
+  const lowerBound = localMidnightAsUtc(today, tz);
+  const upperBound = localMidnightAsUtc(
+    addDaysToDateStr(today, BRIEFING_FORWARD_DAYS),
+    tz
+  );
 
   const rows = await db
     .select({
@@ -229,7 +271,8 @@ export async function getDigestDueOrOverdue(
         isNull(assignmentsTable.deletedAt),
         ne(assignmentsTable.status, "done"),
         isNotNull(assignmentsTable.dueAt),
-        lt(assignmentsTable.dueAt, endOfToday)
+        gte(assignmentsTable.dueAt, lowerBound),
+        lt(assignmentsTable.dueAt, upperBound)
       )
     )
     .orderBy(asc(assignmentsTable.dueAt))
@@ -240,7 +283,9 @@ export async function getDigestDueOrOverdue(
     title: r.title,
     due: r.dueAt ? r.dueAt.toISOString() : "",
     classTitle: r.classTitle ?? null,
-    overdue: r.dueAt ? r.dueAt.getTime() < now.getTime() : false,
+    // Forward-only window: nothing here is past-due, so overdue is always
+    // false. Field retained for shape stability with the digest renderer.
+    overdue: false,
   }));
 }
 

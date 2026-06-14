@@ -337,6 +337,11 @@ export default async function QueuePreview({
         variant={showNotifications ? "notifications" : "default"}
       />
 
+      {/* 2026-06-13 — the briefing is FORWARD-ONLY (today + 3 days). The
+          live loaders drop past-due items upstream, so the preview feeds
+          only forward-looking mock data: events today, deadlines within
+          the +72h window. A +96h deadline (outside the window) is
+          deliberately omitted to mirror what the user actually sees. */}
       {showNotifications ? null : (
         <TodayBriefing
           events={[
@@ -367,21 +372,23 @@ export default async function QueuePreview({
               id: "t2",
               title: "Read MAT223 §5.3",
               classTitle: "MAT223",
-              due: null,
+              due: new Date(NOW.getTime() + 24 * 60 * 60 * 1000)
+                .toISOString()
+                .slice(0, 10),
             },
           ]}
           upcomingDeadlines={[
             {
               id: "d1",
               title: "PSY100 essay draft",
-              due: new Date(NOW.getTime() + 48 * 60 * 60 * 1000).toISOString(),
+              due: new Date(NOW.getTime() + 24 * 60 * 60 * 1000).toISOString(),
               classColor: null,
               classTitle: "PSY100",
             },
             {
               id: "d2",
               title: "MAT223 problem set 6",
-              due: new Date(NOW.getTime() + 96 * 60 * 60 * 1000).toISOString(),
+              due: new Date(NOW.getTime() + 60 * 60 * 60 * 1000).toISOString(),
               classColor: null,
               classTitle: "MAT223",
             },
