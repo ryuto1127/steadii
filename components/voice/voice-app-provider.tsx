@@ -13,6 +13,7 @@ import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import type { VoiceTriggerKey } from "@/components/chat/use-voice-input";
+import { consumeVoiceStream } from "@/lib/voice/consume-voice-stream";
 import { VoiceOverlay } from "./voice-overlay";
 import { GlobalVoicePill } from "./global-voice-pill";
 
@@ -283,19 +284,25 @@ export function VoiceAppProvider({
         setGlobalVoiceState("idle");
         return;
       }
-      if (!voiceResp.ok) {
+      if (!voiceResp.ok || !voiceResp.body) {
         toast.error(tVoice("error_transcribe_failed"));
         setGlobalVoiceState("idle");
         return;
       }
-      const voiceJson = (await voiceResp.json()) as {
-        cleaned?: string;
-        transcript?: string;
-        cleanupSkipped?: boolean;
-      };
-      const cleaned = (voiceJson.cleaned || voiceJson.transcript || "").trim();
+      // `/api/voice` streams SSE (`data: {...}` events) — never JSON. Parse it
+      // through the shared consumer (calling `.json()` here threw
+      // "Unexpected token 'd'" and surfaced the error toast on a HTTP-200
+      // success). The composer path uses the same helper.
+      const voiceResult = await consumeVoiceStream(voiceResp.body);
+      if (voiceResult.errored) {
+        // Explicit stream-side failure — genuine error.
+        toast.error(tVoice("error_transcribe_failed"));
+        setGlobalVoiceState("idle");
+        return;
+      }
+      const cleaned = voiceResult.transcript;
       if (!cleaned) {
-        // Silent return — empty speech is usually accidental.
+        // Empty transcript (silence / didn't speak) — silent abort, no toast.
         setGlobalVoiceState("idle");
         return;
       }
