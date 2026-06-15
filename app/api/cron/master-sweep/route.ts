@@ -12,6 +12,8 @@ import {
   runNotificationExpirySweep,
 } from "@/lib/agent/email/draft-superseded-sweep";
 import { runDispositionResurfaceSweep } from "@/lib/agent/email/disposition-resurface";
+import { runProposalExpirySweep } from "@/lib/agent/proactive/proposal-expiry";
+import { runDraftTtlSweep } from "@/lib/agent/email/draft-ttl-sweep";
 import { runDigestSweep, runWeeklyDigestSweep } from "@/lib/digest/sweep";
 import { verifyQStashSignature } from "@/lib/integrations/qstash/verify";
 import { withHeartbeat } from "@/lib/observability/cron-heartbeat";
@@ -43,7 +45,10 @@ export const maxDuration = 300;
 //   - WHEN minute % 30 === 0     → runAutoCalProposalExpirySweep,
 //                                  expireStaleProposedArchives (Round 4),
 //                                  runDraftSupersededSweep,
-//                                  runDispositionResurfaceSweep
+//                                  runDispositionResurfaceSweep,
+//                                  runNotificationExpirySweep,
+//                                  runProposalExpirySweep (Wave A),
+//                                  runDraftTtlSweep (Wave A)
 //
 // 2026-06-09 — digest dispatch moved out of the minute===0 gate onto the
 // every-tick path. The pickers own eligibility (local-hour match + send-
@@ -116,6 +121,12 @@ export async function POST(req: Request) {
           // 2026-05-24 — Round-5 notify-with-undo bookkeeping.
           "notification-expiry": () =>
             runNotificationExpirySweep({ now: new Date(nowMs) }),
+          // 2026-06-13 — Wave A noise reduction. Both are single bounded
+          // UPDATEs (no Gmail/LLM); proposal-expiry activates the dead
+          // agent_proposals.expires_at column, draft-ttl ages out stale
+          // pending drafts silently.
+          "proposal-expiry": () => runProposalExpirySweep({ nowMs }),
+          "draft-ttl": () => runDraftTtlSweep({ nowMs }),
           digest: () => runDigestSweep(),
           "weekly-digest": () => runWeeklyDigestSweep(),
         };

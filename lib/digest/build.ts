@@ -12,6 +12,7 @@ import {
 import { env } from "@/lib/env";
 import { PENDING_ACTIONS } from "@/lib/agent/email/pending-queries";
 import { FALLBACK_TZ } from "@/lib/calendar/tz-utils";
+import { passesImportanceFloor } from "@/lib/agent/queue/importance-floor";
 import { loadTodaySection } from "./today-section";
 
 // ---------------------------------------------------------------------------
@@ -77,17 +78,15 @@ export type DigestPayload = {
 // EMAIL-only — the in-app queue (buildQueueForUser) is untouched.
 const DIGEST_RECENCY_DAYS = 30;
 
-// 2026-06-07 — importance floor for FYI items in the EMAIL digest.
-// notify_only drafts are informational ("no action needed"); a LOW-risk
-// FYI is exactly the noise users complained about. draft_reply /
-// ask_clarifying always pass (they need user action); notify_only passes
-// only at medium/high risk. Email-only — does NOT change the in-app queue.
+// 2026-06-13 — the FYI importance floor is now UNIFIED across the email
+// digest AND the in-app queue. The predicate moved to the shared leaf
+// module `@/lib/agent/queue/importance-floor` so the two surfaces can't
+// drift; this thin wrapper preserves the local call sites' name.
 function passesDigestImportanceFloor(row: {
   action: AgentDraftAction;
   riskTier: InboxRiskTier;
 }): boolean {
-  if (row.action !== "notify_only") return true;
-  return row.riskTier === "high" || row.riskTier === "medium";
+  return passesImportanceFloor(row);
 }
 
 // Pick up pending drafts for the user. Ordered by risk (high first) then

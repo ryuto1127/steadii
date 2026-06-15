@@ -34,6 +34,8 @@ const ALL_SUB_SWEEPS: SubSweepName[] = [
   "draft-superseded",
   "disposition-resurface",
   "notification-expiry",
+  "proposal-expiry",
+  "draft-ttl",
   "digest",
   "weekly-digest",
 ];
@@ -53,6 +55,9 @@ const THIRTY_MIN: SubSweepName[] = [
   "disposition-resurface",
   // 2026-05-24 — Round-5 notify-with-undo bookkeeping.
   "notification-expiry",
+  // 2026-06-13 — Wave A noise reduction.
+  "proposal-expiry",
+  "draft-ttl",
 ];
 
 function makeSubs(): SubSweeps {
@@ -80,6 +85,11 @@ function makeSubs(): SubSweeps {
     "notification-expiry": vi
       .fn()
       .mockResolvedValue({ ok: true, kind: "notification-expiry" }),
+    // 2026-06-13 — Wave A noise reduction.
+    "proposal-expiry": vi
+      .fn()
+      .mockResolvedValue({ ok: true, kind: "proposal-expiry" }),
+    "draft-ttl": vi.fn().mockResolvedValue({ ok: true, kind: "draft-ttl" }),
     digest: vi.fn().mockResolvedValue({ ok: true, kind: "digest" }),
     "weekly-digest": vi
       .fn()
@@ -213,6 +223,8 @@ describe("dispatchMasterSweep — failure isolation", () => {
     expect(r.ran).toContain("draft-superseded");
     expect(r.ran).toContain("disposition-resurface");
     expect(r.ran).toContain("notification-expiry");
+    expect(r.ran).toContain("proposal-expiry");
+    expect(r.ran).toContain("draft-ttl");
     expect(r.ran).toContain("weekly-digest");
   });
 
@@ -278,6 +290,14 @@ describe("dispatchMasterSweep — result capture", () => {
       ok: true,
       kind: "notification-expiry",
     });
+    expect(r.results["proposal-expiry"]).toEqual({
+      ok: true,
+      kind: "proposal-expiry",
+    });
+    expect(r.results["draft-ttl"]).toEqual({
+      ok: true,
+      kind: "draft-ttl",
+    });
     expect(r.results.digest).toEqual({ ok: true, kind: "digest" });
     expect(r.results["weekly-digest"]).toEqual({
       ok: true,
@@ -302,5 +322,7 @@ describe("dispatchMasterSweep — result capture", () => {
     expect(r.results["draft-superseded"]).toBeUndefined();
     expect(r.results["disposition-resurface"]).toBeUndefined();
     expect(r.results["notification-expiry"]).toBeUndefined();
+    expect(r.results["proposal-expiry"]).toBeUndefined();
+    expect(r.results["draft-ttl"]).toBeUndefined();
   });
 });
