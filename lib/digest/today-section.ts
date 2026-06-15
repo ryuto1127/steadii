@@ -84,6 +84,50 @@ function dueTodayLabel(locale: DigestLocale): string {
   return locale === "ja" ? "本日締切" : "Due today";
 }
 
+// 2026-06-13 — the digest "Today" section is now FORWARD-ONLY (today +
+// BRIEFING_FORWARD_DAYS). A due item is therefore either due TODAY or due
+// on an upcoming day in the window — never overdue. Pick the tag per item:
+//   - overdue flag set (direct-render callers / legacy) → Overdue
+//   - due on the user's local TODAY → Due today
+//   - due on a future day in the window → "Due M/D" (locale-aware prefix)
+// `tz` makes "today" the user's local day, not UTC; `now` is injectable so
+// the renderer stays pure/deterministic (tests pass a fixed reference).
+function dueTagForAssignment(
+  a: DigestDueAssignment,
+  tz: string,
+  locale: DigestLocale,
+  now: Date
+): string {
+  if (a.overdue) return overdueLabel(locale);
+  if (!a.due) return dueTodayLabel(locale);
+  const todayLocal = localDateStr(now.toISOString(), tz);
+  const dueLocal = localDateStr(a.due, tz);
+  if (dueLocal === todayLocal) return dueTodayLabel(locale);
+  // Future-but-forward: render "Due M/D" so a day+2 deadline isn't
+  // mislabeled "Due today".
+  const [, mm, dd] = dueLocal.split("-");
+  const md = `${parseInt(mm, 10)}/${parseInt(dd, 10)}`;
+  return `${dueLabel(locale)} ${md}`;
+}
+
+// "YYYY-MM-DD" for an ISO instant in the given tz.
+function localDateStr(iso: string, tz: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date(iso));
+    const y = parts.find((p) => p.type === "year")?.value ?? "1970";
+    const m = parts.find((p) => p.type === "month")?.value ?? "01";
+    const d = parts.find((p) => p.type === "day")?.value ?? "01";
+    return `${y}-${m}-${d}`;
+  } catch {
+    return iso.slice(0, 10);
+  }
+}
+
 // Calm single line when the day is clear. Follows the existing digest's
 // reassuring tone rather than rendering an empty header.
 function emptyLine(locale: DigestLocale): string {
@@ -100,8 +144,12 @@ export function buildTodaySectionText(args: {
   data: TodaySectionData;
   tz: string;
   locale?: DigestLocale;
+  // Reference "now" for the due-today vs due-future tag. Injectable for
+  // deterministic tests; defaults to the real clock in production.
+  now?: Date;
 }): string {
   const locale = args.locale ?? "en";
+  const now = args.now ?? new Date();
   const { events, assignments } = args.data;
   const lines: string[] = [];
   lines.push(heading(locale));
@@ -125,7 +173,7 @@ export function buildTodaySectionText(args: {
   if (assignments.length > 0) {
     lines.push(`${dueLabel(locale)}:`);
     for (const a of assignments) {
-      const tag = a.overdue ? overdueLabel(locale) : dueTodayLabel(locale);
+      const tag = dueTagForAssignment(a, args.tz, locale, now);
       const cls = a.classTitle ? ` (${a.classTitle})` : "";
       lines.push(`  • [${tag}] ${a.title}${cls}`);
     }
@@ -139,8 +187,10 @@ export function buildTodaySectionHtml(args: {
   data: TodaySectionData;
   tz: string;
   locale?: DigestLocale;
+  now?: Date;
 }): string {
   const locale = args.locale ?? "en";
+  const now = args.now ?? new Date();
   const { events, assignments } = args.data;
 
   const headingHtml = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #6E6A64;">${escapeHtml(
@@ -180,7 +230,7 @@ export function buildTodaySectionHtml(args: {
 
   const dueRows = assignments
     .map((a) => {
-      const tag = a.overdue ? overdueLabel(locale) : dueTodayLabel(locale);
+      const tag = dueTagForAssignment(a, args.tz, locale, now);
       const tagColor = a.overdue ? "#DC2626" : "#D97706";
       const cls = a.classTitle
         ? ` <span style="color: #6E6A64;">(${escapeHtml(a.classTitle)})</span>`
@@ -241,9 +291,10 @@ export async function loadTodaySection(args: {
     getDigestDueOrOverdue(args.userId, args.tz, args.now),
   ]);
   const data: TodaySectionData = { events, assignments };
+  const now = args.now ?? new Date();
   return {
-    text: buildTodaySectionText({ data, tz: args.tz, locale: args.locale }),
-    html: buildTodaySectionHtml({ data, tz: args.tz, locale: args.locale }),
+    text: buildTodaySectionText({ data, tz: args.tz, locale: args.locale, now }),
+    html: buildTodaySectionHtml({ data, tz: args.tz, locale: args.locale, now }),
     hasContent: events.length > 0 || assignments.length > 0,
   };
 }

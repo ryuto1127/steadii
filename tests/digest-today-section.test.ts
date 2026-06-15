@@ -22,6 +22,10 @@ import {
 } from "@/lib/digest/today-section";
 
 const TZ = "America/Vancouver";
+// Fixed reference so the forward-only "Due today vs Due M/D" tag is
+// deterministic: 2026-06-09T18:00Z == 11:00 local Vancouver on 2026-06-09,
+// so an assignment due that local day reads "Due today".
+const NOW = new Date("2026-06-09T18:00:00Z");
 
 function data(overrides: Partial<TodaySectionData> = {}): TodaySectionData {
   return {
@@ -71,7 +75,7 @@ describe("buildTodaySectionText / Html — content", () => {
   });
 
   it("EN: heading + event time + due tags render", () => {
-    const text = buildTodaySectionText({ data: d, tz: TZ, locale: "en" });
+    const text = buildTodaySectionText({ data: d, tz: TZ, locale: "en", now: NOW });
     expect(text).toContain("Today");
     expect(text).toContain("Schedule:");
     expect(text).toContain("Lecture");
@@ -81,12 +85,29 @@ describe("buildTodaySectionText / Html — content", () => {
   });
 
   it("JA: heading + labels render in Japanese", () => {
-    const text = buildTodaySectionText({ data: d, tz: TZ, locale: "ja" });
+    const text = buildTodaySectionText({ data: d, tz: TZ, locale: "ja", now: NOW });
     expect(text).toContain("今日の予定");
     expect(text).toContain("予定:");
     expect(text).toContain("締切:");
     expect(text).toContain("本日締切");
     expect(text).toContain("期限超過");
+  });
+
+  it("forward-only: a deadline due 2 days out reads 'Due M/D', not 'Due today'", () => {
+    const fwd = data({
+      assignments: [
+        {
+          id: "a-fwd",
+          title: "Forward assignment",
+          due: "2026-06-11T23:00:00Z", // 2026-06-11 local Vancouver
+          classTitle: null,
+          overdue: false,
+        },
+      ],
+    });
+    const text = buildTodaySectionText({ data: fwd, tz: TZ, locale: "en", now: NOW });
+    expect(text).toContain("[Due 6/11] Forward assignment");
+    expect(text).not.toContain("[Due today] Forward assignment");
   });
 
   it("HTML escapes event + assignment titles", () => {

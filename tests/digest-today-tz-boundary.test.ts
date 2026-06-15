@@ -21,13 +21,17 @@ vi.mock("@/lib/integrations/google/calendar", () => ({
   CalendarNotConnectedError: class extends Error {},
 }));
 
-// Capture the assignment where-clause cutoff via a recording lt().
+// Capture the assignment where-clause bounds via recording gte()/lt().
 const ltCalls: Array<{ col: unknown; value: unknown }> = [];
+const gteCalls: Array<{ col: unknown; value: unknown }> = [];
 vi.mock("drizzle-orm", () => ({
   and: () => ({}),
   asc: () => ({}),
   eq: () => ({}),
-  gte: () => ({}),
+  gte: (col: unknown, value: unknown) => {
+    gteCalls.push({ col, value });
+    return {};
+  },
   isNotNull: () => ({}),
   isNull: () => ({}),
   lt: (col: unknown, value: unknown) => {
@@ -82,6 +86,7 @@ vi.mock("@/lib/agent/preferences", () => ({
 beforeEach(() => {
   eventsListMock.mockClear();
   ltCalls.length = 0;
+  gteCalls.length = 0;
   assignmentRows.length = 0;
 });
 
@@ -119,41 +124,49 @@ describe("getDigestTodayEvents — TZ window", () => {
   });
 });
 
-describe("getDigestDueOrOverdue — TZ cutoff + overdue flag", () => {
-  it("cutoff is next local midnight, and overdue is flagged vs now", async () => {
+describe("getDigestDueOrOverdue — FORWARD-ONLY window (today + 3d)", () => {
+  it("lower bound is local midnight today; upper bound is today + 3d", async () => {
     const now = new Date("2026-06-09T14:00:00Z"); // 07:00 local Vancouver
+
+    const { getDigestDueOrOverdue } = await load();
+    await getDigestDueOrOverdue("user-1", "America/Vancouver", now);
+
+    // gte() lower bound = local midnight TODAY (2026-06-09 Vancouver, PDT
+    // -7 == 2026-06-09T07:00:00Z) — past-due items are excluded.
+    expect(gteCalls.length).toBeGreaterThanOrEqual(1);
+    const lower = gteCalls[gteCalls.length - 1].value as Date;
+    expect(lower.toISOString()).toBe("2026-06-09T07:00:00.000Z");
+
+    // lt() upper bound = local midnight today + BRIEFING_FORWARD_DAYS (3)
+    // == 2026-06-12 Vancouver == 2026-06-12T07:00:00Z.
+    expect(ltCalls.length).toBeGreaterThanOrEqual(1);
+    const upper = ltCalls[ltCalls.length - 1].value as Date;
+    expect(upper.toISOString()).toBe("2026-06-12T07:00:00.000Z");
+  });
+
+  it("overdue is always false (forward-only window excludes past-due)", async () => {
+    const now = new Date("2026-06-09T14:00:00Z");
+    // These rows are returned by the mocked db (which ignores WHERE); the
+    // production query's gte() lower bound would have excluded a past-due
+    // row, so the mapped output must never flag overdue=true.
     assignmentRows.push(
       {
-        id: "a-overdue",
-        title: "Late one",
-        dueAt: new Date("2026-06-08T20:00:00Z"),
-        classTitle: "CS",
+        id: "a-today",
+        title: "Due today",
+        dueAt: new Date("2026-06-10T05:00:00Z"),
+        classTitle: null,
       },
       {
-        id: "a-today",
-        title: "Tonight",
-        dueAt: new Date("2026-06-10T05:00:00Z"), // 22:00 local today
-        classTitle: null,
+        id: "a-soon",
+        title: "Due in 2 days",
+        dueAt: new Date("2026-06-11T20:00:00Z"),
+        classTitle: "Class A",
       }
     );
 
     const { getDigestDueOrOverdue } = await load();
-    const out = await getDigestDueOrOverdue(
-      "user-1",
-      "America/Vancouver",
-      now
-    );
+    const out = await getDigestDueOrOverdue("user-1", "America/Vancouver", now);
 
-    // The lt() cutoff passed to the query is the next local midnight
-    // (2026-06-10 Vancouver == 2026-06-10T07:00:00Z).
-    expect(ltCalls.length).toBeGreaterThanOrEqual(1);
-    const cutoff = ltCalls[ltCalls.length - 1].value as Date;
-    expect(cutoff.toISOString()).toBe("2026-06-10T07:00:00.000Z");
-
-    // overdue flag: due before `now` → true; due tonight → false.
-    const overdue = out.find((a) => a.id === "a-overdue");
-    const today = out.find((a) => a.id === "a-today");
-    expect(overdue?.overdue).toBe(true);
-    expect(today?.overdue).toBe(false);
+    expect(out.every((a) => a.overdue === false)).toBe(true);
   });
 });
