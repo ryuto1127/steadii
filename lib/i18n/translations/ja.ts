@@ -479,6 +479,10 @@ export const ja: Messages = {
     filter_action: "要対応 ({n})",
     filter_hidden: "非表示 ({n})",
     restore_button: "復元 — 受信箱に戻す",
+    row_confirmed: "確認済み",
+    row_confirmed_aria: "この項目を確認済みにする",
+    row_not_needed: "不要",
+    row_not_needed_aria: "この項目は不要",
     hidden_empty_title: "非表示のメールはありません。",
     hidden_empty_description:
       "Steadii が低リスクメールを自動でアーカイブすると、ここに表示されます。確認・復元できます。",
@@ -1440,6 +1444,12 @@ export const ja: Messages = {
     },
     shared: {
       dismiss: "却下",
+      // 新しいカードモデルの 2 ボタン: 確認済み (中立 — 学習なし) / 不要
+      // (ソフトネガティブを記録のみ)。
+      confirmed: "確認済み",
+      confirmed_aria: "確認済みにする",
+      not_needed: "不要",
+      not_needed_aria: "不要にする",
       verify_recommended: "詳細確認推奨",
       take_action: "対応する",
       open: "開く",

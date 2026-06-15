@@ -4,6 +4,8 @@ import {
   Star,
   Archive,
   RotateCcw,
+  Check,
+  X,
 } from "lucide-react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -24,7 +26,11 @@ import {
   attentionDraftClause,
 } from "@/lib/agent/email/pending-queries";
 import { SteadiiNoticedToggle } from "./_components/steadii-noticed-toggle";
-import { restoreAutoArchivedAction } from "./actions";
+import {
+  restoreAutoArchivedAction,
+  dismissInboxItemAction,
+  markInboxItemNotNeededAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -568,6 +574,39 @@ export default async function InboxPage({
                     {t("restore_button")}
                   </button>
                 </form>
+              ) : !showingHidden ? (
+                /*
+                  Two-button row clear (Action + All views). 確認済み = neutral
+                  status='dismissed' with no learning; 不要 = the same status
+                  clear + a record-only soft-negative feedback signal (no
+                  sender-confidence demotion). Both are server actions on
+                  separate forms so each is an independent POST; the cleared
+                  row drops out of the open inbox query on revalidate.
+                */
+                <div className="flex items-center justify-end gap-1.5 border-t border-[hsl(var(--border)/0.5)] bg-[hsl(var(--surface))] px-3 py-1.5 sm:px-4">
+                  <form action={markInboxItemNotNeededAction}>
+                    <input type="hidden" name="id" value={item.id} />
+                    <button
+                      type="submit"
+                      aria-label={t("row_not_needed_aria")}
+                      className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[12px] font-medium text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]"
+                    >
+                      <X size={11} strokeWidth={1.75} />
+                      {t("row_not_needed")}
+                    </button>
+                  </form>
+                  <form action={dismissInboxItemAction}>
+                    <input type="hidden" name="id" value={item.id} />
+                    <button
+                      type="submit"
+                      aria-label={t("row_confirmed_aria")}
+                      className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[12px] font-medium text-[hsl(var(--primary))] transition-hover hover:opacity-80"
+                    >
+                      <Check size={11} strokeWidth={1.75} />
+                      {t("row_confirmed")}
+                    </button>
+                  </form>
+                </div>
               ) : null}
             </li>
             );

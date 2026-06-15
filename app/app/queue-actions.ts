@@ -28,6 +28,7 @@ import {
 } from "@/lib/agent/email/draft-actions";
 import { processL2 } from "@/lib/agent/email/l2";
 import { recordProactiveFeedback } from "@/lib/agent/proactive/feedback-bias";
+import { recordSenderFeedback } from "@/lib/agent/email/feedback";
 import {
   executeProactiveAction,
   stampLastMonthlyReviewAt,
@@ -464,6 +465,115 @@ export async function queueMarkHandledAction(
   } else if (kind === "autocal") {
     await autoCalProposalDismissAction(rawCardId);
     return; // helper already revalidates
+  }
+  revalidatePath("/app");
+}
+
+// 不要 — the soft-negative sibling of 確認済み (queueMarkHandledAction) on the
+// two-button card model. Like 確認済み it RESOLVES the card (drops it from the
+// judgment queue), but it ALSO records a soft-negative feedback signal so the
+// proposal/sender bias loop sees "the user didn't need this".
+//
+// CRITICAL — RECORD-ONLY. We deliberately log the signal WITHOUT activating
+// any suppression / demotion threshold:
+//   - proposal/group_detect kind → recordProactiveFeedback('dismissed'). That
+//     helper only INSERTs a feedback row; the bias it feeds is a soft system-
+//     prompt hint, never a hard suppression. We do NOT call the cadence-stamp
+//     side effects of dismissProposalPermanent — this is "not needed", not
+//     "never propose this again".
+//   - draft kind (notify_only Type C) → recordSenderFeedback('dismissed').
+//     That is a PURE insert into agent_sender_feedback. We intentionally do
+//     NOT call recordSenderEvent (the sender-confidence learner that the full
+//     dismissAgentDraftAction path uses to demote a sender) — recording the
+//     signal must not flip a sender into always_review here. Behavior change
+//     is deferred; the row is logged for later analysis only.
+//
+// Routing mirrors queueMarkHandledAction so the card surface can wire one
+// action per card without a per-kind switch on the client.
+export async function queueMarkNotNeededAction(
+  rawCardId: string
+): Promise<void> {
+  const userId = await getUserId();
+  const { kind, id } = parseCardId(rawCardId);
+  const now = new Date();
+  if (kind === "draft") {
+    // Resolve the draft (neutral 'resolved' disposition — same status write
+    // as 確認済み) then log the record-only soft-negative.
+    const [row] = await db
+      .select({
+        action: agentDrafts.action,
+        senderEmail: inboxItems.senderEmail,
+        senderDomain: inboxItems.senderDomain,
+        inboxItemId: inboxItems.id,
+      })
+      .from(agentDrafts)
+      .innerJoin(inboxItems, eq(agentDrafts.inboxItemId, inboxItems.id))
+      .where(and(eq(agentDrafts.id, id), eq(agentDrafts.userId, userId)))
+      .limit(1);
+    await db
+      .update(agentDrafts)
+      .set({ disposition: "resolved", skippedAt: null, updatedAt: now })
+      .where(and(eq(agentDrafts.id, id), eq(agentDrafts.userId, userId)));
+    if (row?.senderEmail) {
+      // Record-only: a feedback row, NO recordSenderEvent → no demotion.
+      await recordSenderFeedback({
+        userId,
+        senderEmail: row.senderEmail,
+        senderDomain: row.senderDomain,
+        proposedAction: row.action,
+        userResponse: "dismissed",
+        inboxItemId: row.inboxItemId,
+        agentDraftId: id,
+      });
+    }
+    await logEmailAudit({
+      userId,
+      action: "email_item_marked_not_needed",
+      result: "success",
+      resourceId: id,
+      detail: { source: "queue_card", kind },
+    });
+  } else if (kind === "proposal" || kind === "group_detect") {
+    const [proposal] = await db
+      .select({ issueType: agentProposals.issueType })
+      .from(agentProposals)
+      .where(and(eq(agentProposals.id, id), eq(agentProposals.userId, userId)))
+      .limit(1);
+    await db
+      .update(agentProposals)
+      .set({
+        status: "resolved",
+        resolvedAction: "not_needed",
+        resolvedAt: now,
+        viewedAt: now,
+      })
+      .where(
+        and(eq(agentProposals.id, id), eq(agentProposals.userId, userId))
+      );
+    if (proposal) {
+      // Record-only soft-negative: a feedback row that biases the proposal
+      // generator's prompt hint, not a hard suppression threshold.
+      await recordProactiveFeedback({
+        userId,
+        issueType: proposal.issueType,
+        userResponse: "dismissed",
+        proposalId: id,
+      });
+    }
+    await logEmailAudit({
+      userId,
+      action: "email_item_marked_not_needed",
+      result: "success",
+      resourceId: id,
+      detail: { source: "queue_card", kind },
+    });
+  } else {
+    // Other kinds (pre_brief / office_hours / confirmation / autocal) have no
+    // proactive/sender feedback surface — 不要 there is just a neutral clear,
+    // identical to 確認済み. Delegate so we never accidentally branch into a
+    // learning write for a kind that has none.
+    await queueMarkHandledAction(rawCardId);
+    return; // queueMarkHandledAction already revalidates
   }
   revalidatePath("/app");
 }

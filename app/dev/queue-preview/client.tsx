@@ -95,6 +95,7 @@ export function QueuePreviewClient({
             sendOfficeHours: NOOP,
             setDisposition: NOOP,
             markHandled: NOOP,
+            markNotNeeded: NOOP,
             confirm: NOOP,
             correct: NOOP,
             addToCalendar: NOOP,

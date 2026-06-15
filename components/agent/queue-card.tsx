@@ -133,7 +133,12 @@ type CardBProps = CommonProps & {
 
 type CardCProps = CommonProps & {
   card: QueueCardC;
-  onTakeAction: () => Promise<ActionResult> | ActionResult;
+  // 2026-06-13 two-button model — the card body navigates to the item's
+  // detail route via onOpen (replaces the old 対応する button). onMarkHandled
+  // (確認済み, neutral) comes from CommonProps; onMarkNotNeeded (不要,
+  // record-only soft-negative) is the second button.
+  onOpen: () => Promise<void> | void;
+  onMarkNotNeeded: () => Promise<ActionResult> | ActionResult;
 };
 
 type CardDProps = CommonProps & {
@@ -1065,18 +1070,28 @@ export function QueueCardBRender({
   );
 }
 
-// ── Type C — Soft notice ─────────────────────────────────────────────
+// ── Type C — Soft notice (two-button card model) ─────────────────────
+// 2026-06-13 — new card model (supersedes the old 対応する/却下/snooze row):
+//   - the card BODY is the primary target → clicking it opens the item's
+//     detail route (the old 対応する destination). No separate 対応する button.
+//   - exactly TWO always-visible action buttons, grouped bottom-right:
+//       確認済み (onMarkHandled)   → neutral resolve, NO learning signal.
+//       不要     (onMarkNotNeeded) → resolve + record-only soft-negative.
+//   - the snooze / あとで affordance is removed from this surface entirely.
+//     (Right-click / long-press still exposes the quick menu for the
+//     permanent-dismiss + ignore-sender power paths.)
+// The two buttons stopPropagation so a click on them never also fires the
+// body navigation.
 export function QueueCardCRender({
   card,
-  onTakeAction,
+  onOpen,
   onMarkHandled,
-  onDismiss,
+  onMarkNotNeeded,
   onSnooze,
   onPermanentDismiss,
   onIgnoreSender,
 }: CardCProps) {
   const tShared = useTranslations("queue.shared");
-  const tDispo = useTranslations("queue.card_b_disposition");
   const locale = useLocaleHint();
   const [pending, startTransition] = useTransition();
   const [resolved, setResolved] = useState(false);
@@ -1086,12 +1101,18 @@ export function QueueCardCRender({
     onIgnoreSender: card.ignorableSender ? onIgnoreSender : undefined,
   });
 
-  const takeAction = () => {
+  const open = () => {
     if (pending || resolved) return;
-    startTransition(async () => {
-      await onTakeAction();
-      setResolved(true);
-    });
+    void onOpen();
+  };
+
+  // Keyboard affordance for the clickable body — Enter / Space navigate,
+  // matching the visual "this whole card is a link" affordance.
+  const onBodyKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      open();
+    }
   };
 
   const markHandled = () => {
@@ -1106,71 +1127,79 @@ export function QueueCardCRender({
     });
   };
 
-  // When mark-handled is wired (FYI / "返信不要" notices), 確認済み is the
-  // PRIMARY affordance and 対応する drops to a de-emphasized secondary —
-  // a filled "Take action" CTA on a no-reply notice is contradictory.
-  // Without it (legacy callers), keep the original 対応する-primary layout.
-  const fyiPrimary = Boolean(onMarkHandled);
+  const markNotNeeded = () => {
+    if (!onMarkNotNeeded || pending || resolved) return;
+    setResolved(true);
+    startTransition(async () => {
+      try {
+        await onMarkNotNeeded();
+      } catch {
+        setResolved(false);
+      }
+    });
+  };
+
+  // stopPropagation wrapper so an action-button click never bubbles up to
+  // the body's navigation handler.
+  const onActionClick =
+    (fn: () => void) => (e: React.MouseEvent) => {
+      e.stopPropagation();
+      fn();
+    };
 
   return (
     <>
       <CardShell card={card} size="sm" variant="default" onContextMenu={bindings.onContextMenu}>
         <div {...bindings} className={cn(resolved && "opacity-60")}>
-          <CardHeader
-            card={card}
-            icon={<Sparkles size={13} strokeWidth={1.75} />}
-            locale={locale}
-          />
-          {card.body ? (
-            <p className="mt-1.5 text-[12px] leading-snug text-[hsl(var(--muted-foreground))]">
-              {card.body}
-            </p>
-          ) : null}
-          {card.confidence === "low" ? (
-            <p className="mt-1.5 text-[11px] italic text-[hsl(var(--muted-foreground))]">
-              {tShared("verify_recommended")}
-            </p>
-          ) : null}
-          <div className="mt-2.5 flex items-center gap-2">
-            {fyiPrimary ? (
-              <>
-                <button
-                  type="button"
-                  onClick={markHandled}
-                  disabled={pending || resolved}
-                  className="inline-flex h-8 items-center rounded-full bg-[hsl(var(--foreground))] px-3 text-[12px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90 disabled:opacity-50"
-                >
-                  {tDispo("resolved")}
-                </button>
-                <button
-                  type="button"
-                  onClick={takeAction}
-                  disabled={pending || resolved}
-                  className="inline-flex h-8 items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-[12px] font-medium text-[hsl(var(--foreground))] transition-default hover:bg-[hsl(var(--surface-raised))] disabled:opacity-50"
-                >
-                  {card.primaryActionLabel}
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={takeAction}
-                disabled={pending || resolved}
-                className="inline-flex h-8 items-center rounded-full bg-[hsl(var(--foreground))] px-3 text-[12px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90 disabled:opacity-50"
-              >
-                {card.primaryActionLabel}
-              </button>
-            )}
+          {/*
+            The header + body are the navigation target. role/tabIndex make
+            it a real activatable element; the action buttons below sit
+            OUTSIDE this clickable region so they don't inherit the link
+            affordance and don't need their own stopPropagation for the
+            keyboard path.
+          */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={open}
+            onKeyDown={onBodyKeyDown}
+            aria-disabled={pending || resolved}
+            className="cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary)/0.5)]"
+          >
+            <CardHeader
+              card={card}
+              icon={<Sparkles size={13} strokeWidth={1.75} />}
+              locale={locale}
+            />
+            {card.body ? (
+              <p className="mt-1.5 text-[12px] leading-snug text-[hsl(var(--muted-foreground))]">
+                {card.body}
+              </p>
+            ) : null}
+            {card.confidence === "low" ? (
+              <p className="mt-1.5 text-[11px] italic text-[hsl(var(--muted-foreground))]">
+                {tShared("verify_recommended")}
+              </p>
+            ) : null}
+          </div>
+          <div className="mt-2.5 flex items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => void onDismiss()}
+              onClick={onActionClick(markNotNeeded)}
               disabled={pending || resolved}
-              className={cn(
-                "inline-flex h-8 items-center rounded-full px-2 text-[12px] text-[hsl(var(--muted-foreground))] transition-hover hover:text-[hsl(var(--foreground))]",
-                fyiPrimary && "ml-auto"
-              )}
+              aria-label={tShared("not_needed_aria")}
+              className="inline-flex h-8 items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 text-[12px] font-medium text-[hsl(var(--muted-foreground))] transition-default hover:bg-[hsl(var(--surface-raised))] hover:text-[hsl(var(--foreground))] disabled:opacity-50"
             >
-              {tShared("dismiss")}
+              {tShared("not_needed")}
+            </button>
+            <button
+              type="button"
+              onClick={onActionClick(markHandled)}
+              disabled={pending || resolved}
+              aria-label={tShared("confirmed_aria")}
+              className="inline-flex h-8 items-center rounded-full bg-[hsl(var(--foreground))] px-3 text-[12px] font-medium text-[hsl(var(--surface))] transition-default hover:opacity-90 disabled:opacity-50"
+            >
+              {tShared("confirmed")}
             </button>
           </div>
           <CardFooter card={card} />
@@ -1575,7 +1604,10 @@ export type QueueCardActions = {
   onSend?: CardBProps["onSend"];
   onSecondaryAction?: CardBProps["onSecondaryAction"];
   onSetDisposition?: CardBProps["onSetDisposition"];
-  onTakeAction?: CardCProps["onTakeAction"];
+  // Type C two-button model: body-open + 不要 (record-only soft-negative).
+  // 確認済み reuses onMarkHandled below.
+  onOpen?: CardCProps["onOpen"];
+  onMarkNotNeeded?: CardCProps["onMarkNotNeeded"];
   onSubmit?: CardEProps["onSubmit"];
   onTalkInChat?: CardEProps["onTalkInChat"];
   onConfirm?: CardFProps["onConfirm"];
@@ -1648,8 +1680,9 @@ export function QueueCardRenderer({
       return (
         <QueueCardCRender
           card={card}
-          onTakeAction={actions.onTakeAction ?? noopAsync}
+          onOpen={actions.onOpen ?? noopAsync}
           onMarkHandled={actions.onMarkHandled}
+          onMarkNotNeeded={actions.onMarkNotNeeded ?? noopAsync}
           onDismiss={actions.onDismiss}
           onSnooze={actions.onSnooze}
           onPermanentDismiss={actions.onPermanentDismiss}
