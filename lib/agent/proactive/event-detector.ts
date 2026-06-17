@@ -31,6 +31,10 @@
 // calendar mutate.
 
 import {
+  hasCommercialMarker,
+  hasPurchaseImperative,
+} from "./commerce-lexicon";
+import {
   extractDateTimeMatches,
   extractTimeNear,
   isoDateOf,
@@ -95,16 +99,16 @@ const DATE_LABEL_RE = /^[ \t>*]*(date|日付|日時)\s*[:：]/im;
 // Labeled "Time:" line. JA 時刻/時間.
 const TIME_LABEL_RE = /^[ \t>*]*(time|時刻|時間)\s*[:：]/im;
 
-// Commerce-promo intent. TIGHT purchase/discount lexicon (EN + JA) —
-// the distinguishing signal of a marketing blast vs a legit bulk event
-// confirmation. We key suppression on THIS, never on the unsubscribe
-// footer (legit campus events bulletins carry footers too) nor on the
-// absence of a labeled block (sales livestreams carry Date:/Time:
-// blocks). "% off" / "N% off" anchors the discount shape; the rest are
-// high-intent buy verbs and scarcity phrases. \b on the short EN tokens
-// keeps "sale" from matching "wholesale"/"resale" inside prose.
-const COMMERCE_INTENT_RE =
-  /(\d+%\s*off|%\s*off|\bsale\b|shop\s*now|buy\s*now|order\s*now|add\s*to\s*cart|limited[\s-]time|\bdiscount\b|\bcoupon\b|promo\s*code|\bdeals?\b|セール|割引|今だけ|お買い得|購入はこちら|クーポン)/i;
+// Commerce-promo intent — the distinguishing signal of a marketing blast
+// vs a legit bulk event confirmation. We key suppression on THIS, never on
+// the unsubscribe footer (legit campus events bulletins carry footers too)
+// nor on the absence of a labeled block (sales livestreams carry
+// Date:/Time: blocks). The lexicon now lives in the shared
+// ./commerce-lexicon module so this detector and the deadline detector
+// can't drift apart. This detector keeps its OWN distinct gate shape: a
+// single OR — a purchase imperative OR a commercial marker suppresses (see
+// looksPromotional below), erring toward catching promos. See
+// PROMO_STRUCTURED_BLOCK_BYPASS.
 
 // Explicit TZ marker for the event. Mirrors the deadline detector's set
 // plus the "Eastern/Pacific Time" long forms that appear in EN
@@ -169,7 +173,8 @@ export function detectScheduledEvent(args: {
   // not bulk-send — is what lets a legit campus events bulletin (which
   // also has an unsubscribe footer) still fire. See
   // PROMO_STRUCTURED_BLOCK_BYPASS.
-  const looksPromotional = COMMERCE_INTENT_RE.test(body);
+  const looksPromotional =
+    hasPurchaseImperative(body) || hasCommercialMarker(body);
   if (looksPromotional) {
     return notDetected("looks promotional (commerce/purchase intent)", {
       ...emptySignals,
