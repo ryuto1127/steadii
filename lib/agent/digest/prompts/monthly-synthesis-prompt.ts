@@ -40,7 +40,7 @@ OPERATING RULES (strict):
    - info: noteworthy but not urgent ("usually ping Mei every 5 days, now 23")
    - warn: pattern worth attention ("overwhelmed mentioned 4×, was 0 last month")
    - high: structural risk ("9 assignments not started, due dates in window")
-   Never emit a callout without evidence.
+   (Evidence-first per rule 1 applies to drift callouts too.)
 
 9. CARRY THEMES ACROSS MONTHS. If a prior-month synthesis is provided AND the current month shows the same pattern, say so explicitly ("Last month: workload was X; this month: Y — same direction") and reference the prior theme by its title.
 
@@ -168,9 +168,7 @@ export function buildMonthlySynthesisUserContent(
     lines.push("");
   }
 
-  lines.push(
-    "Produce the JSON object exactly per the schema. Reasoning in the user's locale. Do not include keys outside the schema."
-  );
+  lines.push("Produce the JSON object per the schema.");
 
   return lines.join("\n");
 }

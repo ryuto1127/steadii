@@ -9,6 +9,11 @@ import "server-only";
 export type L2ToolContext = {
   userId: string;
   inboxItemId: string;
+  // User's app locale ("en" / "ja"). Threaded so tools that produce a
+  // user-visible string (e.g. detect_ambiguity's suggestedQuestion, which
+  // seeds the Type F confirmation card) can localize it. Optional / "en"
+  // default for back-compat with callers / tests that don't supply it.
+  locale?: "en" | "ja";
 };
 
 export type L2ToolSchema = {

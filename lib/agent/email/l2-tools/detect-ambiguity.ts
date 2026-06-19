@@ -31,6 +31,8 @@ export type DetectAmbiguityResult = {
 
 const SYSTEM_PROMPT = `You judge whether an agent should ASK a user before committing to a decision, or just go ahead.
 
+The user message begins with a line "Question language: <locale>" — "ja" means Japanese, "en" means English. The "suggestedQuestion" field is shown to the student verbatim (it seeds a confirmation card), so it MUST be written in that locale.
+
 Inputs: a context summary, the candidate decision, and the agent's own confidence (0..1).
 
 Return JSON: { "ambiguous": boolean, "suggestedQuestion": string | null, "rationale": string }.
@@ -42,8 +44,8 @@ Rules:
   - The agent's confidence is < 0.8 OR the inputs themselves are internally inconsistent.
 - ambiguous=false when the decision is reversible by the user with one click (drafts can be edited; the user always reviews).
 - ambiguous=false when confidence ≥ 0.8 and the inputs are consistent.
-- When ambiguous=true, suggestedQuestion is one short sentence in user-friendly language, English. It should be answerable in one tap (yes/no or pick-from-list). Avoid over-explaining.
-- rationale is one sentence pointing at the decision factor.`;
+- When ambiguous=true, suggestedQuestion is one short sentence in user-friendly language, in the user's app locale per the "Question language" header. It should be answerable in one tap (yes/no or pick-from-list). Avoid over-explaining.
+- rationale is one sentence pointing at the decision factor. The rationale is internal-only — keep it in English.`;
 
 const SCHEMA = {
   type: "object",
@@ -78,6 +80,8 @@ export const detectAmbiguityTool: L2ToolExecutor<
   async execute(ctx, args) {
     const model = selectModel("email_classify_risk"); // mini
     const userMsg = [
+      `Question language: ${ctx.locale ?? "en"}`,
+      "",
       `Confidence: ${args.confidence.toFixed(2)}`,
       "",
       "=== Context ===",

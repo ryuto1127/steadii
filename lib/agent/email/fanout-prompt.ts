@@ -37,7 +37,7 @@ const CAPS = {
 export type FanoutPromptPhase = "classify" | "deep" | "draft";
 
 // Render the fanout context as a sequence of clearly-labelled prompt
-// blocks. Each block carries a stable footnote tag (mistake-1, syllabus-2,
+// blocks. Each block carries a stable footnote tag (self-1, syllabus-2,
 // calendar-3, email-N) that the model is required to cite in its reasoning
 // — the citation regex in `<ReasoningPanel />` keys off the same shape.
 export function buildFanoutContextBlocks(

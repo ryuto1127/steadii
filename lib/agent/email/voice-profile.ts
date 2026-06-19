@@ -111,7 +111,7 @@ Output a single 200-character description that captures:
 - signature pattern (name only / "Best, name" / no signature / etc.)
 - tone (warm / direct / formal / playful)
 
-The description is injected as a single line into draft-generation prompts. Return as raw string, no markdown, no quotes around the output, no preamble. Do NOT exceed 200 characters.`;
+The description is injected as a single line into draft-generation prompts. Return as raw string, no markdown, no quotes around the output, no preamble.`;
 
 async function fetchRecentSentBodies(userId: string): Promise<string[]> {
   const gmail = await getGmailForUser(userId);

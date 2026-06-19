@@ -47,3 +47,26 @@ describe("draft.ts SYSTEM_PROMPT — honor explicit reply requests", () => {
     expect(DRAFT_SOURCE).toMatch(/not a blanket "always confirm"/);
   });
 });
+
+describe("draft.ts SYSTEM_PROMPT — reasoning follows the user's app locale", () => {
+  it("no longer forces the reasoning field to English", () => {
+    // Previously: "'reasoning' is ALWAYS in English regardless of the
+    // email's language." That leaked English reasoning into JA users'
+    // draft-details panel — the field is user-visible.
+    expect(DRAFT_SOURCE).not.toMatch(/reasoning' is ALWAYS in English/);
+  });
+
+  it("routes reasoning to the user's app locale via the header", () => {
+    expect(DRAFT_SOURCE).toMatch(/CRITICAL LANGUAGE RULE/);
+    expect(DRAFT_SOURCE).toMatch(/Reasoning language: <locale>/);
+    expect(DRAFT_SOURCE).toMatch(
+      /'reasoning' MUST be written in the user's app locale/
+    );
+  });
+
+  it("emits the reasoning-language header into the user content from the locale input", () => {
+    expect(DRAFT_SOURCE).toMatch(
+      /Reasoning language: \$\{input\.locale \?\? "en"\}/
+    );
+  });
+});
