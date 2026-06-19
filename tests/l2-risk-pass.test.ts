@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const openaiCalls: Array<{
   model: string;
@@ -88,6 +90,39 @@ describe("runRiskPass (L2 Mini classify)", () => {
     expect(userMsg).not.toContain("First-time sender");
   });
 
+  it("threads the user's app locale into the reasoning-language header", async () => {
+    const { runRiskPass } = await import("@/lib/agent/email/classify-risk");
+    await runRiskPass({
+      userId: "u1",
+      senderEmail: "sender@example.jp",
+      senderDomain: "example.jp",
+      senderRole: "professor",
+      subject: "面談の件",
+      snippet: "ご都合いかがでしょうか",
+      firstTimeSender: false,
+      locale: "ja",
+    });
+    const userMsg = openaiCalls[0].messages.find((m) => m.role === "user")!
+      .content;
+    expect(userMsg).toContain("Reasoning language: ja");
+  });
+
+  it("defaults the reasoning-language header to en when no locale is passed", async () => {
+    const { runRiskPass } = await import("@/lib/agent/email/classify-risk");
+    await runRiskPass({
+      userId: "u1",
+      senderEmail: "p@dept.edu",
+      senderDomain: "dept.edu",
+      senderRole: "professor",
+      subject: "Re: office hours",
+      snippet: "see you then",
+      firstTimeSender: false,
+    });
+    const userMsg = openaiCalls[0].messages.find((m) => m.role === "user")!
+      .content;
+    expect(userMsg).toContain("Reasoning language: en");
+  });
+
   it("parseRiskPassOutput defaults to medium on malformed JSON", async () => {
     const { parseRiskPassOutput } = await import(
       "@/lib/agent/email/classify-risk"
@@ -121,5 +156,29 @@ describe("runRiskPass (L2 Mini classify)", () => {
       expect(out.riskTier).toBe(tier);
       expect(out.confidence).toBeCloseTo(0.3);
     }
+  });
+});
+
+describe("classify-risk.ts SYSTEM_PROMPT — locale + self-N tags", () => {
+  const SRC = readFileSync(
+    join(process.cwd(), "lib/agent/email/classify-risk.ts"),
+    "utf-8"
+  );
+
+  it("no longer forces reasoning to English", () => {
+    expect(SRC).not.toMatch(/ALWAYS write reasoning in English/);
+  });
+
+  it("routes reasoning to the user's app locale via the header", () => {
+    expect(SRC).toMatch(/Reasoning language: <locale>/);
+    expect(SRC).toMatch(/in the user's app locale/);
+  });
+
+  it("uses self-N fanout tags, not the retired mistake-N", () => {
+    expect(SRC).not.toMatch(/mistake-N/);
+    expect(SRC).not.toMatch(/mistakes-N/);
+    expect(SRC).not.toMatch(/Relevant past mistakes/);
+    expect(SRC).toMatch(/self-N/);
+    expect(SRC).toMatch(/How you usually reply to this sender/);
   });
 });

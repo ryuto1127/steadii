@@ -254,8 +254,7 @@ Rules:
 - Write in the language the thread is in (mix EN/JA naturally if the thread is bilingual).
 - "(user)" lines mean the student's own outgoing message.
 - Skip pleasantries; surface only points the user needs to remember.
-- Do not invent facts; if a date or name isn't in the thread, omit it.
-- Output raw JSON, no markdown fences.`;
+- Do not invent facts; if a date or name isn't in the thread, omit it.`;
 
 async function summarize(corpus: string): Promise<{
   overview: string;

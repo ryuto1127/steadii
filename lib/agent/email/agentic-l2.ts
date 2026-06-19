@@ -349,7 +349,11 @@ async function runLoop(input: AgenticL2Input): Promise<AgenticL2Result> {
       let result: unknown;
       try {
         result = await tool.execute(
-          { userId: input.userId, inboxItemId: input.inboxItemId },
+          {
+            userId: input.userId,
+            inboxItemId: input.inboxItemId,
+            locale: input.locale,
+          },
           parsedArgs
         );
       } catch (err) {

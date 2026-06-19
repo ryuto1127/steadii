@@ -156,6 +156,13 @@ async function runPipeline(
     resourceId: item.id,
   });
 
+  // User's app locale, read once at pipeline entry. Threaded into every
+  // step that produces a user-visible `reasoning` string (risk pass,
+  // deep pass, draft) so JA users see JA reasoning in the draft-details
+  // panel. Each step also defaults to "en" if omitted, so this is the
+  // single source-of-truth read for the run.
+  const userLocale = await getUserLocale(item.userId);
+
   // 2026-05-11 — fetch the full Gmail body once at L2 entry. Replaces
   // the snippet-only path that was leaving structured emails (interview
   // scheduling, official notices) effectively unread to L2 / draft.
@@ -219,6 +226,7 @@ async function runPipeline(
         snippet: item.snippet,
         firstTimeSender: item.firstTimeSender,
         fanout: fanoutForRisk,
+        locale: userLocale,
       });
     } catch (err) {
       Sentry.captureException(err, {
@@ -324,7 +332,8 @@ async function runPipeline(
     // 2026-05-06 — thread the user's app locale through to the deep
     // pass so reasoning is generated in JA for JA users (the
     // draft-details panel surfaces it user-visibly post PR #167).
-    const locale = await getUserLocale(item.userId);
+    // Read once at pipeline entry (userLocale) and reused here.
+    const locale = userLocale;
 
     // engineer-41 — Agentic L2 branch. Opt-in via users.preferences.agenticL2.
     // When on, swap the single-shot runDeepPass for the tool-using
@@ -576,6 +585,7 @@ async function runPipeline(
       userEmail: userRow?.email ?? null,
       userTimezone: studentTz,
       senderTimezone: senderTzHint.tz,
+      locale: userLocale,
     });
   }
 

@@ -61,6 +61,12 @@ export type DraftInput = {
   // this in the prompt is cheaper than running infer_sender_timezone
   // on every medium-tier draft.
   senderTimezone?: string | null;
+  // user's app locale ("en" / "ja"). Steers the `reasoning` field (NOT
+  // the draft body — the body always matches the incoming email's
+  // language) so the user-visible draft-details panel shows JA reasoning
+  // to JA users. Mirrors classify-deep.ts. Optional / "en" default for
+  // back-compat with callers that don't thread the locale.
+  locale?: "en" | "ja";
 };
 
 // `kind` lets the LLM escalate from "I can answer this" to "I need to ask
@@ -80,7 +86,9 @@ export type DraftResult = {
   usageId: string | null;
 };
 
-const SYSTEM_PROMPT = `You are Steadii's email draft writer for a university student. You compose a reply the student will review before sending.
+const SYSTEM_PROMPT = `CRITICAL LANGUAGE RULE: The user message begins with a line "Reasoning language: <locale>". You MUST write the "reasoning" field of your JSON output in that exact language — "ja" means Japanese (日本語), "en" means English. The 'subject' and 'body' fields are governed separately (they match the incoming email's language); this rule applies ONLY to 'reasoning'.
+
+You are Steadii's email draft writer for a university student. You compose a reply the student will review before sending.
 
 Tone: match the sender's register (formal professors get formal replies; peers get casual). Default to the student's working language — if the incoming email is Japanese, reply in Japanese.
 
@@ -135,7 +143,7 @@ Fanout grounding (when "Class binding" / "Contact persona" / "How you usually re
 
 Language rules — keep these distinct:
 - 'subject' and 'body' MUST match the incoming email's language (the student's working language). Japanese in → Japanese reply; English in → English reply.
-- 'reasoning' is ALWAYS in English regardless of the email's language. It's an internal explanation surfaced in a debug/transparency panel, not user-facing prose. Mixing languages here makes the panel inconsistent across drafts.
+- 'reasoning' MUST be written in the user's app locale per the "Reasoning language: <locale>" line at the top of the user message — "ja" = Japanese, "en" = English. It is surfaced user-visibly in the draft-details panel, so it follows the student's app language, NOT the email's language.
 
 DRAFT BODY TZ DISPLAY (when the user context block names a sender timezone different from the student's timezone):
 - Whenever the body proposes / accepts / references a specific time slot AND the student's timezone differs from the sender's timezone, render EVERY slot in BOTH timezones, e.g. "5月15日(木) 10:00 JST / 5月14日(水) 18:00 PT". Never show only one side.
@@ -272,6 +280,12 @@ export function parseDraftOutput(raw: string): {
 
 function buildUserContent(input: DraftInput): string {
   const parts: string[] = [];
+
+  // Reasoning-language header, mirroring classify-deep.ts. Steers the
+  // `reasoning` field to the user's app locale; the draft body language
+  // is governed separately by the incoming email's language.
+  parts.push(`Reasoning language: ${input.locale ?? "en"}`);
+  parts.push("");
 
   // engineer-38 — voice profile + writing-style rules render BEFORE the
   // email itself. Voice = cold-start anchor (always-on identity). Style

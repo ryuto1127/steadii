@@ -23,6 +23,35 @@ describe("main system prompt", () => {
   });
 });
 
+describe("main system prompt — forest-rules preamble", () => {
+  it("opens with the OPERATING PRINCIPLES (forest) header", () => {
+    expect(MAIN_SYSTEM_PROMPT).toMatch(
+      /^# STEADII — OPERATING PRINCIPLES \(the forest\)/
+    );
+  });
+
+  it("leads with the proactivity principle (P1 — move before you're asked)", () => {
+    expect(MAIN_SYSTEM_PROMPT).toMatch(/MOVE BEFORE YOU'RE ASKED/);
+  });
+
+  it("carries all nine governing principles", () => {
+    for (const p of ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"]) {
+      expect(MAIN_SYSTEM_PROMPT).toMatch(new RegExp(`${p} —`));
+    }
+  });
+
+  it("states the principle-wins precedence over detailed instructions", () => {
+    expect(MAIN_SYSTEM_PROMPT).toMatch(/the principle wins/);
+  });
+
+  it("keeps the existing operational body below the preamble (additive, not a replacement)", () => {
+    // The detailed EMAIL REPLY WORKFLOW MUSTs still live in the prompt —
+    // Stage 1 is additive; later stages consolidate the body.
+    expect(MAIN_SYSTEM_PROMPT).toMatch(/EMAIL REPLY WORKFLOW/);
+    expect(MAIN_SYSTEM_PROMPT).toMatch(/TIMEZONE RULES \(strict\)/);
+  });
+});
+
 describe("main system prompt — eager-read rule", () => {
   // The orchestrator+OpenAI live-call intercept harness for asserting actual
   // tool invocations on "5/16学校休む" / "明日大学行けない" / "疲れた" is a

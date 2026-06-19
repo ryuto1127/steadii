@@ -38,7 +38,7 @@ const SYSTEM_PROMPT = `You classify single short task titles into ONE of five in
 - ASSIGNMENT_WORK: the user wants to work on homework / a problem set / an essay / a lab
 - OTHER: errands, personal items, shopping, vague notes, or unclear intent
 
-Return STRICT JSON matching the response schema. Keep "reasoning" to one short sentence — it surfaces in a glass-box hover for the user.`;
+Keep "reasoning" to one short sentence — it surfaces in a glass-box hover for the user.`;
 
 const RESPONSE_SCHEMA = {
   type: "object",
