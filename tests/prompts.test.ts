@@ -52,6 +52,57 @@ describe("main system prompt — forest-rules preamble", () => {
   });
 });
 
+describe("main system prompt — canonical timezone rule (CODE CONVENTION 1)", () => {
+  // Stage 2 — the timezone rule is consolidated into ONE canonical source
+  // (CODE CONVENTION 1); other surfaces defer to it. These assertions pin
+  // the four behavioral pillars so a future edit can't silently drop one.
+
+  it("marks CODE CONVENTION 1 as the canonical single source of truth", () => {
+    expect(MAIN_SYSTEM_PROMPT).toMatch(
+      /1\. Timezone \(CANONICAL — single source of truth/
+    );
+  });
+
+  it("carries the infer pillar (sender TZ from domain + body, tool when uncertain)", () => {
+    expect(MAIN_SYSTEM_PROMPT).toMatch(/INFER the sender's TZ/);
+    expect(MAIN_SYSTEM_PROMPT).toMatch(/infer_sender_timezone/);
+  });
+
+  it("carries the < 0.6 low-confidence-implicit-TZ -> confirm gate", () => {
+    // The gate the handoff requires to survive consolidation. Implicit TZ
+    // + confidence < 0.6 + affects a cited time => route to confirmation,
+    // never a silent guessed-TZ draft.
+    expect(MAIN_SYSTEM_PROMPT).toMatch(/GATE/);
+    expect(MAIN_SYSTEM_PROMPT).toMatch(/confidence is < 0\.6/);
+    expect(MAIN_SYSTEM_PROMPT).toMatch(
+      /do NOT draft with a guessed TZ: route to confirmation/
+    );
+  });
+
+  it("carries the convert pillar (tool only, no mental math, no reversed direction, both range endpoints)", () => {
+    expect(MAIN_SYSTEM_PROMPT).toMatch(/CONVERT sender → user with the .convert_timezone. tool/);
+    expect(MAIN_SYSTEM_PROMPT).toMatch(/Never do TZ math yourself/);
+    expect(MAIN_SYSTEM_PROMPT).toMatch(/never reverse the direction/);
+    expect(MAIN_SYSTEM_PROMPT).toMatch(/Convert BOTH endpoints of a range/);
+  });
+
+  it("carries the display pillar (dual-TZ, sender-first ordering, friendly names)", () => {
+    expect(MAIN_SYSTEM_PROMPT).toMatch(/sender-TZ FIRST then user-TZ/);
+    expect(MAIN_SYSTEM_PROMPT).toMatch(
+      /<sender-TZ> \/ <date>\(<day>\) HH:MM <user-TZ>/
+    );
+    expect(MAIN_SYSTEM_PROMPT).toMatch(/never raw IANA strings/);
+  });
+
+  it("makes the TIMEZONE RULES (strict) body defer to the canonical rule, not restate it", () => {
+    // The body section keeps its (test-locked) heading but now points at
+    // CODE CONVENTION 1 instead of carrying a second full copy.
+    expect(MAIN_SYSTEM_PROMPT).toMatch(
+      /Follow CODE CONVENTION 1 \(the canonical timezone rule/
+    );
+  });
+});
+
 describe("main system prompt — eager-read rule", () => {
   // The orchestrator+OpenAI live-call intercept harness for asserting actual
   // tool invocations on "5/16学校休む" / "明日大学行けない" / "疲れた" is a
