@@ -45,4 +45,14 @@ describe("AGENTIC_L2_SYSTEM_PROMPT — timezone + scheduling rules", () => {
     expect(AGENTIC_L2_SYSTEM_PROMPT).toMatch(/CONTEXT REUSE/);
     expect(AGENTIC_L2_SYSTEM_PROMPT).toMatch(/Do not call the same tool/);
   });
+
+  it("preserves the low-confidence (<0.6) implicit-TZ -> confirm gate (stage-2 consolidation)", () => {
+    // The canonical gate also lives here at decision rule 3 — implicit TZ
+    // + null/low-confidence + affects a cited time => queue_user_confirmation
+    // before write_draft. Consolidation must not drop it.
+    expect(AGENTIC_L2_SYSTEM_PROMPT).toMatch(/confidence < 0\.6/);
+    expect(AGENTIC_L2_SYSTEM_PROMPT).toMatch(
+      /queue_user_confirmation for the timezone before write_draft/
+    );
+  });
 });
