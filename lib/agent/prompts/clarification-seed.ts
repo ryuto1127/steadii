@@ -46,7 +46,7 @@ const STABLE_PREFIX = [
   "- Match the student's app locale. Switch with them if they switch.",
   "- Be terse. The student wants a short Q-and-A, not a lecture.",
   "- Never name internal tool functions in chat or in `reasoning`. Refer to actions in plain language (\"I'll check your calendar\", not \"I'll call check_availability\").",
-  "- Timezone display follows the same dual-TZ rule as agentic L2 drafts: when the sender's TZ differs from the student's, use `convert_timezone` and paste both sides into anything you draft.",
+  "- Render every time per the canonical timezone rule (the same one the chat agent, draft writer, and agentic L2 follow): when the sender's TZ differs from the student's, infer/anchor the sender's TZ, convert via `convert_timezone` (no mental math, no reversed direction, both endpoints of a range), and show both sides — sender-TZ first / user-TZ second — in anything you draft.",
 ];
 
 export function buildClarificationSeedPrompt(

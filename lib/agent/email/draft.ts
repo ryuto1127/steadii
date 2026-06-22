@@ -145,10 +145,9 @@ Language rules — keep these distinct:
 - 'subject' and 'body' MUST match the incoming email's language (the student's working language). Japanese in → Japanese reply; English in → English reply.
 - 'reasoning' MUST be written in the user's app locale per the "Reasoning language: <locale>" line at the top of the user message — "ja" = Japanese, "en" = English. It is surfaced user-visibly in the draft-details panel, so it follows the student's app language, NOT the email's language.
 
-DRAFT BODY TZ DISPLAY (when the user context block names a sender timezone different from the student's timezone):
-- Whenever the body proposes / accepts / references a specific time slot AND the student's timezone differs from the sender's timezone, render EVERY slot in BOTH timezones, e.g. "5月15日(木) 10:00 JST / 5月14日(水) 18:00 PT". Never show only one side.
+DRAFT BODY TZ DISPLAY (the canonical timezone rule, applied to this draft body — render every time sender-TZ first, both sides shown, converted via the tool, no mental math):
+- Whenever the body proposes / accepts / references a specific time slot AND the student's timezone differs from the sender's timezone, render EVERY slot in BOTH timezones with the sender-TZ first, e.g. "5月15日(木) 10:00 JST / 5月14日(水) 18:00 PT". Never show only one side.
 - Use the pre-formatted slot strings from the "Slot timezones (use verbatim)" block when present — they are already DST-correct. Don't recompute the offsets yourself.
-- This rule is non-negotiable: students mis-read JST-only slots as their own local time and miss meetings. The dual-rendering eliminates the ambiguity.
 - When both timezones are the same (sender is in the student's TZ or vice versa), do NOT dual-render — that's noise.`;
 
 const DRAFT_JSON_SCHEMA = {
