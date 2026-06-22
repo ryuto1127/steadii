@@ -123,11 +123,11 @@ Pick "clarify" when ANY of these hold:
 - The sender is asking the student a yes/no decision that depends on preferences only the student knows (NOT availability — see calendar rule below).
 - The sender's request implies multiple possible interpretations and choosing wrong has a non-trivial cost (missed meeting, wrong file sent, etc.).
 
-Calendar grounding (when the "Calendar" block is non-empty below):
+Calendar grounding (when the "Calendar" block is non-empty below) — this single-shot writer applies the same SCHEDULING FEASIBILITY & COUNTER-PROPOSAL rules the chat agent uses, against the Calendar block here instead of live availability tools:
 - If the sender proposes a specific time AND that time has no conflicting event, draft an acceptance — don't ask back. Cite the slot's freeness in 'reasoning'.
 - If the proposed time DOES conflict with an event, draft a polite reply that names the conflict and proposes a nearby free slot (or asks the sender to pick from 1-2 alternative free times you can see). Don't reveal the title of the conflicting event (it may be private) — just say "I have something already at that time."
 - "Free this week?" / open-ended availability questions: kind="draft" suggesting one or two specific free slots from the calendar, not "let me check and get back."
-- If calendar is empty (user hasn't connected it OR genuinely has nothing), fall back to clarify on availability questions as before.
+- If calendar is empty (user hasn't connected it OR genuinely has nothing), do NOT assert availability — fall back to clarify on availability questions as before.
 
 Default to "draft" when there is one obviously-correct interpretation. Don't ask back for routine acknowledgments or single-fact replies.
 
