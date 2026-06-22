@@ -23,9 +23,10 @@ describe("selectModel routing", () => {
     expect(selectModel("chat_title")).toBe("gpt-5.4-nano");
     expect(selectModel("tag_suggest")).toBe("gpt-5.4-nano");
   });
-  it("routes email_classify_risk to mini, deep + draft to full", () => {
+  it("routes email_classify_risk to mini, deep + agentic + draft to full", () => {
     expect(selectModel("email_classify_risk")).toBe("gpt-5.4-mini");
     expect(selectModel("email_classify_deep")).toBe("gpt-5.4");
+    expect(selectModel("email_classify_agentic")).toBe("gpt-5.4");
     expect(selectModel("email_draft")).toBe("gpt-5.4");
   });
   it("routes email_embed to text-embedding-3-small", () => {
@@ -42,6 +43,7 @@ describe("selectModel routing", () => {
       "tag_suggest",
       "email_classify_risk",
       "email_classify_deep",
+      "email_classify_agentic",
       "email_draft",
       "email_embed",
     ];
@@ -83,6 +85,7 @@ describe("credit accounting", () => {
     expect(taskTypeMetersCredits("notes_extract")).toBe(true);
     expect(taskTypeMetersCredits("email_classify_risk")).toBe(true);
     expect(taskTypeMetersCredits("email_classify_deep")).toBe(true);
+    expect(taskTypeMetersCredits("email_classify_agentic")).toBe(true);
     expect(taskTypeMetersCredits("email_draft")).toBe(true);
     expect(taskTypeMetersCredits("email_embed")).toBe(true);
     // Chat is rate-limited by plan tier, not credit-gated.

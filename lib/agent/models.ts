@@ -9,8 +9,14 @@ export type TaskType =
   // `email_classify_risk` — GPT-5.4 Mini risk-tier classification, always
   //   called for l2_pending inbox_items. Memory: "classify continues on
   //   exhaustion".
-  // `email_classify_deep` — GPT-5.4 Full, called only when the risk pass
-  //   returns `risk_tier === 'high'`. Uses retrieval context.
+  // `email_classify_deep` — GPT-5.4 Full one-shot deep pass (runDeepPass).
+  //   Called only when the risk pass returns `risk_tier === 'high'`. Uses
+  //   retrieval context.
+  // `email_classify_agentic` — GPT-5.4 Full, agentic tool-loop variant of the
+  //   deep pass (runAgenticL2). Separated from email_classify_deep for cost
+  //   attribution so the two paths are independently visible in usage_events.
+  //   Resolves to the identical model as email_classify_deep today; the label
+  //   split is analytics-only.
   // `email_draft` — GPT-5.4 Full, called when the pipeline decides
   //   action === 'draft_reply'.
   // `email_embed` — OpenAI `text-embedding-3-small` per inbox_item at ingest
@@ -18,6 +24,7 @@ export type TaskType =
   //   "embedding" tier below).
   | "email_classify_risk"
   | "email_classify_deep"
+  | "email_classify_agentic"
   | "email_draft"
   | "email_embed"
   // Phase 7 W-Notes: vision OCR for handwritten / scanned notes.
@@ -120,6 +127,7 @@ export function selectModel(
     case "syllabus_extract":
     case "notes_extract":
     case "email_classify_deep":
+    case "email_classify_agentic":
     case "email_draft":
       return env.OPENAI_COMPLEX_MODEL?.trim() || DEFAULTS.complex;
     case "chat_title":
@@ -184,6 +192,7 @@ export function taskTypeMetersCredits(t: TaskType): boolean {
     case "notes_extract":
     case "email_classify_risk":
     case "email_classify_deep":
+    case "email_classify_agentic":
     case "email_draft":
     case "email_embed":
     case "proactive_proposal":

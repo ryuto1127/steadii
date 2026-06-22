@@ -97,7 +97,7 @@ export async function runAgenticL2(
       attributes: {
         "steadii.user_id": input.userId,
         "steadii.inbox_item_id": input.inboxItemId,
-        "steadii.task_type": "email_classify_deep",
+        "steadii.task_type": "email_classify_agentic",
       },
     },
     async () => runLoop(input)
@@ -205,7 +205,7 @@ export function shouldRunAgenticL2(args: {
 }
 
 async function runLoop(input: AgenticL2Input): Promise<AgenticL2Result> {
-  const model = selectModel("email_classify_deep");
+  const model = selectModel("email_classify_agentic");
   // engineer-45 — domain heuristic surfaced once at loop entry so the
   // LLM has a cheap prior before deciding whether to call
   // infer_sender_timezone. Null when the domain is ambiguous (.com /
@@ -440,7 +440,7 @@ async function runLoop(input: AgenticL2Input): Promise<AgenticL2Result> {
   const rec = await recordUsage({
     userId: input.userId,
     model,
-    taskType: "email_classify_deep",
+    taskType: "email_classify_agentic",
     inputTokens: totalInputTokens,
     outputTokens: totalOutputTokens,
     cachedTokens: totalCachedTokens,

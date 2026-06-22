@@ -78,6 +78,7 @@ function routeBucket(taskType: string): string {
   if (
     taskType === "email_classify_risk" ||
     taskType === "email_classify_deep" ||
+    taskType === "email_classify_agentic" ||
     taskType === "email_draft" ||
     taskType === "email_embed"
   )
