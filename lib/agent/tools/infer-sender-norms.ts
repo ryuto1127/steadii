@@ -10,7 +10,8 @@ import type { ToolExecutor } from "./types";
 // the surface of `infer_sender_timezone` (engineer-45 / PR #226). The
 // agent calls this BEFORE drafting a counter-proposal so the proposed
 // window respects the sender's day, not just the user's. Bidirectional
-// intersection happens in the prompt's COUNTER-PROPOSAL PATTERN rule 3.
+// intersection happens in the prompt's SCHEDULING FEASIBILITY &
+// COUNTER-PROPOSAL block, section C rule 3.
 
 const args = z.object({
   senderEmail: z
@@ -46,7 +47,7 @@ export const inferSenderNormsTool: ToolExecutor<
   schema: {
     name: "infer_sender_norms",
     description:
-      "Infer the sender's likely working hours from their email domain + optional body language. Returns {start, end, tz, confidence, source, reasoning, shouldDisclose}. Use when drafting a counter-proposal so your proposed window respects the sender's day, not just the user's — bidirectional intersection is the COUNTER-PROPOSAL PATTERN rule 3 requirement. Confidence drives disclosure: ≥ 0.7 = use silently; 0.4–0.7 = use AND surface the assumption ('I assumed their working hours are around 9 AM – 6 PM JST'); < 0.4 = generic fallback, definitely disclose. Heuristic buckets: JP business (.co.jp / JA body) → 09:00–18:00 Asia/Tokyo @ 0.9; government → 09:00–17:00 @ 0.9; academic (.edu / .ac.jp) → 09:00–18:00 @ 0.6 (wider for profs); business via inferred TZ → 09:00–17:00 @ 0.7; generic fallback → 09:00–18:00 @ 0.4.",
+      "Infer the sender's likely working hours from their email domain + optional body language. Returns {start, end, tz, confidence, source, reasoning, shouldDisclose}. Use when drafting a counter-proposal so your proposed window respects the sender's day, not just the user's — bidirectional intersection is the SCHEDULING FEASIBILITY & COUNTER-PROPOSAL section C rule 3 requirement. Confidence drives disclosure: ≥ 0.7 = use silently; 0.4–0.7 = use AND surface the assumption ('I assumed their working hours are around 9 AM – 6 PM JST'); < 0.4 = generic fallback, definitely disclose. Heuristic buckets: JP business (.co.jp / JA body) → 09:00–18:00 Asia/Tokyo @ 0.9; government → 09:00–17:00 @ 0.9; academic (.edu / .ac.jp) → 09:00–18:00 @ 0.6 (wider for profs); business via inferred TZ → 09:00–17:00 @ 0.7; generic fallback → 09:00–18:00 @ 0.4.",
     mutability: "read",
     parameters: {
       type: "object",

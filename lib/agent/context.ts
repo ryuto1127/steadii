@@ -75,8 +75,9 @@ export async function buildUserContext(userId: string): Promise<UserContextPaylo
       .then((rows) => rows[0] ?? null),
     // engineer-54 — pull working hours to surface as USER_WORKING_HOURS
     // in the serialized prompt. Mirrors the USER_NAME injection pattern;
-    // the SLOT FEASIBILITY CHECK prompt section reads this label and
-    // either gates the draft on the window or asks the user to set it.
+    // the SCHEDULING FEASIBILITY & COUNTER-PROPOSAL prompt block reads
+    // this label and either gates the draft on the window or asks the
+    // user to set it.
     getUserWorkingHours(userId),
     // engineer-56 — pull the inferred empirical window so the prompt
     // can render it as the fallback when no explicit window is set.

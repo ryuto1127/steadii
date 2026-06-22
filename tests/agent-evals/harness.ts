@@ -362,7 +362,7 @@ const HARNESS_TOOL_DEFS: OpenAITool[] = [
     function: {
       name: "save_working_hours",
       description:
-        "Save the user's working/meeting-available window. Call when the user states their availability (e.g. '9 AM to 10 PM Pacific') or answers the SLOT FEASIBILITY CHECK onboarding ask. Auto-saves; HH:MM 24h in the user's profile TZ. α scope non-overnight only (start < end).",
+        "Save the user's working/meeting-available window. Call when the user states their availability (e.g. '9 AM to 10 PM Pacific') or answers the SCHEDULING FEASIBILITY & COUNTER-PROPOSAL feasibility-gate onboarding ask. Auto-saves; HH:MM 24h in the user's profile TZ. α scope non-overnight only (start < end).",
       parameters: {
         type: "object",
         properties: {
@@ -845,9 +845,10 @@ function serializeFixtureContext(fixture: EvalFixture): string {
   // to "(unknown — ask the user…)" when users.name is null.
   lines.push(`USER_NAME: ${user.name}`);
   // engineer-54 / 56 — mirror the prod serialize-context.ts
-  // USER_WORKING_HOURS line so SLOT FEASIBILITY CHECK reads the same
-  // hook in eval scenarios. Three-state resolution: explicit / inferred
-  // / norm-default (engineer-56 soft-default).
+  // USER_WORKING_HOURS line so the SCHEDULING FEASIBILITY &
+  // COUNTER-PROPOSAL block reads the same hook in eval scenarios.
+  // Three-state resolution: explicit / inferred / norm-default
+  // (engineer-56 soft-default).
   if (fixture.workingHoursLocal) {
     lines.push(
       `USER_WORKING_HOURS: ${fixture.workingHoursLocal.start}–${fixture.workingHoursLocal.end} (${user.timezone})`

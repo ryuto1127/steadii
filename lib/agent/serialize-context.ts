@@ -48,8 +48,9 @@ export type UserContextPayload = {
   userName?: string | null;
   // engineer-54 — the user's stored working/meeting-available window
   // (HH:MM–HH:MM in their profile TZ). Surfaced as a labeled
-  // `USER_WORKING_HOURS:` line so the SLOT FEASIBILITY CHECK section of
-  // the system prompt has a deterministic place to find it. Null when
+  // `USER_WORKING_HOURS:` line so the SCHEDULING FEASIBILITY &
+  // COUNTER-PROPOSAL block of the system prompt has a deterministic
+  // place to find it. Null when
   // the user hasn't set one yet — the prompt's soft-default norm path
   // (engineer-56) fires in that case.
   workingHoursLocal?: { start: string; end: string } | null;
@@ -195,15 +196,16 @@ export function serializeContextForPrompt(ctx: UserContextPayload): string {
     );
   }
   // engineer-54 / 56 — surface working hours next to the user's TZ so the
-  // SLOT FEASIBILITY CHECK + COUNTER-PROPOSAL PATTERN prompt sections
-  // have the comparison range available without a tool call. Three-state
+  // SCHEDULING FEASIBILITY & COUNTER-PROPOSAL prompt block has the
+  // comparison range available without a tool call. Three-state
   // resolution (engineer-56):
   //   1. Explicit (workingHoursLocal set)  → use as-is, highest priority
   //   2. Inferred (≥ 3 accepted-slot samples) → empirical window with
   //      "(inferred from N picks)" annotation; overrides default norm
   //   3. Default (norm per profile TZ) → annotated "(not set — using
-  //      norm: …)" so rule 0 of SLOT FEASIBILITY CHECK fires the soft-
-  //      default branch (engineer-56 removed the hard-ASK gate).
+  //      norm: …)" so section A rule 0 of the SCHEDULING FEASIBILITY &
+  //      COUNTER-PROPOSAL block fires the soft-default branch
+  //      (engineer-56 removed the hard-ASK gate).
   if (ctx.workingHoursLocal) {
     lines.push(
       `USER_WORKING_HOURS: ${ctx.workingHoursLocal.start}–${ctx.workingHoursLocal.end} (${tz})`

@@ -8,9 +8,9 @@ import type { ToolExecutor } from "./types";
 
 // engineer-54 — chat-side effector for the user's working/meeting-
 // available window. Persists to users.preferences.workingHoursLocal
-// (JSONB; no schema migration). Used by the SLOT FEASIBILITY CHECK +
-// COUNTER-PROPOSAL PATTERN sections of the system prompt to gate slot
-// acceptance and counter-window framing.
+// (JSONB; no schema migration). Used by the SCHEDULING FEASIBILITY &
+// COUNTER-PROPOSAL block of the system prompt to gate slot acceptance
+// and counter-window framing.
 //
 // Auto-save (no confirmation): this is a user-volunteered preference,
 // not a destructive action. Confirming again would feel like
@@ -46,7 +46,7 @@ export const saveWorkingHours: ToolExecutor<
   schema: {
     name: "save_working_hours",
     description:
-      "Save the user's working/meeting-available window. Call when the user states their availability (e.g. '9 AM to 10 PM Pacific') or answers your own ask in the SLOT FEASIBILITY CHECK flow. Persists to users.preferences.workingHoursLocal; the agent reads it back via USER_WORKING_HOURS in the next turn's context block. Auto-saves without confirmation — this is a low-stakes preference, not a destructive action. α scope: simple non-overnight only (start < end). If the user says '9 AM to 9 AM' or any range that crosses midnight, ask them to split it into two windows and save the larger one for now.",
+      "Save the user's working/meeting-available window. Call when the user states their availability (e.g. '9 AM to 10 PM Pacific') or answers your own ask in the SCHEDULING FEASIBILITY & COUNTER-PROPOSAL feasibility-gate flow. Persists to users.preferences.workingHoursLocal; the agent reads it back via USER_WORKING_HOURS in the next turn's context block. Auto-saves without confirmation — this is a low-stakes preference, not a destructive action. α scope: simple non-overnight only (start < end). If the user says '9 AM to 9 AM' or any range that crosses midnight, ask them to split it into two windows and save the larger one for now.",
     mutability: "write",
     parameters: {
       type: "object",

@@ -1042,7 +1042,8 @@ describe("buildPlaceholderLeakCorrection", () => {
       "slot acceptance missing user-local TZ",
     ]);
     expect(msg).toContain("LATE_NIGHT_SLOT_ACCEPTED_BLINDLY");
-    expect(msg).toContain("SLOT FEASIBILITY CHECK");
+    // Stage 3 — corrective note now points at the consolidated block.
+    expect(msg).toContain("SCHEDULING FEASIBILITY & COUNTER-PROPOSAL");
     expect(msg).toContain("USER_WORKING_HOURS");
   });
 
@@ -1092,7 +1093,8 @@ describe("buildPlaceholderLeakCorrection", () => {
   it("appends a COUNTER_WINDOW_NOT_DUAL_TZ note when the counter-single-TZ token matches", () => {
     const msg = buildPlaceholderLeakCorrection(["counter window not dual-TZ"]);
     expect(msg).toContain("COUNTER_WINDOW_NOT_DUAL_TZ");
-    expect(msg).toContain("COUNTER-PROPOSAL PATTERN");
+    // Stage 3 — corrective note now points at the consolidated block (section C).
+    expect(msg).toContain("SCHEDULING FEASIBILITY & COUNTER-PROPOSAL section C");
     expect(msg.toLowerCase()).toContain("convert_timezone");
   });
 
@@ -1100,7 +1102,8 @@ describe("buildPlaceholderLeakCorrection", () => {
   it("appends a COUNTER_WINDOW_VAGUE note when the counter-vague token matches", () => {
     const msg = buildPlaceholderLeakCorrection(["counter window vague"]);
     expect(msg).toContain("COUNTER_WINDOW_VAGUE");
-    expect(msg).toContain("COUNTER-PROPOSAL PATTERN");
+    // Stage 3 — corrective note now points at the consolidated block (section C).
+    expect(msg).toContain("SCHEDULING FEASIBILITY & COUNTER-PROPOSAL section C");
     expect(msg).toContain("infer_sender_norms");
     expect(msg.toLowerCase()).toContain("vague");
   });

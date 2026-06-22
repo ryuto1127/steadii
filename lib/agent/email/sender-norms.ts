@@ -8,8 +8,8 @@
 // counter-proposal that "fits the user" (e.g. JST 6:00 from a Vancouver
 // student's 8 AM PT) lands at the sender's pre-business hours and reads
 // as inconsiderate / rude. This module supplies the sender-side defaults
-// the prompt's COUNTER-PROPOSAL PATTERN rule 3b intersects with the
-// user-side window.
+// the prompt's SCHEDULING FEASIBILITY & COUNTER-PROPOSAL section C
+// rule 3b intersects with the user-side window.
 //
 // Heuristic set (rule-based, no LLM):
 //   - .co.jp / .ne.jp / .or.jp / JA body → 09:00–18:00 Asia/Tokyo @ 0.9
@@ -178,8 +178,9 @@ function guessTzFromAcademicSuffix(suffix: string): string {
   return "UTC";
 }
 
-// User-norm defaults — used by SLOT FEASIBILITY CHECK rule 0 (soft
-// default) when USER_WORKING_HOURS is not explicitly set. The buckets
+// User-norm defaults — used by SCHEDULING FEASIBILITY & COUNTER-PROPOSAL
+// section A rule 0 (soft default) when USER_WORKING_HOURS is not
+// explicitly set. The buckets
 // are intentionally coarse: NA (any America/*), JP/East Asia, Europe,
 // other. Refinement happens via Part-4 silent-learning + the explicit
 // save_working_hours tool.

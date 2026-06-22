@@ -91,8 +91,9 @@ const FORBIDDEN_TOKENS: Array<{ name: string; pattern: RegExp }> = [
   // local time. The regex is loose by design (false-positive tolerant):
   // a clean draft that DID surface dual-TZ slots can still trigger this
   // if the acceptance prose is phrased generically, but the retry pass
-  // re-fetches and re-emits with the SLOT FEASIBILITY CHECK section in
-  // play, so the false-positive cost is one extra LLM iteration. The
+  // re-fetches and re-emits with the SCHEDULING FEASIBILITY & COUNTER-
+  // PROPOSAL feasibility gate in play, so the false-positive cost is one
+  // extra LLM iteration. The
   // false-negative cost — shipping a 2 AM acceptance to the user — is
   // far worse. The detector pairs with WORKING_HOURS_IGNORED below for
   // the case where slot times ARE shown but no user-TZ counterpart
@@ -262,7 +263,8 @@ function detectLocationNotDisclosed(text: string): boolean {
 // (2) DRAFT_OUTSIDE_CODE_BLOCK (MUST-rule 10): the email-draft prose
 //     (greeting + closing) is emitted as plain text, not wrapped in a
 //     fenced code block — the UI can't attach Send/Edit affordances.
-// (3) COUNTER_WINDOW_NOT_DUAL_TZ (COUNTER-PROPOSAL PATTERN rule 3):
+// (3) COUNTER_WINDOW_NOT_DUAL_TZ (SCHEDULING FEASIBILITY & COUNTER-
+//     PROPOSAL section C rule 3):
 //     agent proposes a counter window in only ONE TZ (user-TZ only OR
 //     sender-TZ only), so the recipient has to math the offset.
 //
@@ -674,7 +676,7 @@ export function buildPlaceholderLeakCorrection(
   }
   if (matched.includes("slot acceptance missing user-local TZ")) {
     extras.push(
-      "- LATE_NIGHT_SLOT_ACCEPTED_BLINDLY: your draft accepted a proposed slot without comparing it to the user's working hours (USER_WORKING_HOURS in your context). Re-run the SLOT FEASIBILITY CHECK: convert each proposed slot to the user's local TZ via convert_timezone, then compare the user-local HH:MM to USER_WORKING_HOURS. If the slot is outside that window, switch to a COUNTER-PROPOSAL draft (push back politely, name the user-local time as the reason, propose an alternative window in the sender's TZ). Do not ship a 2 AM acceptance."
+      "- LATE_NIGHT_SLOT_ACCEPTED_BLINDLY: your draft accepted a proposed slot without comparing it to the user's working hours (USER_WORKING_HOURS in your context). Re-run the SCHEDULING FEASIBILITY & COUNTER-PROPOSAL feasibility gate (section A): convert each proposed slot to the user's local TZ via convert_timezone, then compare the user-local HH:MM to USER_WORKING_HOURS. If the slot is outside that window, switch to a counter-proposal draft (section C: push back politely, name the user-local time as the reason, propose an alternative window in the sender's TZ). Do not ship a 2 AM acceptance."
     );
   }
   if (matched.includes("JST without user-local TZ nearby")) {
@@ -714,12 +716,12 @@ export function buildPlaceholderLeakCorrection(
   }
   if (matched.includes("counter window not dual-TZ")) {
     extras.push(
-      "- COUNTER_WINDOW_NOT_DUAL_TZ / COUNTER-PROPOSAL PATTERN rule 3 violation: you proposed a counter window with HH:MM–HH:MM in only ONE timezone (sender-TZ OR user-TZ, not both). The recipient is in their own TZ and shouldn't have to math the offset — that's exactly the burden Steadii is supposed to remove. Re-emit the counter window with BOTH ranges side-by-side, **sender-TZ FIRST**: `<HH:MM–HH:MM <sender-TZ>> (<HH:MM–HH:MM <user-TZ>>)`. Example: 「JST 9:00–13:00 (バンクーバー時間 17:00–21:00) であれば調整しやすく…」. The conversion goes through convert_timezone — do not math TZ offsets in your head, and do not propose a window without first checking the bidirectional intersection of user-hours and sender-hours."
+      "- COUNTER_WINDOW_NOT_DUAL_TZ / SCHEDULING FEASIBILITY & COUNTER-PROPOSAL section C rule 3 violation: you proposed a counter window with HH:MM–HH:MM in only ONE timezone (sender-TZ OR user-TZ, not both). The recipient is in their own TZ and shouldn't have to math the offset — that's exactly the burden Steadii is supposed to remove. Re-emit the counter window with BOTH ranges side-by-side, **sender-TZ FIRST**: `<HH:MM–HH:MM <sender-TZ>> (<HH:MM–HH:MM <user-TZ>>)`. Example: 「JST 9:00–13:00 (バンクーバー時間 17:00–21:00) であれば調整しやすく…」. The conversion goes through convert_timezone — do not math TZ offsets in your head, and do not propose a window without first checking the bidirectional intersection of user-hours and sender-hours."
     );
   }
   if (matched.includes("counter window vague")) {
     extras.push(
-      "- COUNTER_WINDOW_VAGUE / COUNTER-PROPOSAL PATTERN rule 3 violation: you used counter / push-back language (再度ご調整 / もう少し早い時間 / earlier / different / etc.) but proposed NO concrete HH:MM window. Phrases like 「平日の日中〜夕方」 / 「ご都合の良い時間で」 / 「なるべく早めで」 / \"any weekday afternoon\" / \"sometime next week\" are unactionable — the recipient has no anchor to choose from, and the thread gets stuck in another vague round. Re-emit with a concrete HH:MM–HH:MM range in BOTH TZs (sender-TZ first): 「JST 9:00–13:00 (バンクーバー時間 17:00–21:00) であれば調整しやすく…」. If you genuinely don't have enough information to propose a concrete range, call `infer_sender_norms` first OR fall back to the empty-intersection branch (rule 3e: 「お互いの対応時間が重ならないようで、土日や時間外のご対応もご相談できますでしょうか。」). Never ship a vague counter."
+      "- COUNTER_WINDOW_VAGUE / SCHEDULING FEASIBILITY & COUNTER-PROPOSAL section C rule 3 violation: you used counter / push-back language (再度ご調整 / もう少し早い時間 / earlier / different / etc.) but proposed NO concrete HH:MM window. Phrases like 「平日の日中〜夕方」 / 「ご都合の良い時間で」 / 「なるべく早めで」 / \"any weekday afternoon\" / \"sometime next week\" are unactionable — the recipient has no anchor to choose from, and the thread gets stuck in another vague round. Re-emit with a concrete HH:MM–HH:MM range in BOTH TZs (sender-TZ first): 「JST 9:00–13:00 (バンクーバー時間 17:00–21:00) であれば調整しやすく…」. If you genuinely don't have enough information to propose a concrete range, call `infer_sender_norms` first OR fall back to the empty-intersection branch (rule 3e: 「お互いの対応時間が重ならないようで、土日や時間外のご対応もご相談できますでしょうか。」). Never ship a vague counter."
     );
   }
   if (matched.includes("role-flipped greeting")) {

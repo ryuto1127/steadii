@@ -131,8 +131,9 @@ export function isValidIanaTimezone(tz: string): boolean {
 }
 
 // engineer-54 — working hours window in user's profile TZ. Used by the
-// agent SLOT FEASIBILITY CHECK to decide whether a proposed meeting slot
-// is acceptable. Stored as HH:MM 24h strings; the actual TZ is derived
+// agent SCHEDULING FEASIBILITY & COUNTER-PROPOSAL block to decide whether
+// a proposed meeting slot is acceptable. Stored as HH:MM 24h strings; the
+// actual TZ is derived
 // from users.timezone (single source of truth, auto-follows on travel).
 //
 // α scope: only non-overnight windows (start < end). The save tool
@@ -177,8 +178,8 @@ export async function getUserWorkingHours(
 // engineer-56 — silent learning. Track each accepted slot the user
 // picks (or that the agent emits in a reply draft) as a HH:MM data
 // point in the user's profile TZ. After ≥ 3 samples, the agent's
-// SLOT FEASIBILITY CHECK consumes an empirical window
-// [min(samples), max(samples)] as a refinement over the norm default.
+// SCHEDULING FEASIBILITY & COUNTER-PROPOSAL block consumes an empirical
+// window [min(samples), max(samples)] as a refinement over the norm default.
 // Storage shape (in users.preferences JSONB — no schema migration):
 //   acceptedSlotSamplesLocal: ["19:30", "20:00", "21:15", ...]
 // Capped at MAX_ACCEPTED_SLOT_SAMPLES so the JSONB row stays small.

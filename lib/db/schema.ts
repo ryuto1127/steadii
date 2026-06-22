@@ -100,8 +100,8 @@ export const users = pgTable("users", {
     // window in the user's profile TZ (no `tz` field — derived from
     // `users.timezone`, single source of truth; if the user travels and
     // their timezone changes the window auto-follows). Stored as
-    // HH:MM 24h strings. SLOT FEASIBILITY CHECK + COUNTER-PROPOSAL
-    // PATTERN in lib/agent/prompts/main.ts gate slot acceptance on
+    // HH:MM 24h strings. The SCHEDULING FEASIBILITY & COUNTER-PROPOSAL
+    // block in lib/agent/prompts/main.ts gates slot acceptance on
     // this window. α scope: simple non-overnight (start < end).
     workingHoursLocal?: {
       start: string;

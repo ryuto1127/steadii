@@ -37,7 +37,11 @@ describe("AGENTIC_L2_SYSTEM_PROMPT — timezone + scheduling rules", () => {
   });
 
   it("encodes the slot-pool rule (range + duration = pick within)", () => {
-    expect(AGENTIC_L2_SYSTEM_PROMPT).toMatch(/SCHEDULING DOMAIN RULES/);
+    // Stage 3 — the heading was renamed from "SCHEDULING DOMAIN RULES" to
+    // "SCHEDULING FEASIBILITY & RANGE" when scheduling rules were
+    // consolidated under the canonical block; the slot-pool behavior is
+    // unchanged.
+    expect(AGENTIC_L2_SYSTEM_PROMPT).toMatch(/SCHEDULING FEASIBILITY & RANGE/);
     expect(AGENTIC_L2_SYSTEM_PROMPT).toMatch(/slot-pool/);
   });
 
